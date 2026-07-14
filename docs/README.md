@@ -12,12 +12,13 @@ concurrencia, tiempo real y escalabilidad — no en la cantidad de pantallas.
 
 ## Estado actual
 
-**Épica 2, Módulo 2.1 — Modelo de Remate.** Fase 0 (diseño), Fase 1 (base técnica:
-auth, usuarios, roles, Docker) y el modelo de Remate (CRUD, permisos, ciclo de vida sin
-Lotes todavía) ya están implementados y probados. Esta carpeta sigue siendo la fuente de
-verdad del proyecto: cada fase nueva debe leerla antes de proponer cambios y actualizarla
-si algo deja de ser cierto. Ver el [README raíz](../README.md) para instrucciones de
-instalación y el estado exacto del código.
+**Épica 2, Módulo 2.2 — Modelo de Lote.** Fase 0 (diseño), Fase 1 (base técnica: auth,
+usuarios, roles, Docker), el modelo de Remate (Módulo 2.1) y ahora el modelo de Lote
+(CRUD, permisos, reordenamiento, sin lógica de subasta todavía) ya están implementados y
+probados. Esta carpeta sigue siendo la fuente de verdad del proyecto: cada fase nueva debe
+leerla antes de proponer cambios y actualizarla si algo deja de ser cierto. Ver el
+[README raíz](../README.md) para instrucciones de instalación y el estado exacto del
+código.
 
 ## Índice
 
@@ -37,6 +38,7 @@ instalación y el estado exacto del código.
 | [12-stack-tecnologico.md](12-stack-tecnologico.md) | Justificación de cada tecnología elegida |
 | [13-mvp-y-roadmap.md](13-mvp-y-roadmap.md) | Alcance del MVP y roadmap futuro |
 | [14-modulo-remate.md](14-modulo-remate.md) | Diseño de la entidad Remate: campos, estados implementados, permisos (Épica 2.1) |
+| [15-modulo-lote.md](15-modulo-lote.md) | Diseño de la entidad Lote: campos, estados, permisos, reordenamiento (Épica 2.2) |
 | [adr/](adr/) | Registro de decisiones de arquitectura (ADR), una por decisión relevante |
 
 ## Reglas de esta documentación (aplican a todas las fases futuras)
@@ -83,3 +85,6 @@ instalación y el estado exacto del código.
   auth JWT, usuarios y roles, Docker. ADR-010 y ADR-011.
 - **Épica 2, Módulo 2.1** (2026-07-13): Modelo de Remate — CRUD, permisos, ciclo de vida
   (sin Lotes todavía). Ver [14-modulo-remate.md](14-modulo-remate.md), ADR-012 y ADR-013.
+- **Épica 2, Módulo 2.2** (2026-07-14): Modelo de Lote — CRUD completo, permisos,
+  reordenamiento, sin lógica de subasta (no abre/cierra lotes, no hay ofertas). Ver
+  [15-modulo-lote.md](15-modulo-lote.md), ADR-014 a ADR-017.

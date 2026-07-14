@@ -17,6 +17,7 @@ que el frontend (y cualquier cliente) parseen errores de una única forma consis
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 
 import structlog
 from fastapi import FastAPI, Request, status
@@ -76,13 +77,15 @@ def _error_envelope(code: str, message: str, details: object | None = None) -> d
 def _serialize_validation_errors(errors: list[dict]) -> list[dict]:
     """Sanea `RequestValidationError.errors()` para que sea JSON-serializable.
 
-    Pydantic v2 incluye, en `ctx`, la excepción original que levantó un `field_validator`
-    (por ejemplo, el `ValueError` de `UserCreate.role_must_be_publicly_registerable` en
-    `app/modules/users/schemas.py`) como objeto Python, no como texto. `json.dumps` no
-    sabe serializar un `ValueError` y rompe con un 500 en vez de devolver el 422 esperado
-    — se descubrió probando el registro con `role=admin` en esta misma fase. Acá se
-    convierte cualquier excepción dentro de `ctx` a su mensaje de texto antes de
-    devolver la respuesta.
+    Pydantic v2 incluye, en `ctx`, valores no serializables por `json.dumps` sin ayuda:
+    la excepción original que levantó un `field_validator` (por ejemplo, el `ValueError`
+    de `UserCreate.role_must_be_publicly_registerable` en `app/modules/users/schemas.py`)
+    — se descubrió probando el registro con `role=admin` en Fase 1 — y, desde que
+    `Lote.base_price`/`min_increment`/`reserve_price` (Módulo 2.2) son los primeros campos
+    `Decimal` del proyecto con restricciones numéricas (`gt=0`), también el límite
+    (`Decimal("0")`) que Pydantic adjunta a `ctx` cuando esa restricción falla — se
+    descubrió probando `base_price=0`. Acá se convierte cualquier valor no nativo de JSON
+    dentro de `ctx` a texto antes de devolver la respuesta.
     """
     sanitized = []
     for error in errors:
@@ -90,7 +93,7 @@ def _serialize_validation_errors(errors: list[dict]) -> list[dict]:
         ctx = error.get("ctx")
         if isinstance(ctx, dict):
             error["ctx"] = {
-                key: str(value) if isinstance(value, Exception) else value
+                key: str(value) if isinstance(value, Exception | Decimal) else value
                 for key, value in ctx.items()
             }
         sanitized.append(error)

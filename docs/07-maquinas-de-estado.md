@@ -81,6 +81,17 @@ stateDiagram-v2
 dado (RF-12). Esto es lo que permite razonar sobre "el lote activo" sin ambigüedad, y es
 además lo que se envía como snapshot a un cliente que se conecta o reconecta.
 
+**Estado de implementación** (Épica 2, [Módulo 2.2](15-modulo-lote.md)): el modelo, CRUD,
+permisos y reordenamiento de `Lote` están implementados; **ninguna transición de estado
+está expuesta todavía** — todo lote se crea y permanece en `PENDING`. El código ya modela
+las cinco transiciones completas (`app/modules/remates/lotes/state_machine.py`), pero
+`PENDING -> OPEN`, `OPEN -> CLOSED_SOLD/CLOSED_UNSOLD` y `-> CANCELLED` quedan para el
+módulo de Ofertas, que es quien puede validarlas contra bidding real. Se evaluó
+explícitamente agregar un estado `PAUSED` propio de Lote durante el diseño del Módulo 2.2
+y se descartó: la pausa ya es un concepto de `Remate` que alcanza a cualquier lote `OPEN`
+en ese momento, y duplicarlo a nivel de lote introduciría dos banderas independientes
+potencialmente inconsistentes entre sí (ver [docs/15-modulo-lote.md](15-modulo-lote.md)).
+
 ## Estados de una Oferta
 
 A diferencia de remate/lote, el estado de una oferta individual es mayormente **derivado**,

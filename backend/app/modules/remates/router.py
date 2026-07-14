@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Query, status
 from app.common.schemas import Page
 from app.modules.auth.dependencies import get_current_user, require_roles
 from app.modules.remates.dependencies import get_remate_service
+from app.modules.remates.lotes.router import router as lotes_router
 from app.modules.remates.models import Remate, RemateCategory, RemateStatus
 from app.modules.remates.schemas import (
     RemateCancelRequest,
@@ -28,6 +29,10 @@ from app.modules.remates.service import RemateService
 from app.modules.users.models import User, UserRole
 
 router = APIRouter()
+
+# Lote (Épica 2, Módulo 2.2) cuelga siempre de un remate — ver docs/15-modulo-lote.md
+# sobre por qué vive en un sub-paquete de `remates` en vez de un módulo nuevo.
+router.include_router(lotes_router, prefix="/{remate_id}/lotes", tags=["lotes"])
 
 
 @router.post(

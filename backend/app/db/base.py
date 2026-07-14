@@ -9,7 +9,8 @@ archivo, no cada módulo por separado.
 
 from app.db.base_class import Base
 from app.modules.auth.models import RefreshToken
+from app.modules.remates.lotes.models import Lote
 from app.modules.remates.models import Remate
 from app.modules.users.models import User
 
-__all__ = ["Base", "User", "RefreshToken", "Remate"]
+__all__ = ["Base", "User", "RefreshToken", "Remate", "Lote"]

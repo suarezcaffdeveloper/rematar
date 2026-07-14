@@ -44,6 +44,10 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [011](adr/ADR-011-refresh-tokens-persistidos-en-postgres.md) | Refresh tokens persistidos en PostgreSQL, con rotación | Aceptada |
 | [012](adr/ADR-012-configuracion-de-remate-como-jsonb.md) | Configuración del remate como JSONB validado con Pydantic | Aceptada |
 | [013](adr/ADR-013-categoria-de-remate-como-enum-nativo.md) | Categoría de remate como enum nativo de PostgreSQL | Aceptada |
+| [014](adr/ADR-014-atributos-flexibles-de-lote-y-categoria-compartida.md) | Atributos flexibles de Lote como JSONB, y categoría compartida con Remate | Aceptada |
+| [015](adr/ADR-015-numero-de-lote-y-orden-de-exhibicion-separados.md) | Número de lote y orden de exhibición como campos independientes | Aceptada |
+| [016](adr/ADR-016-precio-de-reserva-oculto-a-compradores.md) | Precio de reserva oculto para compradores | Aceptada |
+| [017](adr/ADR-017-invariante-un-lote-abierto-por-remate-como-indice-parcial.md) | Invariante "a lo sumo un lote OPEN por remate" (RF-12) como índice único parcial | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -86,3 +90,26 @@ el resumen de lo que un lector de esta página necesita saber:
   esta fase (crear, programar, cancelar) — `iniciar`/`pausar`/`reanudar`/`finalizar`
   dependen de que existan Lotes (RF-08) y se agregan en el módulo que los implemente,
   reutilizando esta misma tabla de transiciones.
+
+## Épica 2, Módulo 2.2 — notas de arquitectura del dominio Lote
+
+Detalle completo del modelo en [docs/15-modulo-lote.md](15-modulo-lote.md). Acá solo el
+resumen de lo que un lector de esta página necesita saber:
+
+- `Lote` vive en `app/modules/remates/lotes/`, un sub-paquete **dentro** del módulo
+  `remates` (no un módulo nuevo al mismo nivel que `auth`/`users`/`remates`), porque
+  `Remate` y `Lote` son, por diseño de Fase 0, el mismo módulo interno ("Remates: ciclo de
+  vida de remates y lotes"). Mismo set de archivos que `remates/` (`models.py`,
+  `schemas.py`, `repository.py`, `service.py`, `dependencies.py`, `router.py`,
+  `state_machine.py`).
+- Los únicos archivos existentes modificados fueron, otra vez, los dos puntos de
+  extensión ya usados en el Módulo 2.1: `app/db/base.py` y `app/modules/remates/router.py`
+  (una línea de `include_router` para montar `/remates/{remate_id}/lotes`).
+- CRUD completo (crear, ver, editar, eliminar, reordenar) sin ninguna transición de
+  estado expuesta: todo lote se crea en `PENDING` y queda ahí. `lotes/state_machine.py`
+  modela las cinco transiciones completas de todos modos, mismo patrón que
+  `remates/state_machine.py`, para que el módulo de Ofertas las reutilice sin
+  rediseñarlas.
+- Cuatro ADR nuevos (014 a 017): atributos flexibles + categoría compartida, número de
+  lote vs. orden de exhibición, ocultamiento del precio de reserva, e índice único
+  parcial para la invariante RF-12 aplicado preventivamente.
