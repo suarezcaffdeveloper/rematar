@@ -23,6 +23,21 @@ class LoteRepository:
             return None
         return lote
 
+    async def get_by_id_for_update(self, lote_id: uuid.UUID) -> Lote | None:
+        """`SELECT ... FOR UPDATE`: pone en práctica el lock de fila de ADR-004 (Fase 0)
+        para que `AuctionEngine.place_bid` (app/modules/ofertas/engine.py, Épica 2.4)
+        serialice toda oferta concurrente sobre un mismo lote. No hace falta ningún
+        lock explícito en `LoteService.open`/`close`/`cancel`: el `UPDATE` que esos
+        métodos ya emiten al hacer `commit()` adquiere el lock de fila implícito de
+        Postgres igual, así que se serializan correctamente contra este método sin
+        cambiar una sola línea de esos métodos — ver ADR-020, sección A."""
+        stmt = (
+            select(Lote)
+            .where(Lote.id == lote_id, Lote.deleted_at.is_(None))
+            .with_for_update()
+        )
+        return (await self._db.execute(stmt)).scalar_one_or_none()
+
     async def list_by_remate(
         self, *, remate_id: uuid.UUID, offset: int, limit: int
     ) -> tuple[list[Lote], int]:

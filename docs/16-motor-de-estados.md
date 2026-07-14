@@ -167,9 +167,17 @@ existían desde el Módulo 2.1, pre-agregadas exactamente para este momento.
 
 ## Qué queda para el módulo de Ofertas (próximo)
 
-- Recepción, validación y aceptación de ofertas en tiempo real (RF-17 a RF-20).
+**Actualización (Épica 2.4, 2026-07-15)**: la recepción, validación y aceptación de
+ofertas por HTTP ya está implementada — ver [17-auction-engine.md](17-auction-engine.md)
+y [ADR-020](adr/ADR-020-diseno-del-auction-engine.md). Lo que queda:
+
+- ~~Recepción, validación y aceptación de ofertas~~ — implementado (todavía por HTTP,
+  no WebSocket).
 - Determinación automática del ganador al cerrar un lote: `close(outcome, final_price)`
-  pasa de recibir esos valores manualmente del rematador a que el propio sistema los
-  calcule a partir de la oferta vigente — la transición de estado en sí (`OPEN ->
-  CLOSED_SOLD/CLOSED_UNSOLD`) no cambia, solo quién decide el resultado.
-- WebSockets, snapshot/reconexión, anti-sniping, notificaciones de "superado".
+  sigue recibiendo esos valores manualmente del rematador (ADR-018) — todavía no está
+  enganchado con la oferta vigente calculada por el Auction Engine. La transición de
+  estado en sí (`OPEN -> CLOSED_SOLD/CLOSED_UNSOLD`) no cambia, solo falta que algo
+  calcule `outcome`/`final_price` en vez de recibirlos como input manual.
+- WebSockets, Redis (fan-out), snapshot/reconexión, anti-sniping, notificaciones de
+  "superado" — ninguno tocado todavía; ver la sección "Qué queda" de
+  [17-auction-engine.md](17-auction-engine.md) para el detalle actualizado.

@@ -13,6 +13,10 @@ en que se registran). `open`/`close`/`cancel` no tienen este problema porque cue
 `open`, `open_next` (RF-13, "pasar al siguiente lote"), `close` y `cancel` son el motor
 de estados del lote (Épica 2, Módulo 2.3, ver docs/16-motor-de-estados.md); cada endpoint
 delega enteramente en el método homónimo de `LoteService`, sin lógica propia acá.
+
+`Oferta` (Épica 2.4, Auction Engine, ver docs/17-auction-engine.md) cuelga de un lote
+puntual; su router vive en `app/modules/ofertas/` (módulo propio, no de `remates` — ver
+ADR-020) y se monta acá con una única línea de `include_router`.
 """
 
 import uuid
@@ -22,6 +26,7 @@ from fastapi import APIRouter, Depends, Query, status
 
 from app.common.schemas import Page
 from app.modules.auth.dependencies import get_current_user
+from app.modules.ofertas.router import router as ofertas_router
 from app.modules.remates.lotes.dependencies import get_lote_service
 from app.modules.remates.lotes.models import Lote
 from app.modules.remates.lotes.schemas import (
@@ -36,6 +41,8 @@ from app.modules.remates.lotes.service import LoteService
 from app.modules.users.models import User
 
 router = APIRouter()
+
+router.include_router(ofertas_router, prefix="/{lote_id}/ofertas", tags=["ofertas"])
 
 
 @router.post(

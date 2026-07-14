@@ -129,3 +129,14 @@ rechazadas y su motivo— es la única forma de auditar qué pasó realmente (RF
 derivada ("la oferta `ACCEPTED` de mayor monto para este lote, si el lote sigue `OPEN`"),
 no un campo que haya que mantener sincronizado en dos lugares. Menos estado mutable
 duplicado, menos forma de que se desincronice.
+
+**Estado de implementación** (Épica 2.4, [Auction Engine](17-auction-engine.md)):
+`REJECTED`, `ACCEPTED` y `OUTBID` están implementados y expuestos por HTTP —
+`AuctionEngine.place_bid` (`app/modules/ofertas/engine.py`). El invariante "a lo sumo una
+`ACCEPTED` por lote" (garantizado por un índice único parcial, ver
+[ADR-020](adr/ADR-020-diseno-del-auction-engine.md)) es lo que permite que `LEADING` se
+resuelva con un simple filtro por estado, sin `MAX(amount)`. `WINNING` está modelado (el
+enum ya lo incluye, el índice único parcial ya lo protege) pero todavía no es alcanzable:
+la transición `ACCEPTED -> WINNING` al cerrar un lote como vendido queda para el módulo de
+tiempo real, que es quien va a enganchar `LoteService.close` con el resultado de la
+subasta.

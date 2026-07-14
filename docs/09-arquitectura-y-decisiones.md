@@ -50,6 +50,7 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [017](adr/ADR-017-invariante-un-lote-abierto-por-remate-como-indice-parcial.md) | Invariante "a lo sumo un lote OPEN por remate" (RF-12) como índice único parcial | Aceptada |
 | [018](adr/ADR-018-cierre-de-lote-sin-motor-de-ofertas.md) | Cierre de lote sin motor de ofertas: resultado declarado por el rematador | Aceptada |
 | [019](adr/ADR-019-finalizacion-automatica-de-remate.md) | Finalización automática del remate al resolverse el último lote (RF-10) | Aceptada |
+| [020](adr/ADR-020-diseno-del-auction-engine.md) | Diseño del Auction Engine: concurrencia, estados, idempotencia, invariantes | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -136,3 +137,28 @@ Detalle completo en [docs/16-motor-de-estados.md](16-motor-de-estados.md). Resum
 - `docs/14-modulo-remate.md` y `docs/15-modulo-lote.md` se corrigieron: ambos asumían que
   abrir/cerrar/cancelar un lote llegaría junto con Ofertas; en la práctica llegó antes,
   sin bidding (regla 5 de [docs/README.md](../docs/README.md#reglas-de-esta-documentación-aplican-a-todas-las-fases-futuras)).
+
+## Épica 2.4 — notas de arquitectura del Auction Engine
+
+Detalle completo en [docs/17-auction-engine.md](17-auction-engine.md) y
+[ADR-020](adr/ADR-020-diseno-del-auction-engine.md). Resumen:
+
+- `Oferta` vive en `app/modules/ofertas/`, un módulo **nuevo, top-level** — no un
+  sub-paquete de `remates` como `Lote`. `09` (este documento) ya distinguía "Bidding"
+  como módulo propio desde Fase 0; esta épica ejecuta esa separación, no la inventa.
+  `engine.py` (no `service.py`) contiene `AuctionEngine`, mismo criterio de nombre de
+  archivo que ya estableció `remates/state_machine.py` en el Módulo 2.1 para un
+  componente lo bastante central como para merecer su propio archivo.
+- Único cambio en código ya existente de `remates`/`lotes`: una función nueva y aditiva,
+  `LoteRepository.get_by_id_for_update`, que pone en práctica por primera vez el lock de
+  fila que [ADR-004](adr/ADR-004-concurrencia-en-determinacion-de-ganador.md) (Fase 0) ya
+  exigía. `RemateService`/`LoteService` no se tocan.
+- Ofertas rechazadas por reglas de negocio (remate pausado, lote cerrado, monto
+  insuficiente) se persisten como `Oferta REJECTED` con motivo (RF-18) — nunca como error
+  HTTP; solo fallas de autorización/enrutamiento (rol, suspensión, visibilidad) devuelven
+  403/404 sin persistir nada. Ver ADR-020, sección C.
+- Idempotencia (`client_token`) para que un reintento de red no duplique una oferta —
+  anticipado desde el glosario de Fase 0.
+- El motor es transporte-agnóstico por diseño: el mismo `AuctionEngine.place_bid` que
+  usan los endpoints HTTP de esta fase es el que va a llamar el futuro handler de
+  WebSocket, sin cambios.
