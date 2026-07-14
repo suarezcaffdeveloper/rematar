@@ -51,6 +51,8 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [018](adr/ADR-018-cierre-de-lote-sin-motor-de-ofertas.md) | Cierre de lote sin motor de ofertas: resultado declarado por el rematador | Aceptada |
 | [019](adr/ADR-019-finalizacion-automatica-de-remate.md) | Finalización automática del remate al resolverse el último lote (RF-10) | Aceptada |
 | [020](adr/ADR-020-diseno-del-auction-engine.md) | Diseño del Auction Engine: concurrencia, estados, idempotencia, invariantes | Aceptada |
+| [021](adr/ADR-021-integracion-de-redis.md) | Integración de Redis: cliente compartido y capas de infraestructura | Aceptada |
+| [022](adr/ADR-022-arquitectura-de-eventos.md) | Arquitectura de eventos de dominio: Event Bus interno sobre Redis Pub/Sub | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -162,3 +164,41 @@ Detalle completo en [docs/17-auction-engine.md](17-auction-engine.md) y
 - El motor es transporte-agnóstico por diseño: el mismo `AuctionEngine.place_bid` que
   usan los endpoints HTTP de esta fase es el que va a llamar el futuro handler de
   WebSocket, sin cambios.
+
+## Épica 3, Módulo 3.1 — notas de arquitectura de la integración de Redis
+
+Detalle completo en [docs/18-integracion-redis.md](18-integracion-redis.md) y
+[ADR-021](adr/ADR-021-integracion-de-redis.md). Resumen:
+
+- `app/redis/` — carpeta transversal nueva, al mismo nivel que `app/db/`, sin modelos de
+  negocio. Un único cliente Redis compartido (`app.state.redis`, creado en el `lifespan`
+  de `app/main.py`), a diferencia de `get_db` (una sesión nueva por request) — Redis ya
+  administra su propio pool de conexiones, pensado para vivir tanto como el proceso.
+- Cuatro capas de infraestructura genéricas y ya funcionales pero sin ningún consumidor
+  de dominio todavía: `RedisCache`, `RedisPubSub`, `RedisStreams`, `RedisLockFactory`.
+  Ninguna conoce `Remate`/`Lote`/`Oferta`.
+- `/health` reporta el estado de Redis (`checks.redis`) pero nunca devuelve `503` por su
+  causa — Redis sigue siendo soporte, nunca fuente de verdad (ADR-002), y hoy ningún
+  endpoint depende de él para funcionar.
+- Cero cambios en `app/modules/` — Auth, Users, Remates, Lotes y Ofertas quedan
+  exactamente como estaban.
+
+## Épica 3, Módulo 3.2 — notas de arquitectura de eventos
+
+Detalle completo en [docs/19-arquitectura-de-eventos.md](19-arquitectura-de-eventos.md) y
+[ADR-022](adr/ADR-022-arquitectura-de-eventos.md). Resumen:
+
+- `app/events/` — infraestructura transversal nueva (`DomainEvent`, `RemateScopedEvent`,
+  `EventBus` como `Protocol`, `RedisEventBus`). Los eventos concretos viven en cada
+  módulo de dominio (`remates/events.py`, `remates/lotes/events.py`,
+  `ofertas/events.py`), igual que sus modelos, repos y servicios.
+- Único cambio permitido (y aplicado) en el dominio existente: `RemateService`,
+  `LoteService` y `AuctionEngine` ganaron un parámetro `event_bus` y una llamada a
+  `publish(...)` al final de cada transición relevante — ninguna validación ni regla de
+  negocio cambió (la suite completa de los Módulos 2.1 a 2.4 sigue pasando sin
+  modificaciones).
+- Un canal de Redis Pub/Sub por remate (`events.<remate_id>`), no uno por tipo de
+  evento — pensado directamente para que el módulo de WebSockets se suscriba una sola
+  vez por remate.
+- `EventBus.publish` nunca lanza (best-effort, extensión de ADR-002): una caída de Redis
+  nunca hace fallar una operación de negocio ya confirmada en Postgres.

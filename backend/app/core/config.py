@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     # Formato esperado: postgresql+asyncpg://usuario:password@host:puerto/nombre_db
     DATABASE_URL: str
 
+    # --- Redis (Épica 3, Módulo 3.1) ---
+    # Formato esperado: redis://[:password@]host:puerto/db. Ver docs/18-integracion-redis.md.
+    REDIS_URL: str
+
     # --- Autenticación / JWT ---
     # Sin valor por defecto a propósito: un secreto hardcodeado en el código sería
     # una vulnerabilidad. Debe venir siempre de .env / del entorno de despliegue.

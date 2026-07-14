@@ -4,9 +4,16 @@
 importar — esto es lo que permite a los tests (`tests/conftest.py`) construir una app
 nueva con configuración de test sin depender de efectos secundarios de import. `app`
 (la instancia real que usa Uvicorn) se crea una única vez al final de este archivo.
+
+El `lifespan` (Épica 3, Módulo 3.1) es el único lugar que conoce el ciclo de vida
+completo del proceso: acá se crea el cliente Redis compartido al arrancar y se cierra
+prolijamente al apagar — ver docs/18-integracion-redis.md y `app/redis/client.py`.
 """
 
-from fastapi import FastAPI
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
@@ -14,6 +21,17 @@ from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
+from app.redis.client import build_redis_client
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings = get_settings()
+    app.state.redis = build_redis_client(settings)
+    try:
+        yield
+    finally:
+        await app.state.redis.aclose()
 
 
 def create_app() -> FastAPI:
@@ -23,13 +41,13 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.PROJECT_NAME,
         description=(
-            "Plataforma de remates en vivo. Fase 1: base técnica (auth, usuarios, roles). "
-            "Ver /docs para la documentación interactiva."
+            "Plataforma de remates en vivo. Ver /docs para la documentación interactiva."
         ),
         version="0.1.0",
         openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
         docs_url=f"{settings.API_V1_PREFIX}/docs",
         redoc_url=f"{settings.API_V1_PREFIX}/redoc",
+        lifespan=_lifespan,
     )
 
     app.add_middleware(
@@ -46,8 +64,15 @@ def create_app() -> FastAPI:
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
     @app.get("/health", tags=["health"], summary="Liveness/readiness probe")
-    async def health() -> dict[str, str]:
-        return {"status": "ok"}
+    async def health(request: Request) -> dict[str, object]:
+        # Nunca devuelve un status HTTP de error por Redis caído (soft-fail
+        # deliberado, ver ADR-021 sección C): Redis es soporte, nunca fuente de
+        # verdad (ADR-002), y hoy ningún endpoint depende de él para funcionar.
+        try:
+            redis_ok = bool(await request.app.state.redis.ping())
+        except Exception:  # noqa: BLE001 — cualquier falla de Redis es "no disponible"
+            redis_ok = False
+        return {"status": "ok", "checks": {"redis": "ok" if redis_ok else "unavailable"}}
 
     return app
 

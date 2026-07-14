@@ -12,15 +12,16 @@ concurrencia, tiempo real y escalabilidad — no en la cantidad de pantallas.
 
 ## Estado actual
 
-**Épica 2.4 — Auction Engine.** Fase 0 (diseño), Fase 1 (base técnica: auth, usuarios,
-roles, Docker), el modelo de Remate (Módulo 2.1), el modelo de Lote (Módulo 2.2), el
-motor de estados de Remate/Lote (Módulo 2.3) y ahora el Auction Engine (recepción,
-validación, aceptación/rechazo de ofertas, con concurrencia segura vía lock de fila) ya
-están implementados y probados — todavía por HTTP, sin WebSockets, Redis ni ningún
-componente de tiempo real. Esta carpeta sigue siendo la fuente de verdad del proyecto:
-cada fase nueva debe leerla antes de proponer cambios y actualizarla si algo deja de ser
-cierto. Ver el [README raíz](../README.md) para instrucciones de instalación y el estado
-exacto del código.
+**Épica 3, Módulo 3.2 — Arquitectura de Eventos.** Fase 0 (diseño), Fase 1 (base
+técnica: auth, usuarios, roles, Docker), el modelo de Remate (Módulo 2.1), el modelo de
+Lote (Módulo 2.2), el motor de estados de Remate/Lote (Módulo 2.3), el Auction Engine
+(Épica 2.4), Redis (Módulo 3.1) y ahora el sistema interno de eventos (Event Bus sobre
+Redis Pub/Sub, catálogo de eventos tipados, el dominio publica sin conocer consumidores)
+ya están implementados y probados — todavía sin WebSockets, sin ningún consumidor real.
+Esta carpeta sigue siendo la fuente de verdad del proyecto: cada fase nueva debe leerla
+antes de proponer cambios y actualizarla si algo deja de ser cierto. Ver el
+[README raíz](../README.md) para instrucciones de instalación y el estado exacto del
+código.
 
 ## Índice
 
@@ -43,6 +44,8 @@ exacto del código.
 | [15-modulo-lote.md](15-modulo-lote.md) | Diseño de la entidad Lote: campos, estados, permisos, reordenamiento (Épica 2.2) |
 | [16-motor-de-estados.md](16-motor-de-estados.md) | Motor de estados de Remate y Lote: transiciones, reglas de negocio, finalización automática (Épica 2.3) |
 | [17-auction-engine.md](17-auction-engine.md) | Auction Engine: entidad Oferta, funcionamiento interno, diagrama de flujo, preparación para Redis/WebSockets (Épica 2.4) |
+| [18-integracion-redis.md](18-integracion-redis.md) | Integración de Redis: cliente compartido, health check, capas de cache/pub-sub/streams/locks (Épica 3.1) |
+| [19-arquitectura-de-eventos.md](19-arquitectura-de-eventos.md) | Arquitectura de eventos: catálogo, Event Bus, flujo de publicación, preparación para WebSockets (Épica 3.2) |
 | [adr/](adr/) | Registro de decisiones de arquitectura (ADR), una por decisión relevante |
 
 ## Reglas de esta documentación (aplican a todas las fases futuras)
@@ -100,3 +103,12 @@ exacto del código.
   aceptación/rechazo de ofertas con concurrencia segura (lock de fila, ADR-004),
   idempotencia, historial inmutable; todavía por HTTP, sin WebSockets ni Redis. Ver
   [17-auction-engine.md](17-auction-engine.md), ADR-020.
+- **Épica 3, Módulo 3.1** (2026-07-16): Integración de Redis — cliente compartido vía
+  `lifespan`, health check, capas de cache/pub-sub/streams/locks preparadas y probadas,
+  sin ningún consumidor de dominio todavía. Ver
+  [18-integracion-redis.md](18-integracion-redis.md), ADR-021.
+- **Épica 3, Módulo 3.2** (2026-07-17): Arquitectura de Eventos — catálogo de eventos
+  tipados (Pydantic), Event Bus interno (`Protocol`) sobre Redis Pub/Sub, un canal por
+  remate, `RemateService`/`LoteService`/`AuctionEngine` publican sin conocer
+  consumidores; todavía sin ningún consumidor real. Ver
+  [19-arquitectura-de-eventos.md](19-arquitectura-de-eventos.md), ADR-022.

@@ -4,20 +4,26 @@ Plataforma de remates en vivo con ofertas en tiempo real. Ver [`docs/`](docs/) p
 diseño completo del sistema (visión, requisitos, arquitectura, ADRs) — este README cubre
 solo cómo levantar y trabajar con lo que existe hoy.
 
-**Estado del proyecto: Épica 2, Módulo 2.1 — Modelo de Remate.** Ya están implementados:
-la base técnica del backend (autenticación, usuarios, roles, infraestructura — Fase 1) y
-la entidad `Remate` completa (CRUD, permisos, ciclo de vida) sin relación con lotes
-todavía. Todavía no hay Lotes, Ofertas, WebSockets ni Redis — eso sigue en las próximas
-épicas (ver [Próximos pasos](#próximos-pasos)).
+**Estado del proyecto: Épica 3, Módulo 3.2 — Arquitectura de Eventos.** Ya están
+implementados: la base técnica del backend (autenticación, usuarios, roles — Fase 1),
+`Remate` (Épica 2.1), `Lote` (Épica 2.2), el motor de estados de ambos (Épica 2.3), el
+Auction Engine — recepción, validación, aceptación/rechazo de ofertas (Épica 2.4) —,
+Redis (cliente compartido, health check, capas de infraestructura — Épica 3.1) y ahora
+el sistema interno de eventos: el dominio publica un evento tipado por cada transición
+importante a través de un Event Bus, sobre Redis Pub/Sub, sin conocer quién lo consume
+(Épica 3.2). Todavía no hay WebSockets, chat, broadcast, notificaciones ni presencia —
+ningún consumidor real escucha esos eventos todavía (ver [Próximos pasos](#próximos-pasos)).
 
 ## Stack de esta fase
 
 | Pieza | Tecnología | Por qué (detalle en [docs/12](docs/12-stack-tecnologico.md)) |
 |---|---|---|
 | API | FastAPI (async) | Concurrencia real de primera clase, tipado, docs automáticas |
-| ORM | SQLAlchemy 2.0 (async, `asyncpg`) | Control transaccional explícito (necesario para el locking de ofertas en fases futuras) |
+| ORM | SQLAlchemy 2.0 (async, `asyncpg`) | Control transaccional explícito (`SELECT FOR UPDATE` en el Auction Engine, ver [ADR-004](docs/adr/ADR-004-concurrencia-en-determinacion-de-ganador.md)) |
 | Migraciones | Alembic (async) | Esquema versionado, nunca editado a mano |
 | Base de datos | PostgreSQL 16 | Fuente de verdad de negocio (ADR-002 de Fase 0) |
+| Cache / Pub-Sub / Locks | Redis 7 (`redis-py` async) | Soporte de infraestructura, nunca fuente de verdad (ADR-002); cliente compartido vía `lifespan` (ver [ADR-021](docs/adr/ADR-021-integracion-de-redis.md)) |
+| Eventos de dominio | Event Bus interno (`Protocol`) + Redis Pub/Sub | El dominio publica sin conocer consumidores; un canal por remate (ver [ADR-022](docs/adr/ADR-022-arquitectura-de-eventos.md)) |
 | Auth | JWT (PyJWT) + Argon2 (`argon2-cffi`) | Access token stateless + refresh token persistido y rotado (ver [ADR-011](docs/adr/ADR-011-refresh-tokens-persistidos-en-postgres.md)) |
 | Logging | `structlog` | Logs estructurados con `request_id` de contexto (RNF-15) |
 | Contenedores | Docker + Docker Compose | Entorno reproducible con un comando |
@@ -44,13 +50,24 @@ RematAR/
 │   │   │   ├── base_class.py         Base declarativa de SQLAlchemy + naming convention
 │   │   │   ├── base.py               Importa todos los modelos (para Alembic autogenerate)
 │   │   │   ├── session.py            Engine async + dependencia get_db
-│   │   │   └── mixins.py             UUIDPrimaryKeyMixin, TimestampMixin
+│   │   │   └── mixins.py             UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin
+│   │   ├── redis/                   Infraestructura de Redis, sin lógica de negocio (Épica 3.1)
+│   │   │   ├── client.py             Construcción del cliente compartido (build_redis_client)
+│   │   │   ├── dependencies.py        get_redis_client + una Depends() por capa
+│   │   │   ├── cache.py, pubsub.py, streams.py, locks.py   Capas genéricas, ver docs/18
+│   │   ├── events/                  Event Bus + base de eventos, sin conocer al dominio (Épica 3.2)
+│   │   │   ├── base.py                DomainEvent, RemateScopedEvent (topic por remate)
+│   │   │   ├── bus.py                 EventBus (Protocol) — el dominio depende de esto, no de Redis
+│   │   │   ├── redis_bus.py            RedisEventBus: publish() best-effort sobre RedisPubSub
+│   │   │   └── dependencies.py         get_event_bus, ver docs/19
 │   │   ├── common/
 │   │   │   └── schemas.py            Schemas genuinamente transversales (envelope de error, paginación)
 │   │   ├── modules/                 Un paquete por dominio de negocio (crece en fases futuras)
 │   │   │   ├── users/                Recurso User: modelo, repo, service, router
 │   │   │   ├── auth/                 Sesión/credenciales: JWT, refresh tokens, RBAC, router
-│   │   │   └── remates/              Recurso Remate: modelo, state_machine, repo, service, router
+│   │   │   ├── remates/               Recurso Remate + motor de estados + events.py (catálogo propio)
+│   │   │   │   └── lotes/              Recurso Lote (mismo bounded context que Remate), + su propio motor y events.py
+│   │   │   └── ofertas/               Auction Engine: modelo Oferta, engine.py, repo, router, events.py
 │   │   └── scripts/
 │   │       └── create_superuser.py   Bootstrap del primer administrador (fuera de la API pública)
 │   ├── alembic/                     Migraciones (env.py configurado para engine async)
@@ -130,7 +147,9 @@ python -c "import secrets; print(secrets.token_urlsafe(64))"
 > evitar el choque (esto se detectó en la práctica durante esta fase — ver
 > [docs/09-arquitectura-y-decisiones.md](docs/09-arquitectura-y-decisiones.md)). Dentro
 > de la red de Docker Compose el backend siempre se conecta a `db:5432`, ese mapeo solo
-> afecta accesos desde el host.
+> afecta accesos desde el host. Mismo criterio para Redis: si ya corre otro en 6379, acá
+> se mapea a **6380** (dentro de Docker Compose el backend siempre se conecta a
+> `redis:6379`).
 
 ### 2. Levantar el stack
 
@@ -138,8 +157,8 @@ python -c "import secrets; print(secrets.token_urlsafe(64))"
 docker compose up -d
 ```
 
-Esto levanta PostgreSQL, aplica las migraciones automáticamente (`docker-entrypoint.sh`
-corre `alembic upgrade head` antes de iniciar la app) y expone:
+Esto levanta PostgreSQL y Redis, aplica las migraciones automáticamente
+(`docker-entrypoint.sh` corre `alembic upgrade head` antes de iniciar la app) y expone:
 
 - API: http://localhost:8000
 - Documentación interactiva (Swagger UI): http://localhost:8000/api/v1/docs
@@ -147,12 +166,18 @@ corre `alembic upgrade head` antes de iniciar la app) y expone:
 - Adminer (UI de base de datos): http://localhost:8080 (sistema: PostgreSQL, servidor:
   `db`, usuario/clave/base según tu `.env`)
 
-Verificar que levantó bien:
+Verificar que Redis quedó bien integrado (Épica 3, Módulo 3.1 — ver
+[docs/18-integracion-redis.md](docs/18-integracion-redis.md)):
 
 ```bash
 curl http://localhost:8000/health
-# {"status":"ok"}
+# {"status":"ok","checks":{"redis":"ok"}}
 ```
+
+Si `checks.redis` da `"unavailable"`, revisá que el contenedor `redis` esté `healthy`
+(`docker compose ps`) — la API sigue funcionando igual (Redis es soporte, nunca fuente
+de verdad, ver [ADR-002](docs/adr/ADR-002-postgres-fuente-de-verdad-y-redis-como-soporte.md)),
+pero nada que dependa de Redis (a partir de la próxima épica, tiempo real) va a andar.
 
 ### 3. Crear el primer administrador
 
@@ -223,9 +248,10 @@ docker compose exec backend alembic upgrade head
 
 ### Tests
 
-Los tests corren contra una base PostgreSQL real (no SQLite, no mocks — ver el docstring
-de `backend/tests/conftest.py`), en una base separada `rematar_test`, y se ejecutan desde
-el host (no dentro del contenedor) para poder iterar rápido con un entorno local:
+Los tests corren contra un PostgreSQL y un Redis reales (no SQLite, no mocks — ver el
+docstring de `backend/tests/conftest.py`), en una base separada `rematar_test` y la DB 1
+de Redis (aislada de la DB 0 de desarrollo), y se ejecutan desde el host (no dentro del
+contenedor) para poder iterar rápido con un entorno local:
 
 ```bash
 # Una sola vez: crear la base de test
@@ -236,25 +262,25 @@ cd backend
 python -m venv .venv
 ./.venv/Scripts/pip install -e ".[dev]"   # en Linux/Mac: .venv/bin/pip
 
-# Correr la suite (usa localhost:5434, el puerto mapeado por docker-compose.yml)
+# Requiere Postgres (5434) y Redis (6380) levantados: docker compose up -d db redis
+# Correr la suite (usa los puertos mapeados por docker-compose.yml)
 ./.venv/Scripts/python -m pytest -v        # en Linux/Mac: .venv/bin/python
 ```
 
 ## Próximos pasos
 
 Según [docs/13-mvp-y-roadmap.md](docs/13-mvp-y-roadmap.md) y
-[docs/14-modulo-remate.md](docs/14-modulo-remate.md), lo que sigue:
+[docs/19-arquitectura-de-eventos.md](docs/19-arquitectura-de-eventos.md), lo que sigue
+(Épica 3, Módulo 3.3 — WebSockets, el primer consumidor real de eventos):
 
-- **Módulo 2.2 — Lotes**: modelo y máquina de estado de `Lote` (`PENDING` → `OPEN` →
-  `CLOSED_SOLD`/`CLOSED_UNSOLD`, ver [docs/07](docs/07-maquinas-de-estado.md)), relación
-  `Lote.remate_id`, con la restricción de que solo un lote por remate puede estar `OPEN`
-  a la vez (RF-12).
-- Recién ahí, agregar a `Remate` las transiciones que hoy quedaron deliberadamente afuera
-  (`start` -> LIVE, `pause`/`resume` <-> PAUSED, `finish` -> FINISHED), ahora que se puede
-  validar la precondición de RF-08 ("al menos un lote cargado").
-- Todavía **sin** WebSockets, Redis ni lógica de ofertas en el Módulo 2.2 — eso llega
-  recién cuando el ciclo de vida de remates/lotes esté sólido, siguiendo el orden que ya
-  documentamos en la Fase 0.
+- Conexión WebSocket autenticada por remate ([ADR-006](docs/adr/ADR-006-autenticacion-jwt-en-http-y-websocket.md)),
+  suscripta al canal `events.<remate_id>` que el dominio ya publica (Módulo 3.2).
+- Traducir cada evento de dominio a un mensaje de protocolo para el frontend — no
+  debería requerir tocar `RemateService`/`LoteService`/`AuctionEngine` de nuevo.
+- Snapshot completo al conectar/reconectar (RF-16, [ADR-008](docs/adr/ADR-008-snapshot-mas-delta-para-reconexion.md)),
+  presencia y rate limiting de ofertas, apoyados en las capas de Redis ya construidas.
+- La transición `Oferta.ACCEPTED -> WINNING` al cerrar un lote vendido, con su propio
+  evento, siguiendo el mismo patrón ya establecido.
 
 ## Documentación de referencia
 
@@ -263,3 +289,9 @@ Según [docs/13-mvp-y-roadmap.md](docs/13-mvp-y-roadmap.md) y
   arquitectura general y registro de todos los ADR.
 - [`docs/14-modulo-remate.md`](docs/14-modulo-remate.md) — diseño de la entidad Remate
   (Épica 2.1): campos, obligatoriedad, estados, permisos.
+- [`docs/17-auction-engine.md`](docs/17-auction-engine.md) — diseño del Auction Engine
+  (Épica 2.4): entidad Oferta, funcionamiento interno, concurrencia.
+- [`docs/18-integracion-redis.md`](docs/18-integracion-redis.md) — integración de Redis
+  (Épica 3.1): cliente compartido, health check, capas de infraestructura.
+- [`docs/19-arquitectura-de-eventos.md`](docs/19-arquitectura-de-eventos.md) —
+  arquitectura de eventos (Épica 3.2): catálogo, Event Bus, flujo de publicación.

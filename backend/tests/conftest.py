@@ -34,6 +34,10 @@ os.environ.setdefault(
     "postgresql+asyncpg://rematar:rematar@127.0.0.1:5434/rematar_test",
 )
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production-use")
+# DB 1, no la 0 (desarrollo): mismo Redis, distinto namespace lógico, para no pisar datos
+# si corrés los tests y el backend de desarrollo contra el mismo Redis al mismo tiempo
+# (ver docs/18-integracion-redis.md). Puerto 6380: el mapeado por docker-compose.yml.
+os.environ.setdefault("REDIS_URL", "redis://127.0.0.1:6380/1")
 
 from collections.abc import AsyncIterator
 
@@ -88,8 +92,15 @@ async def client(db_engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
     app = create_app()
     app.dependency_overrides[get_db] = _override_get_db
 
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
+    # `ASGITransport` no dispara el protocolo de `lifespan` de ASGI por sí solo (a
+    # diferencia de un servidor real como uvicorn) — sin esto, `app.state.redis` nunca
+    # se crearía y cualquier endpoint que dependa de Redis (ej. /health) fallaría en
+    # tests aunque funcione perfectamente en producción. `lifespan_context` es el
+    # mecanismo estándar de Starlette para disparar startup/shutdown sin un servidor
+    # real (ver docs/18-integracion-redis.md, Épica 3 Módulo 3.1).
+    async with app.router.lifespan_context(app):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
 
     app.dependency_overrides.clear()

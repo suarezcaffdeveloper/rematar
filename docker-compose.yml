@@ -23,6 +23,24 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      # Host 6380 -> contenedor 6379. Mismo motivo que el mapeo de "db" a 5434: 6379 ya
+      # está ocupado en esta máquina por Redis de otro proyecto — 6380 fue el primer
+      # puerto verificado libre (ver docs/09-arquitectura-y-decisiones.md). Dentro de la
+      # red de Docker Compose el backend igual se conecta a "redis:6379" (ver REDIS_URL
+      # en .env.example); esto solo afecta el acceso desde el host.
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Sin volumen a propósito: Redis acá es soporte (Pub/Sub, cache, locks), nunca fuente
+    # de verdad (ADR-002) — no hay ningún dato que valga la pena persistir entre
+    # reinicios del contenedor.
+
   backend:
     build:
       context: ./backend
@@ -34,6 +52,8 @@ services:
       - ./backend:/app
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 

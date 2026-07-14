@@ -35,6 +35,13 @@ lotes queda congelada, igual que ya aplica `RemateService.update` para el propio
 Abrir/cerrar/cancelar, en cambio, son acciones del remate **en curso**: exigen `LIVE`
 (abrir) o `LIVE`/`PAUSED` (cerrar, cancelar) — validación completamente separada de
 `_assert_structure_editable`, que no se toca.
+
+## Eventos de dominio (Épica 3, Módulo 3.2)
+
+`open`/`open_next`/`close`/`cancel` publican su evento correspondiente
+(`app/modules/remates/lotes/events.py`) al final, después de confirmar la transacción —
+ver docs/19-arquitectura-de-eventos.md y ADR-022. El CRUD estructural (Módulo 2.2) no
+publica nada, mismo criterio que el catálogo de eventos no lo incluye.
 """
 
 import uuid
@@ -44,6 +51,8 @@ from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
 
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
+from app.events.bus import EventBus
+from app.modules.remates.lotes.events import LoteCancelled, LoteClosed, LoteOpened
 from app.modules.remates.lotes.models import Lote, LoteStatus
 from app.modules.remates.lotes.repository import LoteRepository
 from app.modules.remates.lotes.schemas import LoteCloseOutcome, LoteCreate, LoteUpdate
@@ -54,9 +63,15 @@ from app.modules.users.models import User, UserRole
 
 
 class LoteService:
-    def __init__(self, repository: LoteRepository, remate_service: RemateService) -> None:
+    def __init__(
+        self,
+        repository: LoteRepository,
+        remate_service: RemateService,
+        event_bus: EventBus,
+    ) -> None:
         self._repository = repository
         self._remate_service = remate_service
+        self._event_bus = event_bus
 
     @staticmethod
     def _assert_structure_editable(remate: Remate) -> None:
@@ -218,6 +233,14 @@ class LoteService:
             "Ya hay un lote abierto en este remate (conflicto de concurrencia)."
         )
         await self._repository.refresh(lote)
+        await self._event_bus.publish(
+            LoteOpened(
+                remate_id=remate.id,
+                lote_id=lote.id,
+                lot_number=lote.lot_number,
+                display_order=lote.display_order,
+            )
+        )
         return lote
 
     async def open_next(self, remate_id: uuid.UUID, owner: User) -> Lote:
@@ -234,6 +257,14 @@ class LoteService:
             "Ya hay un lote abierto en este remate (conflicto de concurrencia)."
         )
         await self._repository.refresh(lote)
+        await self._event_bus.publish(
+            LoteOpened(
+                remate_id=remate.id,
+                lote_id=lote.id,
+                lot_number=lote.lot_number,
+                display_order=lote.display_order,
+            )
+        )
         return lote
 
     async def close(
@@ -265,6 +296,14 @@ class LoteService:
         lote.closed_at = datetime.now(UTC)
         await self._repository.commit()
         await self._repository.refresh(lote)
+        await self._event_bus.publish(
+            LoteClosed(
+                remate_id=remate.id,
+                lote_id=lote.id,
+                outcome=outcome.value,
+                final_price=final_price,
+            )
+        )
 
         await self._remate_service.try_auto_finish(remate)
         return lote
@@ -286,6 +325,9 @@ class LoteService:
         lote.cancelled_at = datetime.now(UTC)
         await self._repository.commit()
         await self._repository.refresh(lote)
+        await self._event_bus.publish(
+            LoteCancelled(remate_id=remate.id, lote_id=lote.id, reason=reason)
+        )
 
         await self._remate_service.try_auto_finish(remate)
         return lote

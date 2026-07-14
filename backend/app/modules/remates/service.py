@@ -13,6 +13,13 @@ servicio que faltaban, tal como esa fase anticipaba.
 `try_auto_finish` no es una transición expuesta por HTTP: la llama `LoteService` después
 de cerrar/cancelar un lote, para la finalización automática de RF-10 (ver ADR-019).
 
+## Eventos de dominio (Épica 3, Módulo 3.2)
+
+Cada transición publica su evento correspondiente (`app/modules/remates/events.py`) a
+través de `EventBus`, siempre como última instrucción, después de confirmar la
+transacción — ver docs/19-arquitectura-de-eventos.md y ADR-022. Es el único cambio de
+esta fase: ninguna validación ni regla de negocio de las descriptas arriba se modificó.
+
 ## Permisos (ver docs/14-modulo-remate.md para el detalle completo)
 
 - Crear: solo rol `rematador` (aplicado en el router vía `require_roles`).
@@ -28,6 +35,16 @@ import uuid
 from datetime import UTC, datetime
 
 from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
+from app.events.bus import EventBus
+from app.modules.remates.events import (
+    RemateCancelled,
+    RemateCreated,
+    RemateFinished,
+    RematePaused,
+    RemateResumed,
+    RemateScheduled,
+    RemateStarted,
+)
 from app.modules.remates.lotes.repository import LoteRepository
 from app.modules.remates.models import Remate, RemateCategory, RemateStatus
 from app.modules.remates.repository import RemateRepository
@@ -37,9 +54,15 @@ from app.modules.users.models import User, UserRole
 
 
 class RemateService:
-    def __init__(self, repository: RemateRepository, lote_repository: LoteRepository) -> None:
+    def __init__(
+        self,
+        repository: RemateRepository,
+        lote_repository: LoteRepository,
+        event_bus: EventBus,
+    ) -> None:
         self._repository = repository
         self._lote_repository = lote_repository
+        self._event_bus = event_bus
 
     async def create(self, owner: User, data: RemateCreate) -> Remate:
         remate = Remate(
@@ -56,6 +79,14 @@ class RemateService:
         self._repository.add(remate)
         await self._repository.commit()
         await self._repository.refresh(remate)
+        await self._event_bus.publish(
+            RemateCreated(
+                remate_id=remate.id,
+                owner_id=remate.owner_id,
+                title=remate.title,
+                category=remate.category,
+            )
+        )
         return remate
 
     @staticmethod
@@ -136,6 +167,9 @@ class RemateService:
         remate.status = RemateStatus.SCHEDULED
         await self._repository.commit()
         await self._repository.refresh(remate)
+        await self._event_bus.publish(
+            RemateScheduled(remate_id=remate.id, starts_at=remate.starts_at)
+        )
         return remate
 
     async def cancel(self, remate_id: uuid.UUID, owner: User, reason: str) -> Remate:
@@ -148,6 +182,7 @@ class RemateService:
 
         await self._repository.commit()
         await self._repository.refresh(remate)
+        await self._event_bus.publish(RemateCancelled(remate_id=remate.id, reason=reason))
         return remate
 
     async def soft_delete(self, remate_id: uuid.UUID, owner: User) -> None:
@@ -173,6 +208,7 @@ class RemateService:
         remate.status = RemateStatus.LIVE
         await self._repository.commit()
         await self._repository.refresh(remate)
+        await self._event_bus.publish(RemateStarted(remate_id=remate.id))
         return remate
 
     async def pause(self, remate_id: uuid.UUID, owner: User) -> Remate:
@@ -182,6 +218,7 @@ class RemateService:
         remate.status = RemateStatus.PAUSED
         await self._repository.commit()
         await self._repository.refresh(remate)
+        await self._event_bus.publish(RematePaused(remate_id=remate.id))
         return remate
 
     async def resume(self, remate_id: uuid.UUID, owner: User) -> Remate:
@@ -191,6 +228,7 @@ class RemateService:
         remate.status = RemateStatus.LIVE
         await self._repository.commit()
         await self._repository.refresh(remate)
+        await self._event_bus.publish(RemateResumed(remate_id=remate.id))
         return remate
 
     async def finish(self, remate_id: uuid.UUID, owner: User) -> Remate:
@@ -206,6 +244,7 @@ class RemateService:
         remate.finished_at = datetime.now(UTC)
         await self._repository.commit()
         await self._repository.refresh(remate)
+        await self._event_bus.publish(RemateFinished(remate_id=remate.id, triggered_by="manual"))
         return remate
 
     async def try_auto_finish(self, remate: Remate) -> None:
@@ -224,3 +263,4 @@ class RemateService:
         remate.finished_at = datetime.now(UTC)
         await self._repository.commit()
         await self._repository.refresh(remate)
+        await self._event_bus.publish(RemateFinished(remate_id=remate.id, triggered_by="auto"))

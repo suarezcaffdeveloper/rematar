@@ -27,6 +27,15 @@ Todo el procesamiento corre dentro de la transacción que abre
 `LoteRepository.get_by_id_for_update` (`SELECT ... FOR UPDATE`, ADR-004 de Fase 0) — el
 lock de esa fila puntual del lote serializa toda oferta concurrente sobre él, sin
 importar la instancia de backend que la reciba.
+
+## Eventos de dominio (Épica 3, Módulo 3.2)
+
+`place_bid` publica (`app/modules/ofertas/events.py`, después de confirmar la
+transacción): `OfertaPlaced` siempre que se persiste una fila (aceptada o rechazada, ver
+`_save`), `OfertaAccepted`/`OfertaRejected` según el resultado, y `OfertaWinnerChanged`
+cuando una oferta aceptada supera a una vigente anterior. El camino de reintento
+idempotente (`client_token` ya existe) no publica nada — no ocurrió nada nuevo. Ver
+docs/19-arquitectura-de-eventos.md y ADR-022.
 """
 
 import uuid
@@ -35,6 +44,13 @@ from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
 
 from app.core.exceptions import ForbiddenError, NotFoundError
+from app.events.bus import EventBus
+from app.modules.ofertas.events import (
+    OfertaAccepted,
+    OfertaPlaced,
+    OfertaRejected,
+    OfertaWinnerChanged,
+)
 from app.modules.ofertas.models import Oferta, OfertaStatus
 from app.modules.ofertas.repository import OfertaRepository
 from app.modules.ofertas.schemas import OfertaCreate
@@ -51,10 +67,12 @@ class AuctionEngine:
         repository: OfertaRepository,
         remate_service: RemateService,
         lote_repository: LoteRepository,
+        event_bus: EventBus,
     ) -> None:
         self._repository = repository
         self._remate_service = remate_service
         self._lote_repository = lote_repository
+        self._event_bus = event_bus
 
     async def place_bid(
         self, remate_id: uuid.UUID, lote_id: uuid.UUID, buyer: User, data: OfertaCreate
@@ -94,7 +112,20 @@ class AuctionEngine:
                 rejection_reason=reason,
                 client_token=data.client_token,
             )
-            return await self._save(oferta, buyer_id=buyer.id, client_token=data.client_token)
+            oferta = await self._save(
+                oferta, remate_id=remate_id, buyer_id=buyer.id, client_token=data.client_token
+            )
+            await self._event_bus.publish(
+                OfertaRejected(
+                    remate_id=remate_id,
+                    oferta_id=oferta.id,
+                    lote_id=lote_id,
+                    buyer_id=buyer.id,
+                    amount=oferta.amount,
+                    reason=reason,
+                )
+            )
+            return oferta
 
         if leading is not None:
             leading.status = OfertaStatus.OUTBID
@@ -106,7 +137,31 @@ class AuctionEngine:
             status=OfertaStatus.ACCEPTED,
             client_token=data.client_token,
         )
-        return await self._save(oferta, buyer_id=buyer.id, client_token=data.client_token)
+        oferta = await self._save(
+            oferta, remate_id=remate_id, buyer_id=buyer.id, client_token=data.client_token
+        )
+        await self._event_bus.publish(
+            OfertaAccepted(
+                remate_id=remate_id,
+                oferta_id=oferta.id,
+                lote_id=lote_id,
+                buyer_id=buyer.id,
+                amount=oferta.amount,
+            )
+        )
+        if leading is not None:
+            await self._event_bus.publish(
+                OfertaWinnerChanged(
+                    remate_id=remate_id,
+                    lote_id=lote_id,
+                    previous_oferta_id=leading.id,
+                    previous_buyer_id=leading.buyer_id,
+                    new_oferta_id=oferta.id,
+                    new_buyer_id=oferta.buyer_id,
+                    new_amount=oferta.amount,
+                )
+            )
+        return oferta
 
     @staticmethod
     def _first_rejection_reason(
@@ -129,7 +184,12 @@ class AuctionEngine:
         return None
 
     async def _save(
-        self, oferta: Oferta, *, buyer_id: uuid.UUID, client_token: str | None
+        self,
+        oferta: Oferta,
+        *,
+        remate_id: uuid.UUID,
+        buyer_id: uuid.UUID,
+        client_token: str | None,
     ) -> Oferta:
         self._repository.add(oferta)
         try:
@@ -139,16 +199,26 @@ class AuctionEngine:
             # Dos reintentos concurrentes del mismo comprador con el mismo client_token
             # pueden pasar ambos el chequeo de idempotencia de `place_bid` si ninguno
             # todavía había confirmado — acá se recupera la fila que sí llegó a
-            # persistirse. Si el conflicto no es por el client_token (ej. se violó el
-            # invariante "a lo sumo una ACCEPTED por lote", que el lock ya debería
-            # impedir), se re-lanza: eso sí es un error inesperado, no un conflicto de
-            # negocio esperable.
+            # persistirse (sin publicar nada: no es un evento nuevo). Si el conflicto no
+            # es por el client_token (ej. se violó el invariante "a lo sumo una ACCEPTED
+            # por lote", que el lock ya debería impedir), se re-lanza: eso sí es un error
+            # inesperado, no un conflicto de negocio esperable.
             if client_token is not None:
                 existing = await self._repository.get_by_buyer_and_token(buyer_id, client_token)
                 if existing is not None:
                     return existing
             raise
         await self._repository.refresh(oferta)
+        await self._event_bus.publish(
+            OfertaPlaced(
+                remate_id=remate_id,
+                oferta_id=oferta.id,
+                lote_id=oferta.lote_id,
+                buyer_id=oferta.buyer_id,
+                amount=oferta.amount,
+                status=oferta.status,
+            )
+        )
         return oferta
 
     async def get_leading_amount(
