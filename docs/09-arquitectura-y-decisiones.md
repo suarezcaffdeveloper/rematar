@@ -1,0 +1,88 @@
+# 09 — Arquitectura General y Decisiones
+
+## Visión de la arquitectura
+
+RematAR se implementa como un **monolito modular**: un único desplegable de backend
+(FastAPI), organizado internamente en módulos con límites explícitos, corriendo en
+**múltiples instancias sin estado compartido en memoria**, detrás de un balanceador de
+carga. La coordinación entre instancias (difusión de eventos en tiempo real) pasa por
+Redis; la consistencia de negocio (quién ganó una oferta) pasa exclusivamente por
+PostgreSQL.
+
+Módulos internos previstos (detalle de límites y contenido en [10-diagramas.md](10-diagramas.md)):
+
+- **Auth**: usuarios, roles, emisión/validación de JWT.
+- **Remates**: ciclo de vida de remates y lotes, sus máquinas de estado.
+- **Bidding**: recepción, validación y resolución de ofertas en tiempo real; es el módulo
+  más sensible del sistema (ver R-01 en [08-riesgos-tecnicos.md](08-riesgos-tecnicos.md)).
+- **Realtime/Conexiones**: gestión de conexiones WebSocket y su integración con el
+  backplane de Redis Pub/Sub.
+- **Notificaciones**: seguimiento de remates, avisos de "superado", inicio de remate.
+- **Streaming-integration**: módulo deliberadamente delgado, solo resuelve la URL externa
+  de transmisión asociada a un remate (ver [ADR-005](adr/ADR-005-transmision-en-vivo-fuera-de-alcance-del-mvp.md)).
+
+Por qué monolito modular y no microservicios desde el día uno, por qué Postgres es la
+única fuente de verdad de negocio y Redis solo soporte, por qué WebSockets nativos y no
+una librería como Socket.IO, y el resto de las decisiones con trade-offs reales, están
+documentadas individualmente como ADR — no acá, para que cada una tenga su propio
+contexto, alternativas consideradas y consecuencias aceptadas.
+
+## Registro de decisiones de arquitectura (ADR)
+
+| ADR | Título | Estado |
+|---|---|---|
+| [001](adr/ADR-001-modular-monolito-vs-microservicios.md) | Monolito modular vs. microservicios | Aceptada |
+| [002](adr/ADR-002-postgres-fuente-de-verdad-y-redis-como-soporte.md) | PostgreSQL como fuente de verdad, Redis como soporte (pub/sub, cache, rate limiting) | Aceptada |
+| [003](adr/ADR-003-websockets-nativos-vs-socketio.md) | WebSockets nativos vs. Socket.IO | Aceptada |
+| [004](adr/ADR-004-concurrencia-en-determinacion-de-ganador.md) | Concurrencia en la determinación del ganador de un lote | Aceptada |
+| [005](adr/ADR-005-transmision-en-vivo-fuera-de-alcance-del-mvp.md) | Transmisión en vivo fuera del alcance del MVP | Aceptada |
+| [006](adr/ADR-006-autenticacion-jwt-en-http-y-websocket.md) | Autenticación JWT en HTTP y en WebSocket | Aceptada |
+| [007](adr/ADR-007-anti-sniping.md) | Anti-sniping: extensión automática de cierre de lote | Aceptada |
+| [008](adr/ADR-008-snapshot-mas-delta-para-reconexion.md) | Reconexión: snapshot completo en vez de replay de eventos | Aceptada |
+| [009](adr/ADR-009-redis-pubsub-vs-streams-para-fanout.md) | Redis Pub/Sub (no Streams) para el fan-out de tiempo real | Aceptada |
+| [010](adr/ADR-010-enum-nativo-de-roles-en-postgres.md) | Enum nativo de PostgreSQL para el rol de usuario | Aceptada |
+| [011](adr/ADR-011-refresh-tokens-persistidos-en-postgres.md) | Refresh tokens persistidos en PostgreSQL, con rotación | Aceptada |
+| [012](adr/ADR-012-configuracion-de-remate-como-jsonb.md) | Configuración del remate como JSONB validado con Pydantic | Aceptada |
+| [013](adr/ADR-013-categoria-de-remate-como-enum-nativo.md) | Categoría de remate como enum nativo de PostgreSQL | Aceptada |
+
+Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
+
+## Fase 1 — notas de arquitectura del backend
+
+Además de los ADR de arriba (ADR-010 y ADR-011 se escribieron durante esta fase), la
+Fase 1 implementó la base técnica del backend siguiendo esta documentación de Fase 0 sin
+contradecirla. Dos hallazgos de esta fase, no previstos en el diseño original, quedan
+registrados acá porque son relevantes para cualquier fase futura que toque este código:
+
+- **Organización interna por módulo de dominio** (`app/modules/<dominio>/`), no por capa
+  técnica plana. Ver la justificación completa en el [README](../README.md#por-qué-esta-organización-no-por-capa-técnica-por-módulo-de-dominio)
+  — en resumen, refleja los límites de módulo que ADR-001 ya pedía, y es lo que hace
+  viable extraer un módulo a un servicio separado el día que haga falta.
+- **Conflictos de puertos en desarrollo**: la máquina de desarrollo tenía Postgres de
+  otro proyecto en 5432 y otro proceso (un Postgres nativo de Windows) escuchando también
+  en 5433, lo que causó fallas de autenticación intermitentes hasta detectar el conflicto
+  con `netstat`. `docker-compose.yml` mapea el Postgres de RematAR al puerto 5434 del host
+  por esta razón — no es una preferencia de diseño, es evitar un choque real observado en
+  la práctica. Cualquier persona que levante este proyecto en una máquina distinta debería
+  poder usar 5432 sin problema; se documenta acá para que quede claro que 5434 no es
+  significativo, solo el primer puerto libre encontrado.
+
+## Épica 2, Módulo 2.1 — notas de arquitectura del dominio Remate
+
+Detalle completo del modelo en [docs/14-modulo-remate.md](14-modulo-remate.md). Acá solo
+el resumen de lo que un lector de esta página necesita saber:
+
+- Módulo nuevo `app/modules/remates/`, con la misma separación en capas que `users`/`auth`
+  (models, schemas, repository, service, dependencies, router) más un `state_machine.py`
+  propio — la máquina de estados de Remate es lo bastante importante como para no
+  enterrarla dentro de `service.py`.
+- No se tocó ningún archivo de `auth`, `users`, Docker ni configuración: los únicos
+  archivos existentes modificados fueron `app/db/mixins.py` (se **agregó**
+  `SoftDeleteMixin`, sin tocar los mixins de Fase 1), `app/db/base.py` y
+  `app/api/router.py` (los dos puntos de extensión pensados exactamente para registrar
+  un módulo nuevo, ver sus propios docstrings de Fase 1).
+- El estado del remate se implementa con las seis transiciones completas modeladas
+  (`state_machine.ALLOWED_TRANSITIONS`), pero solo tres quedan expuestas por HTTP en
+  esta fase (crear, programar, cancelar) — `iniciar`/`pausar`/`reanudar`/`finalizar`
+  dependen de que existan Lotes (RF-08) y se agregan en el módulo que los implemente,
+  reutilizando esta misma tabla de transiciones.

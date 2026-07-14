@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16-alpine
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rematar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rematar}
+      POSTGRES_DB: ${POSTGRES_DB:-rematar}
+    ports:
+      # Host 5434 -> contenedor 5432. Se probó 5432 y 5433 primero, y ambos ya estaban
+      # ocupados en esta máquina por Postgres de otros proyectos/servicios nativos —
+      # 5434 fue el primer puerto verificado libre (ver README, sección de troubleshooting).
+      # Dentro de la red de Docker Compose el backend igual se conecta a "db:5432" (ver
+      # DATABASE_URL en .env.example); esto solo afecta el acceso desde el host (ej. un
+      # cliente SQL local o los tests corriendo fuera de Docker).
+      - "5434:5432"
+    volumes:
+      - rematar_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rematar} -d ${POSTGRES_DB:-rematar}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # UI mínima de administración de la base de datos, útil en desarrollo para inspeccionar
+  # tablas sin instalar un cliente Postgres aparte. No forma parte del sistema en sí.
+  adminer:
+    image: adminer:latest
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
+volumes:
+  rematar_db_data:
