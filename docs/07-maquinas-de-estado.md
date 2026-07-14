@@ -46,12 +46,12 @@ digan lo mismo. Esto importa en la práctica: un remate puede programarse (queda
 públicamente, con fecha confirmada) sin tener lotes todavía; recién para pasar a `LIVE`
 hace falta al menos uno.
 
-**Estado de implementación** (Épica 2, [Módulo 2.1](14-modulo-remate.md)): están
-implementadas `DRAFT -> SCHEDULED` y `(no terminal) -> CANCELLED`. `SCHEDULED -> LIVE`,
-`LIVE <-> PAUSED` y `LIVE -> FINISHED` quedan para el módulo que agregue Lotes, porque
-recién ahí se puede validar la precondición de RF-08. El código ya modela las seis
-transiciones completas (`app/modules/remates/state_machine.py`), solo falta exponer las
-que dependen de Lotes.
+**Estado de implementación** (Épica 2, [Módulo 2.3](16-motor-de-estados.md)): las seis
+transiciones están implementadas y expuestas por HTTP. `DRAFT -> SCHEDULED` y
+`(no terminal) -> CANCELLED` desde el Módulo 2.1; `SCHEDULED -> LIVE` (validando RF-08),
+`LIVE <-> PAUSED` y `LIVE -> FINISHED` (manual o automático al resolverse el último lote,
+RF-10) desde el Módulo 2.3. La tabla de transiciones (`app/modules/remates/state_machine.py`)
+no cambió desde el Módulo 2.1 — el 2.3 solo agregó los métodos de servicio que faltaban.
 
 ## Estados de un Lote
 
@@ -81,12 +81,14 @@ stateDiagram-v2
 dado (RF-12). Esto es lo que permite razonar sobre "el lote activo" sin ambigüedad, y es
 además lo que se envía como snapshot a un cliente que se conecta o reconecta.
 
-**Estado de implementación** (Épica 2, [Módulo 2.2](15-modulo-lote.md)): el modelo, CRUD,
-permisos y reordenamiento de `Lote` están implementados; **ninguna transición de estado
-está expuesta todavía** — todo lote se crea y permanece en `PENDING`. El código ya modela
-las cinco transiciones completas (`app/modules/remates/lotes/state_machine.py`), pero
-`PENDING -> OPEN`, `OPEN -> CLOSED_SOLD/CLOSED_UNSOLD` y `-> CANCELLED` quedan para el
-módulo de Ofertas, que es quien puede validarlas contra bidding real. Se evaluó
+**Estado de implementación** (Épica 2, [Módulo 2.3](16-motor-de-estados.md)): las cinco
+transiciones están implementadas y expuestas por HTTP — `PENDING -> OPEN` (`open`/
+`open_next`), `OPEN -> CLOSED_SOLD/CLOSED_UNSOLD` (`close`, con resultado declarado
+manualmente por el rematador mientras no exista bidding, ver
+[ADR-018](adr/ADR-018-cierre-de-lote-sin-motor-de-ofertas.md)) y
+`PENDING/OPEN -> CANCELLED` (`cancel`). La tabla de transiciones
+(`app/modules/remates/lotes/state_machine.py`) no cambió desde el Módulo 2.2 — ya modelaba
+las cinco completas, el 2.3 solo agregó los métodos de servicio que faltaban. Se evaluó
 explícitamente agregar un estado `PAUSED` propio de Lote durante el diseño del Módulo 2.2
 y se descartó: la pausa ya es un concepto de `Remate` que alcanza a cualquier lote `OPEN`
 en ese momento, y duplicarlo a nivel de lote introduciría dos banderas independientes

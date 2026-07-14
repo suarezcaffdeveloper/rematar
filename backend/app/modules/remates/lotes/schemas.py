@@ -6,6 +6,7 @@ Remate.settings (JSONB validado en el borde, ver ADR-012/ADR-014): acá se defin
 sub-schemas que le dan forma a esas listas/diccionarios antes de persistirlos.
 """
 
+import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -126,6 +127,37 @@ class LoteReorderRequest(BaseModel):
     lote_ids: list[uuid.UUID] = Field(min_length=1)
 
 
+class LoteCloseOutcome(str, enum.Enum):
+    """Resultado de cerrar un lote, declarado por el rematador mientras no exista motor
+    de ofertas — ver ADR-018 (docs/adr/ADR-018-cierre-de-lote-sin-motor-de-ofertas.md)."""
+
+    SOLD = "sold"
+    UNSOLD = "unsold"
+
+
+class LoteCloseRequest(BaseModel):
+    """Body de `POST .../lotes/{lote_id}/close` (Módulo 2.3, ADR-018). `final_price` es
+    obligatorio si `outcome == "sold"` y debe venir vacío si `outcome == "unsold"` — la
+    comparación contra `base_price` la hace `LoteService.close`, que sí conoce el lote."""
+
+    outcome: LoteCloseOutcome
+    final_price: Decimal | None = Field(default=None, gt=0, max_digits=14, decimal_places=2)
+
+    @model_validator(mode="after")
+    def _validate_final_price(self) -> "LoteCloseRequest":
+        if self.outcome == LoteCloseOutcome.SOLD and self.final_price is None:
+            raise ValueError("Hace falta indicar 'final_price' para marcar el lote como vendido.")
+        if self.outcome == LoteCloseOutcome.UNSOLD and self.final_price is not None:
+            raise ValueError("Un lote desierto no debe tener 'final_price'.")
+        return self
+
+
+class LoteCancelRequest(BaseModel):
+    """Motivo obligatorio (RF-11), mismo criterio que `RemateCancelRequest`."""
+
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class LoteRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -146,5 +178,10 @@ class LoteRead(BaseModel):
     # None para compradores (ADR-016), aunque el valor persistido no sea nulo.
     reserve_price: Decimal | None
     status: LoteStatus
+    opened_at: datetime | None
+    closed_at: datetime | None
+    final_price: Decimal | None
+    cancellation_reason: str | None
+    cancelled_at: datetime | None
     created_at: datetime
     updated_at: datetime

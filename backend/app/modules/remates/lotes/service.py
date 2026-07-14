@@ -1,19 +1,25 @@
 """Lógica de negocio de Lote.
 
-## Alcance de esta fase (Módulo 2.2)
+## Alcance (Módulo 2.2 + Módulo 2.3)
 
-CRUD completo (`create`, `update`, `soft_delete`, `reorder`) más lectura con visibilidad
-(`get_visible_or_raise`, `list_for_viewer`). Deliberadamente NO se implementa ninguna
-transición de estado (abrir/cerrar/cancelar un lote): todo lote se crea en `PENDING` y
-`lotes/state_machine.py` no se invoca desde ningún lado todavía — queda para el módulo de
-Ofertas (ver docs/15-modulo-lote.md).
+CRUD estructural (`create`, `update`, `soft_delete`, `reorder`) más lectura con
+visibilidad (`get_visible_or_raise`, `list_for_viewer`) desde el Módulo 2.2 — sigue
+intacto, sin cambios de comportamiento.
 
-## Permisos (ver docs/15-modulo-lote.md para el detalle completo)
+Motor de estados (Módulo 2.3, ver docs/16-motor-de-estados.md): `open` (abre un lote
+puntual por id), `open_next` (abre el `PENDING` de menor `display_order`, RF-13), `close`
+(con resultado declarado por el rematador mientras no exista bidding, ver ADR-018) y
+`cancel` (distinto de `soft_delete`: `cancel` es una transición de estado con motivo,
+válida durante un remate `LIVE`/`PAUSED`; `soft_delete` es una baja estructural, válida
+solo en `DRAFT`/`SCHEDULED` — son operaciones distintas a propósito, mismo criterio que
+`Remate.cancel` vs. `Remate.soft_delete` en el Módulo 2.1).
 
-- Crear/editar/eliminar/reordenar: exclusivamente el rematador dueño del remate padre. No
-  hay chequeo de rol explícito acá ni en el router: solo un `rematador` puede ser dueño de
-  un remate (se garantiza desde `RemateService.create`), así que verificar ownership del
-  remate ya alcanza.
+## Permisos (ver docs/15-modulo-lote.md y docs/16-motor-de-estados.md para el detalle)
+
+- Crear/editar/eliminar/reordenar/abrir/cerrar/cancelar: exclusivamente el rematador
+  dueño del remate padre. No hay chequeo de rol explícito acá ni en el router: solo un
+  `rematador` puede ser dueño de un remate (se garantiza desde `RemateService.create`),
+  así que verificar ownership del remate ya alcanza.
 - Ver: dueño y admin ven cualquier lote de cualquier remate propio/todos; cualquier otro
   usuario solo ve lotes de remates que no estén en `DRAFT` — la visibilidad de un lote se
   deriva enteramente de la visibilidad de su remate (`RemateService._is_visible`,
@@ -26,6 +32,9 @@ Ofertas (ver docs/15-modulo-lote.md).
 Crear, editar, eliminar y reordenar solo están permitidos mientras el remate padre está
 en `DRAFT` o `SCHEDULED` (`_assert_structure_editable`) — una vez `LIVE`, la estructura de
 lotes queda congelada, igual que ya aplica `RemateService.update` para el propio remate.
+Abrir/cerrar/cancelar, en cambio, son acciones del remate **en curso**: exigen `LIVE`
+(abrir) o `LIVE`/`PAUSED` (cerrar, cancelar) — validación completamente separada de
+`_assert_structure_editable`, que no se toca.
 """
 
 import uuid
@@ -35,9 +44,10 @@ from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
 
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
-from app.modules.remates.lotes.models import Lote
+from app.modules.remates.lotes.models import Lote, LoteStatus
 from app.modules.remates.lotes.repository import LoteRepository
-from app.modules.remates.lotes.schemas import LoteCreate, LoteUpdate
+from app.modules.remates.lotes.schemas import LoteCloseOutcome, LoteCreate, LoteUpdate
+from app.modules.remates.lotes.state_machine import assert_transition_allowed
 from app.modules.remates.models import Remate, RemateStatus
 from app.modules.remates.service import RemateService
 from app.modules.users.models import User, UserRole
@@ -94,7 +104,9 @@ class LoteService:
             reserve_price=data.reserve_price,
         )
         self._repository.add(lote)
-        await self._commit_or_raise_conflict(data.lot_number)
+        await self._commit_or_raise_conflict(
+            f"Ya existe un lote con el número '{data.lot_number}' en este remate."
+        )
         await self._repository.refresh(lote)
         return lote
 
@@ -142,7 +154,9 @@ class LoteService:
         for field, value in changes.items():
             setattr(lote, field, value)
 
-        await self._commit_or_raise_conflict(lote.lot_number)
+        await self._commit_or_raise_conflict(
+            f"Ya existe un lote con el número '{lote.lot_number}' en este remate."
+        )
         await self._repository.refresh(lote)
         return lote
 
@@ -179,11 +193,106 @@ class LoteService:
             await self._repository.refresh(lote)
         return sorted(lotes_by_id.values(), key=lambda lote: lote.display_order)
 
-    async def _commit_or_raise_conflict(self, lot_number: str) -> None:
+    # --- Motor de estados (Módulo 2.3, ver docs/16-motor-de-estados.md) --------------
+
+    async def _assert_can_open(self, remate: Remate) -> None:
+        if remate.status != RemateStatus.LIVE:
+            raise BusinessRuleError(
+                "Solo se puede abrir un lote mientras el remate está en curso (LIVE).",
+                current_status=remate.status.value,
+            )
+        if await self._repository.has_open_lote(remate.id):
+            raise BusinessRuleError(
+                "Ya hay un lote abierto en este remate; hay que cerrarlo o cancelarlo "
+                "antes de abrir otro (RF-12)."
+            )
+
+    async def open(self, remate_id: uuid.UUID, lote_id: uuid.UUID, owner: User) -> Lote:
+        remate, lote = await self._get_owned_lote_or_raise(remate_id, lote_id, owner)
+        await self._assert_can_open(remate)
+        assert_transition_allowed(lote.status, LoteStatus.OPEN)
+
+        lote.status = LoteStatus.OPEN
+        lote.opened_at = datetime.now(UTC)
+        await self._commit_or_raise_conflict(
+            "Ya hay un lote abierto en este remate (conflicto de concurrencia)."
+        )
+        await self._repository.refresh(lote)
+        return lote
+
+    async def open_next(self, remate_id: uuid.UUID, owner: User) -> Lote:
+        remate = await self._remate_service.get_owned_or_raise(remate_id, owner)
+        await self._assert_can_open(remate)
+
+        lote = await self._repository.get_next_pending_lote(remate_id)
+        if lote is None:
+            raise BusinessRuleError("No quedan lotes pendientes por abrir en este remate.")
+
+        lote.status = LoteStatus.OPEN
+        lote.opened_at = datetime.now(UTC)
+        await self._commit_or_raise_conflict(
+            "Ya hay un lote abierto en este remate (conflicto de concurrencia)."
+        )
+        await self._repository.refresh(lote)
+        return lote
+
+    async def close(
+        self,
+        remate_id: uuid.UUID,
+        lote_id: uuid.UUID,
+        owner: User,
+        outcome: LoteCloseOutcome,
+        final_price: Decimal | None,
+    ) -> Lote:
+        remate, lote = await self._get_owned_lote_or_raise(remate_id, lote_id, owner)
+        if remate.status not in (RemateStatus.LIVE, RemateStatus.PAUSED):
+            raise BusinessRuleError(
+                "Solo se puede cerrar un lote mientras el remate está en curso o "
+                "pausado.",
+                current_status=remate.status.value,
+            )
+
+        target = (
+            LoteStatus.CLOSED_SOLD if outcome == LoteCloseOutcome.SOLD else LoteStatus.CLOSED_UNSOLD
+        )
+        assert_transition_allowed(lote.status, target)
+
+        if outcome == LoteCloseOutcome.SOLD and final_price < lote.base_price:
+            raise BusinessRuleError("El precio final no puede ser menor al precio base.")
+
+        lote.status = target
+        lote.final_price = final_price
+        lote.closed_at = datetime.now(UTC)
+        await self._repository.commit()
+        await self._repository.refresh(lote)
+
+        await self._remate_service.try_auto_finish(remate)
+        return lote
+
+    async def cancel(
+        self, remate_id: uuid.UUID, lote_id: uuid.UUID, owner: User, reason: str
+    ) -> Lote:
+        remate, lote = await self._get_owned_lote_or_raise(remate_id, lote_id, owner)
+        if remate.status not in (RemateStatus.LIVE, RemateStatus.PAUSED):
+            raise BusinessRuleError(
+                "Solo se puede cancelar un lote mientras el remate está en curso o "
+                "pausado.",
+                current_status=remate.status.value,
+            )
+        assert_transition_allowed(lote.status, LoteStatus.CANCELLED)
+
+        lote.status = LoteStatus.CANCELLED
+        lote.cancellation_reason = reason
+        lote.cancelled_at = datetime.now(UTC)
+        await self._repository.commit()
+        await self._repository.refresh(lote)
+
+        await self._remate_service.try_auto_finish(remate)
+        return lote
+
+    async def _commit_or_raise_conflict(self, message: str) -> None:
         try:
             await self._repository.commit()
         except IntegrityError as exc:
             await self._repository.rollback()
-            raise ConflictError(
-                f"Ya existe un lote con el número '{lot_number}' en este remate."
-            ) from exc
+            raise ConflictError(message) from exc

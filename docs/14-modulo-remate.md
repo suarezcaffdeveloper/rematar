@@ -113,3 +113,9 @@ diseño menores:
 - Reglas de congelamiento de estructura: RF-05 dice que un remate solo se edita en
   `DRAFT`/`SCHEDULED` — eso ya está implementado acá (`RemateService.update`), y aplica
   igual una vez que existan lotes (no hace falta tocarlo).
+
+**Actualización (Épica 2, Módulo 2.3, 2026-07-14)**: la relación `Lote.remate_id` se
+implementó en el Módulo 2.2, y las cuatro transiciones de `Remate` que faltaban
+(`start`/`pause`/`resume`/`finish`) se implementaron en el Módulo 2.3 — ver
+[16-motor-de-estados.md](16-motor-de-estados.md). Esta sección queda como registro
+histórico de lo que se anticipó desde acá; no hace falta seguir leyéndola como pendiente.

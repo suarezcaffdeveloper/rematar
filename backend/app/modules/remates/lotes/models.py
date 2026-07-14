@@ -1,10 +1,12 @@
-"""Modelo de Lote (Épica 2, Módulo 2.2).
+"""Modelo de Lote (Épica 2, Módulos 2.2 y 2.3).
 
-Ver docs/15-modulo-lote.md para la justificación completa de cada campo. En resumen: un
-`Lote` pertenece a exactamente un `Remate` (`remate_id`, FK simple sin `relationship()` de
-SQLAlchemy — mismo patrón que `Remate.owner_id` hacia `User`, ver el docstring de
-`remates/models.py`), se crea siempre en `PENDING` y este módulo no expone ninguna
-transición de estado: abrir/cerrar/cancelar un lote queda para el módulo de Ofertas.
+Ver docs/15-modulo-lote.md para la justificación completa de los campos estructurales
+(Módulo 2.2): un `Lote` pertenece a exactamente un `Remate` (`remate_id`, FK simple sin
+`relationship()` de SQLAlchemy — mismo patrón que `Remate.owner_id` hacia `User`, ver el
+docstring de `remates/models.py`). Ver docs/16-motor-de-estados.md para los campos de
+auditoría de transiciones (`opened_at`, `closed_at`, `final_price`,
+`cancellation_reason`, `cancelled_at`, Módulo 2.3): `LoteService.open`/`open_next`/
+`close`/`cancel` son quienes los completan.
 
 `LoteStatus` reutiliza los cinco estados ya definidos en docs/07-maquinas-de-estado.md
 (Fase 0) sin agregar un `PAUSED` propio de lote — la pausa es un concepto de `Remate` que
@@ -14,10 +16,12 @@ reutiliza `RemateCategory` en vez de una taxonomía propia (ADR-014).
 
 import enum
 import uuid
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     CheckConstraint,
+    DateTime,
     Enum,
     ForeignKey,
     Index,
@@ -37,8 +41,8 @@ from app.modules.remates.models import RemateCategory
 
 
 class LoteStatus(str, enum.Enum):
-    """Ver docs/07-maquinas-de-estado.md y docs/15-modulo-lote.md. Este módulo (2.2) no
-    expone ninguna transición todavía — todo lote se crea y permanece en PENDING."""
+    """Ver docs/07-maquinas-de-estado.md y docs/16-motor-de-estados.md. Todo lote se crea
+    en PENDING; las transiciones las aplica `LoteService` (Módulo 2.3)."""
 
     PENDING = "pending"
     OPEN = "open"
@@ -65,6 +69,7 @@ class Lote(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
             "reserve_price IS NULL OR reserve_price >= base_price",
             name="reserve_price_gte_base_price",
         ),
+        CheckConstraint("final_price IS NULL OR final_price > 0", name="final_price_positive"),
         # Único por remate entre lotes vivos (ADR-015): dos rematadores distintos, o el
         # mismo rematador en otro remate, pueden reutilizar el mismo número de catálogo.
         Index(
@@ -74,8 +79,8 @@ class Lote(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
         ),
-        # Invariante RF-12 (ADR-017): a lo sumo un lote OPEN por remate. Inalcanzable en
-        # este módulo (nada produce status='open' todavía) pero ya garantizada por la base.
+        # Invariante RF-12 (ADR-017): a lo sumo un lote OPEN por remate — garantizada por
+        # la base como respaldo de la validación de aplicación en LoteService.open.
         Index(
             "uq_lotes_remate_id_open_status",
             "remate_id",
@@ -149,6 +154,17 @@ class Lote(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         nullable=False,
         default=LoteStatus.PENDING,
     )
+
+    # Auditoría de las transiciones del motor de estados (Épica 2, Módulo 2.3). Todas
+    # nulleables y completadas exclusivamente por LoteService.open/open_next/close/cancel
+    # — nunca por el CRUD estructural del Módulo 2.2. `final_price` se declara
+    # manualmente por el rematador en esta fase (ver ADR-018); no hay ganador ni
+    # comprador asociado, solo un monto.
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    final_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    cancellation_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def __repr__(self) -> str:
         return (

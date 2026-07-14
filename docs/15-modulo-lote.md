@@ -166,15 +166,27 @@ Ninguno de estos endpoints abre, cierra, cancela ni resuelve un lote — eso que
 
 ## Qué queda para el módulo de Ofertas (próximo)
 
-- Las transiciones `PENDING -> OPEN`, `OPEN -> CLOSED_SOLD`, `OPEN -> CLOSED_UNSOLD` y
-  `(PENDING|OPEN) -> CANCELLED` de `Lote`, reutilizando `lotes/state_machine.py` tal como
-  está.
-- Las transiciones `SCHEDULED -> LIVE` (RF-08: exige al menos un lote), `LIVE <-> PAUSED`
-  y `LIVE -> FINISHED` de `Remate`, ahora sí validables porque los lotes existen.
-- El endpoint de "abrir siguiente lote" debe apoyarse en el índice único parcial ya creado
-  en este módulo ([ADR-017](adr/ADR-017-invariante-un-lote-abierto-por-remate-como-indice-parcial.md))
-  para la invariante RF-12, manejando su violación como conflicto de concurrencia
-  esperable.
-- Columnas de auditoría de cierre/cancelación de lote (`cancellation_reason`,
-  `cancelled_at`, `closed_at` o equivalentes), que este módulo decidió no anticipar (ver
-  arriba).
+**Actualización (Épica 2, Módulo 2.3, 2026-07-14)**: esta sección asumía originalmente
+que abrir/cerrar/cancelar un lote y las transiciones de `Remate` llegarían junto con
+Ofertas. En la práctica llegaron antes, como motor de estados independiente sin bidding
+— ver [16-motor-de-estados.md](16-motor-de-estados.md) y
+[ADR-018](adr/ADR-018-cierre-de-lote-sin-motor-de-ofertas.md). Los puntos ya resueltos
+por el Módulo 2.3:
+
+- ~~Las transiciones `PENDING -> OPEN`, `OPEN -> CLOSED_SOLD`, `OPEN -> CLOSED_UNSOLD` y
+  `(PENDING|OPEN) -> CANCELLED` de `Lote`~~ — implementadas.
+- ~~Las transiciones `SCHEDULED -> LIVE`, `LIVE <-> PAUSED` y `LIVE -> FINISHED` de
+  `Remate`~~ — implementadas, incluyendo finalización automática (RF-10).
+- ~~El endpoint de "abrir siguiente lote"~~ — implementado (`open_next`), apoyado en el
+  índice único parcial de [ADR-017](adr/ADR-017-invariante-un-lote-abierto-por-remate-como-indice-parcial.md).
+  para la invariante RF-12.
+- ~~Columnas de auditoría de cierre/cancelación de lote~~ — agregadas (`opened_at`,
+  `closed_at`, `final_price`, `cancellation_reason`, `cancelled_at`).
+
+Lo que realmente queda para Ofertas, ahora que el motor de estados existe:
+
+- Recepción, validación y aceptación de ofertas en tiempo real (RF-17 a RF-20).
+- Reemplazar el `outcome`/`final_price` **declarados manualmente** por el rematador al
+  cerrar un lote (ADR-018) por el cálculo automático a partir de la oferta vigente (RF-15)
+  — la transición de estado en sí no cambia, solo quién decide el resultado.
+- WebSockets, snapshot/reconexión, anti-sniping, notificaciones.

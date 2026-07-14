@@ -48,6 +48,8 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [015](adr/ADR-015-numero-de-lote-y-orden-de-exhibicion-separados.md) | Número de lote y orden de exhibición como campos independientes | Aceptada |
 | [016](adr/ADR-016-precio-de-reserva-oculto-a-compradores.md) | Precio de reserva oculto para compradores | Aceptada |
 | [017](adr/ADR-017-invariante-un-lote-abierto-por-remate-como-indice-parcial.md) | Invariante "a lo sumo un lote OPEN por remate" (RF-12) como índice único parcial | Aceptada |
+| [018](adr/ADR-018-cierre-de-lote-sin-motor-de-ofertas.md) | Cierre de lote sin motor de ofertas: resultado declarado por el rematador | Aceptada |
+| [019](adr/ADR-019-finalizacion-automatica-de-remate.md) | Finalización automática del remate al resolverse el último lote (RF-10) | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -113,3 +115,24 @@ resumen de lo que un lector de esta página necesita saber:
 - Cuatro ADR nuevos (014 a 017): atributos flexibles + categoría compartida, número de
   lote vs. orden de exhibición, ocultamiento del precio de reserva, e índice único
   parcial para la invariante RF-12 aplicado preventivamente.
+
+## Épica 2, Módulo 2.3 — notas de arquitectura del motor de estados
+
+Detalle completo en [docs/16-motor-de-estados.md](16-motor-de-estados.md). Resumen:
+
+- No se crea ningún paquete nuevo: se extienden `remates/service.py` (`start`, `pause`,
+  `resume`, `finish`, `try_auto_finish`) y `remates/lotes/service.py` (`open`,
+  `open_next`, `close`, `cancel`), sus repositorios (nuevas consultas de solo lectura) y
+  sus routers (nuevos endpoints). Las tablas de transición
+  (`remates/state_machine.py`, `remates/lotes/state_machine.py`) no cambiaron desde los
+  Módulos 2.1/2.2 — ya modelaban todas las transiciones, solo faltaba invocarlas.
+- Único acoplamiento nuevo: `RemateService` gana una dependencia de solo lectura a
+  `LoteRepository` (no a `LoteService`, para evitar un import circular con
+  `remates/lotes/service.py`, que ya depende de `RemateService`) — ver
+  [ADR-019](adr/ADR-019-finalizacion-automatica-de-remate.md).
+- Dos ADR nuevos (018, 019): cómo cerrar un lote sin motor de ofertas todavía (resultado
+  declarado por el rematador), y dónde vive la finalización automática del remate
+  (RF-10).
+- `docs/14-modulo-remate.md` y `docs/15-modulo-lote.md` se corrigieron: ambos asumían que
+  abrir/cerrar/cancelar un lote llegaría junto con Ofertas; en la práctica llegó antes,
+  sin bidding (regla 5 de [docs/README.md](../docs/README.md#reglas-de-esta-documentación-aplican-a-todas-las-fases-futuras)).

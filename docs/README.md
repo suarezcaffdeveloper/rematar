@@ -12,10 +12,12 @@ concurrencia, tiempo real y escalabilidad — no en la cantidad de pantallas.
 
 ## Estado actual
 
-**Épica 2, Módulo 2.2 — Modelo de Lote.** Fase 0 (diseño), Fase 1 (base técnica: auth,
-usuarios, roles, Docker), el modelo de Remate (Módulo 2.1) y ahora el modelo de Lote
-(CRUD, permisos, reordenamiento, sin lógica de subasta todavía) ya están implementados y
-probados. Esta carpeta sigue siendo la fuente de verdad del proyecto: cada fase nueva debe
+**Épica 2, Módulo 2.3 — Motor de Estados del Remate.** Fase 0 (diseño), Fase 1 (base
+técnica: auth, usuarios, roles, Docker), el modelo de Remate (Módulo 2.1), el modelo de
+Lote (Módulo 2.2) y ahora el motor de estados completo (iniciar/pausar/reanudar/finalizar
+un remate; abrir/cerrar/cancelar un lote, con finalización automática RF-10) ya están
+implementados y probados — todavía sin ofertas, WebSockets ni ningún componente de tiempo
+real. Esta carpeta sigue siendo la fuente de verdad del proyecto: cada fase nueva debe
 leerla antes de proponer cambios y actualizarla si algo deja de ser cierto. Ver el
 [README raíz](../README.md) para instrucciones de instalación y el estado exacto del
 código.
@@ -39,6 +41,7 @@ código.
 | [13-mvp-y-roadmap.md](13-mvp-y-roadmap.md) | Alcance del MVP y roadmap futuro |
 | [14-modulo-remate.md](14-modulo-remate.md) | Diseño de la entidad Remate: campos, estados implementados, permisos (Épica 2.1) |
 | [15-modulo-lote.md](15-modulo-lote.md) | Diseño de la entidad Lote: campos, estados, permisos, reordenamiento (Épica 2.2) |
+| [16-motor-de-estados.md](16-motor-de-estados.md) | Motor de estados de Remate y Lote: transiciones, reglas de negocio, finalización automática (Épica 2.3) |
 | [adr/](adr/) | Registro de decisiones de arquitectura (ADR), una por decisión relevante |
 
 ## Reglas de esta documentación (aplican a todas las fases futuras)
@@ -88,3 +91,7 @@ código.
 - **Épica 2, Módulo 2.2** (2026-07-14): Modelo de Lote — CRUD completo, permisos,
   reordenamiento, sin lógica de subasta (no abre/cierra lotes, no hay ofertas). Ver
   [15-modulo-lote.md](15-modulo-lote.md), ADR-014 a ADR-017.
+- **Épica 2, Módulo 2.3** (2026-07-14): Motor de Estados — iniciar/pausar/reanudar/
+  finalizar un remate; abrir/cerrar/cancelar un lote y pasar al siguiente; finalización
+  automática (RF-10); todavía sin ofertas, WebSockets ni tiempo real. Ver
+  [16-motor-de-estados.md](16-motor-de-estados.md), ADR-018 y ADR-019.

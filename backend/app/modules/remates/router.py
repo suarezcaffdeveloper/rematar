@@ -4,9 +4,13 @@
 endpoints no filtra por rol sino por *ownership*: un rematador que no es dueño de un
 remate se trata igual que un comprador frente a ese remate puntual (ver
 `RemateService._is_visible` / `get_owned_or_raise`). Por eso no hay `require_roles` en
-`GET`, `PATCH`, `schedule`, `cancel` ni `DELETE` — la regla no es "qué rol tenés" sino
-"sos el dueño de este remate en particular", y esa regla la aplica el servicio, no el
-router.
+`GET`, `PATCH`, `schedule`, `cancel`, `start`, `pause`, `resume`, `finish` ni `DELETE` —
+la regla no es "qué rol tenés" sino "sos el dueño de este remate en particular", y esa
+regla la aplica el servicio, no el router.
+
+`start`/`pause`/`resume`/`finish` son del motor de estados (Épica 2, Módulo 2.3, ver
+docs/16-motor-de-estados.md); no llevan lógica propia acá, cada uno delega enteramente
+en el método homónimo de `RemateService`.
 """
 
 import uuid
@@ -127,6 +131,58 @@ async def cancel_remate(
     service: Annotated[RemateService, Depends(get_remate_service)],
 ) -> Remate:
     return await service.cancel(remate_id, current_user, data.reason)
+
+
+@router.post(
+    "/{remate_id}/start",
+    response_model=RemateRead,
+    summary="Iniciar un remate propio (SCHEDULED -> LIVE, exige al menos un lote, RF-08)",
+)
+async def start_remate(
+    remate_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[RemateService, Depends(get_remate_service)],
+) -> Remate:
+    return await service.start(remate_id, current_user)
+
+
+@router.post(
+    "/{remate_id}/pause",
+    response_model=RemateRead,
+    summary="Pausar un remate propio en curso (LIVE -> PAUSED)",
+)
+async def pause_remate(
+    remate_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[RemateService, Depends(get_remate_service)],
+) -> Remate:
+    return await service.pause(remate_id, current_user)
+
+
+@router.post(
+    "/{remate_id}/resume",
+    response_model=RemateRead,
+    summary="Reanudar un remate propio pausado (PAUSED -> LIVE)",
+)
+async def resume_remate(
+    remate_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[RemateService, Depends(get_remate_service)],
+) -> Remate:
+    return await service.resume(remate_id, current_user)
+
+
+@router.post(
+    "/{remate_id}/finish",
+    response_model=RemateRead,
+    summary="Finalizar un remate propio (LIVE -> FINISHED, exige que no haya un lote abierto)",
+)
+async def finish_remate(
+    remate_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[RemateService, Depends(get_remate_service)],
+) -> Remate:
+    return await service.finish(remate_id, current_user)
 
 
 @router.delete(

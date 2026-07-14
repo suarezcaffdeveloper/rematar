@@ -1,17 +1,17 @@
 """Lógica de negocio de Remate.
 
-## Alcance de esta fase (Módulo 2.1)
+## Alcance (Módulo 2.1 + Módulo 2.3)
 
 Transiciones de estado implementadas: `create` (-> DRAFT), `schedule` (DRAFT ->
-SCHEDULED) y `cancel` (cualquier estado no terminal -> CANCELLED). Deliberadamente NO
-se implementan `start` (-> LIVE), `pause`/`resume` (<-> PAUSED) ni `finish` (->
-FINISHED): RF-08 (docs/03-requisitos-funcionales.md) exige que un remate solo pueda
-iniciarse si tiene al menos un lote cargado, y este módulo explícitamente no incluye
-Lotes todavía (instrucción del usuario). Exponer "iniciar remate" sin poder validar esa
-precondición sería implementar la mitad de una regla de negocio — mejor no exponerla
-que exponerla mal. `state_machine.py` ya modela las seis transiciones completas para que
-el módulo que agregue Lotes solo tenga que agregar los métodos de servicio que faltan,
-no rediseñar la máquina de estados.
+SCHEDULED), `cancel` (cualquier estado no terminal -> CANCELLED) desde el Módulo 2.1;
+`start` (SCHEDULED -> LIVE, valida RF-08), `pause`/`resume` (LIVE <-> PAUSED) y `finish`
+(LIVE -> FINISHED, valida que no haya un lote OPEN) desde el Módulo 2.3 — ver
+docs/16-motor-de-estados.md. `state_machine.py` no cambió: ya modelaba las seis
+transiciones completas desde el Módulo 2.1, este módulo solo agregó los métodos de
+servicio que faltaban, tal como esa fase anticipaba.
+
+`try_auto_finish` no es una transición expuesta por HTTP: la llama `LoteService` después
+de cerrar/cancelar un lote, para la finalización automática de RF-10 (ver ADR-019).
 
 ## Permisos (ver docs/14-modulo-remate.md para el detalle completo)
 
@@ -19,14 +19,16 @@ no rediseñar la máquina de estados.
 - Ver: dueño y admin ven cualquier estado; cualquier otro usuario solo ve remates que no
   estén en `DRAFT`. Un borrador ajeno devuelve 404, no 403 — no se confirma su
   existencia a quien no debería ni saber que existe.
-- Modificar/programar/cancelar/eliminar: exclusivamente el rematador dueño. El admin
-  puede *ver* todo pero no puede escribir — así lo pide el enunciado de este módulo.
+- Modificar/programar/cancelar/eliminar/iniciar/pausar/reanudar/finalizar: exclusivamente
+  el rematador dueño. El admin puede *ver* todo pero no puede escribir — así lo pide el
+  enunciado de este módulo.
 """
 
 import uuid
 from datetime import UTC, datetime
 
 from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
+from app.modules.remates.lotes.repository import LoteRepository
 from app.modules.remates.models import Remate, RemateCategory, RemateStatus
 from app.modules.remates.repository import RemateRepository
 from app.modules.remates.schemas import RemateCreate, RemateUpdate
@@ -35,8 +37,9 @@ from app.modules.users.models import User, UserRole
 
 
 class RemateService:
-    def __init__(self, repository: RemateRepository) -> None:
+    def __init__(self, repository: RemateRepository, lote_repository: LoteRepository) -> None:
         self._repository = repository
+        self._lote_repository = lote_repository
 
     async def create(self, owner: User, data: RemateCreate) -> Remate:
         remate = Remate(
@@ -157,3 +160,67 @@ class RemateService:
             )
         remate.deleted_at = datetime.now(UTC)
         await self._repository.commit()
+
+    async def start(self, remate_id: uuid.UUID, owner: User) -> Remate:
+        remate = await self.get_owned_or_raise(remate_id, owner)
+        assert_transition_allowed(remate.status, RemateStatus.LIVE)
+
+        if await self._lote_repository.count_by_remate(remate_id) == 0:
+            raise BusinessRuleError(
+                "Un remate no puede iniciarse sin al menos un lote cargado (RF-08)."
+            )
+
+        remate.status = RemateStatus.LIVE
+        await self._repository.commit()
+        await self._repository.refresh(remate)
+        return remate
+
+    async def pause(self, remate_id: uuid.UUID, owner: User) -> Remate:
+        remate = await self.get_owned_or_raise(remate_id, owner)
+        assert_transition_allowed(remate.status, RemateStatus.PAUSED)
+
+        remate.status = RemateStatus.PAUSED
+        await self._repository.commit()
+        await self._repository.refresh(remate)
+        return remate
+
+    async def resume(self, remate_id: uuid.UUID, owner: User) -> Remate:
+        remate = await self.get_owned_or_raise(remate_id, owner)
+        assert_transition_allowed(remate.status, RemateStatus.LIVE)
+
+        remate.status = RemateStatus.LIVE
+        await self._repository.commit()
+        await self._repository.refresh(remate)
+        return remate
+
+    async def finish(self, remate_id: uuid.UUID, owner: User) -> Remate:
+        remate = await self.get_owned_or_raise(remate_id, owner)
+        assert_transition_allowed(remate.status, RemateStatus.FINISHED)
+
+        if await self._lote_repository.has_open_lote(remate_id):
+            raise BusinessRuleError(
+                "No se puede finalizar el remate mientras haya un lote abierto."
+            )
+
+        remate.status = RemateStatus.FINISHED
+        remate.finished_at = datetime.now(UTC)
+        await self._repository.commit()
+        await self._repository.refresh(remate)
+        return remate
+
+    async def try_auto_finish(self, remate: Remate) -> None:
+        """Finalización automática (RF-10): la llama `LoteService` después de cerrar o
+        cancelar un lote. A diferencia de `finish` (acción manual expuesta por HTTP), es
+        "best effort" — si el remate no está en condiciones de finalizar (no está LIVE, o
+        todavía queda algún lote PENDING/OPEN), no hace nada; no es un error, todavía no
+        corresponde. Ver ADR-019 para el razonamiento completo.
+        """
+        if remate.status != RemateStatus.LIVE:
+            return
+        if await self._lote_repository.has_unresolved_lote(remate.id):
+            return
+
+        remate.status = RemateStatus.FINISHED
+        remate.finished_at = datetime.now(UTC)
+        await self._repository.commit()
+        await self._repository.refresh(remate)

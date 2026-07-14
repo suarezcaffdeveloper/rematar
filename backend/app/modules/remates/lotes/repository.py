@@ -10,7 +10,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.remates.lotes.models import Lote
+from app.modules.remates.lotes.models import Lote, LoteStatus
 
 
 class LoteRepository:
@@ -47,6 +47,48 @@ class LoteRepository:
             Lote.remate_id == remate_id, Lote.deleted_at.is_(None)
         )
         return (await self._db.execute(stmt)).scalar_one()
+
+    async def count_by_remate(self, remate_id: uuid.UUID) -> int:
+        """Usado por `RemateService.start` para validar RF-08 (al menos un lote
+        cargado) — cuenta cualquier lote vivo, sin importar su estado."""
+        stmt = select(func.count()).select_from(Lote).where(
+            Lote.remate_id == remate_id, Lote.deleted_at.is_(None)
+        )
+        return (await self._db.execute(stmt)).scalar_one()
+
+    async def has_open_lote(self, remate_id: uuid.UUID) -> bool:
+        """RF-12: usado antes de abrir un lote (no puede haber otro ya OPEN) y antes de
+        finalizar el remate (no puede haber ninguno OPEN)."""
+        stmt = select(func.count()).select_from(Lote).where(
+            Lote.remate_id == remate_id,
+            Lote.status == LoteStatus.OPEN,
+            Lote.deleted_at.is_(None),
+        )
+        return (await self._db.execute(stmt)).scalar_one() > 0
+
+    async def has_unresolved_lote(self, remate_id: uuid.UUID) -> bool:
+        """RF-10: usado por `RemateService.try_auto_finish` — si no queda ningún lote
+        PENDING ni OPEN, el remate puede finalizarse solo."""
+        stmt = select(func.count()).select_from(Lote).where(
+            Lote.remate_id == remate_id,
+            Lote.status.in_((LoteStatus.PENDING, LoteStatus.OPEN)),
+            Lote.deleted_at.is_(None),
+        )
+        return (await self._db.execute(stmt)).scalar_one() > 0
+
+    async def get_next_pending_lote(self, remate_id: uuid.UUID) -> Lote | None:
+        """RF-13: el `PENDING` de menor `display_order`, para `LoteService.open_next`."""
+        stmt = (
+            select(Lote)
+            .where(
+                Lote.remate_id == remate_id,
+                Lote.status == LoteStatus.PENDING,
+                Lote.deleted_at.is_(None),
+            )
+            .order_by(Lote.display_order.asc())
+            .limit(1)
+        )
+        return (await self._db.execute(stmt)).scalar_one_or_none()
 
     def add(self, lote: Lote) -> None:
         self._db.add(lote)
