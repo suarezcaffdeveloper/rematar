@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     # Formato esperado: redis://[:password@]host:puerto/db. Ver docs/18-integracion-redis.md.
     REDIS_URL: str
 
+    # --- Gateway WebSocket (Épica 3, Módulo 3.3) ---
+    # Ver docs/20-gateway-websocket.md y ADR-023.
+    WS_AUTH_TIMEOUT_SECONDS: float = 10.0
+    WS_PING_INTERVAL_SECONDS: float = 20.0
+    WS_PONG_TIMEOUT_SECONDS: float = 40.0
+
     # --- Autenticación / JWT ---
     # Sin valor por defecto a propósito: un secreto hardcodeado en el código sería
     # una vulnerabilidad. Debe venir siempre de .env / del entorno de despliegue.

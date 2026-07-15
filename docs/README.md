@@ -12,13 +12,15 @@ concurrencia, tiempo real y escalabilidad — no en la cantidad de pantallas.
 
 ## Estado actual
 
-**Épica 3, Módulo 3.2 — Arquitectura de Eventos.** Fase 0 (diseño), Fase 1 (base
+**Épica 3, Módulo 3.4 — Sistema de Salas.** Fase 0 (diseño), Fase 1 (base
 técnica: auth, usuarios, roles, Docker), el modelo de Remate (Módulo 2.1), el modelo de
 Lote (Módulo 2.2), el motor de estados de Remate/Lote (Módulo 2.3), el Auction Engine
-(Épica 2.4), Redis (Módulo 3.1) y ahora el sistema interno de eventos (Event Bus sobre
-Redis Pub/Sub, catálogo de eventos tipados, el dominio publica sin conocer consumidores)
-ya están implementados y probados — todavía sin WebSockets, sin ningún consumidor real.
-Esta carpeta sigue siendo la fuente de verdad del proyecto: cada fase nueva debe leerla
+(Épica 2.4), Redis (Módulo 3.1), el sistema interno de eventos (Módulo 3.2), el Gateway
+WebSocket (Módulo 3.3) y ahora el sistema de salas (agrupar conexiones por remate,
+`RoomManager` en memoria, unión/salida validada, eliminación automática de salas
+vacías) ya están implementados y probados — todavía sin broadcast de eventos de
+dominio a las salas. Esta carpeta sigue siendo la fuente de verdad del proyecto: cada
+fase nueva debe leerla
 antes de proponer cambios y actualizarla si algo deja de ser cierto. Ver el
 [README raíz](../README.md) para instrucciones de instalación y el estado exacto del
 código.
@@ -46,6 +48,8 @@ código.
 | [17-auction-engine.md](17-auction-engine.md) | Auction Engine: entidad Oferta, funcionamiento interno, diagrama de flujo, preparación para Redis/WebSockets (Épica 2.4) |
 | [18-integracion-redis.md](18-integracion-redis.md) | Integración de Redis: cliente compartido, health check, capas de cache/pub-sub/streams/locks (Épica 3.1) |
 | [19-arquitectura-de-eventos.md](19-arquitectura-de-eventos.md) | Arquitectura de eventos: catálogo, Event Bus, flujo de publicación, preparación para WebSockets (Épica 3.2) |
+| [20-gateway-websocket.md](20-gateway-websocket.md) | Gateway WebSocket: ciclo de vida de conexión, autenticación, heartbeat, `ConnectionManager` (Épica 3.3) |
+| [21-sistema-de-salas.md](21-sistema-de-salas.md) | Sistema de salas: `RoomManager`, ciclo de vida de una sala, múltiples conexiones por usuario, preparación para el Event Bus (Épica 3.4) |
 | [adr/](adr/) | Registro de decisiones de arquitectura (ADR), una por decisión relevante |
 
 ## Reglas de esta documentación (aplican a todas las fases futuras)
@@ -112,3 +116,13 @@ código.
   remate, `RemateService`/`LoteService`/`AuctionEngine` publican sin conocer
   consumidores; todavía sin ningún consumidor real. Ver
   [19-arquitectura-de-eventos.md](19-arquitectura-de-eventos.md), ADR-022.
+- **Épica 3, Módulo 3.3** (2026-07-18): Gateway WebSocket — endpoint `/api/v1/ws`,
+  autenticación con el JWT existente en el primer mensaje (ADR-006, implementada por
+  primera vez), heartbeat aplicativo (ping/pong de mensaje), `ConnectionManager` en
+  memoria por instancia; todavía sin salas ni broadcast de eventos de dominio a
+  clientes conectados. Ver
+  [20-gateway-websocket.md](20-gateway-websocket.md), ADR-023.
+- **Épica 3, Módulo 3.4** (2026-07-19): Sistema de Salas — `RoomManager` en memoria,
+  agrupa conexiones por remate (`join_room`/`leave_room`), una sala por conexión,
+  eliminación automática de salas vacías; todavía sin broadcast de eventos de dominio a
+  las salas. Ver [21-sistema-de-salas.md](21-sistema-de-salas.md), ADR-024.

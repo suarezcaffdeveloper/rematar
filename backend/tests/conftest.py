@@ -42,6 +42,7 @@ os.environ.setdefault("REDIS_URL", "redis://127.0.0.1:6380/1")
 from collections.abc import AsyncIterator
 
 import pytest_asyncio
+from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -102,5 +103,40 @@ async def client(db_engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             yield ac
+
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def ws_client(db_engine: AsyncEngine) -> AsyncIterator[TestClient]:
+    """Cliente de test para el Gateway WebSocket (Épica 3, Módulo 3.3) — `httpx` no
+    habla el protocolo WebSocket, así que estos tests usan `TestClient` de Starlette en
+    su lugar de `AsyncClient`/`ASGITransport`.
+
+    `TestClient` corre la aplicación en un hilo y un event loop **propios** (un "portal"
+    de `anyio`), distinto del loop en el que corre la función de test — reutilizar el
+    `AsyncEngine` de `db_engine` (atado al loop del test) desde ese hilo distinto
+    reproduce el mismo error ya documentado arriba para `client` ("attached to a
+    different loop"). Por eso `_override_get_db` acá crea una conexión nueva en cada
+    llamada, usando la misma URL que `db_engine` (que ya dejó el esquema creado) pero
+    sin reutilizar su objeto `AsyncEngine` en sí, que es lo que está atado a un loop
+    concreto. Ver docs/adr/ADR-023-gateway-websocket.md, sección E.
+    """
+    # `str(db_engine.url)` enmascara la contraseña (`***`) por seguridad — hace falta
+    # `render_as_string(hide_password=False)` para reconectar de verdad.
+    database_url = db_engine.url.render_as_string(hide_password=False)
+
+    async def _override_get_db() -> AsyncIterator[AsyncSession]:
+        engine = create_async_engine(database_url)
+        session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+        async with session_factory() as session:
+            yield session
+        await engine.dispose()
+
+    app = create_app()
+    app.dependency_overrides[get_db] = _override_get_db
+
+    with TestClient(app) as test_client:
+        yield test_client
 
     app.dependency_overrides.clear()

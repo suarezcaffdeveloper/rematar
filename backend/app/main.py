@@ -5,9 +5,13 @@ importar — esto es lo que permite a los tests (`tests/conftest.py`) construir 
 nueva con configuración de test sin depender de efectos secundarios de import. `app`
 (la instancia real que usa Uvicorn) se crea una única vez al final de este archivo.
 
-El `lifespan` (Épica 3, Módulo 3.1) es el único lugar que conoce el ciclo de vida
-completo del proceso: acá se crea el cliente Redis compartido al arrancar y se cierra
-prolijamente al apagar — ver docs/18-integracion-redis.md y `app/redis/client.py`.
+El `lifespan` es el único lugar que conoce el ciclo de vida completo del proceso: acá
+se crea el cliente Redis compartido (Módulo 3.1) y el `ConnectionManager` del Gateway
+WebSocket (Módulo 3.3) al arrancar, y ambos se cierran prolijamente al apagar — ver
+docs/18-integracion-redis.md, docs/20-gateway-websocket.md. El `RoomManager` (Módulo
+3.4, docs/21-sistema-de-salas.md) también se crea acá, pero no necesita cierre
+explícito: no retiene sockets ni ninguna otra conexión externa, solo los `UUID` de las
+salas activas.
 """
 
 from collections.abc import AsyncIterator
@@ -22,15 +26,23 @@ from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.redis.client import build_redis_client
+from app.websocket.close_codes import SERVER_SHUTTING_DOWN
+from app.websocket.manager import ConnectionManager
+from app.websocket.rooms import RoomManager
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     app.state.redis = build_redis_client(settings)
+    app.state.connection_manager = ConnectionManager()
+    app.state.room_manager = RoomManager()
     try:
         yield
     finally:
+        await app.state.connection_manager.close_all(
+            code=SERVER_SHUTTING_DOWN, reason="El servidor se está apagando."
+        )
         await app.state.redis.aclose()
 
 

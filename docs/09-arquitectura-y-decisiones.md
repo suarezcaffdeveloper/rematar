@@ -53,6 +53,8 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [020](adr/ADR-020-diseno-del-auction-engine.md) | Diseño del Auction Engine: concurrencia, estados, idempotencia, invariantes | Aceptada |
 | [021](adr/ADR-021-integracion-de-redis.md) | Integración de Redis: cliente compartido y capas de infraestructura | Aceptada |
 | [022](adr/ADR-022-arquitectura-de-eventos.md) | Arquitectura de eventos de dominio: Event Bus interno sobre Redis Pub/Sub | Aceptada |
+| [023](adr/ADR-023-gateway-websocket.md) | Gateway WebSocket: heartbeat aplicativo, `ConnectionManager` en memoria, códigos de cierre propios | Aceptada |
+| [024](adr/ADR-024-sistema-de-salas.md) | Sistema de salas: `RoomManager` en memoria, una sala por conexión, sin dependencias de dominio | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -202,3 +204,46 @@ Detalle completo en [docs/19-arquitectura-de-eventos.md](19-arquitectura-de-even
   vez por remate.
 - `EventBus.publish` nunca lanza (best-effort, extensión de ADR-002): una caída de Redis
   nunca hace fallar una operación de negocio ya confirmada en Postgres.
+
+## Épica 3, Módulo 3.3 — notas de arquitectura del Gateway WebSocket
+
+Detalle completo en [docs/20-gateway-websocket.md](20-gateway-websocket.md) y
+[ADR-023](adr/ADR-023-gateway-websocket.md). Resumen:
+
+- `app/websocket/` — infraestructura transversal nueva, al mismo nivel que `app/redis/`
+  y `app/events/`, sin modelos de dominio. Implementa el endpoint `/api/v1/ws`, la
+  autenticación en el primer mensaje que ADR-006 ya había decidido en Fase 0, un
+  heartbeat aplicativo (ping/pong de mensaje, no de protocolo) y un `ConnectionManager`
+  en memoria por instancia de backend.
+- Cero conocimiento de dominio: el Gateway no importa nada de `app/modules/` salvo
+  `AuthService.get_current_user_from_access_token` (sin modificar) ni de `app/events/`
+  — todavía no reenvía ningún evento de dominio a clientes conectados.
+- Códigos de cierre propios en el rango 4000-4999 (`4400`, `4401`, `4408`, `4000`),
+  además de los estándar (`1001`, `1011`) — dejan un rastro claro en logs de por qué se
+  cortó cada conexión.
+- Cero cambios en `app/modules/auth/` ni en el resto de los módulos de dominio.
+- Deja preparado (sin implementarlo) el punto de apoyo para el módulo de salas: agrupar
+  conexiones por remate y reenviar `events.<remate_id>` (Módulo 3.2) a esas conexiones.
+
+## Épica 3, Módulo 3.4 — notas de arquitectura del sistema de salas
+
+Detalle completo en [docs/21-sistema-de-salas.md](21-sistema-de-salas.md) y
+[ADR-024](adr/ADR-024-sistema-de-salas.md). Resumen:
+
+- `app/websocket/rooms.py` — `RoomManager` en memoria, con un índice bidireccional
+  (`remate_id -> {connection_id}` y su inverso) para que unirse/salir/consultar la sala
+  de una conexión sean todas operaciones `O(1)`.
+- Invariante "una sala por conexión" aplicada por rechazo explícito, no por
+  auto-cambio: un `join_room` a una sala distinta de la actual devuelve un error y no
+  cambia nada — el cliente tiene que mandar `leave_room` primero.
+- Sin ninguna validación de dominio sobre `remate_id` (no se verifica que exista un
+  `Remate` real) — decisión explícita de alcance de esta épica, misma disciplina de
+  límites de módulo que ya rige el resto de `app/websocket/`.
+- Eliminación automática de salas vacías integrada en la misma operación de salida, sin
+  proceso de limpieza aparte.
+- Único cambio de comportamiento en `router.py`: despacha `join_room`/`leave_room` y
+  suma una línea al `finally` que ya limpiaba `ConnectionManager`. `manager.py` y
+  `auth.py` (Módulo 3.3) quedan exactamente como estaban.
+- `RoomManager.connections_in_room(remate_id)` + `ConnectionManager.get(connection_id)`
+  ya son, juntos, todo lo que un futuro suscriptor al Event Bus necesita para reenviar
+  eventos de dominio a una sala — sin que ninguno de los dos managers deba cambiar.
