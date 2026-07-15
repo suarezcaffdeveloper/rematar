@@ -51,6 +51,12 @@ class Settings(BaseSettings):
     WS_PING_INTERVAL_SECONDS: float = 20.0
     WS_PONG_TIMEOUT_SECONDS: float = 40.0
 
+    # --- Sincronización de eventos en tiempo real (Épica 3, Módulo 3.5) ---
+    # Backoff exponencial de reconexión del Event Consumer a Redis Pub/Sub — ver
+    # docs/22-sincronizacion-tiempo-real.md y ADR-025.
+    REALTIME_CONSUMER_RETRY_BASE_SECONDS: float = 1.0
+    REALTIME_CONSUMER_RETRY_MAX_SECONDS: float = 30.0
+
     # --- Autenticación / JWT ---
     # Sin valor por defecto a propósito: un secreto hardcodeado en el código sería
     # una vulnerabilidad. Debe venir siempre de .env / del entorno de despliegue.

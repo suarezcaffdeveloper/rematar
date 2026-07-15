@@ -11,7 +11,11 @@ WebSocket (Módulo 3.3) al arrancar, y ambos se cierran prolijamente al apagar �
 docs/18-integracion-redis.md, docs/20-gateway-websocket.md. El `RoomManager` (Módulo
 3.4, docs/21-sistema-de-salas.md) también se crea acá, pero no necesita cierre
 explícito: no retiene sockets ni ninguna otra conexión externa, solo los `UUID` de las
-salas activas.
+salas activas. El `EventConsumer` (Módulo 3.5, docs/22-sincronizacion-tiempo-real.md)
+arranca acá como tarea de fondo después de que los tres managers de arriba existen (los
+necesita para poder repartir eventos) y se detiene primero en el shutdown, antes de
+cerrar `ConnectionManager`/Redis — para dejar de intentar mandar mensajes a sockets que
+están a punto de cerrarse.
 """
 
 from collections.abc import AsyncIterator
@@ -25,6 +29,8 @@ from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
+from app.realtime.consumer import EventConsumer
+from app.realtime.dispatcher import EventDispatcher
 from app.redis.client import build_redis_client
 from app.websocket.close_codes import SERVER_SHUTTING_DOWN
 from app.websocket.manager import ConnectionManager
@@ -37,9 +43,19 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.redis = build_redis_client(settings)
     app.state.connection_manager = ConnectionManager()
     app.state.room_manager = RoomManager()
+
+    dispatcher = EventDispatcher(app.state.connection_manager, app.state.room_manager)
+    app.state.event_consumer = EventConsumer(
+        app.state.redis,
+        dispatcher,
+        retry_base_seconds=settings.REALTIME_CONSUMER_RETRY_BASE_SECONDS,
+        retry_max_seconds=settings.REALTIME_CONSUMER_RETRY_MAX_SECONDS,
+    )
+    app.state.event_consumer.start()
     try:
         yield
     finally:
+        await app.state.event_consumer.stop()
         await app.state.connection_manager.close_all(
             code=SERVER_SHUTTING_DOWN, reason="El servidor se está apagando."
         )

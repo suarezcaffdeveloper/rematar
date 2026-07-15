@@ -55,6 +55,7 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [022](adr/ADR-022-arquitectura-de-eventos.md) | Arquitectura de eventos de dominio: Event Bus interno sobre Redis Pub/Sub | Aceptada |
 | [023](adr/ADR-023-gateway-websocket.md) | Gateway WebSocket: heartbeat aplicativo, `ConnectionManager` en memoria, códigos de cierre propios | Aceptada |
 | [024](adr/ADR-024-sistema-de-salas.md) | Sistema de salas: `RoomManager` en memoria, una sala por conexión, sin dependencias de dominio | Aceptada |
+| [025](adr/ADR-025-sincronizacion-tiempo-real.md) | Sincronización de eventos en tiempo real: Event Consumer como único puente entre dominio y Gateway | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -247,3 +248,29 @@ Detalle completo en [docs/21-sistema-de-salas.md](21-sistema-de-salas.md) y
 - `RoomManager.connections_in_room(remate_id)` + `ConnectionManager.get(connection_id)`
   ya son, juntos, todo lo que un futuro suscriptor al Event Bus necesita para reenviar
   eventos de dominio a una sala — sin que ninguno de los dos managers deba cambiar.
+
+## Épica 3, Módulo 3.5 — notas de arquitectura de la sincronización en tiempo real
+
+Detalle completo en [docs/22-sincronizacion-tiempo-real.md](22-sincronizacion-tiempo-real.md)
+y [ADR-025](adr/ADR-025-sincronizacion-tiempo-real.md). Resumen:
+
+- `app/realtime/` — paquete transversal nuevo, el único que conoce a la vez el Event
+  Bus (Módulo 3.2) y el Gateway/Room Manager (Módulos 3.3/3.4). `EventConsumer`
+  (`psubscribe("events.*")`, un único suscriptor de patrón, no uno por sala) alimenta a
+  `EventDispatcher` (interpreta contra una whitelist en `registry.py`, resuelve la sala
+  por el propio `remate_id` del evento, entrega vía `RoomManager`/`ConnectionManager`).
+- Cero cambios en `app/modules/ofertas/` (Auction Engine), `app/modules/remates/`,
+  `app/websocket/` (Gateway y `RoomManager`), `app/modules/auth/` y `app/events/`
+  (Event Bus) — verificado también con un test estático de límites de import
+  (`tests/test_architecture_boundaries.py`).
+- Procesamiento estrictamente secuencial (`async for` sin `asyncio.gather`): es lo que
+  garantiza que el Event Consumer nunca tenga dos `send_text` concurrentes hacia la
+  misma conexión, sin necesitar un lock en `manager.py` — se investigó el código fuente
+  exacto de `websockets`/`uvicorn` que usa el proyecto para confirmar que un `ping` de
+  heartbeat y un evento de dominio conviviendo en la misma conexión no corrompen frames
+  (ver ADR-025, sección C).
+- Reconexión automática a Redis con backoff exponencial y reseteo del contador tras una
+  resuscripción exitosa.
+- 12 eventos sincronizados (los 10 pedidos + `RemateCancelled`/`LoteCancelled`), vía una
+  whitelist explícita — un evento no listado en `registry.py` nunca llega a un cliente,
+  aunque se publique en el canal.

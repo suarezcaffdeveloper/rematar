@@ -179,7 +179,7 @@ flowchart TB
     R -- register/unregister --> CM
     R -- join/leave --> RM
 
-    RM -.->|"connections_in_room(remate_id)<br/>(usado por el próximo módulo)"| EventoFuturo[["Suscriptor a<br/>events.&lt;remate_id&gt;<br/>(Event Bus, todavía no existe acá)"]]
+    RM -.->|"connections_in_room(remate_id)<br/>(Módulo 3.5, ver docs/22)"| EventConsumer[["EventConsumer + EventDispatcher<br/>app/realtime/ — implementado en el Módulo 3.5"]]
 ```
 
 ## Qué NO se implementa en este módulo
@@ -195,29 +195,22 @@ Explícitamente fuera de alcance (enunciado de la épica):
 - Estado del remate.
 - Validación de que `remate_id` corresponda a un `Remate` real (ver ADR-024, sección D).
 
-## Cómo este módulo prepara la integración del Event Bus (próxima etapa)
+## Cómo este módulo preparó la integración del Event Bus (implementada — ver Módulo 3.5)
 
-1. **`RoomManager.connections_in_room(remate_id)` ya devuelve exactamente la lista que
-   un suscriptor futuro necesita** para saber a quién reenviar un evento publicado en
-   `events.<remate_id>` (Módulo 3.2) — no hace falta ninguna estructura de datos nueva,
-   solo iterar esa lista.
-2. **`ConnectionManager.get(connection_id)` ya resuelve el `WebSocket` real** de cada
-   `connection_id` que devuelva `connections_in_room` — el suscriptor futuro combina
-   ambos managers (`RoomManager` para "quién", `ConnectionManager` para "cómo
-   mandarle"), sin que ninguno de los dos necesite conocer al otro ni cambiar su API.
-3. **El suscriptor es un componente nuevo, no una modificación de este módulo**: una
-   tarea de fondo (o una por sala activa) que hace
-   `RedisPubSub.subscribe(f"events.{remate_id}")` y, por cada evento recibido, llama
-   `connections_in_room` + `ConnectionManager.get` + `websocket.send_text(...)` con la
-   traducción de `DomainEvent` a un mensaje de protocolo del Gateway. Ni `RoomManager`
-   ni `ConnectionManager` ni el bucle de heartbeat de `router.py` deberían necesitar
-   cambios — mismo patrón que ADR-023 ya había previsto para este módulo, ahora un nivel
-   más adelante.
-4. **La eliminación automática de salas vacías (sección "Ciclo de vida" arriba) ya
-   resuelve cuándo un suscriptor debería darse de baja de un canal**: si
-   `room_count()` — o específicamente, si `remate_id not in list_rooms()` — la sala ya
-   no tiene conexiones, y el suscriptor a ese canal puede cancelarse sin perder ningún
-   evento relevante (nadie está escuchando).
+Esta sección quedó, tal cual estaba escrita, como la hoja de ruta que el Módulo 3.5
+siguió al pie de la letra — ver
+[22-sincronizacion-tiempo-real.md](22-sincronizacion-tiempo-real.md) y
+[ADR-025](adr/ADR-025-sincronizacion-tiempo-real.md) para el resultado:
+
+1. `RoomManager.connections_in_room(remate_id)` es, sin cambios, lo que
+   `EventDispatcher` usa para saber a quién reenviar cada evento.
+2. `ConnectionManager.get(connection_id)` es, sin cambios, lo que resuelve el
+   `WebSocket` real de cada conexión de la sala.
+3. El suscriptor terminó siendo un único `EventConsumer` con `psubscribe("events.*")`
+   (patrón, no un canal por sala — ver ADR-025, sección B, para por qué se prefirió así
+   en vez de suscribirse/desuscribirse sala por sala) — de cualquier forma, ni
+   `RoomManager` ni `ConnectionManager` ni el bucle de heartbeat de `router.py`
+   necesitaron ningún cambio, exactamente como se anticipaba acá.
 
 ## Checklist del módulo
 

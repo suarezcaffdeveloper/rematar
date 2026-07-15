@@ -4,19 +4,20 @@ Plataforma de remates en vivo con ofertas en tiempo real. Ver [`docs/`](docs/) p
 diseño completo del sistema (visión, requisitos, arquitectura, ADRs) — este README cubre
 solo cómo levantar y trabajar con lo que existe hoy.
 
-**Estado del proyecto: Épica 3, Módulo 3.4 — Sistema de Salas.** Ya están
-implementados: la base técnica del backend (autenticación, usuarios, roles — Fase 1),
-`Remate` (Épica 2.1), `Lote` (Épica 2.2), el motor de estados de ambos (Épica 2.3), el
-Auction Engine — recepción, validación, aceptación/rechazo de ofertas (Épica 2.4) —,
-Redis (cliente compartido, health check, capas de infraestructura — Épica 3.1), el
-sistema interno de eventos (Event Bus sobre Redis Pub/Sub, el dominio publica sin
-conocer quién consume — Épica 3.2), el Gateway WebSocket (conexión autenticada con el
-mismo JWT de HTTP, heartbeat aplicativo, `ConnectionManager` en memoria — Épica 3.3) y
-ahora el sistema de salas: cada remate es una sala independiente, las conexiones se
-unen/salen con `join_room`/`leave_room`, una sala se crea con la primera conexión y se
-borra sola con la última (`RoomManager` en memoria — Épica 3.4). Todavía no hay
-broadcast de eventos de dominio, chat, presencia online ni notificaciones — las salas
-no reenvían nada todavía, solo agrupan conexiones (ver
+**Estado del proyecto: Épica 3, Módulo 3.5 — Sincronización de eventos en tiempo
+real.** Ya están implementados: la base técnica del backend (autenticación, usuarios,
+roles — Fase 1), `Remate` (Épica 2.1), `Lote` (Épica 2.2), el motor de estados de ambos
+(Épica 2.3), el Auction Engine — recepción, validación, aceptación/rechazo de ofertas
+(Épica 2.4) —, Redis (Épica 3.1), el sistema interno de eventos (Event Bus sobre Redis
+Pub/Sub, el dominio publica sin conocer quién consume — Épica 3.2), el Gateway
+WebSocket (conexión autenticada con el mismo JWT de HTTP, heartbeat aplicativo —
+Épica 3.3), el sistema de salas (cada remate es una sala independiente, `RoomManager`
+en memoria — Épica 3.4) y ahora el Event Consumer que conecta ambos mundos
+(`app/realtime/`): escucha Redis Pub/Sub, interpreta cada evento de dominio y lo
+entrega automáticamente a los clientes conectados a la sala del remate correspondiente
+— sin que el Auction Engine sepa que existen WebSockets, sin que el Gateway sepa que
+existen ofertas (Épica 3.5). Todavía no hay chat, notificaciones push ni presencia
+online — la arquitectura ya los deja preparados (ver
 [Próximos pasos](#próximos-pasos)).
 
 ## Stack de esta fase
@@ -30,7 +31,8 @@ no reenvían nada todavía, solo agrupan conexiones (ver
 | Cache / Pub-Sub / Locks | Redis 7 (`redis-py` async) | Soporte de infraestructura, nunca fuente de verdad (ADR-002); cliente compartido vía `lifespan` (ver [ADR-021](docs/adr/ADR-021-integracion-de-redis.md)) |
 | Eventos de dominio | Event Bus interno (`Protocol`) + Redis Pub/Sub | El dominio publica sin conocer consumidores; un canal por remate (ver [ADR-022](docs/adr/ADR-022-arquitectura-de-eventos.md)) |
 | Tiempo real | WebSockets nativos de FastAPI/Starlette | Protocolo propio versionado, sin Socket.IO; heartbeat aplicativo y auth en el primer mensaje (ver [ADR-003](docs/adr/ADR-003-websockets-nativos-vs-socketio.md), [ADR-023](docs/adr/ADR-023-gateway-websocket.md)) |
-| Salas | `RoomManager` en memoria, por instancia | Agrupa conexiones por remate sin depender del dominio ni del Event Bus todavía (ver [ADR-024](docs/adr/ADR-024-sistema-de-salas.md)) |
+| Salas | `RoomManager` en memoria, por instancia | Agrupa conexiones por remate, sin depender del dominio (ver [ADR-024](docs/adr/ADR-024-sistema-de-salas.md)) |
+| Sincronización en tiempo real | `EventConsumer` + `EventDispatcher` (`app/realtime/`) | Único puente entre el Event Bus y el Gateway; el Auction Engine nunca sabe que existen WebSockets (ver [ADR-025](docs/adr/ADR-025-sincronizacion-tiempo-real.md)) |
 | Auth | JWT (PyJWT) + Argon2 (`argon2-cffi`) | Access token stateless + refresh token persistido y rotado (ver [ADR-011](docs/adr/ADR-011-refresh-tokens-persistidos-en-postgres.md)) |
 | Logging | `structlog` | Logs estructurados con `request_id` de contexto (RNF-15) |
 | Contenedores | Docker + Docker Compose | Entorno reproducible con un comando |
@@ -74,6 +76,11 @@ RematAR/
 │   │   │   ├── rooms.py                RoomManager: agrupa conexiones por remate, ver docs/21
 │   │   │   ├── messages.py, close_codes.py   Protocolo propio versionado, ver docs/20 y docs/21
 │   │   │   └── dependencies.py         get_connection_manager, get_room_manager
+│   │   ├── realtime/                 Event Consumer: único puente Event Bus <-> Gateway (Épica 3.5)
+│   │   │   ├── consumer.py             EventConsumer: psubscribe("events.*"), reconexión con backoff
+│   │   │   ├── dispatcher.py           EventDispatcher: interpreta, resuelve sala, entrega
+│   │   │   ├── registry.py             Whitelist event_type -> clase Pydantic, ver docs/22
+│   │   │   └── messages.py             DomainEventMessage (extiende WSMessage sin tocar websocket/)
 │   │   ├── common/
 │   │   │   └── schemas.py            Schemas genuinamente transversales (envelope de error, paginación)
 │   │   ├── modules/                 Un paquete por dominio de negocio (crece en fases futuras)
@@ -284,16 +291,21 @@ python -m venv .venv
 ## Próximos pasos
 
 Según [docs/13-mvp-y-roadmap.md](docs/13-mvp-y-roadmap.md) y
-[docs/21-sistema-de-salas.md](docs/21-sistema-de-salas.md), lo que sigue (Épica 3,
-integración del Event Bus con las salas ya construidas):
+[docs/22-sincronizacion-tiempo-real.md](docs/22-sincronizacion-tiempo-real.md), lo que
+sigue (consumidores nuevos sobre la misma arquitectura de tiempo real ya construida):
 
-- Un suscriptor a `events.<remate_id>` (Módulo 3.2) que, por cada evento recibido, use
-  `RoomManager.connections_in_room(remate_id)` + `ConnectionManager.get(connection_id)`
-  para reenviarlo a esa sala — no debería requerir tocar
-  `RemateService`/`LoteService`/`AuctionEngine`, `RoomManager` ni `ConnectionManager` de
-  nuevo.
-- Snapshot completo al conectar/reconectar (RF-16, [ADR-008](docs/adr/ADR-008-snapshot-mas-delta-para-reconexion.md)),
-  presencia y rate limiting de ofertas, apoyados en las capas de Redis ya construidas.
+- Snapshot completo al conectar/reconectar (RF-16, [ADR-008](docs/adr/ADR-008-snapshot-mas-delta-para-reconexion.md)) —
+  para que un cliente que se reconecta no dependa de haber estado escuchando en el
+  momento exacto en que ocurrió cada evento (limitación conocida de Pub/Sub sin
+  persistencia, ADR-009).
+- Presencia online: `RoomManager.connection_count(remate_id)` (Módulo 3.4) ya calcula el
+  dato; falta publicarlo como evento (`presencia.usuario_conectado`,
+  [06-eventos-del-sistema.md](docs/06-eventos-del-sistema.md)) desde
+  `RoomManager.join`/`leave` y sincronizarlo con el `EventDispatcher` ya existente.
+- Notificaciones dirigidas a un usuario (no a toda la sala), apoyadas en
+  `ConnectionManager.connections_for_user(user_id)` (Módulo 3.3, ya existe).
+- Chat por sala y rate limiting de ofertas, apoyados en las capas de Redis ya
+  construidas.
 - La transición `Oferta.ACCEPTED -> WINNING` al cerrar un lote vendido, con su propio
   evento, siguiendo el mismo patrón ya establecido.
 
@@ -315,3 +327,6 @@ integración del Event Bus con las salas ya construidas):
 - [`docs/21-sistema-de-salas.md`](docs/21-sistema-de-salas.md) — Sistema de salas
   (Épica 3.4): `RoomManager`, ciclo de vida de una sala, múltiples conexiones por
   usuario, preparación para el Event Bus.
+- [`docs/22-sincronizacion-tiempo-real.md`](docs/22-sincronizacion-tiempo-real.md) —
+  sincronización en tiempo real (Épica 3.5): Event Consumer, Dispatcher, flujo
+  completo oferta→cliente, cómo se garantiza el aislamiento por sala.
