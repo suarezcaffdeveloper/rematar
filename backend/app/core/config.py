@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     REALTIME_CONSUMER_RETRY_BASE_SECONDS: float = 1.0
     REALTIME_CONSUMER_RETRY_MAX_SECONDS: float = 30.0
 
+    # --- Snapshot Service (Épica 3, Módulo 3.6) ---
+    # Ver docs/23-snapshot-service.md y ADR-026.
+    SNAPSHOT_RECENT_OFFERS_LIMIT: int = 10
+    SNAPSHOT_CACHE_TTL_SECONDS: float = 2.0
+
     # --- Autenticación / JWT ---
     # Sin valor por defecto a propósito: un secreto hardcodeado en el código sería
     # una vulnerabilidad. Debe venir siempre de .env / del entorno de despliegue.

@@ -64,6 +64,12 @@ def _connect_join(ws_client: TestClient, token: str, remate_id: uuid.UUID):
     websocket.receive_json()  # connected
     websocket.send_json({"type": "join_room", "remate_id": str(remate_id)})
     websocket.receive_json()  # room_joined
+    # Épica 3, Módulo 3.6: justo después de `room_joined` llega un `snapshot` (o, para
+    # los `remate_id` aleatorios que usan estos tests, un `error/snapshot_unavailable`
+    # -- ninguno de los dos es lo que estos tests de sincronización quieren observar).
+    # Drenarlo acá, antes de volver al test, evita una carrera real contra los eventos
+    # de dominio que el test publique después (ver docs/23-snapshot-service.md).
+    websocket.receive_json()
     return websocket
 
 

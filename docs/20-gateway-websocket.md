@@ -255,8 +255,11 @@ estaba prevista: `app/websocket/rooms.py` agrupa conexiones por remate sin que
 siendo trabajo futuro, ahora del **próximo** módulo (integración del Event Bus con las
 salas):
 
-- Escuchar el canal `events.<remate_id>` (Módulo 3.2) y reenviar cada evento a las
-  conexiones de la sala correspondiente (`RoomManager.connections_in_room`).
-- Snapshot al conectar/reconectar (RF-16, [ADR-008](adr/ADR-008-snapshot-mas-delta-para-reconexion.md)).
+- ~~Escuchar el canal `events.<remate_id>` (Módulo 3.2) y reenviar cada evento a las
+  conexiones de la sala correspondiente~~ — implementado en el Módulo 3.5, ver
+  [22-sincronizacion-tiempo-real.md](22-sincronizacion-tiempo-real.md) y ADR-025.
+- ~~Snapshot al conectar/reconectar (RF-16, [ADR-008](adr/ADR-008-snapshot-mas-delta-para-reconexion.md))~~
+  — implementado en el Módulo 3.6, ver
+  [23-snapshot-service.md](23-snapshot-service.md) y ADR-026.
 - Presencia (contador de conectados por remate) y notificaciones dirigidas
-  ("superado").
+  ("superado") — todavía sin implementar.

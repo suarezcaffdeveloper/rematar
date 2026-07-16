@@ -56,6 +56,7 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [023](adr/ADR-023-gateway-websocket.md) | Gateway WebSocket: heartbeat aplicativo, `ConnectionManager` en memoria, códigos de cierre propios | Aceptada |
 | [024](adr/ADR-024-sistema-de-salas.md) | Sistema de salas: `RoomManager` en memoria, una sala por conexión, sin dependencias de dominio | Aceptada |
 | [025](adr/ADR-025-sincronizacion-tiempo-real.md) | Sincronización de eventos en tiempo real: Event Consumer como único puente entre dominio y Gateway | Aceptada |
+| [026](adr/ADR-026-snapshot-service.md) | Snapshot Service: reconstrucción de estado reutilizable por transporte, sin duplicar reglas de dominio | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -274,3 +275,34 @@ y [ADR-025](adr/ADR-025-sincronizacion-tiempo-real.md). Resumen:
 - 12 eventos sincronizados (los 10 pedidos + `RemateCancelled`/`LoteCancelled`), vía una
   whitelist explícita — un evento no listado en `registry.py` nunca llega a un cliente,
   aunque se publique en el canal.
+
+## Épica 3, Módulo 3.6 — notas de arquitectura del Snapshot Service
+
+Detalle completo en [docs/23-snapshot-service.md](23-snapshot-service.md) y
+[ADR-026](adr/ADR-026-snapshot-service.md). Resumen:
+
+- `app/snapshot/` — paquete transversal nuevo, implementa por primera vez RF-16/ADR-008
+  (snapshot completo al conectar, decidido en Fase 0). `SnapshotService.build` combina
+  `RemateService.get_visible_or_raise` (visibilidad), una consulta propia optimizada
+  para el lote `OPEN` (índice único parcial de ADR-017, no existía un método reusable
+  para esto), `OfertaRepository.get_leading_offer`/`list_by_lote` (ya existían) y una
+  caché corta en Redis (best-effort) del recorte más costoso de recalcular.
+- Reutilizable de verdad, no solo declarado: recibe `connected_users` como un `int`
+  simple (nunca un `RoomManager`), y se prueba con tests reales tanto desde
+  `GET /remates/{id}/snapshot` (HTTP) como desde el Gateway WebSocket, confirmando la
+  misma forma de respuesta en ambos casos.
+- Cero cambios en el dominio, el Auction Engine, el Event Bus, Redis, el Room Manager y
+  el Event Consumer; único cambio permitido en el Gateway: `router.py` llama a
+  `SnapshotService.build` después de un `join_room` exitoso — verificado con tests de
+  límites de import.
+- Hallazgo no anticipado: las dependencias HTTP-only ya existentes
+  (`get_cache`/`get_remate_service`, que encadenan hasta `get_redis_client(request:
+  Request)`) rompen si se reusan tal cual desde una ruta WebSocket — `Request` no es
+  inyectable ahí. Se resolvió con `HTTPConnection` (clase base común de `Request` y
+  `WebSocket`), sin modificar `app/redis/` ni `app/modules/remates/` (ADR-026, sección
+  F) — el mismo patrón sirve para cualquier dependencia futura que necesite Redis/DB
+  desde ambos transportes.
+- El estado que se cachea es siempre el crudo, sin enmascarar; el enmascarado de
+  `reserve_price`/`buyer_id` se aplica después de leer (de caché o de la base), según
+  el viewer de cada pedido puntual — evita que la respuesta cacheada para un dueño
+  filtre datos sensibles a un comprador dentro del mismo TTL.

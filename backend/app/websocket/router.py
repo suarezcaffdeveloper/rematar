@@ -8,6 +8,12 @@ conexión entiende mensajes de gestión de conexión (`pong`) y de gestión de s
 (`join_room`, `leave_room`) — cualquier otro tipo se ignora silenciosamente, dejando el
 lugar para que un módulo futuro (Event Bus) agregue su propio despacho sin
 reestructurar este bucle (ver ADR-023 y ADR-024).
+
+Única excepción deliberada (Épica 3, Módulo 3.6, ver docs/23-snapshot-service.md y
+ADR-026): tras un `join_room` exitoso, este archivo llama a `SnapshotService.build` — el
+único punto de integración que la épica pidió explícitamente ("el Gateway deberá
+utilizar este servicio únicamente cuando una conexión ingresa correctamente a una
+sala"). `SnapshotService` en sí no sabe que existe un Gateway; acá solo se lo invoca.
 """
 
 import asyncio
@@ -20,8 +26,13 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
 from app.core.config import Settings, get_settings
+from app.core.exceptions import NotFoundError
 from app.modules.auth.dependencies import get_auth_service
 from app.modules.auth.service import AuthService
+from app.modules.users.models import User
+from app.snapshot.dependencies import get_snapshot_service
+from app.snapshot.messages import SNAPSHOT_UNAVAILABLE, SnapshotMessage
+from app.snapshot.service import SnapshotService
 from app.websocket import close_codes
 from app.websocket.auth import authenticate_connection
 from app.websocket.dependencies import get_connection_manager, get_room_manager
@@ -54,6 +65,7 @@ async def websocket_gateway(
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     manager: Annotated[ConnectionManager, Depends(get_connection_manager)],
     room_manager: Annotated[RoomManager, Depends(get_room_manager)],
+    snapshot_service: Annotated[SnapshotService, Depends(get_snapshot_service)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
     await websocket.accept()
@@ -70,7 +82,9 @@ async def websocket_gateway(
         await websocket.send_text(
             ConnectedMessage(connection_id=context.connection_id, user_id=user.id).model_dump_json()
         )
-        await _run_connection_loop(websocket, context, settings, room_manager)
+        await _run_connection_loop(
+            websocket, context, settings, room_manager, snapshot_service, user
+        )
     except WebSocketDisconnect:
         pass
     except Exception:
@@ -86,6 +100,8 @@ async def _run_connection_loop(
     context: ConnectionContext,
     settings: Settings,
     room_manager: RoomManager,
+    snapshot_service: SnapshotService,
+    user: User,
 ) -> None:
     """Alterna entre esperar un mensaje del cliente y, si no llega nada dentro del
     intervalo de heartbeat, enviar un `ping`. Si no hay `pong` dentro del timeout
@@ -108,7 +124,7 @@ async def _run_connection_loop(
             await websocket.send_text(PingMessage().model_dump_json())
             continue
 
-        await _handle_message(raw_message, context, websocket, room_manager)
+        await _handle_message(raw_message, context, websocket, room_manager, snapshot_service, user)
 
 
 async def _handle_message(
@@ -116,6 +132,8 @@ async def _handle_message(
     context: ConnectionContext,
     websocket: WebSocket,
     room_manager: RoomManager,
+    snapshot_service: SnapshotService,
+    user: User,
 ) -> None:
     """Despacha por `type`: `pong` (heartbeat), `join_room`/`leave_room` (salas,
     Módulo 3.4). Cualquier otro tipo (incluido cualquier protocolo futuro, por ejemplo
@@ -129,7 +147,9 @@ async def _handle_message(
     if message.type == "pong":
         context.last_pong_at = datetime.now(UTC)
     elif message.type == "join_room":
-        await _handle_join_room(raw_message, context, websocket, room_manager)
+        await _handle_join_room(
+            raw_message, context, websocket, room_manager, snapshot_service, user
+        )
     elif message.type == "leave_room":
         await _handle_leave_room(context, websocket, room_manager)
 
@@ -139,6 +159,8 @@ async def _handle_join_room(
     context: ConnectionContext,
     websocket: WebSocket,
     room_manager: RoomManager,
+    snapshot_service: SnapshotService,
+    user: User,
 ) -> None:
     try:
         join_message = JoinRoomMessage.model_validate_json(raw_message)
@@ -163,6 +185,44 @@ async def _handle_join_room(
     await websocket.send_text(
         RoomJoinedMessage(remate_id=join_message.remate_id).model_dump_json()
     )
+    await _send_snapshot(websocket, snapshot_service, join_message.remate_id, user, room_manager)
+
+
+async def _send_snapshot(
+    websocket: WebSocket,
+    snapshot_service: SnapshotService,
+    remate_id: uuid.UUID,
+    user: User,
+    room_manager: RoomManager,
+) -> None:
+    """Se manda una única vez, justo después de confirmar el `join_room` (Épica 3,
+    Módulo 3.6) -- de ahí en más la conexión se entera de cambios exclusivamente por los
+    eventos que reenvía el Event Consumer (Módulo 3.5, sin modificar). Un fallo acá
+    (remate no encontrado/no visible, o cualquier error inesperado) se informa con un
+    `ErrorMessage` sin cerrar la conexión ni deshacer el `join_room` ya confirmado — el
+    cliente sigue en la sala y puede reintentar."""
+    try:
+        connected_users = room_manager.connection_count(remate_id)
+        snapshot = await snapshot_service.build(remate_id, user, connected_users=connected_users)
+    except NotFoundError:
+        await websocket.send_text(
+            ErrorMessage(
+                code=SNAPSHOT_UNAVAILABLE,
+                message="No se pudo obtener el estado del remate.",
+            ).model_dump_json()
+        )
+        return
+    except Exception:
+        logger.exception("snapshot_build_failed", remate_id=str(remate_id))
+        await websocket.send_text(
+            ErrorMessage(
+                code=SNAPSHOT_UNAVAILABLE,
+                message="No se pudo obtener el estado del remate.",
+            ).model_dump_json()
+        )
+        return
+
+    await websocket.send_text(SnapshotMessage(data=snapshot).model_dump_json())
 
 
 async def _handle_leave_room(

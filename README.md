@@ -4,20 +4,22 @@ Plataforma de remates en vivo con ofertas en tiempo real. Ver [`docs/`](docs/) p
 diseño completo del sistema (visión, requisitos, arquitectura, ADRs) — este README cubre
 solo cómo levantar y trabajar con lo que existe hoy.
 
-**Estado del proyecto: Épica 3, Módulo 3.5 — Sincronización de eventos en tiempo
-real.** Ya están implementados: la base técnica del backend (autenticación, usuarios,
-roles — Fase 1), `Remate` (Épica 2.1), `Lote` (Épica 2.2), el motor de estados de ambos
-(Épica 2.3), el Auction Engine — recepción, validación, aceptación/rechazo de ofertas
-(Épica 2.4) —, Redis (Épica 3.1), el sistema interno de eventos (Event Bus sobre Redis
-Pub/Sub, el dominio publica sin conocer quién consume — Épica 3.2), el Gateway
-WebSocket (conexión autenticada con el mismo JWT de HTTP, heartbeat aplicativo —
-Épica 3.3), el sistema de salas (cada remate es una sala independiente, `RoomManager`
-en memoria — Épica 3.4) y ahora el Event Consumer que conecta ambos mundos
-(`app/realtime/`): escucha Redis Pub/Sub, interpreta cada evento de dominio y lo
-entrega automáticamente a los clientes conectados a la sala del remate correspondiente
-— sin que el Auction Engine sepa que existen WebSockets, sin que el Gateway sepa que
-existen ofertas (Épica 3.5). Todavía no hay chat, notificaciones push ni presencia
-online — la arquitectura ya los deja preparados (ver
+**Estado del proyecto: Épica 3, Módulo 3.6 — Snapshot Service.** Ya están
+implementados: la base técnica del backend (autenticación, usuarios, roles — Fase 1),
+`Remate` (Épica 2.1), `Lote` (Épica 2.2), el motor de estados de ambos (Épica 2.3), el
+Auction Engine — recepción, validación, aceptación/rechazo de ofertas (Épica 2.4) —,
+Redis (Épica 3.1), el sistema interno de eventos (Event Bus sobre Redis Pub/Sub, el
+dominio publica sin conocer quién consume — Épica 3.2), el Gateway WebSocket (conexión
+autenticada con el mismo JWT de HTTP, heartbeat aplicativo — Épica 3.3), el sistema de
+salas (cada remate es una sala independiente, `RoomManager` en memoria — Épica 3.4), el
+Event Consumer (`app/realtime/`: escucha Redis Pub/Sub, entrega cada evento de dominio
+únicamente a la sala del remate correspondiente — Épica 3.5) y ahora el Snapshot
+Service (`app/snapshot/`): al entrar correctamente a una sala, el Gateway pide el
+estado completo del remate (info, lote activo, oferta ganadora, historial reciente,
+conectados) y se lo manda al cliente antes de que empiece a recibir eventos — RF-16
+implementado por primera vez, reutilizable también por HTTP (Épica 3.6). Todavía no hay
+chat, notificaciones push ni presencia online — la arquitectura ya los deja preparados
+(ver
 [Próximos pasos](#próximos-pasos)).
 
 ## Stack de esta fase
@@ -33,6 +35,7 @@ online — la arquitectura ya los deja preparados (ver
 | Tiempo real | WebSockets nativos de FastAPI/Starlette | Protocolo propio versionado, sin Socket.IO; heartbeat aplicativo y auth en el primer mensaje (ver [ADR-003](docs/adr/ADR-003-websockets-nativos-vs-socketio.md), [ADR-023](docs/adr/ADR-023-gateway-websocket.md)) |
 | Salas | `RoomManager` en memoria, por instancia | Agrupa conexiones por remate, sin depender del dominio (ver [ADR-024](docs/adr/ADR-024-sistema-de-salas.md)) |
 | Sincronización en tiempo real | `EventConsumer` + `EventDispatcher` (`app/realtime/`) | Único puente entre el Event Bus y el Gateway; el Auction Engine nunca sabe que existen WebSockets (ver [ADR-025](docs/adr/ADR-025-sincronizacion-tiempo-real.md)) |
+| Snapshot Service | `SnapshotService` (`app/snapshot/`), caché corta en Redis | Reconstruye el estado completo de un remate al conectarse (RF-16/ADR-008), reutilizable por HTTP y WebSocket (ver [ADR-026](docs/adr/ADR-026-snapshot-service.md)) |
 | Auth | JWT (PyJWT) + Argon2 (`argon2-cffi`) | Access token stateless + refresh token persistido y rotado (ver [ADR-011](docs/adr/ADR-011-refresh-tokens-persistidos-en-postgres.md)) |
 | Logging | `structlog` | Logs estructurados con `request_id` de contexto (RNF-15) |
 | Contenedores | Docker + Docker Compose | Entorno reproducible con un comando |
@@ -81,6 +84,12 @@ RematAR/
 │   │   │   ├── dispatcher.py           EventDispatcher: interpreta, resuelve sala, entrega
 │   │   │   ├── registry.py             Whitelist event_type -> clase Pydantic, ver docs/22
 │   │   │   └── messages.py             DomainEventMessage (extiende WSMessage sin tocar websocket/)
+│   │   ├── snapshot/                 Snapshot Service: estado completo reutilizable (Épica 3.6)
+│   │   │   ├── service.py              SnapshotService.build() -- único método público
+│   │   │   ├── schemas.py              RemateStateSnapshot, OfertaSnapshotEntry, ver docs/23
+│   │   │   ├── dependencies.py         get_snapshot_service (funciona en HTTP y WebSocket)
+│   │   │   ├── messages.py             SnapshotMessage (extiende WSMessage sin tocar websocket/)
+│   │   │   └── router.py               GET /remates/{id}/snapshot -- demuestra la reutilización
 │   │   ├── common/
 │   │   │   └── schemas.py            Schemas genuinamente transversales (envelope de error, paginación)
 │   │   ├── modules/                 Un paquete por dominio de negocio (crece en fases futuras)
@@ -291,13 +300,9 @@ python -m venv .venv
 ## Próximos pasos
 
 Según [docs/13-mvp-y-roadmap.md](docs/13-mvp-y-roadmap.md) y
-[docs/22-sincronizacion-tiempo-real.md](docs/22-sincronizacion-tiempo-real.md), lo que
-sigue (consumidores nuevos sobre la misma arquitectura de tiempo real ya construida):
+[docs/23-snapshot-service.md](docs/23-snapshot-service.md), lo que sigue (consumidores
+nuevos sobre la misma arquitectura de snapshot + tiempo real ya construida):
 
-- Snapshot completo al conectar/reconectar (RF-16, [ADR-008](docs/adr/ADR-008-snapshot-mas-delta-para-reconexion.md)) —
-  para que un cliente que se reconecta no dependa de haber estado escuchando en el
-  momento exacto en que ocurrió cada evento (limitación conocida de Pub/Sub sin
-  persistencia, ADR-009).
 - Presencia online: `RoomManager.connection_count(remate_id)` (Módulo 3.4) ya calcula el
   dato; falta publicarlo como evento (`presencia.usuario_conectado`,
   [06-eventos-del-sistema.md](docs/06-eventos-del-sistema.md)) desde
@@ -330,3 +335,6 @@ sigue (consumidores nuevos sobre la misma arquitectura de tiempo real ya constru
 - [`docs/22-sincronizacion-tiempo-real.md`](docs/22-sincronizacion-tiempo-real.md) —
   sincronización en tiempo real (Épica 3.5): Event Consumer, Dispatcher, flujo
   completo oferta→cliente, cómo se garantiza el aislamiento por sala.
+- [`docs/23-snapshot-service.md`](docs/23-snapshot-service.md) — Snapshot Service
+  (Épica 3.6): reconstrucción de estado, reutilización por transporte, por qué hace
+  falta snapshot + eventos, cómo escala a miles de conexiones concurrentes.

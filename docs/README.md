@@ -12,17 +12,18 @@ concurrencia, tiempo real y escalabilidad — no en la cantidad de pantallas.
 
 ## Estado actual
 
-**Épica 3, Módulo 3.5 — Sincronización de eventos en tiempo real.** Fase 0 (diseño),
-Fase 1 (base técnica: auth, usuarios, roles, Docker), el modelo de Remate (Módulo 2.1),
-el modelo de Lote (Módulo 2.2), el motor de estados de Remate/Lote (Módulo 2.3), el
-Auction Engine (Épica 2.4), Redis (Módulo 3.1), el sistema interno de eventos (Módulo
-3.2), el Gateway WebSocket (Módulo 3.3), el sistema de salas (Módulo 3.4) y ahora el
-Event Consumer que conecta ambos (`app/realtime/`: escucha Redis Pub/Sub, interpreta
-cada evento, lo entrega únicamente a la sala del remate correspondiente) ya están
-implementados y probados — los clientes conectados reciben cambios de estado del
-remate en tiempo real, sin pedir nada por HTTP. Todavía sin chat, notificaciones push
-ni presencia online (la arquitectura ya los deja preparados, ver
-[22-sincronizacion-tiempo-real.md](22-sincronizacion-tiempo-real.md)). Esta carpeta
+**Épica 3, Módulo 3.6 — Snapshot Service.** Fase 0 (diseño), Fase 1 (base técnica: auth,
+usuarios, roles, Docker), el modelo de Remate (Módulo 2.1), el modelo de Lote (Módulo
+2.2), el motor de estados de Remate/Lote (Módulo 2.3), el Auction Engine (Épica 2.4),
+Redis (Módulo 3.1), el sistema interno de eventos (Módulo 3.2), el Gateway WebSocket
+(Módulo 3.3), el sistema de salas (Módulo 3.4), el Event Consumer (Módulo 3.5) y ahora
+el Snapshot Service (`app/snapshot/`: reconstruye el estado completo de un remate —
+info, lote activo, oferta ganadora, historial reciente, conectados — para un cliente que
+entra a mitad de un remate en vivo, RF-16/ADR-008 implementados por primera vez) ya
+están implementados y probados — un cliente nuevo ve la interfaz completa de inmediato
+y, de ahí en más, solo eventos. Todavía sin chat, notificaciones push ni presencia
+online (la arquitectura ya los deja preparados, ver
+[23-snapshot-service.md](23-snapshot-service.md)). Esta carpeta
 sigue siendo la fuente de verdad del proyecto: cada fase nueva debe leerla
 antes de proponer cambios y actualizarla si algo deja de ser cierto. Ver el
 [README raíz](../README.md) para instrucciones de instalación y el estado exacto del
@@ -54,6 +55,7 @@ código.
 | [20-gateway-websocket.md](20-gateway-websocket.md) | Gateway WebSocket: ciclo de vida de conexión, autenticación, heartbeat, `ConnectionManager` (Épica 3.3) |
 | [21-sistema-de-salas.md](21-sistema-de-salas.md) | Sistema de salas: `RoomManager`, ciclo de vida de una sala, múltiples conexiones por usuario, preparación para el Event Bus (Épica 3.4) |
 | [22-sincronizacion-tiempo-real.md](22-sincronizacion-tiempo-real.md) | Sincronización en tiempo real: Event Consumer, Dispatcher, flujo completo oferta→cliente, preparación para Chat/Notificaciones/Presencia (Épica 3.5) |
+| [23-snapshot-service.md](23-snapshot-service.md) | Snapshot Service: reconstrucción de estado, reutilizable por transporte, por qué hace falta snapshot + eventos (Épica 3.6) |
 | [adr/](adr/) | Registro de decisiones de arquitectura (ADR), una por decisión relevante |
 
 ## Reglas de esta documentación (aplican a todas las fases futuras)
@@ -136,3 +138,11 @@ código.
   sala del remate correspondiente; cero cambios en el dominio, el Auction Engine, el
   Gateway, el Room Manager o el Event Bus. Ver
   [22-sincronizacion-tiempo-real.md](22-sincronizacion-tiempo-real.md), ADR-025.
+- **Épica 3, Módulo 3.6** (2026-07-21): Snapshot Service — `app/snapshot/` reconstruye
+  el estado completo de un remate (info, lote activo, oferta ganadora, historial
+  reciente, conectados) para un cliente que entra a mitad de un remate en vivo (RF-16,
+  ADR-008 implementado por primera vez); reutilizable por HTTP y WebSocket; el Gateway
+  lo usa únicamente al entrar a una sala; cero cambios en el dominio, el Auction
+  Engine, el Event Bus, Redis, el Gateway (salvo el punto de integración), el Room
+  Manager o el Event Consumer. Ver [23-snapshot-service.md](23-snapshot-service.md),
+  ADR-026.

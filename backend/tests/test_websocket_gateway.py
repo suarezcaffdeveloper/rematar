@@ -26,12 +26,14 @@ from starlette.websockets import WebSocketDisconnect
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
+from app.snapshot.messages import SNAPSHOT_UNAVAILABLE
 from app.websocket import close_codes
 from app.websocket.rooms import ERROR_ALREADY_IN_ROOM, ERROR_INVALID_ROOM_ID, ERROR_NOT_IN_ROOM
 
 WS_URL = "/api/v1/ws"
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
+REMATES_URL = "/api/v1/remates"
 
 
 def _build_ws_app(db_engine: AsyncEngine, **settings_overrides: float):
@@ -65,6 +67,17 @@ def _register_and_login(client: TestClient, *, email: str, role: str = "comprado
     login = client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
+
+
+def _drain_join_room_extras(websocket) -> dict:
+    """Después de `room_joined`, el Gateway manda un `snapshot` (o, si el `remate_id`
+    no corresponde a un remate real, un `error/snapshot_unavailable` -- Módulo 3.6, ver
+    docs/23-snapshot-service.md). La mayoría de los tests de salas de acá usan
+    `remate_id` aleatorios a propósito (les importa solo la mecánica de la sala, no el
+    dominio, ver ADR-024 sección D) -- este helper consume ese mensaje extra sin
+    asumir cuál de los dos llega, para no romper el orden de los `receive_json()`
+    siguientes."""
+    return websocket.receive_json()
 
 
 # --- Autenticación -------------------------------------------------------------------
@@ -282,6 +295,7 @@ async def test_join_room_already_in_another_room_returns_error(ws_client: TestCl
 
         websocket.send_json({"type": "join_room", "remate_id": str(room_a)})
         websocket.receive_json()  # room_joined
+        _drain_join_room_extras(websocket)  # snapshot o snapshot_unavailable
 
         websocket.send_json({"type": "join_room", "remate_id": str(room_b)})
         response = websocket.receive_json()
@@ -305,6 +319,7 @@ async def test_rejoining_same_room_is_idempotent_over_the_wire(ws_client: TestCl
 
         websocket.send_json({"type": "join_room", "remate_id": str(remate_id)})
         first = websocket.receive_json()
+        _drain_join_room_extras(websocket)  # snapshot o snapshot_unavailable
         websocket.send_json({"type": "join_room", "remate_id": str(remate_id)})
         second = websocket.receive_json()
 
@@ -322,6 +337,7 @@ async def test_leave_room_confirms_and_removes_connection(ws_client: TestClient)
         websocket.receive_json()  # connected
         websocket.send_json({"type": "join_room", "remate_id": str(remate_id)})
         websocket.receive_json()  # room_joined
+        _drain_join_room_extras(websocket)  # snapshot o snapshot_unavailable
 
         websocket.send_json({"type": "leave_room"})
         response = websocket.receive_json()
@@ -354,6 +370,7 @@ async def test_leave_then_join_a_different_room_succeeds(ws_client: TestClient) 
 
         websocket.send_json({"type": "join_room", "remate_id": str(room_a)})
         websocket.receive_json()  # room_joined
+        _drain_join_room_extras(websocket)  # snapshot o snapshot_unavailable
 
         websocket.send_json({"type": "leave_room"})
         websocket.receive_json()  # room_left
@@ -456,6 +473,7 @@ async def test_heartbeat_after_joining_a_room_does_not_break_room_membership(
             connected = websocket.receive_json()
             websocket.send_json({"type": "join_room", "remate_id": str(remate_id)})
             websocket.receive_json()  # room_joined
+            _drain_join_room_extras(websocket)  # snapshot o snapshot_unavailable
 
             ping = websocket.receive_json()
             assert ping["type"] == "ping"
@@ -464,4 +482,198 @@ async def test_heartbeat_after_joining_a_room_does_not_break_room_membership(
             room_manager = app.state.room_manager
             connection_id = uuid.UUID(connected["connection_id"])
             assert room_manager.room_id_for_connection(connection_id) == remate_id
-            assert room_manager.connection_count(remate_id) == 1
+
+
+# --- Snapshot (Épica 3, Módulo 3.6) ----------------------------------------------------
+
+
+def _create_remate(client: TestClient, token: str, **overrides) -> dict:
+    payload = {
+        "title": "Remate de snapshot vía Gateway",
+        "category": "hacienda",
+        "starts_at": "2027-06-01T10:00:00Z",
+    }
+    payload.update(overrides)
+    r = client.post(REMATES_URL, json=payload, headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def _create_lote(client: TestClient, token: str, remate_id: str, **overrides) -> dict:
+    payload = {
+        "lot_number": overrides.pop("lot_number", "1"),
+        "title": "Toro Angus",
+        "category": "hacienda",
+        "base_price": "1000.00",
+        "min_increment": "100.00",
+        "reserve_price": "5000.00",
+    }
+    payload.update(overrides)
+    r = client.post(
+        f"{REMATES_URL}/{remate_id}/lotes",
+        json=payload,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def _start_remate_and_open_lote(
+    client: TestClient, token: str, remate_id: str, lote_id: str
+) -> None:
+    headers = {"Authorization": f"Bearer {token}"}
+    r = client.post(f"{REMATES_URL}/{remate_id}/schedule", headers=headers)
+    assert r.status_code == 200, r.text
+    r = client.post(f"{REMATES_URL}/{remate_id}/start", headers=headers)
+    assert r.status_code == 200, r.text
+    r = client.post(f"{REMATES_URL}/{remate_id}/lotes/{lote_id}/open", headers=headers)
+    assert r.status_code == 200, r.text
+
+
+def _bid(client: TestClient, token: str, remate_id: str, lote_id: str, amount: str) -> dict:
+    r = client.post(
+        f"{REMATES_URL}/{remate_id}/lotes/{lote_id}/ofertas",
+        json={"amount": amount},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def _register_owner(client: TestClient, email: str) -> str:
+    return _register_and_login(client, email=email, role="rematador")
+
+
+def _connect_join(client: TestClient, token: str, remate_id: str):
+    websocket = client.websocket_connect(WS_URL).__enter__()
+    websocket.send_json({"type": "auth", "token": token})
+    websocket.receive_json()  # connected
+    websocket.send_json({"type": "join_room", "remate_id": remate_id})
+    return websocket
+
+
+async def test_join_room_sends_snapshot_right_after_room_joined(ws_client: TestClient) -> None:
+    owner_token = _register_owner(ws_client, "snapws1-owner@example.com")
+    remate = _create_remate(ws_client, owner_token)
+    lote = _create_lote(ws_client, owner_token, remate["id"])
+    _start_remate_and_open_lote(ws_client, owner_token, remate["id"], lote["id"])
+
+    buyer_token = _register_and_login(ws_client, email="snapws1-buyer@example.com")
+    websocket = _connect_join(ws_client, buyer_token, remate["id"])
+    try:
+        joined = websocket.receive_json()
+        snapshot_msg = websocket.receive_json()
+
+        assert joined["type"] == "room_joined"
+        assert snapshot_msg["type"] == "snapshot"
+        data = snapshot_msg["data"]
+        assert data["remate"]["id"] == remate["id"]
+        assert data["active_lote"]["id"] == lote["id"]
+        assert data["active_lote"]["status"] == "open"
+        assert data["winning_offer"] is None
+        assert data["recent_offers"] == []
+        assert data["connected_users"] == 1
+    finally:
+        websocket.__exit__(None, None, None)
+
+
+async def test_snapshot_includes_winning_offer_and_history_over_ws(ws_client: TestClient) -> None:
+    owner_token = _register_owner(ws_client, "snapws2-owner@example.com")
+    remate = _create_remate(ws_client, owner_token)
+    lote = _create_lote(ws_client, owner_token, remate["id"])
+    _start_remate_and_open_lote(ws_client, owner_token, remate["id"], lote["id"])
+
+    buyer_token = _register_and_login(ws_client, email="snapws2-buyer@example.com")
+    _bid(ws_client, buyer_token, remate["id"], lote["id"], "1000.00")
+    _bid(ws_client, buyer_token, remate["id"], lote["id"], "1200.00")
+
+    websocket = _connect_join(ws_client, buyer_token, remate["id"])
+    try:
+        websocket.receive_json()  # room_joined
+        snapshot_msg = websocket.receive_json()
+
+        data = snapshot_msg["data"]
+        assert data["winning_offer"]["amount"] == "1200.00"
+        assert len(data["recent_offers"]) == 2
+        assert data["recent_offers"][0]["amount"] == "1200.00"
+    finally:
+        websocket.__exit__(None, None, None)
+
+
+async def test_snapshot_masks_reserve_price_for_non_owner_over_ws(ws_client: TestClient) -> None:
+    owner_token = _register_owner(ws_client, "snapws3-owner@example.com")
+    remate = _create_remate(ws_client, owner_token)
+    lote = _create_lote(ws_client, owner_token, remate["id"], reserve_price="9999.00")
+    _start_remate_and_open_lote(ws_client, owner_token, remate["id"], lote["id"])
+
+    buyer_token = _register_and_login(ws_client, email="snapws3-buyer@example.com")
+
+    owner_ws = _connect_join(ws_client, owner_token, remate["id"])
+    buyer_ws = _connect_join(ws_client, buyer_token, remate["id"])
+    try:
+        owner_ws.receive_json()  # room_joined
+        owner_snapshot = owner_ws.receive_json()
+        buyer_ws.receive_json()  # room_joined
+        buyer_snapshot = buyer_ws.receive_json()
+
+        assert owner_snapshot["data"]["active_lote"]["reserve_price"] == "9999.00"
+        assert buyer_snapshot["data"]["active_lote"]["reserve_price"] is None
+    finally:
+        owner_ws.__exit__(None, None, None)
+        buyer_ws.__exit__(None, None, None)
+
+
+async def test_join_room_for_nonexistent_remate_sends_snapshot_unavailable_error(
+    ws_client: TestClient,
+) -> None:
+    token = _register_and_login(ws_client, email="snapws4@example.com")
+    fake_remate_id = uuid.uuid4()
+
+    with ws_client.websocket_connect(WS_URL) as websocket:
+        websocket.send_json({"type": "auth", "token": token})
+        websocket.receive_json()  # connected
+        websocket.send_json({"type": "join_room", "remate_id": str(fake_remate_id)})
+
+        joined = websocket.receive_json()
+        error = websocket.receive_json()
+
+        # El join a la sala en sí no se deshace ni falla -- ADR-024 sección D ya
+        # decidió que RoomManager no valida contra el dominio; ADR-026 lo respeta y
+        # solo informa que el snapshot puntual no se pudo construir.
+        assert joined["type"] == "room_joined"
+        assert error["type"] == "error"
+        assert error["code"] == SNAPSHOT_UNAVAILABLE
+
+        room_manager = ws_client.app.state.room_manager
+        assert room_manager.connection_count(fake_remate_id) == 1
+
+
+async def test_snapshot_connected_users_reflects_current_room_size(ws_client: TestClient) -> None:
+    owner_token = _register_owner(ws_client, "snapws5-owner@example.com")
+    remate = _create_remate(ws_client, owner_token)
+    # Un DRAFT solo es visible para el dueño (RemateService._is_visible) -- se programa
+    # para que los compradores de este test puedan verlo y el snapshot se construya.
+    schedule = ws_client.post(
+        f"{REMATES_URL}/{remate['id']}/schedule",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert schedule.status_code == 200, schedule.text
+
+    buyer_1_token = _register_and_login(ws_client, email="snapws5-buyer1@example.com")
+    buyer_2_token = _register_and_login(ws_client, email="snapws5-buyer2@example.com")
+
+    ws_1 = _connect_join(ws_client, buyer_1_token, remate["id"])
+    try:
+        ws_1.receive_json()  # room_joined
+        first_snapshot = ws_1.receive_json()
+        assert first_snapshot["data"]["connected_users"] == 1
+
+        ws_2 = _connect_join(ws_client, buyer_2_token, remate["id"])
+        try:
+            ws_2.receive_json()  # room_joined
+            second_snapshot = ws_2.receive_json()
+            assert second_snapshot["data"]["connected_users"] == 2
+        finally:
+            ws_2.__exit__(None, None, None)
+    finally:
+        ws_1.__exit__(None, None, None)
