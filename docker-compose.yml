@@ -57,6 +57,26 @@ services:
         condition: service_healthy
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      # node_modules del contenedor, no del host -- los binarios que instala npm
+      # (esbuild, etc.) son específicos de la plataforma; si el volumen de arriba
+      # pisara este directorio con un node_modules de Windows/Mac, Vite fallaría al
+      # arrancar dentro del contenedor Linux. Mismo problema clásico que resuelve
+      # cualquier proyecto Node dockerizado con bind mount del código fuente.
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      - backend
+    # Sin `env_file`: Vite lee `frontend/.env` directamente (mismo volumen montado
+    # arriba), no necesita que Docker Compose se lo inyecte -- y `VITE_API_BASE_URL`
+    # tiene que apuntar a "localhost" (lo resuelve el navegador del usuario, fuera de
+    # la red de Docker), no al nombre del servicio "backend".
+
   # UI mínima de administración de la base de datos, útil en desarrollo para inspeccionar
   # tablas sin instalar un cliente Postgres aparte. No forma parte del sistema en sí.
   adminer:
@@ -68,3 +88,4 @@ services:
 
 volumes:
   rematar_db_data:
+  frontend_node_modules:

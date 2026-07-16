@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind v4: configuración "CSS-first" -- no hace falta tailwind.config.js ni
+ * postcss.config.js (ver ADR-027). `@theme` define los únicos tokens de diseño que
+ * este módulo necesita hoy; se amplía acá mismo a medida que crecen las pantallas
+ * reales, no antes.
+ */
+@theme {
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-500: #2563eb;
+  --color-brand-600: #1d4ed8;
+  --color-brand-700: #1e40af;
+
+  --color-danger-50: #fef2f2;
+  --color-danger-500: #dc2626;
+  --color-danger-600: #b91c1c;
+
+  --color-success-50: #f0fdf4;
+  --color-success-500: #16a34a;
+  --color-success-600: #15803d;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}

@@ -57,6 +57,7 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [024](adr/ADR-024-sistema-de-salas.md) | Sistema de salas: `RoomManager` en memoria, una sala por conexión, sin dependencias de dominio | Aceptada |
 | [025](adr/ADR-025-sincronizacion-tiempo-real.md) | Sincronización de eventos en tiempo real: Event Consumer como único puente entre dominio y Gateway | Aceptada |
 | [026](adr/ADR-026-snapshot-service.md) | Snapshot Service: reconstrucción de estado reutilizable por transporte, sin duplicar reglas de dominio | Aceptada |
+| [027](adr/ADR-027-fundacion-frontend.md) | Fundación del frontend: estructura por dominio, Zustand, Tailwind, cliente HTTP con refresh transparente | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -306,3 +307,33 @@ Detalle completo en [docs/23-snapshot-service.md](23-snapshot-service.md) y
   `reserve_price`/`buyer_id` se aplica después de leer (de caché o de la base), según
   el viewer de cada pedido puntual — evita que la respuesta cacheada para un dueño
   filtre datos sensibles a un comprador dentro del mismo TTL.
+
+## Épica 4, Módulo 4.1 — notas de arquitectura de la fundación del frontend
+
+Detalle completo en [docs/24-fundacion-frontend.md](24-fundacion-frontend.md) y
+[ADR-027](adr/ADR-027-fundacion-frontend.md). Resumen:
+
+- `frontend/` nuevo, al lado de `backend/` — React + Vite + TypeScript (Fase 0), con
+  `features/<dominio>/` (mismo criterio que `app/modules/<dominio>/` del backend) +
+  `shared/` (transversal) + `app/` (ensamblaje: router, layouts).
+- Tailwind v4 en vez de CSS Modules, y Zustand en vez de Context API — ambas
+  justificadas explícitamente (la épica lo pedía): Tailwind por la cantidad de estado
+  visual cambiante que va a tener la interfaz; Zustand porque el diferencial del
+  proyecto (tiempo real) necesita suscripción por selector, no notificación a todo un
+  subárbol de React como hace `Context.Provider`.
+- Cliente Axios centralizado (`shared/api/client.ts`) con JWT automático, refresh
+  transparente ante 401 con cola single-flight (evita invalidar el refresh token
+  rotado del backend, ver ADR-011, si dos requests fallan a la vez), e inversión de
+  dependencias con el store de sesión para evitar un import circular de tres módulos.
+- Hallazgo no anticipado, verificado empíricamente (reproducible en `vite dev` y en
+  `vite preview`, no un artefacto de Hot Module Replacement): con `localStorage`
+  (síncrono), Zustand ejecuta `onRehydrateStorage` durante la propia llamada a
+  `create(...)`, antes de que la constante del store termine de asignarse —
+  referenciarla desde ese callback tira `ReferenceError`/`TypeError` según el entorno.
+  Se resolvió capturando `set` del creator en una variable de módulo en vez de
+  referenciar el store ya creado (ADR-027, sección H).
+- Guards de ruta (`RequireAuth`, `RequireRole`) como elementos de ruta sin `path`
+  propio, anidables en el árbol de `createBrowserRouter` — agregar una ruta protegida
+  nueva no requiere tocar ninguno de los dos.
+- Cero cambios en `backend/` — único archivo compartido tocado fuera de `frontend/`:
+  `docker-compose.yml` (un servicio `frontend` nuevo, aditivo).

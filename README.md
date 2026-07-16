@@ -4,25 +4,19 @@ Plataforma de remates en vivo con ofertas en tiempo real. Ver [`docs/`](docs/) p
 diseño completo del sistema (visión, requisitos, arquitectura, ADRs) — este README cubre
 solo cómo levantar y trabajar con lo que existe hoy.
 
-**Estado del proyecto: Épica 3, Módulo 3.6 — Snapshot Service.** Ya están
-implementados: la base técnica del backend (autenticación, usuarios, roles — Fase 1),
-`Remate` (Épica 2.1), `Lote` (Épica 2.2), el motor de estados de ambos (Épica 2.3), el
-Auction Engine — recepción, validación, aceptación/rechazo de ofertas (Épica 2.4) —,
-Redis (Épica 3.1), el sistema interno de eventos (Event Bus sobre Redis Pub/Sub, el
-dominio publica sin conocer quién consume — Épica 3.2), el Gateway WebSocket (conexión
-autenticada con el mismo JWT de HTTP, heartbeat aplicativo — Épica 3.3), el sistema de
-salas (cada remate es una sala independiente, `RoomManager` en memoria — Épica 3.4), el
-Event Consumer (`app/realtime/`: escucha Redis Pub/Sub, entrega cada evento de dominio
-únicamente a la sala del remate correspondiente — Épica 3.5) y ahora el Snapshot
-Service (`app/snapshot/`): al entrar correctamente a una sala, el Gateway pide el
-estado completo del remate (info, lote activo, oferta ganadora, historial reciente,
-conectados) y se lo manda al cliente antes de que empiece a recibir eventos — RF-16
-implementado por primera vez, reutilizable también por HTTP (Épica 3.6). Todavía no hay
-chat, notificaciones push ni presencia online — la arquitectura ya los deja preparados
-(ver
+**Estado del proyecto: Épica 4, Módulo 4.1 — Fundación del Frontend.** El backend
+completo de la Épica 3 (Redis, Event Bus, Gateway WebSocket, salas, Event Consumer,
+Snapshot Service — detalle en la sección "Backend" más abajo) ya está implementado y
+probado. Arranca el frontend (`frontend/`, React + Vite + TypeScript): estructura de
+carpetas por dominio, ruteo con guards de autenticación y de rol, cliente Axios
+centralizado con JWT automático y refresh transparente, Zustand para estado
+compartido, Tailwind, y los primeros componentes base. Todavía no hay ninguna pantalla
+de producto (remates, lotes, sala del remate, chat, dashboard son módulos futuros, ver
 [Próximos pasos](#próximos-pasos)).
 
-## Stack de esta fase
+## Stack
+
+### Backend
 
 | Pieza | Tecnología | Por qué (detalle en [docs/12](docs/12-stack-tecnologico.md)) |
 |---|---|---|
@@ -39,6 +33,18 @@ chat, notificaciones push ni presencia online — la arquitectura ya los deja pr
 | Auth | JWT (PyJWT) + Argon2 (`argon2-cffi`) | Access token stateless + refresh token persistido y rotado (ver [ADR-011](docs/adr/ADR-011-refresh-tokens-persistidos-en-postgres.md)) |
 | Logging | `structlog` | Logs estructurados con `request_id` de contexto (RNF-15) |
 | Contenedores | Docker + Docker Compose | Entorno reproducible con un comando |
+
+### Frontend (Épica 4.1)
+
+| Pieza | Tecnología | Por qué (detalle en [docs/24](docs/24-fundacion-frontend.md), [ADR-027](docs/adr/ADR-027-fundacion-frontend.md)) |
+|---|---|---|
+| UI | React + Vite + TypeScript | Ciclo de desarrollo rápido, ecosistema maduro para estado reactivo ante eventos por WebSocket (ver [docs/12](docs/12-stack-tecnologico.md)) |
+| Ruteo | React Router v7 (`createBrowserRouter`) | API de datos, guards de autenticación/rol como rutas anidadas sin `path` propio |
+| Estilos | Tailwind CSS v4 | Interfaz con mucho estado visual cambiante (ofertas, estados de lote) — se prefirió sobre CSS Modules, justificado en ADR-027 sección C |
+| Estado global | Zustand | Suscripción por selector, no por subárbol como `Context.Provider` — pensado para el estado de tiempo real que viene después (ADR-027 sección D) |
+| HTTP | Axios, cliente centralizado con interceptores | JWT automático + refresh transparente con cola single-flight (ADR-027 secciones E-G) |
+| Tests | Vitest + Testing Library | Mismo motor que Vite, sin configuración aparte |
+| Contenedores | Docker (dev-only, ver Dockerfile) | Mismo criterio que el backend: `docker compose up` levanta todo |
 
 ## Estructura del proyecto
 
@@ -105,6 +111,24 @@ RematAR/
 │   ├── Dockerfile
 │   ├── docker-entrypoint.sh          Corre `alembic upgrade head` antes de levantar uvicorn
 │   └── pyproject.toml                Único manifiesto de dependencias (PEP 621)
+├── frontend/                        Épica 4 -- React + Vite + TypeScript, ver docs/24
+│   ├── src/
+│   │   ├── main.tsx / App.tsx        Entry point + <RouterProvider>
+│   │   ├── app/                       Ensamblaje: router, los 3 layouts, páginas sin dominio propio
+│   │   │   ├── router.tsx              Árbol de rutas (createBrowserRouter), guards anidados
+│   │   │   ├── layouts/                RootLayout, AuthLayout, AppLayout
+│   │   │   └── pages/                  HomePage (placeholder), 403, 404, admin de ejemplo
+│   │   ├── features/                  Un paquete por dominio de negocio (mismo criterio que app/modules/)
+│   │   │   └── auth/                   api.ts, store.ts (Zustand+persist), hooks.ts, types.ts, pages/
+│   │   ├── shared/                    Transversal, sin conocer ningún dominio
+│   │   │   ├── api/                    client.ts (Axios + interceptores), errors.ts, types.ts
+│   │   │   ├── components/             Button, Input, Spinner, Alert, Card
+│   │   │   ├── guards/                 RequireAuth, RequireRole
+│   │   │   ├── config/                 env.ts -- wrapper tipado de import.meta.env
+│   │   │   └── toast/                  Manejo global de avisos/errores (Zustand)
+│   │   └── test/                      Setup de Vitest
+│   ├── Dockerfile                    Dev-only, ver docs/24
+│   └── package.json
 ├── docker-compose.yml
 ├── .env.example
 └── README.md                        Este archivo
@@ -145,6 +169,17 @@ diferieron a propósito porque dependen de que exista el módulo de Lotes). `rem
 tiene ninguna relación SQLAlchemy con `users` — solo una FK simple (`owner_id`), para
 mantener real el límite de módulo entre ambos.
 
+### El frontend: la misma disciplina de límites, del otro lado
+
+`frontend/src/features/<dominio>/` es, a propósito, el mismo criterio que
+`backend/app/modules/<dominio>/`: todo lo de un dominio (llamadas HTTP, estado, tipos,
+páginas) en una carpeta, no repartido en `pages/`, `hooks/`, `stores/` con todos los
+dominios mezclados. `frontend/src/shared/` cumple el rol de `app/core/`+`app/common/`
+del backend — transversal, sin conocer ningún dominio. Detalle completo, incluida la
+justificación de Tailwind sobre CSS Modules y Zustand sobre Context API, en
+[docs/24-fundacion-frontend.md](docs/24-fundacion-frontend.md) y
+[ADR-027](docs/adr/ADR-027-fundacion-frontend.md).
+
 ## Dependencias principales
 
 Ver [`backend/pyproject.toml`](backend/pyproject.toml) para la lista completa con
@@ -157,14 +192,21 @@ versiones. Justificación de cada una (incluyendo alternativas descartadas) en
 ### Requisitos
 
 - Docker y Docker Compose.
-- Ningún requisito de Python en el host — todo corre en contenedores. (Python 3.13 local
-  es necesario solo si vas a correr los tests fuera de Docker, ver más abajo.)
+- Ningún requisito de Python ni Node en el host — todo corre en contenedores. (Python
+  3.13 y Node 24 locales son necesarios solo si vas a correr los tests fuera de Docker,
+  ver más abajo.)
 
 ### 1. Configurar variables de entorno
 
 ```bash
 cp .env.example .env
+cp frontend/.env.example frontend/.env
 ```
+
+El `.env` de la raíz es del backend (`SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, CORS,
+etc.); `frontend/.env` es del frontend (`VITE_API_BASE_URL`, ver
+[docs/24-fundacion-frontend.md](docs/24-fundacion-frontend.md)) — Vite lee variables de
+entorno desde su propia carpeta, no desde la raíz del repo.
 
 Completar al menos `SECRET_KEY` con un valor real:
 
@@ -187,9 +229,11 @@ python -c "import secrets; print(secrets.token_urlsafe(64))"
 docker compose up -d
 ```
 
-Esto levanta PostgreSQL y Redis, aplica las migraciones automáticamente
-(`docker-entrypoint.sh` corre `alembic upgrade head` antes de iniciar la app) y expone:
+Esto levanta PostgreSQL, Redis y el backend (aplicando migraciones automáticamente --
+`docker-entrypoint.sh` corre `alembic upgrade head` antes de iniciar la app) y también
+el frontend (Vite en modo dev, con hot reload vía el volumen montado). Expone:
 
+- Frontend: http://localhost:5173
 - API: http://localhost:8000
 - Documentación interactiva (Swagger UI): http://localhost:8000/api/v1/docs
 - Documentación alternativa (ReDoc): http://localhost:8000/api/v1/redoc
@@ -207,7 +251,8 @@ curl http://localhost:8000/health
 Si `checks.redis` da `"unavailable"`, revisá que el contenedor `redis` esté `healthy`
 (`docker compose ps`) — la API sigue funcionando igual (Redis es soporte, nunca fuente
 de verdad, ver [ADR-002](docs/adr/ADR-002-postgres-fuente-de-verdad-y-redis-como-soporte.md)),
-pero nada que dependa de Redis (a partir de la próxima épica, tiempo real) va a andar.
+pero todo lo de tiempo real (Event Bus, Gateway WebSocket, salas, Event Consumer,
+Snapshot Service — Épica 3, ya implementados) va a fallar.
 
 ### 3. Crear el primer administrador
 
@@ -297,11 +342,53 @@ python -m venv .venv
 ./.venv/Scripts/python -m pytest -v        # en Linux/Mac: .venv/bin/python
 ```
 
+### Frontend: desarrollo y tests
+
+Para trabajar en el frontend con recarga instantánea sin pasar por el volumen de
+Docker (más rápido para iterar), corré Vite directo en el host -- necesita el backend
+levantado (`docker compose up -d db redis backend`) para que las llamadas a la API
+tengan a quién pegarle:
+
+```bash
+cd frontend
+npm install
+npm run dev          # http://localhost:5173, con hot reload
+```
+
+Tests (Vitest + Testing Library, sin necesidad de backend ni Docker -- todo el estado
+externo se mockea):
+
+```bash
+cd frontend
+npm run test          # una corrida
+npm run test:watch    # modo watch
+```
+
+Typecheck y lint:
+
+```bash
+npx tsc -b            # o: npm run build, que además genera frontend/dist/
+npm run lint           # oxlint
+```
+
 ## Próximos pasos
 
-Según [docs/13-mvp-y-roadmap.md](docs/13-mvp-y-roadmap.md) y
-[docs/23-snapshot-service.md](docs/23-snapshot-service.md), lo que sigue (consumidores
-nuevos sobre la misma arquitectura de snapshot + tiempo real ya construida):
+**Frontend** (según [docs/24-fundacion-frontend.md](docs/24-fundacion-frontend.md),
+sobre la fundación de este módulo, sin tocar nada de lo ya construido):
+
+- Pantallas de remates y lotes (`features/remates/`, `features/lotes/`): listado,
+  detalle, CRUD para el rematador — mismo esqueleto que `features/auth/`.
+- Cliente WebSocket (sobre el Gateway del backend, Módulo 3.3): se autentica
+  reusando `useAuthStore.getState().accessToken`, igual que ya hace `shared/api/client.ts`
+  para HTTP.
+- Sala del remate: snapshot inicial (`GET /remates/{id}/snapshot`, backend Módulo 3.6)
+  + eventos por WebSocket (backend Módulo 3.5) sobre un store de Zustand nuevo, mismo
+  patrón que `features/auth/store.ts`.
+- Dashboard real (hoy `HomePage` es un placeholder deliberado).
+
+**Backend** (según [docs/13-mvp-y-roadmap.md](docs/13-mvp-y-roadmap.md) y
+[docs/23-snapshot-service.md](docs/23-snapshot-service.md), consumidores nuevos sobre
+la arquitectura de snapshot + tiempo real ya construida):
 
 - Presencia online: `RoomManager.connection_count(remate_id)` (Módulo 3.4) ya calcula el
   dato; falta publicarlo como evento (`presencia.usuario_conectado`,
@@ -338,3 +425,6 @@ nuevos sobre la misma arquitectura de snapshot + tiempo real ya construida):
 - [`docs/23-snapshot-service.md`](docs/23-snapshot-service.md) — Snapshot Service
   (Épica 3.6): reconstrucción de estado, reutilización por transporte, por qué hace
   falta snapshot + eventos, cómo escala a miles de conexiones concurrentes.
+- [`docs/24-fundacion-frontend.md`](docs/24-fundacion-frontend.md) — Fundación del
+  frontend (Épica 4.1): árbol completo, flujo de autenticación, manejo de rutas,
+  cómo esta base permite construir el resto de las pantallas.
