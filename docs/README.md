@@ -12,16 +12,18 @@ concurrencia, tiempo real y escalabilidad — no en la cantidad de pantallas.
 
 ## Estado actual
 
-**Épica 4, Módulo 4.1 — Fundación del Frontend.** Todo el backend descripto por la
-Épica 3 (Redis, Event Bus, Gateway WebSocket, salas, Event Consumer, Snapshot Service)
-ya está implementado y probado, sin cambios en este módulo. Arranca el frontend (React
-+ Vite + TypeScript): estructura de carpetas por dominio, ruteo con guards de
-autenticación y de rol, cliente HTTP centralizado con manejo automático de JWT y
-refresh transparente, y los primeros componentes base — todavía sin ninguna pantalla
-de producto (remates, lotes, sala del remate, chat, dashboard son módulos futuros, ver
-[24-fundacion-frontend.md](24-fundacion-frontend.md)). Esta carpeta
-sigue siendo la fuente de verdad del proyecto: cada fase nueva debe leerla
-antes de proponer cambios y actualizarla si algo deja de ser cierto. Ver el
+**Épica 4, Módulo 4.4 — Página de Detalle del Remate.** Todo el backend descripto por
+la Épica 3 (Redis, Event Bus, Gateway WebSocket, salas, Event Consumer, Snapshot
+Service) ya está implementado y probado, sin cambios en este módulo ni en los
+anteriores. El dashboard del comprador (Módulo 4.3: listado de remates con búsqueda,
+filtros, orden) ya estaba listo; este módulo agrega la pantalla de detalle de un
+remate puntual — portada, estado, fecha, categoría, descripción, ubicación, rematador,
+listado de lotes, y un botón "Entrar al remate" que hoy lleva a un placeholder de la
+sala en vivo (ver [26-detalle-remate.md](26-detalle-remate.md)). `rematador`/`admin`
+siguen viendo el placeholder de la Módulo 4.1 como pantalla de inicio; sala del
+remate, WebSockets, ofertas, chat y video siguen siendo módulos futuros. Esta carpeta
+sigue siendo la fuente de verdad del proyecto: cada fase nueva debe leerla antes de
+proponer cambios y actualizarla si algo deja de ser cierto. Ver el
 [README raíz](../README.md) para instrucciones de instalación y el estado exacto del
 código.
 
@@ -53,6 +55,8 @@ código.
 | [22-sincronizacion-tiempo-real.md](22-sincronizacion-tiempo-real.md) | Sincronización en tiempo real: Event Consumer, Dispatcher, flujo completo oferta→cliente, preparación para Chat/Notificaciones/Presencia (Épica 3.5) |
 | [23-snapshot-service.md](23-snapshot-service.md) | Snapshot Service: reconstrucción de estado, reutilizable por transporte, por qué hace falta snapshot + eventos (Épica 3.6) |
 | [24-fundacion-frontend.md](24-fundacion-frontend.md) | Fundación del frontend: estructura de carpetas, ruteo, layouts, cliente HTTP, guards, flujo de autenticación (Épica 4.1) |
+| [25-dashboard-comprador.md](25-dashboard-comprador.md) | Dashboard del comprador: flujo de datos, consumo de la API existente, componentes reutilizables, limitaciones conocidas (Épica 4.3) |
+| [26-detalle-remate.md](26-detalle-remate.md) | Página de detalle del remate: flujo de datos, listado de lotes, componentes reutilizables, preparación para la sala en vivo (Épica 4.4) |
 | [adr/](adr/) | Registro de decisiones de arquitectura (ADR), una por decisión relevante |
 
 ## Reglas de esta documentación (aplican a todas las fases futuras)
@@ -149,3 +153,18 @@ código.
   automático y refresh transparente (cola single-flight), Zustand para estado
   compartido, Tailwind v4, componentes base; cero cambios en el backend. Ver
   [24-fundacion-frontend.md](24-fundacion-frontend.md), ADR-027.
+- **Épica 4, Módulo 4.3** (2026-07-23): Dashboard del Comprador — primera pantalla de
+  producto real: listado de remates visibles para un `comprador`, en tarjetas
+  responsive, con búsqueda por título (client-side, el backend no expone búsqueda de
+  texto), filtro por estado/categoría, orden (próximos/recientes/en vivo), estados de
+  carga/vacío/error; sin sala del remate, WebSockets, ofertas, chat ni video (módulos
+  futuros); cero cambios en el backend ni en la autenticación. Ver
+  [25-dashboard-comprador.md](25-dashboard-comprador.md), ADR-028.
+- **Épica 4, Módulo 4.4** (2026-07-24): Página de Detalle del Remate — toda la
+  información de un remate puntual (portada, estado, fecha, categoría, descripción,
+  ubicación, rematador, cantidad de lotes) más el listado completo de sus lotes, en
+  tarjetas; breadcrumb de navegación; botón "Entrar al remate" a un placeholder de la
+  sala en vivo, ahora en su propia ruta (`/remates/:remateId/sala`); dos fuentes de
+  datos con carga/error independientes (remate y lotes); sin WebSockets, ofertas, chat,
+  video ni tiempo real (módulos futuros); cero cambios en el backend ni en la
+  autenticación. Ver [26-detalle-remate.md](26-detalle-remate.md), ADR-029.

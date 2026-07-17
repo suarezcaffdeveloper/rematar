@@ -4,14 +4,16 @@ Plataforma de remates en vivo con ofertas en tiempo real. Ver [`docs/`](docs/) p
 diseño completo del sistema (visión, requisitos, arquitectura, ADRs) — este README cubre
 solo cómo levantar y trabajar con lo que existe hoy.
 
-**Estado del proyecto: Épica 4, Módulo 4.1 — Fundación del Frontend.** El backend
-completo de la Épica 3 (Redis, Event Bus, Gateway WebSocket, salas, Event Consumer,
-Snapshot Service — detalle en la sección "Backend" más abajo) ya está implementado y
-probado. Arranca el frontend (`frontend/`, React + Vite + TypeScript): estructura de
-carpetas por dominio, ruteo con guards de autenticación y de rol, cliente Axios
-centralizado con JWT automático y refresh transparente, Zustand para estado
-compartido, Tailwind, y los primeros componentes base. Todavía no hay ninguna pantalla
-de producto (remates, lotes, sala del remate, chat, dashboard son módulos futuros, ver
+**Estado del proyecto: Épica 4, Módulo 4.4 — Página de Detalle del Remate.** El
+backend completo de la Épica 3 (Redis, Event Bus, Gateway WebSocket, salas, Event
+Consumer, Snapshot Service — detalle en la sección "Backend" más abajo) ya está
+implementado y probado. El dashboard del comprador (Módulo 4.3: listado de remates en
+tarjetas, búsqueda, filtros, orden) ya estaba listo; este módulo agrega la página de
+detalle de un remate puntual — portada, estado, fecha, categoría, descripción,
+ubicación, rematador, listado completo de lotes, y un botón "Entrar al remate" que hoy
+navega a un placeholder de la sala en vivo (ver
+[docs/26](docs/26-detalle-remate.md)). Todavía no hay WebSockets, ofertas, chat ni
+video del lado del frontend (módulos futuros, ver
 [Próximos pasos](#próximos-pasos)).
 
 ## Stack
@@ -34,7 +36,7 @@ de producto (remates, lotes, sala del remate, chat, dashboard son módulos futur
 | Logging | `structlog` | Logs estructurados con `request_id` de contexto (RNF-15) |
 | Contenedores | Docker + Docker Compose | Entorno reproducible con un comando |
 
-### Frontend (Épica 4.1)
+### Frontend (Épica 4.1 + 4.3 + 4.4)
 
 | Pieza | Tecnología | Por qué (detalle en [docs/24](docs/24-fundacion-frontend.md), [ADR-027](docs/adr/ADR-027-fundacion-frontend.md)) |
 |---|---|---|
@@ -117,13 +119,15 @@ RematAR/
 │   │   ├── app/                       Ensamblaje: router, los 3 layouts, páginas sin dominio propio
 │   │   │   ├── router.tsx              Árbol de rutas (createBrowserRouter), guards anidados
 │   │   │   ├── layouts/                RootLayout, AuthLayout, AppLayout
-│   │   │   └── pages/                  HomePage (placeholder), 403, 404, admin de ejemplo
+│   │   │   └── pages/                  HomePage (rama por rol -> dashboard real si comprador), 403, 404, admin de ejemplo
 │   │   ├── features/                  Un paquete por dominio de negocio (mismo criterio que app/modules/)
-│   │   │   └── auth/                   api.ts, store.ts (Zustand+persist), hooks.ts, types.ts, pages/
+│   │   │   ├── auth/                   api.ts, store.ts (Zustand+persist), hooks.ts, types.ts, pages/
+│   │   │   └── remates/                Dashboard (4.3) + detalle del remate (4.4): api.ts, filtering.ts, hooks.ts, components/, pages/
 │   │   ├── shared/                    Transversal, sin conocer ningún dominio
 │   │   │   ├── api/                    client.ts (Axios + interceptores), errors.ts, types.ts
-│   │   │   ├── components/             Button, Input, Spinner, Alert, Card
+│   │   │   ├── components/             Button, Input, Spinner, Alert, Card, Badge, Skeleton, EmptyState, Breadcrumb
 │   │   │   ├── guards/                 RequireAuth, RequireRole
+│   │   │   ├── lib/                    format.ts -- formatDateTime (Intl nativo)
 │   │   │   ├── config/                 env.ts -- wrapper tipado de import.meta.env
 │   │   │   └── toast/                  Manejo global de avisos/errores (Zustand)
 │   │   └── test/                      Setup de Vitest
@@ -373,18 +377,20 @@ npm run lint           # oxlint
 
 ## Próximos pasos
 
-**Frontend** (según [docs/24-fundacion-frontend.md](docs/24-fundacion-frontend.md),
-sobre la fundación de este módulo, sin tocar nada de lo ya construido):
+**Frontend** (según [docs/26-detalle-remate.md](docs/26-detalle-remate.md), sobre lo
+agregado en este módulo, sin tocar nada de lo ya construido):
 
-- Pantallas de remates y lotes (`features/remates/`, `features/lotes/`): listado,
-  detalle, CRUD para el rematador — mismo esqueleto que `features/auth/`.
+- Sala del remate: snapshot inicial (`GET /remates/{id}/snapshot`, backend Módulo 3.6)
+  + eventos por WebSocket (backend Módulo 3.5) sobre un store de Zustand nuevo, mismo
+  patrón que `features/auth/store.ts` — hoy `SalaPlaceholderPage`
+  (`/remates/:remateId/sala`) es un placeholder deliberado, ya en su ruta final.
 - Cliente WebSocket (sobre el Gateway del backend, Módulo 3.3): se autentica
   reusando `useAuthStore.getState().accessToken`, igual que ya hace `shared/api/client.ts`
   para HTTP.
-- Sala del remate: snapshot inicial (`GET /remates/{id}/snapshot`, backend Módulo 3.6)
-  + eventos por WebSocket (backend Módulo 3.5) sobre un store de Zustand nuevo, mismo
-  patrón que `features/auth/store.ts`.
-- Dashboard real (hoy `HomePage` es un placeholder deliberado).
+- Ofertas, chat y video dentro de la sala en vivo.
+- Dashboard propio para `rematador` (gestión de sus remates) y `admin` — hoy ambos
+  siguen viendo el placeholder de la Módulo 4.1.
+- CRUD de remates/lotes para el rematador (`features/lotes/` no existe todavía).
 
 **Backend** (según [docs/13-mvp-y-roadmap.md](docs/13-mvp-y-roadmap.md) y
 [docs/23-snapshot-service.md](docs/23-snapshot-service.md), consumidores nuevos sobre
@@ -428,3 +434,11 @@ la arquitectura de snapshot + tiempo real ya construida):
 - [`docs/24-fundacion-frontend.md`](docs/24-fundacion-frontend.md) — Fundación del
   frontend (Épica 4.1): árbol completo, flujo de autenticación, manejo de rutas,
   cómo esta base permite construir el resto de las pantallas.
+- [`docs/25-dashboard-comprador.md`](docs/25-dashboard-comprador.md) — Dashboard del
+  comprador (Épica 4.3): flujo de datos, consumo de la API existente, estructura de
+  componentes reutilizables, limitaciones conocidas (sin búsqueda server-side, N+1
+  acotado para lote count, sin nombre de rematador).
+- [`docs/26-detalle-remate.md`](docs/26-detalle-remate.md) — Página de detalle del
+  remate (Épica 4.4): flujo de datos con dos hooks de carga independientes, listado de
+  lotes, componentes reutilizables, preparación para integrarse con la sala del remate
+  en vivo.

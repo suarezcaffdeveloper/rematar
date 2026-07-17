@@ -58,6 +58,8 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [025](adr/ADR-025-sincronizacion-tiempo-real.md) | Sincronización de eventos en tiempo real: Event Consumer como único puente entre dominio y Gateway | Aceptada |
 | [026](adr/ADR-026-snapshot-service.md) | Snapshot Service: reconstrucción de estado reutilizable por transporte, sin duplicar reglas de dominio | Aceptada |
 | [027](adr/ADR-027-fundacion-frontend.md) | Fundación del frontend: estructura por dominio, Zustand, Tailwind, cliente HTTP con refresh transparente | Aceptada |
+| [028](adr/ADR-028-dashboard-comprador.md) | Dashboard del comprador: carga completa + filtrado client-side, N+1 acotado para lote count, sin nombre de rematador | Aceptada |
+| [029](adr/ADR-029-detalle-remate.md) | Detalle del remate: rematador mostrado honestamente sin nombre real, hooks de carga independientes, sala en su propia ruta | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -337,3 +339,49 @@ Detalle completo en [docs/24-fundacion-frontend.md](24-fundacion-frontend.md) y
   nueva no requiere tocar ninguno de los dos.
 - Cero cambios en `backend/` — único archivo compartido tocado fuera de `frontend/`:
   `docker-compose.yml` (un servicio `frontend` nuevo, aditivo).
+
+## Épica 4, Módulo 4.3 — notas de arquitectura del dashboard del comprador
+
+Detalle completo en [docs/25-dashboard-comprador.md](25-dashboard-comprador.md) y
+[ADR-028](adr/ADR-028-dashboard-comprador.md). Resumen:
+
+- Primera pantalla de producto real, sobre la fundación de la Módulo 4.1: `HomePage`
+  se ramifica por rol (`comprador` → `CompradorDashboardPage`; el resto sigue con el
+  placeholder existente), y `features/remates/` nace con el mismo esqueleto que
+  `features/auth/` (`api.ts`, `types.ts`, `hooks.ts`).
+- `GET /remates` no expone búsqueda de texto (solo `category`/`status`/`owner_id`) —
+  `useRemates` pagina internamente hasta juntar la lista completa (tope de 500) y
+  `filterAndSortRemates` (función pura) filtra/ordena client-side. Paginar
+  server-side y filtrar solo la página visible habría dado resultados de búsqueda
+  incompletos.
+- `RemateRead` no expone cantidad de lotes: `useLoteCount` pide
+  `GET /remates/{id}/lotes?page_size=1` de forma perezosa, una vez por tarjeta
+  efectivamente renderizada (N+1 deliberado y acotado, no una optimización pendiente).
+- Sin forma de resolver `owner_id` a un nombre (no hay `GET /users/{id}`, `GET /users`
+  es solo-admin): la tarjeta omite el rematador por completo en vez de mostrar un UUID
+  crudo.
+- Cero cambios en `backend/`, en la autenticación, ni en componentes/layouts
+  preexistentes — únicas ediciones a código ya existente: `HomePage.tsx` (rama por
+  rol) y `router.tsx` (una ruta nueva), ambas ya anticipadas en ADR-027.
+
+## Épica 4, Módulo 4.4 — notas de arquitectura del detalle del remate
+
+Detalle completo en [docs/26-detalle-remate.md](26-detalle-remate.md) y
+[ADR-029](adr/ADR-029-detalle-remate.md). Resumen:
+
+- `/remates/:remateId` deja de ser el placeholder del Módulo 4.3 y pasa a ser la
+  página de detalle real; el placeholder (renombrado `SalaPlaceholderPage`) se muda a
+  su propia ruta, `/remates/:remateId/sala` — destino de "Entrar al remate", listo para
+  que un módulo futuro lo reemplace por la sala real sin tocar el árbol de rutas.
+- Dos hooks de carga independientes (`useRemateDetail`, `useLotes`): un fallo al traer
+  los lotes no tira abajo la información del remate que sí cargó bien, cada sección
+  tiene su propio `Alert` con su propio reintento.
+- El rematador dueño, sin nombre resoluble (mismo hueco que ADR-028), se muestra como
+  "Rematador verificado" + un fragmento corto del `owner_id` — a diferencia del
+  dashboard (que lo omite), acá el enunciado lo pide como campo mínimo explícito, así
+  que se resuelve mostrándolo honestamente en vez de ocultarlo o inventar un nombre.
+- `CoverPlaceholder` se extrajo de `RemateCard` (antes local, no exportado) a un
+  componente compartido del feature, reutilizado también por `RemateDetailHeader` y
+  `LoteCard`.
+- Cero cambios en `backend/` ni en la autenticación — mismos dos endpoints que ya
+  consumía el dashboard (`GET /remates/{id}`, `GET /remates/{id}/lotes`).

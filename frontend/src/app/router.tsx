@@ -17,6 +17,8 @@ import { RequireAuth } from '../shared/guards/RequireAuth';
 import { RequireRole } from '../shared/guards/RequireRole';
 import { LoginPage } from '../features/auth/pages/LoginPage';
 import { RegisterPage } from '../features/auth/pages/RegisterPage';
+import { RemateDetailPage } from '../features/remates/pages/RemateDetailPage';
+import { SalaPlaceholderPage } from '../features/remates/pages/SalaPlaceholderPage';
 import { HomePage } from './pages/HomePage';
 import { AdminPlaceholderPage } from './pages/AdminPlaceholderPage';
 import { ForbiddenPage } from './pages/ForbiddenPage';
@@ -42,6 +44,13 @@ export const router = createBrowserRouter([
             element: <AppLayout />,
             children: [
               { index: true, element: <HomePage /> },
+              // Detalle del remate (Épica 4.4) -- cualquier rol autenticado puede
+              // navegar acá; el backend decide qué remate es visible para quién
+              // (RemateService.get_visible_or_raise), no esta ruta.
+              { path: '/remates/:remateId', element: <RemateDetailPage /> },
+              // Placeholder de la sala en vivo (WebSocket/ofertas/chat/video, módulo
+              // futuro) -- destino de "Entrar al remate" en RemateDetailPage.
+              { path: '/remates/:remateId/sala', element: <SalaPlaceholderPage /> },
               // Protegidas además por rol: RequireRole asume que ya pasó RequireAuth.
               {
                 element: <RequireRole allowedRoles={['admin']} />,

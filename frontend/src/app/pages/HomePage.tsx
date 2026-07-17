@@ -1,14 +1,19 @@
 import { useAuth } from '../../features/auth/hooks';
+import { CompradorDashboardPage } from '../../features/remates/pages/CompradorDashboardPage';
 import { Card } from '../../shared/components/Card';
 
 /**
- * Placeholder deliberado -- Épica 4, Módulo 4.1 construye la fundación (routing,
- * layouts, auth), no pantallas de producto. El Dashboard real (listado de remates,
- * accesos según rol) es un módulo futuro; esto solo prueba que login -> guard ->
- * layout autenticado -> página funciona de punta a punta.
+ * Punto de entrada tras el login (ruta `index` de `AppLayout`, ver `app/router.tsx`).
+ * Por rol: `comprador` ya tiene su dashboard real (Épica 4, Módulo 4.3); `rematador` y
+ * `admin` siguen viendo el placeholder de la Módulo 4.1 hasta que tengan el suyo propio
+ * (fuera de alcance de este módulo, ver docs/25-dashboard-comprador.md).
  */
 export function HomePage() {
   const { user } = useAuth();
+
+  if (user?.role === 'comprador') {
+    return <CompradorDashboardPage />;
+  }
 
   return (
     <Card>
@@ -17,8 +22,8 @@ export function HomePage() {
       </h1>
       <p className="mt-2 text-sm text-slate-600">
         Tu rol es <span className="font-medium">{user?.role}</span>. Esta es una página
-        de inicio temporal -- el dashboard real es un módulo futuro (ver
-        docs/24-fundacion-frontend.md).
+        de inicio temporal -- tu dashboard real es un módulo futuro (ver
+        docs/25-dashboard-comprador.md).
       </p>
     </Card>
   );
