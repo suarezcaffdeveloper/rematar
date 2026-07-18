@@ -2,13 +2,24 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
+import { ConfirmModal } from '../../../shared/components/ConfirmModal';
+import { DropdownMenu } from '../../../shared/components/DropdownMenu';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { formatDateTime } from '../../../shared/lib/format';
 import { useToastStore } from '../../../shared/toast/toastStore';
-import { finishRemateRequest, resumeRemateRequest, startRemateRequest } from '../../remates/api';
+import {
+  deleteRemateRequest,
+  finishRemateRequest,
+  resumeRemateRequest,
+  scheduleRemateRequest,
+  startRemateRequest,
+} from '../../remates/api';
 import { BoxIcon, CalendarIcon, UsersIcon } from '../../remates/components/icons';
 import { CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_LABELS } from '../../remates/labels';
 import type { Remate } from '../../remates/types';
+import { CancelRemateModal } from './CancelRemateModal';
+import { RemateFormModal } from './RemateFormModal';
+import { duplicateRemate } from '../duplication';
 import { useRemateOperationalInfo } from '../hooks';
 
 export interface RematadorRemateCardProps {
@@ -62,6 +73,13 @@ function describeLoteState(
  * Operativa del Rematador (Módulo 5.2, ver docs/29-dashboard-rematador.md), no a este
  * dashboard de repaso -- "Reanudar" sigue teniendo sentido acá para retomar un remate que
  * quedó pausado de una sesión anterior.
+ *
+ * Épica 5, Módulo 5.3 agrega el menú "⋯" (editar/publicar/duplicar/cancelar/eliminar,
+ * ver `docs/31-gestion-remates-lotes.md`) y hace que "Administrar"/"Preparar lotes"
+ * navegue a una ruta distinta según el estado: mientras el remate todavía no arrancó
+ * (`draft`/`scheduled`), a la Gestión de Lotes (`/lotes`, este módulo); una vez en curso
+ * o terminado, a la Consola Operativa (`/gestionar`, Módulo 5.2, sin cambios) -- el
+ * mismo botón de siempre, ahora consciente de en qué fase está el remate.
  */
 export function RematadorRemateCard({ remate, onChanged }: RematadorRemateCardProps) {
   const navigate = useNavigate();
@@ -70,6 +88,46 @@ export function RematadorRemateCard({ remate, onChanged }: RematadorRemateCardPr
     remate.status,
   );
   const [pendingAction, setPendingAction] = useState<LifecycleAction | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDuplicating, setIsDuplicating] = useState(false);
+
+  const isDraft = remate.status === 'draft';
+  const isEditableStructure = remate.status === 'draft' || remate.status === 'scheduled';
+  const isCancellable =
+    remate.status === 'draft' || remate.status === 'scheduled' || remate.status === 'live' || remate.status === 'paused';
+  const isPreparing = remate.status === 'draft' || remate.status === 'scheduled';
+
+  async function handlePublish() {
+    try {
+      await scheduleRemateRequest(remate.id);
+      useToastStore.getState().push('success', 'El remate se publicó.');
+      onChanged();
+    } catch (err) {
+      useToastStore.getState().push('error', normalizeApiError(err).message);
+    }
+  }
+
+  async function handleDuplicate() {
+    setIsDuplicating(true);
+    try {
+      const created = await duplicateRemate(remate);
+      useToastStore.getState().push('success', 'Se creó una copia del remate.');
+      onChanged();
+      navigate(`/remates/${created.id}/lotes`);
+    } catch (err) {
+      useToastStore.getState().push('error', normalizeApiError(err).message);
+    } finally {
+      setIsDuplicating(false);
+    }
+  }
+
+  async function handleDelete() {
+    await deleteRemateRequest(remate.id);
+    useToastStore.getState().push('success', 'El remate se eliminó.');
+    onChanged();
+  }
 
   async function runAction(action: LifecycleAction) {
     if (action === 'finish') {
@@ -107,8 +165,30 @@ export function RematadorRemateCard({ remate, onChanged }: RematadorRemateCardPr
           </p>
           <h3 className="mt-1 truncate text-base font-semibold text-slate-900">{remate.title}</h3>
         </div>
-        <Badge variant={STATUS_BADGE_VARIANTS[remate.status]}>{STATUS_LABELS[remate.status]}</Badge>
+        <div className="flex shrink-0 items-center gap-1">
+          <Badge variant={STATUS_BADGE_VARIANTS[remate.status]}>{STATUS_LABELS[remate.status]}</Badge>
+          <DropdownMenu
+            triggerLabel={`Más acciones para ${remate.title}`}
+            items={[
+              { label: 'Editar', onSelect: () => setIsEditModalOpen(true), disabled: !isEditableStructure },
+              {
+                label: 'Publicar remate',
+                onSelect: () => void handlePublish(),
+                disabled: !isDraft || !remate.starts_at,
+              },
+              { label: 'Duplicar', onSelect: () => void handleDuplicate() },
+              { label: 'Cancelar remate', onSelect: () => setIsCancelModalOpen(true), disabled: !isCancellable },
+              {
+                label: 'Eliminar',
+                onSelect: () => setIsDeleteModalOpen(true),
+                disabled: !isDraft,
+                variant: 'danger',
+              },
+            ]}
+          />
+        </div>
       </div>
+      {isDuplicating && <p className="text-xs text-slate-400">Duplicando remate…</p>}
 
       <dl className="grid grid-cols-1 gap-2 text-sm text-slate-600 sm:grid-cols-2">
         <div className="flex items-center gap-2">
@@ -136,8 +216,11 @@ export function RematadorRemateCard({ remate, onChanged }: RematadorRemateCardPr
         <Button variant="secondary" onClick={() => navigate(`/remates/${remate.id}`)}>
           Ver remate
         </Button>
-        <Button variant="secondary" onClick={() => navigate(`/remates/${remate.id}/gestionar`)}>
-          Administrar
+        <Button
+          variant="secondary"
+          onClick={() => navigate(`/remates/${remate.id}/${isPreparing ? 'lotes' : 'gestionar'}`)}
+        >
+          {isPreparing ? 'Preparar lotes' : 'Administrar'}
         </Button>
 
         {canStart && (
@@ -167,6 +250,30 @@ export function RematadorRemateCard({ remate, onChanged }: RematadorRemateCardPr
           </Button>
         )}
       </div>
+
+      <RemateFormModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        remate={remate}
+        onSaved={onChanged}
+      />
+
+      <CancelRemateModal
+        isOpen={isCancelModalOpen}
+        onClose={() => setIsCancelModalOpen(false)}
+        remate={remate}
+        onCancelled={onChanged}
+      />
+
+      <ConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+        title="Eliminar remate"
+        message={`¿Seguro que querés eliminar "${remate.title}"? Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        variant="danger"
+      />
     </article>
   );
 }

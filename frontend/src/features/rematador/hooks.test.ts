@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
-import type { RemateStatus } from '../remates/types';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import type { Remate, RemateStatus } from '../remates/types';
 
 const rematesApiMocks = vi.hoisted(() => ({
   fetchLotesRequest: vi.fn(),
@@ -12,7 +12,7 @@ const salaApiMocks = vi.hoisted(() => ({
 vi.mock('../remates/api', () => rematesApiMocks);
 vi.mock('../sala/api', () => salaApiMocks);
 
-const { useRemateOperationalInfo } = await import('./hooks');
+const { useRemateOperationalInfo, useElapsedTime } = await import('./hooks');
 
 function lote(id: string, status: 'pending' | 'open' | 'closed_sold' | 'closed_unsold' | 'cancelled') {
   return { id, title: `Lote ${id}`, status };
@@ -99,5 +99,82 @@ describe('useRemateOperationalInfo', () => {
     await waitFor(() => expect(result.current.isLoadingLotes).toBe(false));
     expect(result.current.connectedUsers).toBeNull();
     expect(result.current.activeLote?.id).toBe('a');
+  });
+});
+
+function makeRemate(overrides: Partial<Remate> = {}): Remate {
+  return {
+    id: 'remate-1',
+    owner_id: 'owner-1',
+    title: 'Remate',
+    description: null,
+    category: 'otros',
+    cover_image_url: null,
+    location: null,
+    starts_at: '2026-07-18T10:00:00Z',
+    ends_at: null,
+    status: 'live',
+    settings: { anti_sniping_enabled: false, anti_sniping_extension_seconds: 60, currency: 'ARS' },
+    cancellation_reason: null,
+    cancelled_at: null,
+    finished_at: null,
+    created_at: '2026-07-01T00:00:00Z',
+    updated_at: '2026-07-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
+describe('useElapsedTime', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-18T10:05:30Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('en "live", cuenta desde starts_at y avanza cada segundo', () => {
+    const { result } = renderHook(() => useElapsedTime(makeRemate({ status: 'live' })));
+
+    expect(result.current).toBe('5:30');
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(result.current).toBe('5:32');
+  });
+
+  it('en "paused", también cuenta (no se congela en este módulo)', () => {
+    const { result } = renderHook(() => useElapsedTime(makeRemate({ status: 'paused' })));
+    expect(result.current).toBe('5:30');
+  });
+
+  it('en "finished", es fijo (finished_at - starts_at), sin ticking', () => {
+    const { result } = renderHook(() =>
+      useElapsedTime(
+        makeRemate({ status: 'finished', finished_at: '2026-07-18T11:30:00Z' }),
+      ),
+    );
+
+    expect(result.current).toBe('1h 30m');
+
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(result.current).toBe('1h 30m');
+  });
+
+  it('en "scheduled"/"draft"/"cancelled", o sin starts_at, devuelve null', () => {
+    expect(renderHook(() => useElapsedTime(makeRemate({ status: 'scheduled' }))).result.current).toBeNull();
+    expect(renderHook(() => useElapsedTime(makeRemate({ status: 'draft' }))).result.current).toBeNull();
+    expect(renderHook(() => useElapsedTime(makeRemate({ status: 'cancelled' }))).result.current).toBeNull();
+    expect(
+      renderHook(() => useElapsedTime(makeRemate({ status: 'live', starts_at: null }))).result.current,
+    ).toBeNull();
+  });
+
+  it('sin remate (null), devuelve null', () => {
+    expect(renderHook(() => useElapsedTime(null)).result.current).toBeNull();
   });
 });

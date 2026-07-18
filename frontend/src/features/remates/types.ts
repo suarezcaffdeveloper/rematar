@@ -65,6 +65,27 @@ export interface RemateListParams {
   owner_id?: string;
 }
 
+/**
+ * Body de `POST /remates` / `PATCH /remates/{id}` -- `RemateCreate`/`RemateUpdate`
+ * (`backend/app/modules/remates/schemas.py`). Un único tipo para crear y editar (Épica
+ * 5, Módulo 5.3: "formularios reutilizables") -- en `PATCH` el backend acepta el mismo
+ * conjunto de campos, todos opcionales a nivel de transporte; enviar el objeto completo
+ * en ambos casos es más simple que rastrear qué campo puntual cambió, y el backend no
+ * distingue "no enviado" de "enviado igual al valor actual". `settings` es parcial
+ * porque el propio schema del backend ya trae defaults (`RemateSettings`) si no se manda
+ * completo.
+ */
+export interface RemateFormPayload {
+  title: string;
+  category: RemateCategory;
+  description?: string | null;
+  cover_image_url?: string | null;
+  location?: string | null;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  settings?: Partial<RemateSettings>;
+}
+
 /** `LoteStatus` del backend (`lotes/models.py`) -- los mismos cinco valores, ni uno más. */
 export type LoteStatus = 'pending' | 'open' | 'closed_sold' | 'closed_unsold' | 'cancelled';
 
@@ -119,4 +140,37 @@ export interface Lote {
 export interface LoteListParams {
   page?: number;
   page_size?: number;
+}
+
+/** Body de `POST /remates/{id}/lotes/{lote_id}/close` -- `backend/app/modules/remates/
+ * lotes/schemas.py::LoteCloseRequest` (Épica 2.3, ADR-018; consumido desde la Consola
+ * Operativa del Rematador, Épica 5.2). `final_price` es `string` (no `number`), mismo
+ * motivo que `base_price`/`min_increment` -- Pydantic acepta un string numérico para un
+ * campo `Decimal` sin perder precisión. Obligatorio si `outcome` es `"sold"`, debe venir
+ * ausente si es `"unsold"` (el backend valida esto igual, esto solo espeja el contrato). */
+export interface LoteClosePayload {
+  outcome: 'sold' | 'unsold';
+  final_price?: string;
+}
+
+/**
+ * Body de `POST /remates/{id}/lotes` / `PATCH /remates/{id}/lotes/{lote_id}` --
+ * `LoteCreate`/`LoteUpdate` (`backend/app/modules/remates/lotes/schemas.py`). Mismo
+ * criterio que `RemateFormPayload`: un único tipo para crear y editar. No incluye
+ * `display_order` (solo cambia vía `reorderLotesRequest`) ni `status` (sin transición
+ * expuesta por `PATCH`, ver `docs/15-modulo-lote.md`). `base_price`/`min_increment`/
+ * `reserve_price` son `string`, mismo motivo que `Lote` (arriba).
+ */
+export interface LoteFormPayload {
+  lot_number: string;
+  title: string;
+  category: RemateCategory;
+  description?: string | null;
+  attributes?: Record<string, LoteAttributeValue>;
+  images?: LoteImage[];
+  quantity?: number;
+  unit_label?: string | null;
+  base_price: string;
+  min_increment: string;
+  reserve_price?: string | null;
 }

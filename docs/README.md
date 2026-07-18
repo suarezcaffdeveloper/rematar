@@ -12,22 +12,20 @@ concurrencia, tiempo real y escalabilidad — no en la cantidad de pantallas.
 
 ## Estado actual
 
-**Épica 5, Módulo 5.1 — Dashboard del Rematador.** Todo lo de la Épica 4 (frontend del
-comprador: dashboard, detalle, sala en vivo con WebSocket) y de la Épica 3 (backend de
-tiempo real) ya estaba implementado y probado, sin cambios en este módulo. Este módulo
-agrega la consola principal para el rol `rematador`: tarjetas con sus remates propios en
-cualquier estado (nombre, estado, fecha, cantidad de lotes, compradores conectados si el
-dato está disponible, lote activo o próximo lote), acciones de ciclo de vida (iniciar,
-reanudar, finalizar -- consumiendo el motor de estados del backend ya expuesto desde la
-Épica 2.3), buscador/filtro/orden y una fila de indicadores tipo "consola operativa" (sin
-tablas). Ver [29-dashboard-rematador.md](29-dashboard-rematador.md). `admin` sigue viendo
-el placeholder de la Módulo 4.1; creación de remates, edición, cancelación, y la Consola
-Operativa del Rematador (abrir/cerrar lotes, ofertas en vivo, pausar) siguen siendo
-módulos futuros -- la ruta de entrada a esa consola ya queda resuelta (placeholder). Esta
-carpeta sigue siendo la fuente de verdad del proyecto: cada fase nueva debe leerla antes
-de proponer cambios y actualizarla si algo deja de ser cierto. Ver el
-[README raíz](../README.md) para instrucciones de instalación y el estado exacto del
-código.
+**Épica 5, Módulo 5.3 — Gestión completa de Remates y Lotes.** La Consola Operativa
+(Épica 5.2) ya cubría un remate en vivo; este módulo agrega la pantalla donde el
+rematador lo prepara antes de que empiece: crear/editar/eliminar/duplicar/publicar/
+cancelar un remate, y crear/editar/eliminar/duplicar/reordenar (drag & drop nativo +
+botones ↑/↓ como fallback siempre disponible) sus lotes, todo con tarjetas, sidebar y
+modales -- sin tablas tradicionales. "Programar" y "Publicar" se consolidaron en una
+sola acción (el motor de estados solo tiene una transición para eso); "duplicar" se
+compone en el cliente con GET + POST porque el backend no expone ningún endpoint para
+eso. Ver [31-gestion-remates-lotes.md](31-gestion-remates-lotes.md). `admin` sigue
+viendo el placeholder de la Módulo 4.1; chat, streaming y notificaciones siguen siendo
+módulos futuros. Esta carpeta sigue siendo la fuente de verdad del proyecto: cada fase
+nueva debe leerla antes de proponer cambios y actualizarla si algo deja de ser cierto.
+Ver el [README raíz](../README.md) para instrucciones de instalación y el estado exacto
+del código.
 
 ## Índice
 
@@ -62,6 +60,8 @@ código.
 | [27-sala-del-remate.md](27-sala-del-remate.md) | Sala del remate (versión inicial): flujo Snapshot → Render, estructura de componentes, optimización de renderizado, preparación para WebSockets (Épica 4.5) |
 | [28-websocket-tiempo-real-sala.md](28-websocket-tiempo-real-sala.md) | Integración WebSocket y tiempo real: servicio WebSocket reutilizable, flujo Snapshot → WebSocket → Eventos, manejo de los 12 eventos de dominio, preparación para Chat/Presencia/Notificaciones/Streaming (Épica 4.6) |
 | [29-dashboard-rematador.md](29-dashboard-rematador.md) | Dashboard del Rematador: flujo de datos, componentes reutilizables, acciones de ciclo de vida (iniciar/reanudar/finalizar), preparación para la Consola Operativa del Rematador (Épica 5.1) |
+| [30-consola-operativa-rematador.md](30-consola-operativa-rematador.md) | Consola Operativa del Rematador: diagrama, flujo de cada acción, integración con WebSockets (reutilización de `useLiveRemateState`), preparación para la gestión completa de remates y lotes (Épica 5.2) |
+| [31-gestion-remates-lotes.md](31-gestion-remates-lotes.md) | Gestión completa de Remates y Lotes: flujo de creación/edición, drag & drop de reordenamiento, componentes reutilizables (Épica 5.3) |
 | [adr/](adr/) | Registro de decisiones de arquitectura (ADR), una por decisión relevante |
 
 ## Reglas de esta documentación (aplican a todas las fases futuras)
@@ -202,3 +202,25 @@ código.
   ruta placeholder para la Consola Operativa del Rematador (Módulo 5.2); cero cambios en
   el backend, la autenticación ni la Sala del Remate del comprador. Ver
   [29-dashboard-rematador.md](29-dashboard-rematador.md), ADR-032.
+- **Épica 5, Módulo 5.2** (2026-07-28): Consola Operativa del Rematador -- pantalla de
+  control de un remate en vivo: cabecera (estado, tiempo transcurrido, conectados,
+  indicador de conexión), panel principal con el lote activo, panel de control con las
+  seis acciones del motor de estados (abrir lote, pasar al siguiente, cerrar lote,
+  pausar, reanudar, finalizar), panel de ofertas en tiempo real con la última oferta
+  destacada, panel de próximos lotes seleccionable; reutiliza tal cual
+  `useLiveRemateState`/`ImageGallery`/`ConnectionStatusBadge` de la Épica 4.6, sin
+  modificarlos; reemplaza el placeholder de "Administrar" de la Épica 5.1 sin tocar el
+  árbol de rutas; cero cambios en el backend, la autenticación ni `features/sala/`. Ver
+  [30-consola-operativa-rematador.md](30-consola-operativa-rematador.md), ADR-033.
+- **Épica 5, Módulo 5.3** (2026-07-29): Gestión completa de Remates y Lotes -- pantalla
+  de preparación de un remate (`/remates/:remateId/lotes`, reemplaza el placeholder de la
+  Épica 5.1): crear/editar/eliminar/duplicar/publicar/cancelar el remate desde una
+  sidebar, y crear/editar/eliminar/duplicar/reordenar sus lotes en tarjetas; "programar"/
+  "publicar" consolidados en una sola acción (una única transición de backend);
+  "duplicar" compuesto en el cliente (GET + POST) porque no hay endpoint para eso;
+  reordenamiento con HTML5 Drag and Drop nativo (actualización optimista con
+  revert-on-error) y botones ↑/↓ como mecanismo siempre disponible, no cosmético; cinco
+  componentes genéricos nuevos en `shared/components/` (`Modal`, `ConfirmModal`,
+  `Textarea`, `Select`, `DropdownMenu`); reutiliza `useRemateDetail`/`useLotes` de la
+  Épica 4.4 sin modificarlos; cero cambios en el backend ni en la autenticación. Ver
+  [31-gestion-remates-lotes.md](31-gestion-remates-lotes.md), ADR-034.

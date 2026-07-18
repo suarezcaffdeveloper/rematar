@@ -63,6 +63,8 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [030](adr/ADR-030-sala-del-remate.md) | Sala del remate: feature propio espejando el límite de módulo del Snapshot Service, montos como string, sin polling | Aceptada |
 | [031](adr/ADR-031-websocket-tiempo-real-sala.md) | Integración WebSocket en la Sala del Remate: cliente genérico de transporte, snapshot por WS como reconciliador, anonimato re-aplicado en eventos crudos | Aceptada |
 | [032](adr/ADR-032-dashboard-rematador.md) | Dashboard del Rematador: extender `features/remates/` para el recurso, feature nuevo para la experiencia, sin botón "Pausar" | Aceptada |
+| [033](adr/ADR-033-consola-operativa-rematador.md) | Consola Operativa del Rematador: paneles propios en vez de extender los del comprador, y por qué no refrescar por HTTP después de una acción | Aceptada |
+| [034](adr/ADR-034-gestion-remates-lotes.md) | Gestión completa de Remates y Lotes: "programar"/"publicar" consolidados, duplicar compuesto en el cliente, drag & drop nativo con fallback obligatorio | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -485,3 +487,72 @@ Detalle completo en [docs/29-dashboard-rematador.md](29-dashboard-rematador.md) 
   rematador, remates en `draft`/`scheduled` con y sin lotes, acción "Iniciar" desde la
   UI con toast y actualización de estado, navegación a "Administrar").
 - Cero cambios en `backend/`, en la autenticación, ni en `features/sala/`.
+
+## Épica 5, Módulo 5.2 — notas de arquitectura de la Consola Operativa del Rematador
+
+Detalle completo en [docs/30-consola-operativa-rematador.md](30-consola-operativa-
+rematador.md) y [ADR-033](adr/ADR-033-consola-operativa-rematador.md). Resumen:
+
+- `ConsolaOperativaPage` reemplaza el placeholder de la Épica 5.1 en la misma ruta
+  (`/remates/:remateId/gestionar`) y reutiliza `useLiveRemateState` de
+  `features/sala/hooks.ts` (Épica 4.6) **sin modificarlo** -- la consola es, en los
+  hechos, una segunda conexión a la misma sala del remate: recibe exactamente los mismos
+  eventos que un comprador con la Sala abierta, por el mismo canal.
+- Paneles nuevos y propios en `features/rematador/components/`
+  (`ConsolaLotePanel`/`ConsolaOfferPanel`/`ConsolaUpcomingLotesPanel`) en vez de extender
+  los de `features/sala/` (`ActiveLotePanel`/`OfferHistoryPanel`/`UpcomingLotesStrip`):
+  esos embeben `PlaceBidButton` o son deliberadamente de solo lectura, y esta fase
+  prioriza cero riesgo sobre la experiencia del comprador por encima de un ahorro de
+  código modesto. Sí se reutilizan tal cual los componentes verdaderamente puros
+  (`ImageGallery`, `ConnectionStatusBadge`).
+- Las seis acciones del panel de control (abrir lote, pasar al siguiente, cerrar lote,
+  pausar, reanudar, finalizar) llaman a un endpoint del motor de estados y **no**
+  refrescan nada por HTTP -- confían en que el evento de dominio que la propia acción
+  dispara vuelva por el mismo WebSocket ya conectado.
+- Hallazgo verificado en vivo (no en tests, que mockean el transporte): un refresco HTTP
+  "de respaldo" tras una acción exitosa podía traer una respuesta cacheada por
+  `SnapshotService` (Redis, TTL de 2s, Épica 3.6) de *antes* de la acción, pisando el
+  estado correcto que el WebSocket ya había aplicado. Se eliminó ese refresco por
+  completo -- el evento de WebSocket solo demostró ser, en la práctica, más rápido y más
+  confiable que un `reload()` HTTP adicional.
+- Verificado de punta a punta contra el backend real en Docker Compose: abrir/cerrar
+  lotes, pasar al siguiente, pausar/reanudar, finalizar (con confirmación), una oferta
+  real de un comprador reflejada en el panel sin recargar la página, y la finalización
+  automática al resolverse el último lote (RF-10), reflejada en vivo sin recargar.
+- Cero cambios en `backend/`, en la autenticación, ni en `features/sala/`.
+
+## Épica 5, Módulo 5.3 — notas de arquitectura de la Gestión de Remates y Lotes
+
+Detalle completo en [docs/31-gestion-remates-lotes.md](31-gestion-remates-lotes.md) y
+[ADR-034](adr/ADR-034-gestion-remates-lotes.md). Resumen:
+
+- El enunciado lista "Programar remate" y "Publicar remate" como acciones separadas, pero
+  el motor de estados solo tiene una transición `draft` → `scheduled`
+  (`POST .../schedule`) -- se consolidaron en un único botón/ítem de menú "Publicar
+  remate" en vez de exponer dos controles para la misma llamada HTTP.
+- Sin endpoint de "duplicar" en el backend (restricción "no modificar el backend"):
+  `features/rematador/duplication.ts` compone `duplicateRemate`/`duplicateLote` con
+  GET + POST secuenciales sobre endpoints ya existentes, generando un `lot_number` único
+  con sufijos (`-copia`, `-copia-2`, ...) para no chocar con el índice único de
+  `(remate_id, lot_number)`.
+- Reordenamiento de lotes con HTML5 Drag and Drop nativo (sin librería, mismo criterio de
+  ADR-027), actualización optimista con revert-on-error sobre el endpoint de reorder ya
+  existente; botones ↑/↓ en cada tarjeta como mecanismo de reordenamiento **siempre
+  disponible**, no un fallback cosmético -- HTML5 DnD no funciona en pantallas táctiles.
+- Cinco componentes genéricos nuevos en `shared/components/` (`Modal`, `ConfirmModal`,
+  `Textarea`, `Select`, `DropdownMenu`), sin ningún conocimiento del dominio Remate/Lote,
+  reutilizables por cualquier módulo futuro.
+- "Peso" se mapea a un campo dedicado dentro de `attributes.peso_kg` (JSONB de forma
+  libre, ADR-014), separado del editor dinámico de "Información técnica"; "Estado" del
+  lote se muestra como un badge de solo lectura -- mientras la estructura es editable,
+  todo lote está siempre en `pending`, no hay ninguna transición que disparar desde este
+  formulario.
+- `LotesManagementPage` (nueva, en `/remates/:remateId/lotes`) reemplaza el placeholder
+  que dejó la Épica 5.1 en esa ruta y reutiliza `useRemateDetail`/`useLotes`
+  (`features/remates/hooks.ts`, Épica 4.4) sin modificarlos.
+- Verificado de punta a punta contra el backend real en Docker Compose: creación de
+  remate y navegación a su gestión de lotes, alta/edición/duplicado/eliminación de lotes,
+  reordenamiento por drag & drop y por botones (persistido tras recargar), edición y
+  publicación del remate, congelamiento de la estructura al pasar a estado en vivo,
+  duplicado del remate completo, cancelación con motivo, eliminación de un borrador.
+- Cero cambios en `backend/` ni en la autenticación.

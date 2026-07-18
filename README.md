@@ -4,18 +4,17 @@ Plataforma de remates en vivo con ofertas en tiempo real. Ver [`docs/`](docs/) p
 diseño completo del sistema (visión, requisitos, arquitectura, ADRs) — este README cubre
 solo cómo levantar y trabajar con lo que existe hoy.
 
-**Estado del proyecto: Épica 5, Módulo 5.1 — Dashboard del Rematador.** Todo lo del
-frontend del comprador (Épica 4: dashboard, detalle, sala en vivo con WebSocket) y el
-backend de tiempo real (Épica 3) ya estaban implementados y probados, sin cambios en
-este módulo. Este módulo agrega la consola principal para el rol `rematador`: tarjetas
-con sus remates propios en cualquier estado (nombre, estado, fecha, cantidad de lotes,
-compradores conectados si el dato está disponible, lote activo o próximo lote), acciones
-de ciclo de vida (iniciar, reanudar, finalizar — motor de estados ya expuesto desde la
-Épica 2.3), buscador/filtro/orden y una fila de indicadores tipo consola profesional, sin
-tablas — ver [docs/29](docs/29-dashboard-rematador.md). Creación/edición/cancelación de
-remates y la Consola Operativa del Rematador (abrir/cerrar lotes, ofertas en vivo,
-pausar) siguen siendo módulos futuros del lado del frontend (ver
-[Próximos pasos](#próximos-pasos)).
+**Estado del proyecto: Épica 5, Módulo 5.3 — Gestión completa de Remates y Lotes.** La
+Consola Operativa (Épica 5.2) ya cubría un remate en vivo; este módulo agrega la
+pantalla donde el rematador lo prepara antes de que empiece:
+crear/editar/eliminar/duplicar/publicar/cancelar un remate desde una sidebar, y
+crear/editar/eliminar/duplicar/reordenar (drag & drop nativo + botones ↑/↓ como
+mecanismo siempre disponible, no solo cosmético) sus lotes en tarjetas — sin tablas
+tradicionales. "Programar"/"Publicar" se consolidaron en una sola acción (el motor de
+estados solo tiene una transición para eso) y "duplicar" se compone en el cliente con
+GET + POST porque el backend no expone ningún endpoint para eso. Ver
+[docs/31](docs/31-gestion-remates-lotes.md). Chat, streaming y notificaciones siguen
+siendo módulos futuros del lado del frontend (ver [Próximos pasos](#próximos-pasos)).
 
 ## Stack
 
@@ -37,7 +36,7 @@ pausar) siguen siendo módulos futuros del lado del frontend (ver
 | Logging | `structlog` | Logs estructurados con `request_id` de contexto (RNF-15) |
 | Contenedores | Docker + Docker Compose | Entorno reproducible con un comando |
 
-### Frontend (Épica 4.1 + 4.3 + 4.4 + 4.5 + 4.6 + 5.1)
+### Frontend (Épica 4.1 + 4.3 + 4.4 + 4.5 + 4.6 + 5.1 + 5.2 + 5.3)
 
 | Pieza | Tecnología | Por qué (detalle en [docs/24](docs/24-fundacion-frontend.md), [ADR-027](docs/adr/ADR-027-fundacion-frontend.md)) |
 |---|---|---|
@@ -126,10 +125,10 @@ RematAR/
 │   │   │   ├── auth/                   api.ts, store.ts (Zustand+persist), hooks.ts, types.ts, pages/
 │   │   │   ├── remates/                Dashboard comprador (4.3) + detalle (4.4): api.ts (+ start/resume/finish, 5.1), filtering.ts, hooks.ts, components/, pages/
 │   │   │   ├── sala/                    Sala del remate (4.5) + tiempo real (4.6): api.ts, hooks.ts, realtime/ (events.ts, messages.ts, reducer.ts), components/, pages/
-│   │   │   └── rematador/               Dashboard del rematador (5.1): hooks.ts, components/, pages/ (+ placeholder de Consola Operativa)
+│   │   │   └── rematador/               Dashboard (5.1) + Consola Operativa (5.2) + Gestión de Remates/Lotes (5.3): remateForm.ts, loteForm.ts, duplication.ts, hooks.ts, components/, pages/
 │   │   ├── shared/                    Transversal, sin conocer ningún dominio
 │   │   │   ├── api/                    client.ts (Axios + interceptores), errors.ts, types.ts
-│   │   │   ├── components/             Button, Input, Spinner, Alert, Card, Badge, Skeleton, EmptyState, Breadcrumb
+│   │   │   ├── components/             Button, Input, Textarea, Select, Spinner, Alert, Card, Badge, Skeleton, EmptyState, Breadcrumb, Modal, ConfirmModal, DropdownMenu
 │   │   │   ├── guards/                 RequireAuth, RequireRole
 │   │   │   ├── lib/                    format.ts -- formatDateTime, formatCurrency (Intl nativo)
 │   │   │   ├── config/                 env.ts -- wrapper tipado de import.meta.env (+ wsBaseUrl derivado, Épica 4.6)
@@ -382,17 +381,15 @@ npm run lint           # oxlint
 
 ## Próximos pasos
 
-**Frontend** (según [docs/29-dashboard-rematador.md](docs/29-dashboard-rematador.md),
+**Frontend** (según [docs/31-gestion-remates-lotes.md](docs/31-gestion-remates-lotes.md),
 sobre lo agregado en este módulo, sin tocar nada de lo ya construido):
 
-- Consola Operativa del Rematador (Módulo 5.2): abrir/cerrar lotes, seguir ofertas en
-  vivo, pausar el remate -- reemplaza `GestionRematePlaceholderPage`
-  (`/remates/:remateId/gestionar`, ya montada) sin tocar el árbol de rutas.
-- Botón "Cancelar remate" (`POST /remates/{id}/cancel`, ya expuesto por el backend, sin
-  consumidor en el frontend todavía) y edición de un remate propio (`PATCH
-  /remates/{id}`).
-- Creación de remates desde el frontend (`POST /remates`, ya expuesto, sin consumidor en
-  el frontend todavía).
+- Subida real de imágenes para lotes y portada de remate (hoy, URL de texto).
+- Un endpoint de duplicación real en el backend, si el volumen de lotes por remate lo
+  justificara (hoy se compone en el cliente con GET + POST secuencial, ver ADR-034).
+- "Cancelar lote" desde la Consola Operativa (`POST .../cancel`, ya expuesto por el
+  backend, sin consumidor en el frontend todavía) -- "Cancelar remate" ya se consume
+  desde este módulo (Épica 5.3).
 - Formulario real de "Realizar oferta" en la Sala del Remate (`PlaceBidButton` ya
   aislado para esto) -- podría además usar `oferta.rejected` (ya tipado, hoy descartado
   deliberadamente porque nadie puede ser su emisor todavía) para notificar al propio
@@ -469,3 +466,11 @@ la arquitectura de snapshot + tiempo real ya construida):
   Rematador (Épica 5.1): flujo de datos, componentes reutilizables (extensión aditiva
   de `features/remates/`), acciones de ciclo de vida (iniciar/reanudar/finalizar),
   preparación para la Consola Operativa del Rematador.
+- [`docs/30-consola-operativa-rematador.md`](docs/30-consola-operativa-rematador.md) —
+  Consola Operativa del Rematador (Épica 5.2): diagrama de la consola, flujo de cada
+  acción del panel de control, integración con WebSockets (reutilización de
+  `useLiveRemateState` sin modificarlo), preparación para la gestión completa de
+  remates y lotes.
+- [`docs/31-gestion-remates-lotes.md`](docs/31-gestion-remates-lotes.md) — Gestión
+  completa de Remates y Lotes (Épica 5.3): flujo de creación/edición, reordenamiento
+  con drag & drop, componentes reutilizables nuevos, checklist completo del módulo.

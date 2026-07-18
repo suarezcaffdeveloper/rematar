@@ -1,19 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { RematadorDashboardPage } from './RematadorDashboardPage';
 import type { Remate } from '../../remates/types';
 
-const { useAuthMock, useRematesMock, useRemateOperationalInfoMock } = vi.hoisted(() => ({
+const { useAuthMock, useRematesMock, useRemateOperationalInfoMock, navigateMock, apiMocks } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   useRematesMock: vi.fn(),
   useRemateOperationalInfoMock: vi.fn(),
+  navigateMock: vi.fn(),
+  apiMocks: {
+    createRemateRequest: vi.fn(),
+    updateRemateRequest: vi.fn(),
+    startRemateRequest: vi.fn(),
+    resumeRemateRequest: vi.fn(),
+    finishRemateRequest: vi.fn(),
+    scheduleRemateRequest: vi.fn(),
+    deleteRemateRequest: vi.fn(),
+    cancelRemateRequest: vi.fn(),
+    createLoteRequest: vi.fn(),
+    fetchLotesRequest: vi.fn(),
+  },
 }));
 
 vi.mock('../../auth/hooks', () => ({ useAuth: useAuthMock }));
 vi.mock('../../remates/hooks', () => ({ useRemates: useRematesMock }));
 vi.mock('../hooks', () => ({ useRemateOperationalInfo: useRemateOperationalInfoMock }));
+vi.mock('../../remates/api', () => apiMocks);
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return { ...actual, useNavigate: () => navigateMock };
+});
 
 function makeRemate(overrides: Partial<Remate>): Remate {
   return {
@@ -150,5 +168,34 @@ describe('RematadorDashboardPage', () => {
 
     const statusSelect = screen.getByLabelText('Filtrar por estado');
     expect(within(statusSelect).getByText('Borrador')).toBeInTheDocument();
+  });
+
+  it('"Crear remate" abre el modal de creación', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'user-42', role: 'rematador' } });
+    useRematesMock.mockReturnValue({ remates: [], isLoading: false, error: null, reload: vi.fn() });
+
+    renderPage();
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Crear remate' })[0]);
+    expect(screen.getByRole('heading', { name: 'Crear remate' })).toBeInTheDocument();
+  });
+
+  it('al crear un remate, navega a su página de lotes', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'user-42', role: 'rematador' } });
+    const reload = vi.fn();
+    useRematesMock.mockReturnValue({ remates: [], isLoading: false, error: null, reload });
+    apiMocks.createRemateRequest.mockResolvedValue({ id: 'remate-nuevo' });
+
+    renderPage();
+
+    // Sin remates, "Crear remate" aparece dos veces (header + estado vacío) -- se abre
+    // desde el del header.
+    await userEvent.click(screen.getAllByRole('button', { name: 'Crear remate' })[0]);
+    await userEvent.type(screen.getByLabelText('Título'), 'Mi primer remate');
+    await userEvent.selectOptions(screen.getByLabelText('Categoría'), 'hacienda');
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Crear remate' }));
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/remates/remate-nuevo/lotes'));
+    expect(reload).toHaveBeenCalled();
   });
 });

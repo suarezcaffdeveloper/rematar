@@ -12,6 +12,13 @@ const { navigateMock, useRemateOperationalInfoMock, apiMocks, toastPushMock } = 
     startRemateRequest: vi.fn(),
     resumeRemateRequest: vi.fn(),
     finishRemateRequest: vi.fn(),
+    scheduleRemateRequest: vi.fn(),
+    deleteRemateRequest: vi.fn(),
+    cancelRemateRequest: vi.fn(),
+    createRemateRequest: vi.fn(),
+    updateRemateRequest: vi.fn(),
+    createLoteRequest: vi.fn(),
+    fetchLotesRequest: vi.fn(),
   },
   toastPushMock: vi.fn(),
 }));
@@ -103,15 +110,107 @@ describe('RematadorRemateCard', () => {
     expect(screen.getByText('Lote activo: Toro Angus')).toBeInTheDocument();
   });
 
-  it('"Ver remate" y "Administrar" navegan a las rutas correspondientes', async () => {
+  it('"Ver remate" navega a la ficha del remate', async () => {
     useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
     renderCard(makeRemate({ id: 'remate-9' }));
 
     await userEvent.click(screen.getByRole('button', { name: 'Ver remate' }));
     expect(navigateMock).toHaveBeenCalledWith('/remates/remate-9');
+  });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Administrar' }));
+  it('"draft"/"scheduled": el botón dice "Preparar lotes" y navega a /lotes', async () => {
+    useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
+    renderCard(makeRemate({ id: 'remate-9', status: 'scheduled' }));
+
+    const button = screen.getByRole('button', { name: 'Preparar lotes' });
+    await userEvent.click(button);
+    expect(navigateMock).toHaveBeenCalledWith('/remates/remate-9/lotes');
+  });
+
+  it('"live"/"paused"/"finished"/"cancelled": el botón dice "Administrar" y navega a /gestionar', async () => {
+    useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
+    renderCard(makeRemate({ id: 'remate-9', status: 'live' }));
+
+    const button = screen.getByRole('button', { name: 'Administrar' });
+    await userEvent.click(button);
     expect(navigateMock).toHaveBeenCalledWith('/remates/remate-9/gestionar');
+  });
+
+  describe('menú de acciones', () => {
+    it('"draft": Editar y Eliminar habilitados, Publicar deshabilitado sin fecha', async () => {
+      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
+      renderCard(makeRemate({ status: 'draft', starts_at: null, title: 'Remate borrador' }));
+
+      await userEvent.click(screen.getByRole('button', { name: 'Más acciones para Remate borrador' }));
+
+      expect(screen.getByRole('menuitem', { name: 'Editar' })).toBeEnabled();
+      expect(screen.getByRole('menuitem', { name: 'Eliminar' })).toBeEnabled();
+      expect(screen.getByRole('menuitem', { name: 'Publicar remate' })).toBeDisabled();
+    });
+
+    it('"draft" con fecha: Publicar habilitado y llama a scheduleRemateRequest', async () => {
+      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
+      apiMocks.scheduleRemateRequest.mockResolvedValue(makeRemate({ status: 'scheduled' }));
+      const onChanged = vi.fn();
+      renderCard(makeRemate({ id: 'remate-5', status: 'draft', starts_at: '2026-09-01T10:00:00Z', title: 'Remate con fecha' }), onChanged);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Más acciones para Remate con fecha' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Publicar remate' }));
+
+      await waitFor(() => expect(apiMocks.scheduleRemateRequest).toHaveBeenCalledWith('remate-5'));
+      expect(toastPushMock).toHaveBeenCalledWith('success', 'El remate se publicó.');
+      expect(onChanged).toHaveBeenCalledTimes(1);
+    });
+
+    it('"live"/"finished": Editar y Eliminar deshabilitados', async () => {
+      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
+      renderCard(makeRemate({ status: 'finished', title: 'Remate finalizado' }));
+
+      await userEvent.click(screen.getByRole('button', { name: 'Más acciones para Remate finalizado' }));
+
+      expect(screen.getByRole('menuitem', { name: 'Editar' })).toBeDisabled();
+      expect(screen.getByRole('menuitem', { name: 'Eliminar' })).toBeDisabled();
+      expect(screen.getByRole('menuitem', { name: 'Cancelar remate' })).toBeDisabled();
+    });
+
+    it('"Duplicar" crea una copia y navega a su página de lotes', async () => {
+      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
+      apiMocks.createRemateRequest.mockResolvedValue(makeRemate({ id: 'remate-copia' }));
+      apiMocks.fetchLotesRequest.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 300 });
+      renderCard(makeRemate({ title: 'Remate original' }));
+
+      await userEvent.click(screen.getByRole('button', { name: 'Más acciones para Remate original' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Duplicar' }));
+
+      await waitFor(() => expect(apiMocks.createRemateRequest).toHaveBeenCalledTimes(1));
+      expect(navigateMock).toHaveBeenCalledWith('/remates/remate-copia/lotes');
+    });
+
+    it('"Editar" abre el modal de edición', async () => {
+      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
+      renderCard(makeRemate({ status: 'draft', title: 'Remate a editar' }));
+
+      await userEvent.click(screen.getByRole('button', { name: 'Más acciones para Remate a editar' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Editar' }));
+
+      expect(screen.getByRole('heading', { name: 'Editar remate' })).toBeInTheDocument();
+    });
+
+    it('"Eliminar" pide confirmación y llama a deleteRemateRequest', async () => {
+      apiMocks.deleteRemateRequest.mockResolvedValue(undefined);
+      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
+      const onChanged = vi.fn();
+      renderCard(makeRemate({ id: 'remate-7', status: 'draft', title: 'Remate a eliminar' }), onChanged);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Más acciones para Remate a eliminar' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Eliminar' }));
+      // El menú ya se cerró (DropdownMenu cierra al elegir un ítem) -- el único botón
+      // "Eliminar" que queda es el de confirmación del modal.
+      await userEvent.click(screen.getByRole('button', { name: 'Eliminar' }));
+
+      await waitFor(() => expect(apiMocks.deleteRemateRequest).toHaveBeenCalledWith('remate-7'));
+      expect(onChanged).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('acciones de ciclo de vida', () => {

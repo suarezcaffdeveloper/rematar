@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCurrency, formatDateTime } from './format';
+import { formatCurrency, formatDateTime, formatDuration } from './format';
 
 describe('formatDateTime', () => {
   it('formatea un ISO 8601 con fecha y hora', () => {
@@ -30,5 +30,24 @@ describe('formatCurrency', () => {
   it('ante un código de moneda inválido, no rompe -- cae a un formato de respaldo', () => {
     const result = formatCurrency('1000.00', 'XXX_NO_VALIDO');
     expect(result).toBe('1000.00 XXX_NO_VALIDO');
+  });
+});
+
+describe('formatDuration', () => {
+  it('menos de un minuto, muestra "0:SS"', () => {
+    expect(formatDuration(45_000)).toBe('0:45');
+  });
+
+  it('varios minutos, sin horas, muestra "M:SS"', () => {
+    expect(formatDuration(5 * 60_000 + 2_000)).toBe('5:02');
+  });
+
+  it('una hora o más, muestra "Hh MMm" (sin segundos)', () => {
+    expect(formatDuration(60 * 60_000 + 23 * 60_000)).toBe('1h 23m');
+  });
+
+  it('negativo o cero, no rompe -- se trata como 0', () => {
+    expect(formatDuration(-5000)).toBe('0:00');
+    expect(formatDuration(0)).toBe('0:00');
   });
 });

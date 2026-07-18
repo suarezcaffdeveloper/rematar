@@ -42,3 +42,22 @@ export function formatCurrency(amount: string, currency: string): string {
     return `${amount} ${currency}`;
   }
 }
+
+/**
+ * `"1h 23m"`/`"5m 02s"`/`"00:45"` a partir de una duración en milisegundos -- para el
+ * "tiempo transcurrido" de la Consola Operativa del Rematador (Épica 5, Módulo 5.2).
+ * Sin `Intl.DurationFormat` (soporte de navegador todavía desparejo en 2026) ni una
+ * librería nueva (mismo criterio que el resto de `format.ts`, ver ADR-027) -- aritmética
+ * simple alcanza para un cronómetro de horas/minutos/segundos.
+ */
+export function formatDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}

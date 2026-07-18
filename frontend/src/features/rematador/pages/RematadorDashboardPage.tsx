@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/hooks';
 import { Alert } from '../../../shared/components/Alert';
 import { Button } from '../../../shared/components/Button';
@@ -8,6 +9,8 @@ import { GavelIcon } from '../../remates/components/icons';
 import { DEFAULT_FILTERS, filterAndSortRemates } from '../../remates/filtering';
 import { useRemates } from '../../remates/hooks';
 import { ALL_STATUS_OPTIONS } from '../../remates/labels';
+import { PlusIcon } from '../components/icons';
+import { RemateFormModal } from '../components/RemateFormModal';
 import { RematadorDashboardStats } from '../components/RematadorDashboardStats';
 import { RematadorRemateCard } from '../components/RematadorRemateCard';
 import { RematadorRemateCardSkeleton } from '../components/RematadorRemateCardSkeleton';
@@ -24,19 +27,27 @@ const SKELETON_COUNT = 6;
  */
 export function RematadorDashboardPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { remates, isLoading, error, reload } = useRemates({ ownerId: user?.id ?? '' });
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const filteredRemates = useMemo(() => filterAndSortRemates(remates, filters), [remates, filters]);
   const hasAnyRemates = remates.length > 0;
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Mis remates</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Administrá tus remates: iniciá, reanudá y finalizá desde acá.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Mis remates</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Administrá tus remates: creá, preparalos, iniciá, reanudá y finalizá desde acá.
+          </p>
+        </div>
+        <Button onClick={() => setIsCreateModalOpen(true)}>
+          <PlusIcon className="h-4 w-4" />
+          Crear remate
+        </Button>
       </div>
 
       {!isLoading && !error && <RematadorDashboardStats remates={remates} />}
@@ -79,7 +90,8 @@ export function RematadorDashboardPage() {
         <EmptyState
           icon={<GavelIcon className="h-10 w-10" />}
           title="Todavía no tenés remates"
-          description="La creación de remates todavía no está disponible desde este dashboard."
+          description="Creá tu primer remate para empezar a prepararlo."
+          action={<Button onClick={() => setIsCreateModalOpen(true)}>Crear remate</Button>}
         />
       )}
 
@@ -90,6 +102,15 @@ export function RematadorDashboardPage() {
           ))}
         </div>
       )}
+
+      <RemateFormModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSaved={(created) => {
+          reload();
+          navigate(`/remates/${created.id}/lotes`);
+        }}
+      />
     </div>
   );
 }

@@ -18,7 +18,8 @@ import { RequireRole } from '../shared/guards/RequireRole';
 import { LoginPage } from '../features/auth/pages/LoginPage';
 import { RegisterPage } from '../features/auth/pages/RegisterPage';
 import { RemateDetailPage } from '../features/remates/pages/RemateDetailPage';
-import { GestionRematePlaceholderPage } from '../features/rematador/pages/GestionRematePlaceholderPage';
+import { ConsolaOperativaPage } from '../features/rematador/pages/ConsolaOperativaPage';
+import { LotesManagementPage } from '../features/rematador/pages/LotesManagementPage';
 import { SalaPage } from '../features/sala/pages/SalaPage';
 import { HomePage } from './pages/HomePage';
 import { AdminPlaceholderPage } from './pages/AdminPlaceholderPage';
@@ -53,13 +54,19 @@ export const router = createBrowserRouter([
               // sin WebSockets todavía (ver docs/27-sala-del-remate.md). Destino de
               // "Entrar al remate" en RemateDetailPage.
               { path: '/remates/:remateId/sala', element: <SalaPage /> },
-              // "Administrar remate" del Dashboard del Rematador (Épica 5.1) -- hoy un
-              // placeholder, reemplazado por la Consola Operativa del Rematador en el
-              // Módulo 5.2 (ver docs/29-dashboard-rematador.md), mismo patrón que
-              // /sala tuvo entre los Módulos 4.4 y 4.5. Sin `RequireRole`: mismo
-              // criterio que el resto de las rutas de `/remates/:remateId/*`, el
-              // backend decide qué puede hacer cada usuario, no esta ruta.
-              { path: '/remates/:remateId/gestionar', element: <GestionRematePlaceholderPage /> },
+              // "Administrar remate" del Dashboard del Rematador (Épica 5.1) -- desde la
+              // Épica 5.2 apunta a la Consola Operativa real (ver
+              // docs/30-consola-operativa-rematador.md), reemplazando al placeholder de
+              // la 5.1 sin tocar esta ruta, mismo patrón que /sala tuvo entre los
+              // Módulos 4.4 y 4.5. Sin `RequireRole`: mismo criterio que el resto de las
+              // rutas de `/remates/:remateId/*`, el backend decide qué puede hacer cada
+              // usuario, no esta ruta.
+              { path: '/remates/:remateId/gestionar', element: <ConsolaOperativaPage /> },
+              // Gestión de Remates y Lotes (Épica 5.3) -- donde el rematador prepara un
+              // remate (editar, publicar, cancelar, eliminar, duplicar) y sus lotes
+              // (crear/editar/eliminar/duplicar/reordenar) antes de que empiece. Mismo
+              // criterio sin `RequireRole` que el resto de `/remates/:remateId/*`.
+              { path: '/remates/:remateId/lotes', element: <LotesManagementPage /> },
               // Protegidas además por rol: RequireRole asume que ya pasó RequireAuth.
               {
                 element: <RequireRole allowedRoles={['admin']} />,

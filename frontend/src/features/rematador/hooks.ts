@@ -7,8 +7,9 @@
  */
 
 import { useEffect, useState } from 'react';
+import { formatDuration } from '../../shared/lib/format';
 import { fetchLotesRequest } from '../remates/api';
-import type { Lote, RemateStatus } from '../remates/types';
+import type { Lote, Remate, RemateStatus } from '../remates/types';
 import { fetchRemateSnapshotRequest } from '../sala/api';
 
 // Suficiente para encontrar el lote `open` y el próximo `pending` en la enorme mayoría
@@ -94,4 +95,44 @@ export function useRemateOperationalInfo(remateId: string, status: RemateStatus)
   }, [remateId, status]);
 
   return { loteCount, activeLote, nextLote, connectedUsers, isLoadingLotes };
+}
+
+const TICK_INTERVAL_MS = 1000;
+
+/**
+ * "Tiempo transcurrido" de la cabecera de la Consola Operativa (Épica 5, Módulo 5.2).
+ * El backend no persiste un instante de "cuándo se puso en vivo" (`Remate` no tiene una
+ * columna `started_at`, ver `backend/app/modules/remates/models.py`, sin cambios) --
+ * usar `starts_at` (la fecha programada) como referencia es una aproximación deliberada,
+ * no un cronómetro exacto desde el `start` real, documentada como tal (ver
+ * docs/30-consola-operativa-rematador.md, "Limitaciones conocidas").
+ *
+ * - `live`/`paused`: cuenta en vivo desde `starts_at` hasta ahora (tick cada segundo).
+ * - `finished`: fijo, `finished_at - starts_at` (el remate ya no corre, no hace falta
+ *   ningún intervalo).
+ * - cualquier otro estado (`draft`/`scheduled`/`cancelled`): `null` -- no hay "tiempo
+ *   transcurrido" de una operación que no llegó a correr.
+ */
+export function useElapsedTime(remate: Remate | null): string | null {
+  const [now, setNow] = useState(() => Date.now());
+  const isTicking = remate?.status === 'live' || remate?.status === 'paused';
+
+  useEffect(() => {
+    if (!isTicking) return;
+    setNow(Date.now());
+    const interval = setInterval(() => setNow(Date.now()), TICK_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [isTicking]);
+
+  if (!remate?.starts_at) return null;
+
+  if (isTicking) {
+    return formatDuration(now - new Date(remate.starts_at).getTime());
+  }
+
+  if (remate.status === 'finished' && remate.finished_at) {
+    return formatDuration(new Date(remate.finished_at).getTime() - new Date(remate.starts_at).getTime());
+  }
+
+  return null;
 }
