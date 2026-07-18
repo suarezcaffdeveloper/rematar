@@ -12,20 +12,18 @@ concurrencia, tiempo real y escalabilidad — no en la cantidad de pantallas.
 
 ## Estado actual
 
-**Épica 4, Módulo 4.6 — Integración WebSocket y actualización en tiempo real.** Todo el
-backend descripto por la Épica 3 (Redis, Event Bus, Gateway WebSocket, salas, Event
-Consumer, Snapshot Service) ya estaba implementado y probado desde antes, sin cambios en
-este módulo. La Sala del Remate (Módulo 4.5) se resolvía enteramente con el Snapshot
-Service, sin WebSockets ni actualización automática (pedido explícito de esa fase); este
-módulo la conecta al Gateway WebSocket ya existente: un cliente WebSocket reutilizable
-(`shared/websocket/client.ts` -- auth, heartbeat, reconexión con backoff exponencial,
-cierre limpio), los 12 eventos de dominio sincronizados por el backend (`AuctionStarted`,
-`LotOpened`, `BidAccepted`, etc.), aplicados de forma incremental (solo la parte de la
-pantalla que corresponde, sin recargar nada) e indicadores visuales de conexión
-(Conectando.../Conectado/Reconectando.../Desconectado). Ver
-[28-websocket-tiempo-real-sala.md](28-websocket-tiempo-real-sala.md). `rematador`/`admin`
-siguen viendo el placeholder de la Módulo 4.1 como pantalla de inicio; formulario real de
-ofertas, chat, presencia detallada, video y streaming siguen siendo módulos futuros. Esta
+**Épica 5, Módulo 5.1 — Dashboard del Rematador.** Todo lo de la Épica 4 (frontend del
+comprador: dashboard, detalle, sala en vivo con WebSocket) y de la Épica 3 (backend de
+tiempo real) ya estaba implementado y probado, sin cambios en este módulo. Este módulo
+agrega la consola principal para el rol `rematador`: tarjetas con sus remates propios en
+cualquier estado (nombre, estado, fecha, cantidad de lotes, compradores conectados si el
+dato está disponible, lote activo o próximo lote), acciones de ciclo de vida (iniciar,
+reanudar, finalizar -- consumiendo el motor de estados del backend ya expuesto desde la
+Épica 2.3), buscador/filtro/orden y una fila de indicadores tipo "consola operativa" (sin
+tablas). Ver [29-dashboard-rematador.md](29-dashboard-rematador.md). `admin` sigue viendo
+el placeholder de la Módulo 4.1; creación de remates, edición, cancelación, y la Consola
+Operativa del Rematador (abrir/cerrar lotes, ofertas en vivo, pausar) siguen siendo
+módulos futuros -- la ruta de entrada a esa consola ya queda resuelta (placeholder). Esta
 carpeta sigue siendo la fuente de verdad del proyecto: cada fase nueva debe leerla antes
 de proponer cambios y actualizarla si algo deja de ser cierto. Ver el
 [README raíz](../README.md) para instrucciones de instalación y el estado exacto del
@@ -63,6 +61,7 @@ código.
 | [26-detalle-remate.md](26-detalle-remate.md) | Página de detalle del remate: flujo de datos, listado de lotes, componentes reutilizables, preparación para la sala en vivo (Épica 4.4) |
 | [27-sala-del-remate.md](27-sala-del-remate.md) | Sala del remate (versión inicial): flujo Snapshot → Render, estructura de componentes, optimización de renderizado, preparación para WebSockets (Épica 4.5) |
 | [28-websocket-tiempo-real-sala.md](28-websocket-tiempo-real-sala.md) | Integración WebSocket y tiempo real: servicio WebSocket reutilizable, flujo Snapshot → WebSocket → Eventos, manejo de los 12 eventos de dominio, preparación para Chat/Presencia/Notificaciones/Streaming (Épica 4.6) |
+| [29-dashboard-rematador.md](29-dashboard-rematador.md) | Dashboard del Rematador: flujo de datos, componentes reutilizables, acciones de ciclo de vida (iniciar/reanudar/finalizar), preparación para la Consola Operativa del Rematador (Épica 5.1) |
 | [adr/](adr/) | Registro de decisiones de arquitectura (ADR), una por decisión relevante |
 
 ## Reglas de esta documentación (aplican a todas las fases futuras)
@@ -194,3 +193,12 @@ código.
   conexión; arquitectura preparada para Chat/Presencia/Notificaciones/Streaming sin
   modificar el servicio WebSocket; cero cambios en el backend ni en la autenticación. Ver
   [28-websocket-tiempo-real-sala.md](28-websocket-tiempo-real-sala.md), ADR-031.
+- **Épica 5, Módulo 5.1** (2026-07-27): Dashboard del Rematador -- consola de tarjetas
+  con los remates propios del rematador autenticado, en cualquier estado; indicadores
+  operativos por tarjeta (lotes, conectados si disponible, lote activo/próximo);
+  acciones de ciclo de vida (iniciar/reanudar/finalizar, motor de estados de la Épica
+  2.3); buscador/filtro (incluido `draft`)/orden reusando la infraestructura del
+  dashboard del comprador (Épica 4.3); fila de indicadores tipo consola, sin tablas;
+  ruta placeholder para la Consola Operativa del Rematador (Módulo 5.2); cero cambios en
+  el backend, la autenticación ni la Sala del Remate del comprador. Ver
+  [29-dashboard-rematador.md](29-dashboard-rematador.md), ADR-032.

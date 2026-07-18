@@ -43,3 +43,26 @@ export async function fetchLoteCountRequest(remateId: string): Promise<number> {
   });
   return data.total;
 }
+
+/**
+ * Transiciones del motor de estados (Épica 2, Módulo 2.3, `backend/app/modules/remates/
+ * router.py`) -- ninguna lleva body, las tres devuelven el `Remate` ya actualizado.
+ * Usadas por el Dashboard del Rematador (Épica 5, Módulo 5.1). `schedule`/`cancel` no
+ * se agregan acá todavía: ese módulo no expone esas acciones (ver docs/29-dashboard-
+ * rematador.md, "Trabajo futuro") -- se agregan el día que alguna pantalla las
+ * necesite, no antes.
+ */
+export async function startRemateRequest(remateId: string): Promise<Remate> {
+  const { data } = await apiClient.post<Remate>(`/remates/${remateId}/start`);
+  return data;
+}
+
+export async function resumeRemateRequest(remateId: string): Promise<Remate> {
+  const { data } = await apiClient.post<Remate>(`/remates/${remateId}/resume`);
+  return data;
+}
+
+export async function finishRemateRequest(remateId: string): Promise<Remate> {
+  const { data } = await apiClient.post<Remate>(`/remates/${remateId}/finish`);
+  return data;
+}

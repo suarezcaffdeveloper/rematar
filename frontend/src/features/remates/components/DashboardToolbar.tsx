@@ -1,11 +1,15 @@
 import { CATEGORY_LABELS, CATEGORY_OPTIONS, STATUS_LABELS, VISIBLE_STATUS_OPTIONS } from '../labels';
 import type { RemateFilters, RemateSortOption } from '../filtering';
-import type { RemateCategory, VisibleRemateStatus } from '../types';
+import type { RemateCategory, RemateStatus } from '../types';
 import { SearchIcon } from './icons';
 
 export interface DashboardToolbarProps {
   filters: RemateFilters;
   onChange: (filters: RemateFilters) => void;
+  /** Opciones del filtro de estado -- default `VISIBLE_STATUS_OPTIONS` (sin `draft`,
+   * lo que ya usaba `CompradorDashboardPage`). El Dashboard del Rematador (Épica 5,
+   * Módulo 5.1) pasa `ALL_STATUS_OPTIONS` para poder filtrar también sus borradores. */
+  statusOptions?: RemateStatus[];
 }
 
 const SORT_LABELS: Record<RemateSortOption, string> = {
@@ -23,7 +27,11 @@ const SELECT_CLASSES =
  * (`CompradorDashboardPage`), que es quien conoce la lista completa a filtrar -- este
  * componente no sabe nada de remates cargados, solo edita el objeto `RemateFilters`.
  */
-export function DashboardToolbar({ filters, onChange }: DashboardToolbarProps) {
+export function DashboardToolbar({
+  filters,
+  onChange,
+  statusOptions = VISIBLE_STATUS_OPTIONS,
+}: DashboardToolbarProps) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center">
       <div className="relative flex-1">
@@ -43,12 +51,12 @@ export function DashboardToolbar({ filters, onChange }: DashboardToolbarProps) {
           aria-label="Filtrar por estado"
           value={filters.status}
           onChange={(event) =>
-            onChange({ ...filters, status: event.target.value as VisibleRemateStatus | 'all' })
+            onChange({ ...filters, status: event.target.value as RemateStatus | 'all' })
           }
           className={SELECT_CLASSES}
         >
           <option value="all">Todos los estados</option>
-          {VISIBLE_STATUS_OPTIONS.map((status) => (
+          {statusOptions.map((status) => (
             <option key={status} value={status}>
               {STATUS_LABELS[status]}
             </option>

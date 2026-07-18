@@ -35,6 +35,11 @@ export const VISIBLE_STATUS_OPTIONS: VisibleRemateStatus[] = [
   'cancelled',
 ];
 
+/** Igual que `VISIBLE_STATUS_OPTIONS`, pero con `draft` -- para el Dashboard del
+ * Rematador (Épica 5, Módulo 5.1), donde el propio dueño sí necesita filtrar sus
+ * borradores. Nunca usado por `CompradorDashboardPage`. */
+export const ALL_STATUS_OPTIONS: RemateStatus[] = ['draft', ...VISIBLE_STATUS_OPTIONS];
+
 export const CATEGORY_LABELS: Record<RemateCategory, string> = {
   inmuebles: 'Inmuebles',
   vehiculos: 'Vehículos',

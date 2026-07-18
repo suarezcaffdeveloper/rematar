@@ -7,13 +7,18 @@
  * sin estado a propósito: se puede testear sin montar nada de React.
  */
 
-import type { Remate, RemateCategory, VisibleRemateStatus } from './types';
+import type { Remate, RemateCategory, RemateStatus } from './types';
 
 export type RemateSortOption = 'proximos' | 'recientes' | 'en_vivo';
 
 export interface RemateFilters {
   search: string;
-  status: VisibleRemateStatus | 'all';
+  // `RemateStatus` completo (no solo `VisibleRemateStatus`) -- el Dashboard del
+  // Rematador (Épica 5, Módulo 5.1) necesita poder filtrar también por `draft`, algo
+  // que un comprador nunca ve. `CompradorDashboardPage` sigue sin ofrecer esa opción:
+  // el tipo lo permite, pero `DashboardToolbar` solo la lista si se le pasan
+  // `ALL_STATUS_OPTIONS` (ver `labels.ts`).
+  status: RemateStatus | 'all';
   category: RemateCategory | 'all';
   sort: RemateSortOption;
 }

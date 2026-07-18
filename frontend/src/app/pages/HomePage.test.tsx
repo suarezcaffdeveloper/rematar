@@ -7,6 +7,9 @@ vi.mock('../../features/auth/hooks', () => ({ useAuth: useAuthMock }));
 vi.mock('../../features/remates/pages/CompradorDashboardPage', () => ({
   CompradorDashboardPage: () => <p>Dashboard del comprador</p>,
 }));
+vi.mock('../../features/rematador/pages/RematadorDashboardPage', () => ({
+  RematadorDashboardPage: () => <p>Dashboard del rematador</p>,
+}));
 
 describe('HomePage', () => {
   it('para un comprador, renderiza el dashboard real de remates', () => {
@@ -17,13 +20,13 @@ describe('HomePage', () => {
     expect(screen.getByText('Dashboard del comprador')).toBeInTheDocument();
   });
 
-  it('para un rematador, sigue mostrando el placeholder (dashboard propio es un módulo futuro)', () => {
+  it('para un rematador, renderiza su propio dashboard (Épica 5.1)', () => {
     useAuthMock.mockReturnValue({ user: { full_name: 'Beto', role: 'rematador' } });
 
     render(<HomePage />);
 
-    expect(screen.getByText('Bienvenido, Beto')).toBeInTheDocument();
-    expect(screen.queryByText('Dashboard del comprador')).not.toBeInTheDocument();
+    expect(screen.getByText('Dashboard del rematador')).toBeInTheDocument();
+    expect(screen.queryByText('Bienvenido, Beto')).not.toBeInTheDocument();
   });
 
   it('para un admin, sigue mostrando el placeholder', () => {

@@ -1,18 +1,23 @@
 import { useAuth } from '../../features/auth/hooks';
 import { CompradorDashboardPage } from '../../features/remates/pages/CompradorDashboardPage';
+import { RematadorDashboardPage } from '../../features/rematador/pages/RematadorDashboardPage';
 import { Card } from '../../shared/components/Card';
 
 /**
  * Punto de entrada tras el login (ruta `index` de `AppLayout`, ver `app/router.tsx`).
- * Por rol: `comprador` ya tiene su dashboard real (Épica 4, Módulo 4.3); `rematador` y
- * `admin` siguen viendo el placeholder de la Módulo 4.1 hasta que tengan el suyo propio
- * (fuera de alcance de este módulo, ver docs/25-dashboard-comprador.md).
+ * Por rol: `comprador` tiene su dashboard real desde la Épica 4.3; `rematador` desde
+ * esta Épica 5.1 (Dashboard del Rematador, ver docs/29-dashboard-rematador.md); `admin`
+ * sigue viendo el placeholder de la Módulo 4.1 (fuera de alcance de este módulo).
  */
 export function HomePage() {
   const { user } = useAuth();
 
   if (user?.role === 'comprador') {
     return <CompradorDashboardPage />;
+  }
+
+  if (user?.role === 'rematador') {
+    return <RematadorDashboardPage />;
   }
 
   return (

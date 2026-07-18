@@ -62,6 +62,7 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [029](adr/ADR-029-detalle-remate.md) | Detalle del remate: rematador mostrado honestamente sin nombre real, hooks de carga independientes, sala en su propia ruta | Aceptada |
 | [030](adr/ADR-030-sala-del-remate.md) | Sala del remate: feature propio espejando el límite de módulo del Snapshot Service, montos como string, sin polling | Aceptada |
 | [031](adr/ADR-031-websocket-tiempo-real-sala.md) | Integración WebSocket en la Sala del Remate: cliente genérico de transporte, snapshot por WS como reconciliador, anonimato re-aplicado en eventos crudos | Aceptada |
+| [032](adr/ADR-032-dashboard-rematador.md) | Dashboard del Rematador: extender `features/remates/` para el recurso, feature nuevo para la experiencia, sin botón "Pausar" | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -450,3 +451,37 @@ y [ADR-031](adr/ADR-031-websocket-tiempo-real-sala.md). Resumen:
   la Módulo 4.5 no cambia una línea.
 - Cero cambios en `backend/` (Gateway, Snapshot Service, Event Bus, RoomManager, Auction
   Engine) ni en la autenticación.
+
+## Épica 5, Módulo 5.1 — notas de arquitectura del Dashboard del Rematador
+
+Detalle completo en [docs/29-dashboard-rematador.md](29-dashboard-rematador.md) y
+[ADR-032](adr/ADR-032-dashboard-rematador.md). Resumen:
+
+- Extensión aditiva de `features/remates/` para todo lo que opera sobre el recurso
+  `Remate` (mismo router del backend que ya tenía el CRUD): `api.ts` gana
+  `startRemateRequest`/`resumeRemateRequest`/`finishRemateRequest`; `useRemates` gana un
+  parámetro opcional `ownerId`; `DashboardToolbar` gana un prop opcional
+  `statusOptions`; `RemateFilters.status` se ensancha a `RemateStatus | 'all'` -- los
+  cuatro cambios retrocompatibles, `CompradorDashboardPage` sigue pasando sin
+  modificaciones.
+- `features/rematador/` nuevo, solo para la experiencia de producto (página, tarjetas,
+  hook de información operativa) -- mismo criterio de crecimiento futuro que ya
+  justificó separar `features/sala/` en ADR-030, aplicado acá al nivel de
+  página/componentes, no al de llamadas HTTP del recurso (que sí se comparten).
+- `useRemateOperationalInfo` resuelve lote activo/próximo pidiendo `GET
+  /remates/{id}/lotes` (siempre) y "conectados" reusando `fetchRemateSnapshotRequest`
+  de `features/sala/api.ts` (solo si el remate está `live`/`paused` -- pedirlo en
+  cualquier otro estado siempre daría `0` sin aportar información real).
+- Acciones de ciclo de vida (`Iniciar`/`Reanudar`/`Finalizar`) validan preventivamente en
+  la UI las mismas precondiciones que el backend ya exige (al menos un lote para
+  iniciar, ningún lote abierto para finalizar) antes de deshabilitar el botón
+  correspondiente -- primer uso real de `useToastStore` (existía desde la fundación del
+  frontend sin consumidores) para el feedback de éxito/error.
+- Deliberadamente sin botón "Pausar": es una acción de control en vivo que corresponde a
+  la Consola Operativa del Rematador (Módulo 5.2, para la que ya queda resuelta la ruta
+  `/remates/:remateId/gestionar` con un placeholder) -- "Reanudar" sigue teniendo sentido
+  en este dashboard de repaso para retomar un remate pausado en una sesión anterior.
+- Verificado de punta a punta contra el backend real en Docker Compose (registro de un
+  rematador, remates en `draft`/`scheduled` con y sin lotes, acción "Iniciar" desde la
+  UI con toast y actualización de estado, navegación a "Administrar").
+- Cero cambios en `backend/`, en la autenticación, ni en `features/sala/`.

@@ -18,6 +18,7 @@ import { RequireRole } from '../shared/guards/RequireRole';
 import { LoginPage } from '../features/auth/pages/LoginPage';
 import { RegisterPage } from '../features/auth/pages/RegisterPage';
 import { RemateDetailPage } from '../features/remates/pages/RemateDetailPage';
+import { GestionRematePlaceholderPage } from '../features/rematador/pages/GestionRematePlaceholderPage';
 import { SalaPage } from '../features/sala/pages/SalaPage';
 import { HomePage } from './pages/HomePage';
 import { AdminPlaceholderPage } from './pages/AdminPlaceholderPage';
@@ -52,6 +53,13 @@ export const router = createBrowserRouter([
               // sin WebSockets todavía (ver docs/27-sala-del-remate.md). Destino de
               // "Entrar al remate" en RemateDetailPage.
               { path: '/remates/:remateId/sala', element: <SalaPage /> },
+              // "Administrar remate" del Dashboard del Rematador (Épica 5.1) -- hoy un
+              // placeholder, reemplazado por la Consola Operativa del Rematador en el
+              // Módulo 5.2 (ver docs/29-dashboard-rematador.md), mismo patrón que
+              // /sala tuvo entre los Módulos 4.4 y 4.5. Sin `RequireRole`: mismo
+              // criterio que el resto de las rutas de `/remates/:remateId/*`, el
+              // backend decide qué puede hacer cada usuario, no esta ruta.
+              { path: '/remates/:remateId/gestionar', element: <GestionRematePlaceholderPage /> },
               // Protegidas además por rol: RequireRole asume que ya pasó RequireAuth.
               {
                 element: <RequireRole allowedRoles={['admin']} />,

@@ -4,20 +4,18 @@ Plataforma de remates en vivo con ofertas en tiempo real. Ver [`docs/`](docs/) p
 diseño completo del sistema (visión, requisitos, arquitectura, ADRs) — este README cubre
 solo cómo levantar y trabajar con lo que existe hoy.
 
-**Estado del proyecto: Épica 4, Módulo 4.6 — Integración WebSocket y actualización en
-tiempo real.** El backend completo de la Épica 3 (Redis, Event Bus, Gateway WebSocket,
-salas, Event Consumer, Snapshot Service — detalle en la sección "Backend" más abajo) ya
-estaba implementado y probado, sin cambios en este módulo. La Sala del Remate (Módulo
-4.5) se resolvía enteramente con el Snapshot Service, sin WebSockets ni actualización
-automática; este módulo la conecta al Gateway WebSocket ya existente: un cliente
-WebSocket reutilizable (`shared/websocket/client.ts` — auth, heartbeat, reconexión con
-backoff exponencial, cierre limpio), los 12 eventos de dominio ya sincronizados por el
-backend aplicados de forma incremental (sin recargar la pantalla), snapshot recibido
-también por WebSocket para reconciliar automáticamente cualquier evento perdido en una
-reconexión, e indicadores visuales de conexión (Conectando.../Conectado/
-Reconectando.../Desconectado) — ver [docs/28](docs/28-websocket-tiempo-real-sala.md).
-Formulario real de ofertas, chat, presencia detallada, video y streaming siguen siendo
-módulos futuros del lado del frontend (ver [Próximos pasos](#próximos-pasos)).
+**Estado del proyecto: Épica 5, Módulo 5.1 — Dashboard del Rematador.** Todo lo del
+frontend del comprador (Épica 4: dashboard, detalle, sala en vivo con WebSocket) y el
+backend de tiempo real (Épica 3) ya estaban implementados y probados, sin cambios en
+este módulo. Este módulo agrega la consola principal para el rol `rematador`: tarjetas
+con sus remates propios en cualquier estado (nombre, estado, fecha, cantidad de lotes,
+compradores conectados si el dato está disponible, lote activo o próximo lote), acciones
+de ciclo de vida (iniciar, reanudar, finalizar — motor de estados ya expuesto desde la
+Épica 2.3), buscador/filtro/orden y una fila de indicadores tipo consola profesional, sin
+tablas — ver [docs/29](docs/29-dashboard-rematador.md). Creación/edición/cancelación de
+remates y la Consola Operativa del Rematador (abrir/cerrar lotes, ofertas en vivo,
+pausar) siguen siendo módulos futuros del lado del frontend (ver
+[Próximos pasos](#próximos-pasos)).
 
 ## Stack
 
@@ -39,7 +37,7 @@ módulos futuros del lado del frontend (ver [Próximos pasos](#próximos-pasos))
 | Logging | `structlog` | Logs estructurados con `request_id` de contexto (RNF-15) |
 | Contenedores | Docker + Docker Compose | Entorno reproducible con un comando |
 
-### Frontend (Épica 4.1 + 4.3 + 4.4 + 4.5 + 4.6)
+### Frontend (Épica 4.1 + 4.3 + 4.4 + 4.5 + 4.6 + 5.1)
 
 | Pieza | Tecnología | Por qué (detalle en [docs/24](docs/24-fundacion-frontend.md), [ADR-027](docs/adr/ADR-027-fundacion-frontend.md)) |
 |---|---|---|
@@ -126,8 +124,9 @@ RematAR/
 │   │   │   └── pages/                  HomePage (rama por rol -> dashboard real si comprador), 403, 404, admin de ejemplo
 │   │   ├── features/                  Un paquete por dominio de negocio (mismo criterio que app/modules/)
 │   │   │   ├── auth/                   api.ts, store.ts (Zustand+persist), hooks.ts, types.ts, pages/
-│   │   │   ├── remates/                Dashboard (4.3) + detalle del remate (4.4): api.ts, filtering.ts, hooks.ts, components/, pages/
-│   │   │   └── sala/                    Sala del remate (4.5) + tiempo real (4.6): api.ts, hooks.ts, realtime/ (events.ts, messages.ts, reducer.ts), components/, pages/
+│   │   │   ├── remates/                Dashboard comprador (4.3) + detalle (4.4): api.ts (+ start/resume/finish, 5.1), filtering.ts, hooks.ts, components/, pages/
+│   │   │   ├── sala/                    Sala del remate (4.5) + tiempo real (4.6): api.ts, hooks.ts, realtime/ (events.ts, messages.ts, reducer.ts), components/, pages/
+│   │   │   └── rematador/               Dashboard del rematador (5.1): hooks.ts, components/, pages/ (+ placeholder de Consola Operativa)
 │   │   ├── shared/                    Transversal, sin conocer ningún dominio
 │   │   │   ├── api/                    client.ts (Axios + interceptores), errors.ts, types.ts
 │   │   │   ├── components/             Button, Input, Spinner, Alert, Card, Badge, Skeleton, EmptyState, Breadcrumb
@@ -383,21 +382,29 @@ npm run lint           # oxlint
 
 ## Próximos pasos
 
-**Frontend** (según [docs/28-websocket-tiempo-real-sala.md](docs/28-websocket-tiempo-real-sala.md),
+**Frontend** (según [docs/29-dashboard-rematador.md](docs/29-dashboard-rematador.md),
 sobre lo agregado en este módulo, sin tocar nada de lo ya construido):
 
-- Formulario real de "Realizar oferta" (`PlaceBidButton` ya aislado para esto) -- podría
-  además usar `oferta.rejected` (ya tipado, hoy descartado deliberadamente porque nadie
-  puede ser su emisor todavía) para notificar al propio usuario que ofertó.
+- Consola Operativa del Rematador (Módulo 5.2): abrir/cerrar lotes, seguir ofertas en
+  vivo, pausar el remate -- reemplaza `GestionRematePlaceholderPage`
+  (`/remates/:remateId/gestionar`, ya montada) sin tocar el árbol de rutas.
+- Botón "Cancelar remate" (`POST /remates/{id}/cancel`, ya expuesto por el backend, sin
+  consumidor en el frontend todavía) y edición de un remate propio (`PATCH
+  /remates/{id}`).
+- Creación de remates desde el frontend (`POST /remates`, ya expuesto, sin consumidor en
+  el frontend todavía).
+- Formulario real de "Realizar oferta" en la Sala del Remate (`PlaceBidButton` ya
+  aislado para esto) -- podría además usar `oferta.rejected` (ya tipado, hoy descartado
+  deliberadamente porque nadie puede ser su emisor todavía) para notificar al propio
+  usuario que ofertó.
 - Chat por sala, presencia detallada (quién específicamente está conectado, no solo un
   número), video y streaming -- todos construibles sobre `shared/websocket/client.ts`
-  sin modificarlo (ver docs/28, "Preparado para Chat/Presencia/Notificaciones/Streaming").
+  sin modificarlo (ver [docs/28](docs/28-websocket-tiempo-real-sala.md), "Preparado
+  para Chat/Presencia/Notificaciones/Streaming").
 - Presencia en tiempo real de `connected_users` (hoy solo se actualiza en cada
-  reconexión, no evento a evento -- requiere que el backend publique
+  reconexión/recarga, no evento a evento -- requiere que el backend publique
   `presencia.usuario_conectado`/`desconectado`, ver "Backend" abajo).
-- Dashboard propio para `rematador` (gestión de sus remates) y `admin` — hoy ambos
-  siguen viendo el placeholder de la Módulo 4.1.
-- CRUD de remates/lotes para el rematador (`features/lotes/` no existe todavía).
+- Dashboard propio para `admin` — sigue viendo el placeholder de la Módulo 4.1.
 
 **Backend** (según [docs/13-mvp-y-roadmap.md](docs/13-mvp-y-roadmap.md) y
 [docs/23-snapshot-service.md](docs/23-snapshot-service.md), consumidores nuevos sobre
@@ -458,3 +465,7 @@ la arquitectura de snapshot + tiempo real ya construida):
   flujo Snapshot → WebSocket → Eventos, manejo de los 12 eventos de dominio
   sincronizados, indicadores visuales de conexión, preparación para Chat/Presencia/
   Notificaciones/Streaming sin modificar el servicio WebSocket.
+- [`docs/29-dashboard-rematador.md`](docs/29-dashboard-rematador.md) — Dashboard del
+  Rematador (Épica 5.1): flujo de datos, componentes reutilizables (extensión aditiva
+  de `features/remates/`), acciones de ciclo de vida (iniciar/reanudar/finalizar),
+  preparación para la Consola Operativa del Rematador.

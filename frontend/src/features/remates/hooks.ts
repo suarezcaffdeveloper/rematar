@@ -29,8 +29,19 @@ export interface UseRematesResult {
   reload: () => void;
 }
 
-/** Trae TODAS las páginas de `GET /remates` visibles para el usuario actual (hasta el tope). */
-export function useRemates(): UseRematesResult {
+export interface UseRematesParams {
+  /** `owner_id` de `GET /remates` (Épica 5, Módulo 5.1) -- filtra a los remates propios
+   * de ese usuario en cualquier estado, incluido `draft` (el propio dueño siempre los ve,
+   * `RemateService.list_for_viewer`). Sin esto, `CompradorDashboardPage` sigue trayendo
+   * exactamente lo mismo que traía antes (todo lo visible para el usuario actual, sin
+   * filtrar por dueño) -- parámetro opcional, retrocompatible. */
+  ownerId?: string;
+}
+
+/** Trae TODAS las páginas de `GET /remates` visibles para el usuario actual (hasta el
+ * tope), opcionalmente acotadas a un `owner_id` puntual. */
+export function useRemates(params: UseRematesParams = {}): UseRematesResult {
+  const { ownerId } = params;
   const [remates, setRemates] = useState<Remate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<NormalizedApiError | null>(null);
@@ -46,7 +57,7 @@ export function useRemates(): UseRematesResult {
         const collected: Remate[] = [];
         let page = 1;
         while (collected.length < MAX_REMATES) {
-          const result = await fetchRematesRequest({ page, page_size: PAGE_SIZE });
+          const result = await fetchRematesRequest({ page, page_size: PAGE_SIZE, owner_id: ownerId });
           collected.push(...result.items);
           const gotFullPage = result.items.length === PAGE_SIZE;
           const moreRemain = collected.length < result.total;
@@ -65,7 +76,7 @@ export function useRemates(): UseRematesResult {
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+  }, [reloadToken, ownerId]);
 
   const reload = useCallback(() => setReloadToken((token) => token + 1), []);
 
