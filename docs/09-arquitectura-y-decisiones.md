@@ -60,6 +60,8 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [027](adr/ADR-027-fundacion-frontend.md) | Fundación del frontend: estructura por dominio, Zustand, Tailwind, cliente HTTP con refresh transparente | Aceptada |
 | [028](adr/ADR-028-dashboard-comprador.md) | Dashboard del comprador: carga completa + filtrado client-side, N+1 acotado para lote count, sin nombre de rematador | Aceptada |
 | [029](adr/ADR-029-detalle-remate.md) | Detalle del remate: rematador mostrado honestamente sin nombre real, hooks de carga independientes, sala en su propia ruta | Aceptada |
+| [030](adr/ADR-030-sala-del-remate.md) | Sala del remate: feature propio espejando el límite de módulo del Snapshot Service, montos como string, sin polling | Aceptada |
+| [031](adr/ADR-031-websocket-tiempo-real-sala.md) | Integración WebSocket en la Sala del Remate: cliente genérico de transporte, snapshot por WS como reconciliador, anonimato re-aplicado en eventos crudos | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -385,3 +387,66 @@ Detalle completo en [docs/26-detalle-remate.md](26-detalle-remate.md) y
   `LoteCard`.
 - Cero cambios en `backend/` ni en la autenticación — mismos dos endpoints que ya
   consumía el dashboard (`GET /remates/{id}`, `GET /remates/{id}/lotes`).
+
+## Épica 4, Módulo 4.5 — notas de arquitectura de la sala del remate
+
+Detalle completo en [docs/27-sala-del-remate.md](27-sala-del-remate.md) y
+[ADR-030](adr/ADR-030-sala-del-remate.md). Resumen:
+
+- Toda la pantalla sale de una única lectura de `GET /remates/{id}/snapshot` (Épica 3,
+  Módulo 3.6) — sin WebSockets, sin polling, pedido explícito de este módulo pese a que
+  el backend ya los tiene completos.
+- `features/sala/` nace como feature propio (no una extensión de `features/remates/`),
+  espejando el límite de módulo que el backend ya traza entre `app/snapshot/` y
+  `app/modules/remates/`/`app/modules/ofertas/`: compone `Remate`/`Lote` existentes con
+  un DTO propio (`OfertaSnapshotEntry`), sin duplicarlos.
+- Montos de dinero tipados como `string`, no `number` — verificado contra una respuesta
+  real del backend (`"base_price": "1000.00"`): Pydantic v2 serializa `Decimal`
+  preservando su representación exacta, evitando el error de redondeo de `float` en
+  precios.
+- El `buyer_id` de cada oferta llega siempre `null` para un comprador (incluso para el
+  propio postor) — comportamiento esperado del backend (`SnapshotService._mask_oferta`,
+  sin cambios), no una limitación: la sala muestra "Comprador verificado" en vez de
+  cualquier identidad.
+- Preparación para WebSockets por contrato de props, no código simulado: los
+  componentes de presentación reciben `RemateStateSnapshot` ya resuelto y no importan
+  `features/sala/api.ts`/`hooks.ts` — agregar tiempo real es un cambio acotado a
+  `hooks.ts`/`SalaPage.tsx`.
+- Cero cambios en `backend/` ni en la autenticación.
+
+## Épica 4, Módulo 4.6 — notas de arquitectura de la integración WebSocket
+
+Detalle completo en [docs/28-websocket-tiempo-real-sala.md](28-websocket-tiempo-real-sala.md)
+y [ADR-031](adr/ADR-031-websocket-tiempo-real-sala.md). Resumen:
+
+- `shared/websocket/client.ts` — cliente WebSocket genérico y reutilizable, transversal
+  (no conoce ningún dominio): implementa únicamente el protocolo del Gateway (auth en el
+  primer mensaje vía `getToken()` inyectado, heartbeat aplicativo, reconexión con backoff
+  exponencial 1s→30s con re-unión automática a la sala, salas `join_room`/`leave_room`,
+  cierre limpio). `onMessage`/`send` entregan/envían cualquier mensaje sin filtrar --
+  punto de extensión ya resuelto para un futuro Chat/Presencia/Notificaciones/Streaming.
+- `features/sala/realtime/` — capa específica de dominio sobre ese cliente genérico:
+  tipos de los 12 eventos sincronizados (`events.ts`), envelopes `snapshot`/
+  `domain_event` (`messages.ts`), y un reducer puro (`reducer.ts`) que aplica cada
+  evento sobre el `RemateStateSnapshot` en memoria compartiendo referencia con todo lo
+  que no cambió (aprovecha el `React.memo` ya aplicado en el Módulo 4.5).
+- El snapshot llega dos veces: por HTTP (`useRemateSnapshot`, sin cambios, pinta de
+  inmediato) y por WebSocket (`SnapshotMessage`, ya integrado en el backend desde el
+  Módulo 3.6, tras cada `join_room`) -- la segunda REEMPLAZA a la primera y es lo que
+  reconcilia automáticamente cualquier evento perdido durante una reconexión, sin
+  ningún mecanismo nuevo del lado del cliente.
+- `lote.opened` solo trae `lote_id` (no el lote completo) -- se reconstruye buscándolo
+  en la lista ya cargada por `useLotes` (reusado tal cual de `features/remates/`).
+- `oferta.rejected` se descarta deliberadamente: el Event Dispatcher del backend reenvía
+  `buyer_id` sin enmascarar a toda la sala (a diferencia del Snapshot Service), y
+  `PlaceBidButton` sigue deshabilitado en este módulo -- mostrarlo filtraría intentos
+  ajenos, violando una política ya establecida desde `docs/06-eventos-del-sistema.md`.
+  Las entradas nuevas de historial (`oferta.accepted`/`winner_changed`) fuerzan
+  `buyer_id: null` incondicionalmente, re-aplicando del lado del cliente la misma
+  máscara de anonimato que el Snapshot Service ya aplica en el estado inicial.
+- Único cambio en un componente de presentación ya existente: `SalaHeader` gana el prop
+  `connectionStatus` (aditivo) para mostrar `ConnectionStatusBadge`
+  (Conectando.../Conectado/Reconectando.../Desconectado). El resto de los componentes de
+  la Módulo 4.5 no cambia una línea.
+- Cero cambios en `backend/` (Gateway, Snapshot Service, Event Bus, RoomManager, Auction
+  Engine) ni en la autenticación.

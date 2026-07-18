@@ -4,17 +4,20 @@ Plataforma de remates en vivo con ofertas en tiempo real. Ver [`docs/`](docs/) p
 diseño completo del sistema (visión, requisitos, arquitectura, ADRs) — este README cubre
 solo cómo levantar y trabajar con lo que existe hoy.
 
-**Estado del proyecto: Épica 4, Módulo 4.4 — Página de Detalle del Remate.** El
-backend completo de la Épica 3 (Redis, Event Bus, Gateway WebSocket, salas, Event
-Consumer, Snapshot Service — detalle en la sección "Backend" más abajo) ya está
-implementado y probado. El dashboard del comprador (Módulo 4.3: listado de remates en
-tarjetas, búsqueda, filtros, orden) ya estaba listo; este módulo agrega la página de
-detalle de un remate puntual — portada, estado, fecha, categoría, descripción,
-ubicación, rematador, listado completo de lotes, y un botón "Entrar al remate" que hoy
-navega a un placeholder de la sala en vivo (ver
-[docs/26](docs/26-detalle-remate.md)). Todavía no hay WebSockets, ofertas, chat ni
-video del lado del frontend (módulos futuros, ver
-[Próximos pasos](#próximos-pasos)).
+**Estado del proyecto: Épica 4, Módulo 4.6 — Integración WebSocket y actualización en
+tiempo real.** El backend completo de la Épica 3 (Redis, Event Bus, Gateway WebSocket,
+salas, Event Consumer, Snapshot Service — detalle en la sección "Backend" más abajo) ya
+estaba implementado y probado, sin cambios en este módulo. La Sala del Remate (Módulo
+4.5) se resolvía enteramente con el Snapshot Service, sin WebSockets ni actualización
+automática; este módulo la conecta al Gateway WebSocket ya existente: un cliente
+WebSocket reutilizable (`shared/websocket/client.ts` — auth, heartbeat, reconexión con
+backoff exponencial, cierre limpio), los 12 eventos de dominio ya sincronizados por el
+backend aplicados de forma incremental (sin recargar la pantalla), snapshot recibido
+también por WebSocket para reconciliar automáticamente cualquier evento perdido en una
+reconexión, e indicadores visuales de conexión (Conectando.../Conectado/
+Reconectando.../Desconectado) — ver [docs/28](docs/28-websocket-tiempo-real-sala.md).
+Formulario real de ofertas, chat, presencia detallada, video y streaming siguen siendo
+módulos futuros del lado del frontend (ver [Próximos pasos](#próximos-pasos)).
 
 ## Stack
 
@@ -36,7 +39,7 @@ video del lado del frontend (módulos futuros, ver
 | Logging | `structlog` | Logs estructurados con `request_id` de contexto (RNF-15) |
 | Contenedores | Docker + Docker Compose | Entorno reproducible con un comando |
 
-### Frontend (Épica 4.1 + 4.3 + 4.4)
+### Frontend (Épica 4.1 + 4.3 + 4.4 + 4.5 + 4.6)
 
 | Pieza | Tecnología | Por qué (detalle en [docs/24](docs/24-fundacion-frontend.md), [ADR-027](docs/adr/ADR-027-fundacion-frontend.md)) |
 |---|---|---|
@@ -45,6 +48,7 @@ video del lado del frontend (módulos futuros, ver
 | Estilos | Tailwind CSS v4 | Interfaz con mucho estado visual cambiante (ofertas, estados de lote) — se prefirió sobre CSS Modules, justificado en ADR-027 sección C |
 | Estado global | Zustand | Suscripción por selector, no por subárbol como `Context.Provider` — pensado para el estado de tiempo real que viene después (ADR-027 sección D) |
 | HTTP | Axios, cliente centralizado con interceptores | JWT automático + refresh transparente con cola single-flight (ADR-027 secciones E-G) |
+| Tiempo real | WebSocket nativo del navegador, cliente propio (`shared/websocket/client.ts`) | Mismo criterio que el backend (ADR-003: nativo, sin Socket.IO); auth en el primer mensaje, heartbeat, reconexión con backoff exponencial, reutilizable por cualquier feature futura (ver [docs/28](docs/28-websocket-tiempo-real-sala.md), [ADR-031](docs/adr/ADR-031-websocket-tiempo-real-sala.md)) |
 | Tests | Vitest + Testing Library | Mismo motor que Vite, sin configuración aparte |
 | Contenedores | Docker (dev-only, ver Dockerfile) | Mismo criterio que el backend: `docker compose up` levanta todo |
 
@@ -122,13 +126,15 @@ RematAR/
 │   │   │   └── pages/                  HomePage (rama por rol -> dashboard real si comprador), 403, 404, admin de ejemplo
 │   │   ├── features/                  Un paquete por dominio de negocio (mismo criterio que app/modules/)
 │   │   │   ├── auth/                   api.ts, store.ts (Zustand+persist), hooks.ts, types.ts, pages/
-│   │   │   └── remates/                Dashboard (4.3) + detalle del remate (4.4): api.ts, filtering.ts, hooks.ts, components/, pages/
+│   │   │   ├── remates/                Dashboard (4.3) + detalle del remate (4.4): api.ts, filtering.ts, hooks.ts, components/, pages/
+│   │   │   └── sala/                    Sala del remate (4.5) + tiempo real (4.6): api.ts, hooks.ts, realtime/ (events.ts, messages.ts, reducer.ts), components/, pages/
 │   │   ├── shared/                    Transversal, sin conocer ningún dominio
 │   │   │   ├── api/                    client.ts (Axios + interceptores), errors.ts, types.ts
 │   │   │   ├── components/             Button, Input, Spinner, Alert, Card, Badge, Skeleton, EmptyState, Breadcrumb
 │   │   │   ├── guards/                 RequireAuth, RequireRole
-│   │   │   ├── lib/                    format.ts -- formatDateTime (Intl nativo)
-│   │   │   ├── config/                 env.ts -- wrapper tipado de import.meta.env
+│   │   │   ├── lib/                    format.ts -- formatDateTime, formatCurrency (Intl nativo)
+│   │   │   ├── config/                 env.ts -- wrapper tipado de import.meta.env (+ wsBaseUrl derivado, Épica 4.6)
+│   │   │   ├── websocket/              client.ts -- WebSocketClient reutilizable (auth, heartbeat, reconexión, salas), sin conocer dominio (Épica 4.6)
 │   │   │   └── toast/                  Manejo global de avisos/errores (Zustand)
 │   │   └── test/                      Setup de Vitest
 │   ├── Dockerfile                    Dev-only, ver docs/24
@@ -377,17 +383,18 @@ npm run lint           # oxlint
 
 ## Próximos pasos
 
-**Frontend** (según [docs/26-detalle-remate.md](docs/26-detalle-remate.md), sobre lo
-agregado en este módulo, sin tocar nada de lo ya construido):
+**Frontend** (según [docs/28-websocket-tiempo-real-sala.md](docs/28-websocket-tiempo-real-sala.md),
+sobre lo agregado en este módulo, sin tocar nada de lo ya construido):
 
-- Sala del remate: snapshot inicial (`GET /remates/{id}/snapshot`, backend Módulo 3.6)
-  + eventos por WebSocket (backend Módulo 3.5) sobre un store de Zustand nuevo, mismo
-  patrón que `features/auth/store.ts` — hoy `SalaPlaceholderPage`
-  (`/remates/:remateId/sala`) es un placeholder deliberado, ya en su ruta final.
-- Cliente WebSocket (sobre el Gateway del backend, Módulo 3.3): se autentica
-  reusando `useAuthStore.getState().accessToken`, igual que ya hace `shared/api/client.ts`
-  para HTTP.
-- Ofertas, chat y video dentro de la sala en vivo.
+- Formulario real de "Realizar oferta" (`PlaceBidButton` ya aislado para esto) -- podría
+  además usar `oferta.rejected` (ya tipado, hoy descartado deliberadamente porque nadie
+  puede ser su emisor todavía) para notificar al propio usuario que ofertó.
+- Chat por sala, presencia detallada (quién específicamente está conectado, no solo un
+  número), video y streaming -- todos construibles sobre `shared/websocket/client.ts`
+  sin modificarlo (ver docs/28, "Preparado para Chat/Presencia/Notificaciones/Streaming").
+- Presencia en tiempo real de `connected_users` (hoy solo se actualiza en cada
+  reconexión, no evento a evento -- requiere que el backend publique
+  `presencia.usuario_conectado`/`desconectado`, ver "Backend" abajo).
 - Dashboard propio para `rematador` (gestión de sus remates) y `admin` — hoy ambos
   siguen viendo el placeholder de la Módulo 4.1.
 - CRUD de remates/lotes para el rematador (`features/lotes/` no existe todavía).
@@ -442,3 +449,12 @@ la arquitectura de snapshot + tiempo real ya construida):
   remate (Épica 4.4): flujo de datos con dos hooks de carga independientes, listado de
   lotes, componentes reutilizables, preparación para integrarse con la sala del remate
   en vivo.
+- [`docs/27-sala-del-remate.md`](docs/27-sala-del-remate.md) — Sala del remate,
+  versión inicial (Épica 4.5): flujo Snapshot → Render, estructura de componentes,
+  optimización de renderizado, preparación para recibir eventos WebSocket sin
+  reestructurar código.
+- [`docs/28-websocket-tiempo-real-sala.md`](docs/28-websocket-tiempo-real-sala.md) —
+  Integración WebSocket y tiempo real (Épica 4.6): servicio WebSocket reutilizable,
+  flujo Snapshot → WebSocket → Eventos, manejo de los 12 eventos de dominio
+  sincronizados, indicadores visuales de conexión, preparación para Chat/Presencia/
+  Notificaciones/Streaming sin modificar el servicio WebSocket.

@@ -12,18 +12,22 @@ concurrencia, tiempo real y escalabilidad — no en la cantidad de pantallas.
 
 ## Estado actual
 
-**Épica 4, Módulo 4.4 — Página de Detalle del Remate.** Todo el backend descripto por
-la Épica 3 (Redis, Event Bus, Gateway WebSocket, salas, Event Consumer, Snapshot
-Service) ya está implementado y probado, sin cambios en este módulo ni en los
-anteriores. El dashboard del comprador (Módulo 4.3: listado de remates con búsqueda,
-filtros, orden) ya estaba listo; este módulo agrega la pantalla de detalle de un
-remate puntual — portada, estado, fecha, categoría, descripción, ubicación, rematador,
-listado de lotes, y un botón "Entrar al remate" que hoy lleva a un placeholder de la
-sala en vivo (ver [26-detalle-remate.md](26-detalle-remate.md)). `rematador`/`admin`
-siguen viendo el placeholder de la Módulo 4.1 como pantalla de inicio; sala del
-remate, WebSockets, ofertas, chat y video siguen siendo módulos futuros. Esta carpeta
-sigue siendo la fuente de verdad del proyecto: cada fase nueva debe leerla antes de
-proponer cambios y actualizarla si algo deja de ser cierto. Ver el
+**Épica 4, Módulo 4.6 — Integración WebSocket y actualización en tiempo real.** Todo el
+backend descripto por la Épica 3 (Redis, Event Bus, Gateway WebSocket, salas, Event
+Consumer, Snapshot Service) ya estaba implementado y probado desde antes, sin cambios en
+este módulo. La Sala del Remate (Módulo 4.5) se resolvía enteramente con el Snapshot
+Service, sin WebSockets ni actualización automática (pedido explícito de esa fase); este
+módulo la conecta al Gateway WebSocket ya existente: un cliente WebSocket reutilizable
+(`shared/websocket/client.ts` -- auth, heartbeat, reconexión con backoff exponencial,
+cierre limpio), los 12 eventos de dominio sincronizados por el backend (`AuctionStarted`,
+`LotOpened`, `BidAccepted`, etc.), aplicados de forma incremental (solo la parte de la
+pantalla que corresponde, sin recargar nada) e indicadores visuales de conexión
+(Conectando.../Conectado/Reconectando.../Desconectado). Ver
+[28-websocket-tiempo-real-sala.md](28-websocket-tiempo-real-sala.md). `rematador`/`admin`
+siguen viendo el placeholder de la Módulo 4.1 como pantalla de inicio; formulario real de
+ofertas, chat, presencia detallada, video y streaming siguen siendo módulos futuros. Esta
+carpeta sigue siendo la fuente de verdad del proyecto: cada fase nueva debe leerla antes
+de proponer cambios y actualizarla si algo deja de ser cierto. Ver el
 [README raíz](../README.md) para instrucciones de instalación y el estado exacto del
 código.
 
@@ -57,6 +61,8 @@ código.
 | [24-fundacion-frontend.md](24-fundacion-frontend.md) | Fundación del frontend: estructura de carpetas, ruteo, layouts, cliente HTTP, guards, flujo de autenticación (Épica 4.1) |
 | [25-dashboard-comprador.md](25-dashboard-comprador.md) | Dashboard del comprador: flujo de datos, consumo de la API existente, componentes reutilizables, limitaciones conocidas (Épica 4.3) |
 | [26-detalle-remate.md](26-detalle-remate.md) | Página de detalle del remate: flujo de datos, listado de lotes, componentes reutilizables, preparación para la sala en vivo (Épica 4.4) |
+| [27-sala-del-remate.md](27-sala-del-remate.md) | Sala del remate (versión inicial): flujo Snapshot → Render, estructura de componentes, optimización de renderizado, preparación para WebSockets (Épica 4.5) |
+| [28-websocket-tiempo-real-sala.md](28-websocket-tiempo-real-sala.md) | Integración WebSocket y tiempo real: servicio WebSocket reutilizable, flujo Snapshot → WebSocket → Eventos, manejo de los 12 eventos de dominio, preparación para Chat/Presencia/Notificaciones/Streaming (Épica 4.6) |
 | [adr/](adr/) | Registro de decisiones de arquitectura (ADR), una por decisión relevante |
 
 ## Reglas de esta documentación (aplican a todas las fases futuras)
@@ -168,3 +174,23 @@ código.
   datos con carga/error independientes (remate y lotes); sin WebSockets, ofertas, chat,
   video ni tiempo real (módulos futuros); cero cambios en el backend ni en la
   autenticación. Ver [26-detalle-remate.md](26-detalle-remate.md), ADR-029.
+- **Épica 4, Módulo 4.5** (2026-07-25): Sala del Remate (versión inicial) — pantalla
+  principal de un remate en vivo resuelta enteramente con el Snapshot Service ya
+  existente (Épica 3.6), sin WebSockets todavía (pedido explícito); cabecera, lote
+  activo (galería, ficha técnica, precio inicial, oferta actual, incremento mínimo),
+  panel de ofertas (comprador líder anonimizado, historial reciente), próximos lotes no
+  seleccionables, botón "Realizar oferta" deshabilitado; nuevo feature
+  `features/sala/`, espejando el límite de módulo del `app/snapshot/` del backend;
+  arquitectura preparada para WebSockets sin reestructurar (props tipadas, sin código
+  simulado); cero cambios en el backend ni en la autenticación. Ver
+  [27-sala-del-remate.md](27-sala-del-remate.md), ADR-030.
+- **Épica 4, Módulo 4.6** (2026-07-26): Integración WebSocket y actualización en tiempo
+  real — cliente WebSocket reutilizable (`shared/websocket/client.ts`): auth en el
+  primer mensaje, heartbeat, reconexión con backoff exponencial, salas, cierre limpio;
+  los 12 eventos de dominio ya sincronizados por el backend, aplicados de forma
+  incremental sobre el snapshot en memoria (nunca se recarga la pantalla completa);
+  snapshot recibido también por WebSocket tras `join_room`, que reconcilia
+  automáticamente cualquier evento perdido en una reconexión; indicadores visuales de
+  conexión; arquitectura preparada para Chat/Presencia/Notificaciones/Streaming sin
+  modificar el servicio WebSocket; cero cambios en el backend ni en la autenticación. Ver
+  [28-websocket-tiempo-real-sala.md](28-websocket-tiempo-real-sala.md), ADR-031.

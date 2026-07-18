@@ -21,6 +21,20 @@ function readRequiredEnvVar(key: string): string {
   return value;
 }
 
+/**
+ * `wsBaseUrl` -- derivada de `apiBaseUrl`, no una variable de entorno propia: el
+ * Gateway WebSocket (Épica 3, Módulo 3.3) vive en el mismo host/puerto que la API HTTP,
+ * bajo el mismo prefijo de versión (`/api/v1/ws`, ver `docs/20-gateway-websocket.md`) --
+ * agregar una segunda variable de entorno para esto sería una fuente de verdad
+ * duplicada que podría desincronizarse de `VITE_API_BASE_URL` en algún entorno.
+ */
+export function deriveWsBaseUrl(apiBaseUrl: string): string {
+  return `${apiBaseUrl.replace(/^http/, 'ws')}/ws`;
+}
+
 export const env = {
   apiBaseUrl: readRequiredEnvVar('VITE_API_BASE_URL'),
+  get wsBaseUrl() {
+    return deriveWsBaseUrl(this.apiBaseUrl);
+  },
 } as const;

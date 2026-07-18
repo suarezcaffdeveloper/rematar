@@ -27,6 +27,15 @@ export type RemateCategory =
   | 'indumentaria'
   | 'otros';
 
+/** `RemateSettings` -- `backend/app/modules/remates/schemas.py`. Solo `currency` se usa
+ * hoy (Sala del Remate, Épica 4.5, para formatear precios) -- los otros dos campos
+ * (anti-sniping) se reflejan igual por fidelidad con el schema del backend. */
+export interface RemateSettings {
+  anti_sniping_enabled: boolean;
+  anti_sniping_extension_seconds: number;
+  currency: string;
+}
+
 /** `RemateRead` -- `backend/app/modules/remates/schemas.py`. */
 export interface Remate {
   id: string;
@@ -39,6 +48,7 @@ export interface Remate {
   starts_at: string | null;
   ends_at: string | null;
   status: RemateStatus;
+  settings: RemateSettings;
   cancellation_reason: string | null;
   cancelled_at: string | null;
   finished_at: string | null;
@@ -65,12 +75,22 @@ export interface LoteImage {
   caption: string | null;
 }
 
+/** `LoteRead.attributes` -- `AttributeValue` en `backend/.../lotes/schemas.py`
+ * (`str | int | float | bool`). Datos libres del lote (peso, raza, año, m2, etc.). */
+export type LoteAttributeValue = string | number | boolean;
+
 /**
- * `LoteRead` -- `backend/app/modules/remates/lotes/schemas.py`. Sin los campos de
- * precio (`base_price`, `min_increment`, `reserve_price`, `final_price`) ni
- * `attributes`/`documents`: este módulo (Épica 4.4) no muestra información de ofertas
- * todavía (explícitamente fuera de alcance), así que no hay pantalla que los use hoy --
- * se agregan cuando el módulo de ofertas/sala en vivo los necesite, no antes.
+ * `LoteRead` -- `backend/app/modules/remates/lotes/schemas.py`. Sin `documents`: ninguna
+ * pantalla los usa todavía (a diferencia de `attributes`/precios, que la Sala del
+ * Remate, Épica 4.5, sí necesita -- ver docs/26-detalle-remate.md, que deliberadamente
+ * los había dejado afuera hasta este módulo).
+ *
+ * `base_price`/`min_increment`/`reserve_price`/`final_price` llegan como **string**, no
+ * `number` -- confirmado contra una respuesta real de `GET /remates/{id}/snapshot`
+ * (`"base_price": "1000.00"`): Pydantic v2 serializa `Decimal` a JSON preservando su
+ * representación exacta en vez de convertir a `float` (evita el error de redondeo
+ * binario de IEEE 754 para montos de dinero). `shared/lib/format.ts::formatCurrency`
+ * hace el `Number(...)` en el único lugar que lo necesita.
  */
 export interface Lote {
   id: string;
@@ -80,9 +100,17 @@ export interface Lote {
   title: string;
   description: string | null;
   category: RemateCategory;
+  attributes: Record<string, LoteAttributeValue>;
   images: LoteImage[];
   quantity: number;
   unit_label: string | null;
+  base_price: string;
+  min_increment: string;
+  // `null` para un comprador que no es dueño del remate (enmascarado por
+  // `LoteService`/`SnapshotService`, ver ADR-016) -- nunca se muestra en la UI, pero se
+  // refleja en el tipo por fidelidad con lo que el backend realmente devuelve.
+  reserve_price: string | null;
+  final_price: string | null;
   status: LoteStatus;
   created_at: string;
 }

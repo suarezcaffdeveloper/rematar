@@ -33,6 +33,16 @@ export function registerSessionAccessor(accessor: SessionAccessor): void {
   sessionAccessor = accessor;
 }
 
+/**
+ * Lectura del access token vigente, para cualquier transporte que no sea `apiClient`
+ * (Épica 4, Módulo 4.6 -- el cliente WebSocket de `shared/websocket/client.ts` necesita
+ * el mismo JWT para el mensaje `auth`, ver ADR-006). Misma inversión de dependencias que
+ * `registerSessionAccessor`: este módulo sigue sin importar el store de auth.
+ */
+export function getSessionAccessToken(): string | null {
+  return sessionAccessor?.getAccessToken() ?? null;
+}
+
 const SESSION_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout'];
 
 function isSessionEndpoint(url?: string): boolean {
