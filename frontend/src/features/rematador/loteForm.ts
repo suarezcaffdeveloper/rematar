@@ -8,6 +8,12 @@
  * `attributes.peso_kg`, un atributo más entre los libres. El editor de "información
  * técnica" (`attributeRows`) excluye `peso_kg` a propósito para no editarlo dos veces en
  * dos lugares distintos del mismo formulario.
+ *
+ * Sin `image_url`/`images` (Épica 6, Módulo 6.1): la galería de imágenes ahora se
+ * gestiona aparte (`LoteGalleryManager`), con su propio `PATCH` inmediato por acción --
+ * ver docs/32-gestion-multimedia-lotes.md. `buildLoteFormPayload` ya no incluye
+ * `images` en absoluto (la propiedad queda `undefined`, y por lo tanto ausente del JSON
+ * enviado), así que guardar el resto de los campos del lote nunca pisa sus imágenes.
  */
 
 import type { Lote, LoteAttributeValue, LoteFormPayload, RemateCategory } from '../remates/types';
@@ -29,7 +35,6 @@ export interface LoteFormValues {
   base_price: string;
   min_increment: string;
   reserve_price: string;
-  image_url: string;
 }
 
 export const DEFAULT_LOTE_FORM_VALUES: LoteFormValues = {
@@ -44,24 +49,14 @@ export const DEFAULT_LOTE_FORM_VALUES: LoteFormValues = {
   base_price: '',
   min_increment: '',
   reserve_price: '',
-  image_url: '',
 };
 
 export type LoteFormErrors = Partial<
-  Record<'lot_number' | 'title' | 'category' | 'description' | 'peso_kg' | 'quantity' | 'unit_label' | 'base_price' | 'min_increment' | 'reserve_price' | 'image_url' | 'attributes', string>
+  Record<'lot_number' | 'title' | 'category' | 'description' | 'peso_kg' | 'quantity' | 'unit_label' | 'base_price' | 'min_increment' | 'reserve_price' | 'attributes', string>
 >;
 
 const MAX_ATTRIBUTES = 30;
 const MAX_ATTRIBUTE_KEY_LENGTH = 100;
-
-function isValidUrl(value: string): boolean {
-  try {
-    new URL(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 function isPositiveDecimal(value: string): boolean {
   return /^\d+(\.\d{1,2})?$/.test(value.trim()) && Number(value) > 0;
@@ -81,7 +76,6 @@ export function loteToFormValues(lote: Lote): LoteFormValues {
     base_price: lote.base_price,
     min_increment: lote.min_increment,
     reserve_price: lote.reserve_price ?? '',
-    image_url: lote.images[0]?.url ?? '',
   };
 }
 
@@ -126,10 +120,6 @@ export function validateLoteForm(values: LoteFormValues): LoteFormErrors {
       errors.reserve_price = 'El precio de reserva no puede ser menor al precio inicial.';
     }
   }
-  if (values.image_url.trim() && !isValidUrl(values.image_url.trim())) {
-    errors.image_url = 'Ingresá una URL válida (por ejemplo, https://...).';
-  }
-
   const nonEmptyRows = values.attributeRows.filter((row) => row.key.trim());
   const totalAttributes = nonEmptyRows.length + (values.peso_kg.trim() ? 1 : 0);
   if (totalAttributes > MAX_ATTRIBUTES) {
@@ -169,15 +159,12 @@ export function buildLoteFormPayload(values: LoteFormValues): LoteFormPayload {
     if (key) attributes[key] = coerceAttributeValue(row.value);
   }
 
-  const imageUrl = values.image_url.trim();
-
   return {
     lot_number: values.lot_number.trim(),
     title: values.title.trim(),
     category: values.category as RemateCategory,
     description: values.description.trim() || null,
     attributes,
-    images: imageUrl ? [{ url: imageUrl, order: 0, caption: null }] : [],
     quantity: Number(values.quantity),
     unit_label: values.unit_label.trim() || null,
     base_price: values.base_price.trim(),

@@ -48,10 +48,13 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
+from fastapi import UploadFile
 from sqlalchemy.exc import IntegrityError
 
+from app.core.config import Settings
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
 from app.events.bus import EventBus
+from app.modules.remates.lotes import media_storage
 from app.modules.remates.lotes.events import LoteCancelled, LoteClosed, LoteOpened
 from app.modules.remates.lotes.models import Lote, LoteStatus
 from app.modules.remates.lotes.repository import LoteRepository
@@ -68,10 +71,12 @@ class LoteService:
         repository: LoteRepository,
         remate_service: RemateService,
         event_bus: EventBus,
+        settings: Settings,
     ) -> None:
         self._repository = repository
         self._remate_service = remate_service
         self._event_bus = event_bus
+        self._settings = settings
 
     @staticmethod
     def _assert_structure_editable(remate: Remate) -> None:
@@ -207,6 +212,22 @@ class LoteService:
         for lote in lotes_by_id.values():
             await self._repository.refresh(lote)
         return sorted(lotes_by_id.values(), key=lambda lote: lote.display_order)
+
+    async def upload_image(
+        self,
+        remate_id: uuid.UUID,
+        lote_id: uuid.UUID,
+        owner: User,
+        upload: UploadFile,
+        request_base_url: str,
+    ) -> str:
+        """Sube una imagen para un lote propio (Épica 6, Módulo 6.1) -- mismo chequeo de
+        ownership y de estructura editable que `create`/`update`/`soft_delete`, para no
+        permitir subir contenido a un lote de un remate ajeno o ya congelado. No toca la
+        fila del lote: devuelve solo la URL, ver `LoteImageUploadResponse`."""
+        remate, lote = await self._get_owned_lote_or_raise(remate_id, lote_id, owner)
+        self._assert_structure_editable(remate)
+        return await media_storage.save_lote_image(lote.id, upload, self._settings, request_base_url)
 
     # --- Motor de estados (Módulo 2.3, ver docs/16-motor-de-estados.md) --------------
 

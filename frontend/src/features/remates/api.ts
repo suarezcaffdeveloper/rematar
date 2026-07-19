@@ -11,6 +11,7 @@ import type {
   Lote,
   LoteClosePayload,
   LoteFormPayload,
+  LoteImage,
   LoteListParams,
   Remate,
   RemateFormPayload,
@@ -176,5 +177,51 @@ export async function reorderLotesRequest(remateId: string, loteIds: string[]): 
   const { data } = await apiClient.post<Lote[]>(`/remates/${remateId}/lotes/reorder`, {
     lote_ids: loteIds,
   });
+  return data;
+}
+
+/**
+ * Gestión multimedia de lotes (Épica 6, Módulo 6.1, ver docs/32-gestion-multimedia-
+ * lotes.md y ADR-035). Dos operaciones separadas a propósito:
+ *
+ * - `uploadLoteImageRequest` sube el ARCHIVO (`POST .../lotes/{id}/images`, endpoint
+ *   nuevo de este módulo) y devuelve solo la URL resultante -- no toca el lote.
+ * - `updateLoteImagesRequest` persiste el array `images` completo (con esa URL ya
+ *   incluida, más orden/caption) usando el `PATCH` de Lote que ya existía desde la
+ *   Épica 2.2 (`LoteUpdate.images`), sin necesidad de mandar el resto de los campos del
+ *   lote -- el backend acepta un `PATCH` parcial.
+ *
+ * `LoteGalleryManager` sube todos los archivos elegidos en paralelo y recién arma UN
+ * único `PATCH` con el array final, para no perder entradas si dos requests de
+ * actualización llegaran a superponerse (ver docs/32, "Flujo de carga de archivos").
+ */
+export async function uploadLoteImageRequest(
+  remateId: string,
+  loteId: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<{ url: string }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await apiClient.post<{ url: string }>(
+    `/remates/${remateId}/lotes/${loteId}/images`,
+    formData,
+    {
+      onUploadProgress: (event) => {
+        if (onProgress && event.total) {
+          onProgress(Math.round((event.loaded / event.total) * 100));
+        }
+      },
+    },
+  );
+  return data;
+}
+
+export async function updateLoteImagesRequest(
+  remateId: string,
+  loteId: string,
+  images: LoteImage[],
+): Promise<Lote> {
+  const { data } = await apiClient.patch<Lote>(`/remates/${remateId}/lotes/${loteId}`, { images });
   return data;
 }

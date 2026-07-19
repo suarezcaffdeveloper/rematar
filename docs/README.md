@@ -12,20 +12,23 @@ concurrencia, tiempo real y escalabilidad — no en la cantidad de pantallas.
 
 ## Estado actual
 
-**Épica 5, Módulo 5.3 — Gestión completa de Remates y Lotes.** La Consola Operativa
-(Épica 5.2) ya cubría un remate en vivo; este módulo agrega la pantalla donde el
-rematador lo prepara antes de que empiece: crear/editar/eliminar/duplicar/publicar/
-cancelar un remate, y crear/editar/eliminar/duplicar/reordenar (drag & drop nativo +
-botones ↑/↓ como fallback siempre disponible) sus lotes, todo con tarjetas, sidebar y
-modales -- sin tablas tradicionales. "Programar" y "Publicar" se consolidaron en una
-sola acción (el motor de estados solo tiene una transición para eso); "duplicar" se
-compone en el cliente con GET + POST porque el backend no expone ningún endpoint para
-eso. Ver [31-gestion-remates-lotes.md](31-gestion-remates-lotes.md). `admin` sigue
-viendo el placeholder de la Módulo 4.1; chat, streaming y notificaciones siguen siendo
-módulos futuros. Esta carpeta sigue siendo la fuente de verdad del proyecto: cada fase
-nueva debe leerla antes de proponer cambios y actualizarla si algo deja de ser cierto.
-Ver el [README raíz](../README.md) para instrucciones de instalación y el estado exacto
-del código.
+**Épica 6, Módulo 6.1 — Gestión multimedia de los lotes.** La Gestión de Remates y
+Lotes (Épica 5.3) ya permitía cargar un lote con una única imagen (URL de texto); este
+módulo agrega una galería multimedia completa: subida de múltiples imágenes en paralelo
+con barra de progreso, vista previa antes de que termine de subirse, selección de
+imagen principal, reordenamiento (drag & drop nativo + flechas de fallback) y
+eliminación con confirmación. El backend no tenía ninguna capacidad de subida binaria
+(`Lote.images` era JSONB de URLs de texto, sin storage propio) -- se documentó la
+brecha antes de implementar (siguiendo la instrucción explícita del enunciado) y se
+agregó el único endpoint nuevo de este módulo, `POST .../lotes/{id}/images`, que sube a
+disco local y sirve el archivo vía `StaticFiles`; el array `images` se sigue
+persistiendo con el `PATCH` de Lote ya existente desde la Épica 2.2, sin cambios. Ver
+[32-gestion-multimedia-lotes.md](32-gestion-multimedia-lotes.md). `admin` sigue viendo
+el placeholder de la Módulo 4.1; chat, streaming, notificaciones y video/PDF/
+certificados de lote siguen siendo módulos futuros. Esta carpeta sigue siendo la fuente
+de verdad del proyecto: cada fase nueva debe leerla antes de proponer cambios y
+actualizarla si algo deja de ser cierto. Ver el [README raíz](../README.md) para
+instrucciones de instalación y el estado exacto del código.
 
 ## Índice
 
@@ -62,6 +65,7 @@ del código.
 | [29-dashboard-rematador.md](29-dashboard-rematador.md) | Dashboard del Rematador: flujo de datos, componentes reutilizables, acciones de ciclo de vida (iniciar/reanudar/finalizar), preparación para la Consola Operativa del Rematador (Épica 5.1) |
 | [30-consola-operativa-rematador.md](30-consola-operativa-rematador.md) | Consola Operativa del Rematador: diagrama, flujo de cada acción, integración con WebSockets (reutilización de `useLiveRemateState`), preparación para la gestión completa de remates y lotes (Épica 5.2) |
 | [31-gestion-remates-lotes.md](31-gestion-remates-lotes.md) | Gestión completa de Remates y Lotes: flujo de creación/edición, drag & drop de reordenamiento, componentes reutilizables (Épica 5.3) |
+| [32-gestion-multimedia-lotes.md](32-gestion-multimedia-lotes.md) | Gestión multimedia de los lotes: endpoint de subida a disco local, flujo de carga de archivos, galería (Épica 6.1) |
 | [adr/](adr/) | Registro de decisiones de arquitectura (ADR), una por decisión relevante |
 
 ## Reglas de esta documentación (aplican a todas las fases futuras)
@@ -224,3 +228,16 @@ del código.
   `Textarea`, `Select`, `DropdownMenu`); reutiliza `useRemateDetail`/`useLotes` de la
   Épica 4.4 sin modificarlos; cero cambios en el backend ni en la autenticación. Ver
   [31-gestion-remates-lotes.md](31-gestion-remates-lotes.md), ADR-034.
+- **Épica 6, Módulo 6.1** (2026-07-30): Gestión multimedia de los lotes -- galería
+  completa de imágenes embebida en el formulario de Lote (modo edición): subida múltiple
+  en paralelo con barra de progreso, vista previa antes de terminar de subir, selección
+  de imagen principal, reordenamiento (drag & drop nativo + flechas de fallback),
+  eliminación con confirmación, validación de formato/tamaño espejada en cliente y
+  servidor; único endpoint de backend nuevo de todo el proyecto en esta fase,
+  `POST .../lotes/{id}/images` (multipart, disco local, `StaticFiles`), documentado como
+  brecha antes de implementarlo (instrucción explícita del enunciado) -- el array
+  `images` se sigue persistiendo con el `PATCH` de Lote ya existente desde la Épica 2.2;
+  dos componentes genéricos nuevos (`Dropzone`, `ProgressBar`) sin ningún conocimiento de
+  imágenes, reutilizables por video/PDF/certificados a futuro (`Lote.documents`, ya
+  existente, sin consumidor todavía) sin rediseñar. Ver
+  [32-gestion-multimedia-lotes.md](32-gestion-multimedia-lotes.md), ADR-035.

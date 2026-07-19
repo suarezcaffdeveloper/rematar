@@ -120,6 +120,15 @@ class LoteUpdate(BaseModel, _LotePriceValidationMixin):
         return self
 
 
+class LoteImageUploadResponse(BaseModel):
+    """Respuesta de `POST .../lotes/{lote_id}/images` (Épica 6, Módulo 6.1) -- solo la
+    URL resultante. Quien sube la imagen (el frontend) decide `order`/`caption` y
+    persiste el array `images` completo con el `PATCH` ya existente (`LoteUpdate.images`)
+    -- este endpoint no toca la fila del lote en absoluto."""
+
+    url: HttpUrl
+
+
 class LoteReorderRequest(BaseModel):
     """Lista completa y ordenada de `id` de los lotes vigentes del remate — ver
     ADR-015. `LoteService.reorder` valida que sea exactamente el conjunto actual."""

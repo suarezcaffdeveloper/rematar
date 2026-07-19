@@ -7,6 +7,8 @@ import type { Lote } from '../../remates/types';
 const apiMocks = vi.hoisted(() => ({
   createLoteRequest: vi.fn(),
   updateLoteRequest: vi.fn(),
+  updateLoteImagesRequest: vi.fn(),
+  uploadLoteImageRequest: vi.fn(),
 }));
 
 vi.mock('../../remates/api', () => apiMocks);
@@ -53,6 +55,17 @@ describe('LoteFormModal', () => {
     render(<LoteFormModal isOpen onClose={vi.fn()} remateId="remate-1" onSaved={vi.fn()} />);
     expect(screen.getByRole('heading', { name: 'Crear lote' })).toBeInTheDocument();
     expect(screen.getByLabelText('Número de lote')).toHaveValue('');
+  });
+
+  it('en modo creación, muestra el aviso de guardar antes de agregar imágenes', () => {
+    render(<LoteFormModal isOpen onClose={vi.fn()} remateId="remate-1" onSaved={vi.fn()} />);
+    expect(screen.getByText('Guardá el lote para poder agregarle imágenes.')).toBeInTheDocument();
+    expect(screen.queryByText('Arrastrá imágenes acá o hacé clic para elegirlas')).not.toBeInTheDocument();
+  });
+
+  it('en modo edición, muestra la galería de imágenes', () => {
+    render(<LoteFormModal isOpen onClose={vi.fn()} remateId="remate-1" lote={makeLote()} onSaved={vi.fn()} />);
+    expect(screen.getByText('Arrastrá imágenes acá o hacé clic para elegirlas')).toBeInTheDocument();
   });
 
   it('en modo edición, separa peso_kg de los demás atributos', () => {

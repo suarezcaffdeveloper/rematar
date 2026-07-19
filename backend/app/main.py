@@ -20,9 +20,11 @@ están a punto de cerrarse.
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.router import api_router
 from app.core.config import get_settings
@@ -90,6 +92,13 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
 
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+    # Sirve las imágenes de lote subidas a disco local (Épica 6, Módulo 6.1, ver
+    # docs/32-gestion-multimedia-lotes.md y ADR-035) -- `MEDIA_ROOT` vive dentro del
+    # volumen ya montado por docker-compose.yml ("./backend:/app"), sin storage externo.
+    media_root = Path(settings.MEDIA_ROOT)
+    media_root.mkdir(parents=True, exist_ok=True)
+    app.mount(settings.MEDIA_URL_PREFIX, StaticFiles(directory=media_root), name="media")
 
     @app.get("/health", tags=["health"], summary="Liveness/readiness probe")
     async def health(request: Request) -> dict[str, object]:

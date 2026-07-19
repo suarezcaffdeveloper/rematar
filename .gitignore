@@ -21,3 +21,7 @@ Thumbs.db
 
 # Docker
 docker-compose.override.yml
+
+# Media subida por el usuario (Épica 6, Módulo 6.1) -- runtime, no fuente
+backend/media/
+backend/media_test/

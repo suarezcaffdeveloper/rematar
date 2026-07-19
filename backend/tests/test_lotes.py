@@ -12,10 +12,12 @@ ver docs/14-modulo-remate.md, y no se implementa hasta el módulo de Ofertas).
 
 import uuid
 from decimal import Decimal
+from pathlib import Path
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.security import hash_password
 from app.modules.remates.models import Remate, RemateStatus
 from app.modules.users.models import User, UserRole
@@ -564,3 +566,109 @@ async def test_create_lote_with_attributes_images_and_documents(client: AsyncCli
     assert lote["attributes"] == {"marca": "Toyota", "anio": 2019, "kilometraje": 85000.5}
     assert lote["images"][0]["caption"] == "Frente"
     assert lote["documents"][0]["title"] == "Título del vehículo"
+
+
+# --- Subida de imágenes (Épica 6, Módulo 6.1) -----------------------------------------
+
+
+def _image_url(remate_id: str, lote_id: str) -> str:
+    return f"{_lotes_url(remate_id)}/{lote_id}/images"
+
+
+async def test_owner_can_upload_lote_image(client: AsyncClient) -> None:
+    token = await _register_and_login(client, email="rematador32@example.com", role="rematador")
+    remate = await _create_remate(client, token)
+    lote = await _create_lote(client, token, remate["id"])
+
+    response = await client.post(
+        _image_url(remate["id"], lote["id"]),
+        files={"file": ("foto.jpg", b"contenido-de-prueba", "image/jpeg")},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 201, response.text
+    url = response.json()["url"]
+    assert f"/static/lotes/{lote['id']}/" in url
+    assert url.endswith(".jpg")
+
+    relative_path = url.split("/static/", 1)[1]
+    saved_file = Path(get_settings().MEDIA_ROOT) / relative_path
+    assert saved_file.read_bytes() == b"contenido-de-prueba"
+
+
+async def test_upload_rejects_unsupported_content_type(client: AsyncClient) -> None:
+    token = await _register_and_login(client, email="rematador33@example.com", role="rematador")
+    remate = await _create_remate(client, token)
+    lote = await _create_lote(client, token, remate["id"])
+
+    response = await client.post(
+        _image_url(remate["id"], lote["id"]),
+        files={"file": ("archivo.txt", b"no es una imagen", "text/plain")},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "business_rule_violation"
+
+
+async def test_upload_rejects_oversized_file(client: AsyncClient) -> None:
+    token = await _register_and_login(client, email="rematador34@example.com", role="rematador")
+    remate = await _create_remate(client, token)
+    lote = await _create_lote(client, token, remate["id"])
+
+    oversized = b"0" * (5 * 1024 * 1024 + 1)
+    response = await client.post(
+        _image_url(remate["id"], lote["id"]),
+        files={"file": ("grande.jpg", oversized, "image/jpeg")},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "business_rule_violation"
+
+
+async def test_non_owner_cannot_upload_lote_image(client: AsyncClient) -> None:
+    owner_token = await _register_and_login(
+        client, email="rematador35@example.com", role="rematador"
+    )
+    remate = await _create_remate(client, owner_token, starts_at="2027-06-01T10:00:00Z")
+    lote = await _create_lote(client, owner_token, remate["id"])
+    await _schedule_remate(client, owner_token, remate["id"])
+
+    other_token = await _register_and_login(
+        client, email="rematador36@example.com", role="rematador"
+    )
+    response = await client.post(
+        _image_url(remate["id"], lote["id"]),
+        files={"file": ("foto.jpg", b"contenido", "image/jpeg")},
+        headers=_auth(other_token),
+    )
+    assert response.status_code == 403
+
+
+async def test_cannot_upload_lote_image_once_remate_is_live(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    token = await _register_and_login(client, email="rematador37@example.com", role="rematador")
+    remate = await _create_remate(client, token)
+    lote = await _create_lote(client, token, remate["id"])
+    await _force_remate_status(db_session, remate["id"], RemateStatus.LIVE)
+
+    response = await client.post(
+        _image_url(remate["id"], lote["id"]),
+        files={"file": ("foto.jpg", b"contenido", "image/jpeg")},
+        headers=_auth(token),
+    )
+    assert response.status_code == 422
+
+
+async def test_upload_lote_image_for_nonexistent_lote_returns_404(client: AsyncClient) -> None:
+    token = await _register_and_login(client, email="rematador38@example.com", role="rematador")
+    remate = await _create_remate(client, token)
+
+    response = await client.post(
+        _image_url(remate["id"], str(uuid.uuid4())),
+        files={"file": ("foto.jpg", b"contenido", "image/jpeg")},
+        headers=_auth(token),
+    )
+    assert response.status_code == 404

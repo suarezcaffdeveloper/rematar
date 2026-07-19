@@ -4,17 +4,19 @@ Plataforma de remates en vivo con ofertas en tiempo real. Ver [`docs/`](docs/) p
 diseño completo del sistema (visión, requisitos, arquitectura, ADRs) — este README cubre
 solo cómo levantar y trabajar con lo que existe hoy.
 
-**Estado del proyecto: Épica 5, Módulo 5.3 — Gestión completa de Remates y Lotes.** La
-Consola Operativa (Épica 5.2) ya cubría un remate en vivo; este módulo agrega la
-pantalla donde el rematador lo prepara antes de que empiece:
-crear/editar/eliminar/duplicar/publicar/cancelar un remate desde una sidebar, y
-crear/editar/eliminar/duplicar/reordenar (drag & drop nativo + botones ↑/↓ como
-mecanismo siempre disponible, no solo cosmético) sus lotes en tarjetas — sin tablas
-tradicionales. "Programar"/"Publicar" se consolidaron en una sola acción (el motor de
-estados solo tiene una transición para eso) y "duplicar" se compone en el cliente con
-GET + POST porque el backend no expone ningún endpoint para eso. Ver
-[docs/31](docs/31-gestion-remates-lotes.md). Chat, streaming y notificaciones siguen
-siendo módulos futuros del lado del frontend (ver [Próximos pasos](#próximos-pasos)).
+**Estado del proyecto: Épica 6, Módulo 6.1 — Gestión multimedia de los lotes.** La
+Gestión de Remates y Lotes (Épica 5.3) ya cargaba un lote con una única imagen (URL de
+texto); este módulo agrega una galería completa: subida de múltiples imágenes en
+paralelo con barra de progreso, vista previa antes de terminar de subir, selección de
+imagen principal, reordenamiento (drag & drop nativo + flechas de fallback) y
+eliminación con confirmación. El backend no tenía ninguna capacidad de subida binaria —
+se documentó esa brecha antes de implementar (instrucción explícita del enunciado) y se
+agregó un único endpoint nuevo, `POST .../lotes/{id}/images` (multipart, disco local,
+servido vía `StaticFiles`); el array de imágenes se sigue persistiendo con el `PATCH` de
+Lote ya existente desde la Épica 2.2, sin cambios. Ver
+[docs/32](docs/32-gestion-multimedia-lotes.md). Chat, streaming, notificaciones y
+video/PDF/certificados de lote siguen siendo módulos futuros (ver
+[Próximos pasos](#próximos-pasos)).
 
 ## Stack
 
@@ -33,10 +35,11 @@ siendo módulos futuros del lado del frontend (ver [Próximos pasos](#próximos-
 | Sincronización en tiempo real | `EventConsumer` + `EventDispatcher` (`app/realtime/`) | Único puente entre el Event Bus y el Gateway; el Auction Engine nunca sabe que existen WebSockets (ver [ADR-025](docs/adr/ADR-025-sincronizacion-tiempo-real.md)) |
 | Snapshot Service | `SnapshotService` (`app/snapshot/`), caché corta en Redis | Reconstruye el estado completo de un remate al conectarse (RF-16/ADR-008), reutilizable por HTTP y WebSocket (ver [ADR-026](docs/adr/ADR-026-snapshot-service.md)) |
 | Auth | JWT (PyJWT) + Argon2 (`argon2-cffi`) | Access token stateless + refresh token persistido y rotado (ver [ADR-011](docs/adr/ADR-011-refresh-tokens-persistidos-en-postgres.md)) |
+| Media (imágenes de lote) | Disco local + `StaticFiles` (FastAPI/Starlette) | Sin storage externo en esta fase; único endpoint nuevo del backend desde la fundación del frontend (ver [ADR-035](docs/adr/ADR-035-gestion-multimedia-lotes.md)) |
 | Logging | `structlog` | Logs estructurados con `request_id` de contexto (RNF-15) |
 | Contenedores | Docker + Docker Compose | Entorno reproducible con un comando |
 
-### Frontend (Épica 4.1 + 4.3 + 4.4 + 4.5 + 4.6 + 5.1 + 5.2 + 5.3)
+### Frontend (Épica 4.1 + 4.3 + 4.4 + 4.5 + 4.6 + 5.1 + 5.2 + 5.3 + 6.1)
 
 | Pieza | Tecnología | Por qué (detalle en [docs/24](docs/24-fundacion-frontend.md), [ADR-027](docs/adr/ADR-027-fundacion-frontend.md)) |
 |---|---|---|
@@ -125,10 +128,10 @@ RematAR/
 │   │   │   ├── auth/                   api.ts, store.ts (Zustand+persist), hooks.ts, types.ts, pages/
 │   │   │   ├── remates/                Dashboard comprador (4.3) + detalle (4.4): api.ts (+ start/resume/finish, 5.1), filtering.ts, hooks.ts, components/, pages/
 │   │   │   ├── sala/                    Sala del remate (4.5) + tiempo real (4.6): api.ts, hooks.ts, realtime/ (events.ts, messages.ts, reducer.ts), components/, pages/
-│   │   │   └── rematador/               Dashboard (5.1) + Consola Operativa (5.2) + Gestión de Remates/Lotes (5.3): remateForm.ts, loteForm.ts, duplication.ts, hooks.ts, components/, pages/
+│   │   │   └── rematador/               Dashboard (5.1) + Consola Operativa (5.2) + Gestión de Remates/Lotes (5.3) + Galería multimedia (6.1): remateForm.ts, loteForm.ts, duplication.ts, media.ts, hooks.ts, components/, pages/
 │   │   ├── shared/                    Transversal, sin conocer ningún dominio
 │   │   │   ├── api/                    client.ts (Axios + interceptores), errors.ts, types.ts
-│   │   │   ├── components/             Button, Input, Textarea, Select, Spinner, Alert, Card, Badge, Skeleton, EmptyState, Breadcrumb, Modal, ConfirmModal, DropdownMenu
+│   │   │   ├── components/             Button, Input, Textarea, Select, Spinner, Alert, Card, Badge, Skeleton, EmptyState, Breadcrumb, Modal, ConfirmModal, DropdownMenu, Dropzone, ProgressBar
 │   │   │   ├── guards/                 RequireAuth, RequireRole
 │   │   │   ├── lib/                    format.ts -- formatDateTime, formatCurrency (Intl nativo)
 │   │   │   ├── config/                 env.ts -- wrapper tipado de import.meta.env (+ wsBaseUrl derivado, Épica 4.6)
@@ -381,10 +384,18 @@ npm run lint           # oxlint
 
 ## Próximos pasos
 
-**Frontend** (según [docs/31-gestion-remates-lotes.md](docs/31-gestion-remates-lotes.md),
+**Frontend** (según [docs/32-gestion-multimedia-lotes.md](docs/32-gestion-multimedia-lotes.md),
 sobre lo agregado en este módulo, sin tocar nada de lo ya construido):
 
-- Subida real de imágenes para lotes y portada de remate (hoy, URL de texto).
+- Subida de video, PDF, certificados sanitarios y archivos técnicos sobre
+  `Lote.documents` (ya existente desde la Épica 2.2, sin consumidor todavía) -- mismo
+  patrón subida+`PATCH` que este módulo, sin rediseñar (ver ADR-035).
+- Storage externo (S3/Cloudinary) para las imágenes de lote, si el volumen lo
+  justificara (hoy, disco local -- ver ADR-035).
+- Limpieza de archivos huérfanos en disco (subidos pero nunca persistidos en ningún
+  lote, ver ADR-035, "Consecuencias").
+- Subida real de portada de remate (`Remate.cover_image_url`, hoy sigue siendo URL de
+  texto -- este módulo solo resolvió imágenes de lote).
 - Un endpoint de duplicación real en el backend, si el volumen de lotes por remate lo
   justificara (hoy se compone en el cliente con GET + POST secuencial, ver ADR-034).
 - "Cancelar lote" desde la Consola Operativa (`POST .../cancel`, ya expuesto por el
@@ -474,3 +485,7 @@ la arquitectura de snapshot + tiempo real ya construida):
 - [`docs/31-gestion-remates-lotes.md`](docs/31-gestion-remates-lotes.md) — Gestión
   completa de Remates y Lotes (Épica 5.3): flujo de creación/edición, reordenamiento
   con drag & drop, componentes reutilizables nuevos, checklist completo del módulo.
+- [`docs/32-gestion-multimedia-lotes.md`](docs/32-gestion-multimedia-lotes.md) — Gestión
+  multimedia de los lotes (Épica 6.1): brecha de backend documentada antes de
+  implementar, endpoint nuevo de subida a disco local, flujo de carga de archivos,
+  estructura de componentes, preparación para video/PDF/certificados sin rediseñar.

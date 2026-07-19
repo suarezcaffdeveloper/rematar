@@ -22,7 +22,7 @@ ADR-020) y se monta acá con una única línea de `include_router`.
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 
 from app.common.schemas import Page
 from app.modules.auth.dependencies import get_current_user
@@ -33,6 +33,7 @@ from app.modules.remates.lotes.schemas import (
     LoteCancelRequest,
     LoteCloseRequest,
     LoteCreate,
+    LoteImageUploadResponse,
     LoteRead,
     LoteReorderRequest,
     LoteUpdate,
@@ -146,6 +147,24 @@ async def delete_lote(
     service: Annotated[LoteService, Depends(get_lote_service)],
 ) -> None:
     await service.soft_delete(remate_id, lote_id, current_user)
+
+
+@router.post(
+    "/{lote_id}/images",
+    response_model=LoteImageUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Subir una imagen para un lote propio (Épica 6, Módulo 6.1)",
+)
+async def upload_lote_image(
+    remate_id: uuid.UUID,
+    lote_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[LoteService, Depends(get_lote_service)],
+    file: Annotated[UploadFile, File()],
+) -> LoteImageUploadResponse:
+    url = await service.upload_image(remate_id, lote_id, current_user, file, str(request.base_url))
+    return LoteImageUploadResponse(url=url)
 
 
 @router.post(

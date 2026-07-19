@@ -10,6 +10,7 @@ import { Textarea } from '../../../shared/components/Textarea';
 import { createLoteRequest, updateLoteRequest } from '../../remates/api';
 import { CATEGORY_LABELS, CATEGORY_OPTIONS, LOTE_STATUS_BADGE_VARIANTS, LOTE_STATUS_LABELS } from '../../remates/labels';
 import type { Lote } from '../../remates/types';
+import { LoteGalleryManager } from './LoteGalleryManager';
 import { PlusIcon, TrashIcon } from './icons';
 import {
   DEFAULT_LOTE_FORM_VALUES,
@@ -35,6 +36,13 @@ export interface LoteFormModalProps {
  * hay un `lote` en edición) pero no es editable acá: el backend no expone ninguna
  * transición vía `PATCH` (`docs/15-modulo-lote.md`) -- todo lote en un remate
  * `draft`/`scheduled` está siempre en `pending`, así que no hay nada que elegir.
+ *
+ * La galería de imágenes (Épica 6, Módulo 6.1, `LoteGalleryManager`) solo se muestra en
+ * modo edición: subir una imagen requiere un `lote_id` real (`POST .../lotes/{id}/
+ * images`), que todavía no existe mientras se está creando el lote -- ver
+ * docs/32-gestion-multimedia-lotes.md para la decisión completa. `currentLote` guarda la
+ * versión más reciente del lote dentro del modal para que la galería refleje sus propios
+ * cambios (subir/eliminar/reordenar) sin esperar a que el modal se cierre.
  */
 export function LoteFormModal({ isOpen, onClose, remateId, lote, onSaved }: LoteFormModalProps) {
   const isEditMode = Boolean(lote);
@@ -42,12 +50,14 @@ export function LoteFormModal({ isOpen, onClose, remateId, lote, onSaved }: Lote
   const [errors, setErrors] = useState<ReturnType<typeof validateLoteForm>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentLote, setCurrentLote] = useState<Lote | undefined>(lote);
 
   useEffect(() => {
     if (!isOpen) return;
     setValues(lote ? loteToFormValues(lote) : DEFAULT_LOTE_FORM_VALUES);
     setErrors({});
     setSubmitError(null);
+    setCurrentLote(lote);
   }, [isOpen, lote]);
 
   function setField<K extends keyof LoteFormValues>(field: K, value: LoteFormValues[K]) {
@@ -261,13 +271,23 @@ export function LoteFormModal({ isOpen, onClose, remateId, lote, onSaved }: Lote
           El precio de reserva nunca se muestra a los compradores -- solo lo ves vos.
         </p>
 
-        <Input
-          label="URL de imagen (opcional)"
-          type="url"
-          value={values.image_url}
-          onChange={(event) => setField('image_url', event.target.value)}
-          error={errors.image_url}
-        />
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">Imágenes</h3>
+          {currentLote ? (
+            <LoteGalleryManager
+              remateId={remateId}
+              lote={currentLote}
+              onChanged={(updated) => {
+                setCurrentLote(updated);
+                onSaved(updated);
+              }}
+            />
+          ) : (
+            <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+              Guardá el lote para poder agregarle imágenes.
+            </p>
+          )}
+        </div>
       </div>
     </Modal>
   );

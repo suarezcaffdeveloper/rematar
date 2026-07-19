@@ -34,13 +34,20 @@ os.environ.setdefault(
     "postgresql+asyncpg://rematar:rematar@127.0.0.1:5434/rematar_test",
 )
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production-use")
+# Directorio separado del `media/` real de desarrollo (Épica 6, Módulo 6.1) -- mismo
+# criterio que `rematar_test` para Postgres y la DB 1 de Redis: un recurso real y
+# aislado, no un mock, para no ensuciar las imágenes subidas en desarrollo con archivos
+# de test. Se limpia automáticamente después de cada test (ver `_clean_test_media`).
+os.environ.setdefault("MEDIA_ROOT", "media_test")
 # DB 1, no la 0 (desarrollo): mismo Redis, distinto namespace lógico, para no pisar datos
 # si corrés los tests y el backend de desarrollo contra el mismo Redis al mismo tiempo
 # (ver docs/18-integracion-redis.md). Puerto 6380: el mapeado por docker-compose.yml.
 os.environ.setdefault("REDIS_URL", "redis://127.0.0.1:6380/1")
 
-from collections.abc import AsyncIterator
+import shutil
+from collections.abc import AsyncIterator, Iterator
 
+import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
@@ -55,6 +62,14 @@ from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
+
+
+@pytest.fixture(autouse=True)
+def _clean_test_media() -> Iterator[None]:
+    """Borra `MEDIA_ROOT` (`media_test/`) después de cada test que suba una imagen
+    (Épica 6, Módulo 6.1) -- evita acumular archivos de test entre corridas."""
+    yield
+    shutil.rmtree(get_settings().MEDIA_ROOT, ignore_errors=True)
 
 
 @pytest_asyncio.fixture

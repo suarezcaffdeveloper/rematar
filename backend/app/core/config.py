@@ -78,6 +78,15 @@ class Settings(BaseSettings):
     FIRST_ADMIN_PASSWORD: str | None = None
     FIRST_ADMIN_FULL_NAME: str = "Administrador"
 
+    # --- Media: subida de imágenes de lote (Épica 6, Módulo 6.1) ---
+    # Disco local montado como volumen (ver docker-compose.yml, "./backend:/app") y
+    # servido vía StaticFiles (app/main.py) -- sin storage externo (S3/Cloudinary) en
+    # esta fase, ver docs/32-gestion-multimedia-lotes.md y ADR-035.
+    MEDIA_ROOT: str = "media"
+    MEDIA_URL_PREFIX: str = "/static"
+    MAX_IMAGE_UPLOAD_BYTES: int = 5 * 1024 * 1024
+    ALLOWED_IMAGE_CONTENT_TYPES: list[str] = ["image/jpeg", "image/png", "image/webp"]
+
 
 @lru_cache
 def get_settings() -> Settings:

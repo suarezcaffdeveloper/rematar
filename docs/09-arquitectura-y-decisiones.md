@@ -65,6 +65,7 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [032](adr/ADR-032-dashboard-rematador.md) | Dashboard del Rematador: extender `features/remates/` para el recurso, feature nuevo para la experiencia, sin botón "Pausar" | Aceptada |
 | [033](adr/ADR-033-consola-operativa-rematador.md) | Consola Operativa del Rematador: paneles propios en vez de extender los del comprador, y por qué no refrescar por HTTP después de una acción | Aceptada |
 | [034](adr/ADR-034-gestion-remates-lotes.md) | Gestión completa de Remates y Lotes: "programar"/"publicar" consolidados, duplicar compuesto en el cliente, drag & drop nativo con fallback obligatorio | Aceptada |
+| [035](adr/ADR-035-gestion-multimedia-lotes.md) | Gestión multimedia de lotes: endpoint nuevo de subida a disco local (brecha documentada antes de implementar), galería "viva" con PATCH inmediato, sin galería en modo creación | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -556,3 +557,44 @@ Detalle completo en [docs/31-gestion-remates-lotes.md](31-gestion-remates-lotes.
   publicación del remate, congelamiento de la estructura al pasar a estado en vivo,
   duplicado del remate completo, cancelación con motivo, eliminación de un borrador.
 - Cero cambios en `backend/` ni en la autenticación.
+
+## Épica 6, Módulo 6.1 — notas de arquitectura de la Gestión Multimedia de los Lotes
+
+Detalle completo en [docs/32-gestion-multimedia-lotes.md](32-gestion-multimedia-lotes.md)
+y [ADR-035](adr/ADR-035-gestion-multimedia-lotes.md). Resumen:
+
+- El backend no tenía ninguna capacidad de subida binaria (`Lote.images` era JSONB de
+  URLs de texto, sin storage propio, mismo alcance que `Remate.cover_image_url`) --
+  brecha documentada y presentada al usuario antes de escribir código (instrucción
+  explícita del enunciado: "documentarlo claramente antes de implementarlo").
+- Único endpoint nuevo de todo este módulo: `POST /remates/{id}/lotes/{lote_id}/images`
+  (multipart), valida Content-Type/tamaño, guarda a disco local
+  (`MEDIA_ROOT/lotes/{lote_id}/...`, dentro del volumen ya montado por
+  `docker-compose.yml`) y sirve vía `StaticFiles` (`/static`, mount nuevo en
+  `app/main.py`). Devuelve solo la URL -- no toca la fila del lote.
+- El array `images` se sigue persistiendo con el `PATCH .../lotes/{id}` ya existente
+  desde la Épica 2.2 (`LoteUpdate.images`), sin ningún cambio -- subir un archivo y
+  persistir el array son dos pasos deliberadamente separados (ver ADR-035, sección B),
+  para poder subir varios archivos en paralelo y armar un único `PATCH` final sin riesgo
+  de que dos actualizaciones concurrentes del mismo array JSONB se pisen entre sí.
+- Galería "viva": cada acción (subir, eliminar, reordenar, marcar principal) persiste de
+  inmediato con actualización optimista y revert-on-error, mismo patrón que el
+  reordenamiento de lotes de la Épica 5.3 (ADR-034) -- sin un botón "Guardar" propio de
+  la galería.
+- Reordenamiento con HTML5 Drag and Drop nativo (sin librería nueva) + flechas ‹ › como
+  fallback siempre visible, mismo criterio que ADR-034: HTML5 DnD no funciona en
+  pantallas táctiles.
+- Sin galería durante la creación de un lote (subir requiere un `lote_id` real que
+  todavía no existe) -- el modal muestra un aviso y la galería completa aparece de
+  inmediato al reabrir en modo edición, sin ningún paso de backend adicional.
+- Dos componentes genéricos nuevos en `shared/components/` (`Dropzone`, `ProgressBar`),
+  sin ningún conocimiento de imágenes ni de ningún dominio -- reutilizables tal cual el
+  día que se agregue subida de video/PDF/certificados sobre `Lote.documents` (ya
+  existente desde la Épica 2.2, sin consumidor todavía).
+- Verificado de punta a punta contra el backend real en Docker Compose: subida de
+  múltiples imágenes con progreso, selección de principal, reordenamiento por drag & drop
+  y por flechas (persistido tras recargar la página), eliminación con confirmación, y
+  rechazo de archivos con formato/tamaño inválido.
+- Único módulo hasta ahora, desde la fundación del frontend (Épica 4.1), que agrega un
+  endpoint nuevo al backend -- de forma puramente aditiva (ningún endpoint, schema ni
+  comportamiento existente cambia) y documentada como tal antes de implementarse.

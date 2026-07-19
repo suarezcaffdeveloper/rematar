@@ -67,10 +67,6 @@ describe('validateLoteForm', () => {
     expect(validateLoteForm(makeValues({ reserve_price: '' })).reserve_price).toBeUndefined();
   });
 
-  it('URL de imagen inválida', () => {
-    expect(validateLoteForm(makeValues({ image_url: 'no-es-una-url' }))).toHaveProperty('image_url');
-  });
-
   it('atributos con claves repetidas', () => {
     const result = validateLoteForm(
       makeValues({
@@ -104,14 +100,9 @@ describe('buildLoteFormPayload', () => {
     expect(payload.attributes?.edad_meses).toBe(18);
   });
 
-  it('sin URL de imagen, images queda vacío', () => {
-    const payload = buildLoteFormPayload(makeValues({ image_url: '' }));
-    expect(payload.images).toEqual([]);
-  });
-
-  it('con URL de imagen, arma un único elemento en images', () => {
-    const payload = buildLoteFormPayload(makeValues({ image_url: 'https://example.com/foto.jpg' }));
-    expect(payload.images).toEqual([{ url: 'https://example.com/foto.jpg', order: 0, caption: null }]);
+  it('no incluye "images" en el payload (se gestiona aparte, Épica 6, Módulo 6.1)', () => {
+    const payload = buildLoteFormPayload(makeValues());
+    expect(payload.images).toBeUndefined();
   });
 
   it('reserve_price vacío se manda como null', () => {
@@ -151,6 +142,5 @@ describe('loteToFormValues', () => {
 
     expect(values.peso_kg).toBe('480');
     expect(values.attributeRows).toEqual([{ key: 'raza', value: 'Angus' }]);
-    expect(values.image_url).toBe('https://example.com/a.jpg');
   });
 });
