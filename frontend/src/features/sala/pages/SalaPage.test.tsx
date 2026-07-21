@@ -76,6 +76,7 @@ function makeSnapshot(overrides: Partial<RemateStateSnapshot> = {}): RemateState
     winning_offer: null,
     recent_offers: [],
     connected_users: 3,
+    connected_users_detail: null,
     generated_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
@@ -94,6 +95,7 @@ function defaultLiveState(): UseLiveRemateStateResult {
     upcomingLotes: [],
     isUpcomingLotesLoading: false,
     connectionStatus: 'open',
+    subscribeToRealtime: () => () => {},
   };
 }
 
@@ -151,7 +153,8 @@ describe('SalaPage', () => {
     renderPage();
 
     expect(screen.getByRole('heading', { name: 'Remate de hacienda' })).toBeInTheDocument();
-    expect(screen.getByText('3 conectados')).toBeInTheDocument();
+    // Aparece dos veces: en SalaHeader y en el header del ChatPanel (ambos usan PresenceCounter).
+    expect(screen.getAllByText('3 conectados').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Conectado')).toBeInTheDocument();
     expect(screen.getByText('Toro Angus')).toBeInTheDocument();
     expect(screen.getByText('Comprador líder')).toBeInTheDocument();

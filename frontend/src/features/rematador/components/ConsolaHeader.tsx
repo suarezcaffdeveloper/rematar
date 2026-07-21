@@ -2,7 +2,8 @@ import { Badge } from '../../../shared/components/Badge';
 import { formatDateTime } from '../../../shared/lib/format';
 import type { ConnectionStatus } from '../../../shared/websocket/client';
 import { ConnectionStatusBadge } from '../../sala/components/ConnectionStatusBadge';
-import { CalendarIcon, ClockIcon, UsersIcon } from '../../remates/components/icons';
+import { PresenceCounter } from '../../sala/components/PresenceCounter';
+import { CalendarIcon, ClockIcon } from '../../remates/components/icons';
 import { STATUS_BADGE_VARIANTS, STATUS_LABELS } from '../../remates/labels';
 import type { Remate } from '../../remates/types';
 import { useElapsedTime } from '../hooks';
@@ -16,9 +17,10 @@ export interface ConsolaHeaderProps {
 /**
  * Cabecera de la Consola Operativa (Épica 5, Módulo 5.2): nombre, estado, fecha, tiempo
  * transcurrido y compradores conectados -- todo lo que un rematador necesita ver de un
- * vistazo mientras opera un remate en vivo. Reusa `ConnectionStatusBadge` de
- * `features/sala/` tal cual (componente puro, sin ninguna acción de comprador embebida)
- * en vez de duplicarlo -- mismo indicador que ya usa la Sala del Remate.
+ * vistazo mientras opera un remate en vivo. Reusa `ConnectionStatusBadge` y
+ * `PresenceCounter` de `features/sala/` tal cual (componentes puros, sin ninguna acción
+ * de comprador embebida) en vez de duplicarlos -- mismos indicadores que ya usa la Sala
+ * del Remate; `PresenceCounter` se actualiza en vivo (Épica 6, Módulo 6.2).
  */
 export function ConsolaHeader({ remate, connectedUsers, connectionStatus }: ConsolaHeaderProps) {
   const elapsed = useElapsedTime(remate);
@@ -46,10 +48,7 @@ export function ConsolaHeader({ remate, connectedUsers, connectionStatus }: Cons
             {elapsed}
           </span>
         )}
-        <span className="flex items-center gap-1.5 font-medium text-slate-700">
-          <UsersIcon className="h-4 w-4 shrink-0 text-slate-400" />
-          {connectedUsers} {connectedUsers === 1 ? 'conectado' : 'conectados'}
-        </span>
+        <PresenceCounter count={connectedUsers} />
       </div>
     </div>
   );

@@ -16,6 +16,24 @@ arranca acá como tarea de fondo después de que los tres managers de arriba exi
 necesita para poder repartir eventos) y se detiene primero en el shutdown, antes de
 cerrar `ConnectionManager`/Redis — para dejar de intentar mandar mensajes a sockets que
 están a punto de cerrarse.
+
+Un **segundo** `EventConsumer` (Épica 6, Módulo 6.4, ver docs/34-chat-del-remate.md y
+ADR-037) arranca en paralelo, con un dispatcher distinto
+(`ChatSystemEventDispatcher`): genera los mensajes de sistema del chat (inicio/pausa/
+reanudación de un remate, apertura/cierre de un lote) reaccionando a los mismos eventos
+de dominio que el primer consumidor ya reenvía a los clientes WS -- dos suscriptores
+independientes sobre el mismo patrón `events.*`, exactamente el uso normal de Redis
+Pub/Sub (múltiples suscriptores). Se arranca/detiene junto con el primero.
+
+Su `session_factory` se resuelve como `app.state.db_session_factory` si ya existe,
+`AsyncSessionLocal` (`app/db/session.py`) si no -- mismo criterio que `get_db` (que los
+tests ya sobreescriben vía `app.dependency_overrides`, ver `tests/conftest.py`): un
+consumidor de fondo no pasa por la inyección de dependencias de FastAPI, así que no
+puede reusar ese mecanismo, pero sí puede leer un `app.state` fijado por el test *antes*
+de entrar al `lifespan` -- evita que este consumidor, en tests, termine usando el
+`engine` de producción (atado a un event loop que pytest-asyncio cierra al terminar
+cada test, ver el docstring de `tests/conftest.py::ws_client` para el mismo problema ya
+resuelto ahí para `get_db`).
 """
 
 from collections.abc import AsyncIterator
@@ -31,9 +49,14 @@ from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
+from app.db.session import AsyncSessionLocal
+from app.events.redis_bus import RedisEventBus
+from app.modules.chat.realtime import ChatSystemEventDispatcher
 from app.realtime.consumer import EventConsumer
 from app.realtime.dispatcher import EventDispatcher
 from app.redis.client import build_redis_client
+from app.redis.pubsub import RedisPubSub
+from app.redis.rate_limit import RedisRateLimiter
 from app.websocket.close_codes import SERVER_SHUTTING_DOWN
 from app.websocket.manager import ConnectionManager
 from app.websocket.rooms import RoomManager
@@ -54,9 +77,25 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         retry_max_seconds=settings.REALTIME_CONSUMER_RETRY_MAX_SECONDS,
     )
     app.state.event_consumer.start()
+
+    chat_session_factory = getattr(app.state, "db_session_factory", None) or AsyncSessionLocal
+    chat_system_dispatcher = ChatSystemEventDispatcher(
+        chat_session_factory,
+        RedisEventBus(RedisPubSub(app.state.redis)),
+        RedisRateLimiter(app.state.redis),
+        settings,
+    )
+    app.state.chat_system_event_consumer = EventConsumer(
+        app.state.redis,
+        chat_system_dispatcher,
+        retry_base_seconds=settings.REALTIME_CONSUMER_RETRY_BASE_SECONDS,
+        retry_max_seconds=settings.REALTIME_CONSUMER_RETRY_MAX_SECONDS,
+    )
+    app.state.chat_system_event_consumer.start()
     try:
         yield
     finally:
+        await app.state.chat_system_event_consumer.stop()
         await app.state.event_consumer.stop()
         await app.state.connection_manager.close_all(
             code=SERVER_SHUTTING_DOWN, reason="El servidor se está apagando."

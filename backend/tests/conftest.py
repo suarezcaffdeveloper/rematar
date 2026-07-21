@@ -46,6 +46,7 @@ os.environ.setdefault("REDIS_URL", "redis://127.0.0.1:6380/1")
 
 import shutil
 from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
 
 import pytest
 import pytest_asyncio
@@ -107,6 +108,14 @@ async def client(db_engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
 
     app = create_app()
     app.dependency_overrides[get_db] = _override_get_db
+    # `ChatSystemEventDispatcher` (Épica 6, Módulo 6.4) no pasa por la inyección de
+    # dependencias de FastAPI (corre como tarea de fondo del `lifespan`, no dentro de un
+    # request) -- `app.dependency_overrides[get_db]` no lo alcanza. Fijar esto ANTES de
+    # entrar al `lifespan` es lo que le permite a `app/main.py` usar el mismo
+    # `session_factory` de este test en vez del `engine` de producción (atado a un event
+    # loop que este test cierra al terminar -- mismo problema que ya resuelve
+    # `_override_get_db` de acá arriba, ver también `ws_client` más abajo).
+    app.state.db_session_factory = session_factory
 
     # `ASGITransport` no dispara el protocolo de `lifespan` de ASGI por sí solo (a
     # diferencia de un servidor real como uvicorn) — sin esto, `app.state.redis` nunca
@@ -148,8 +157,20 @@ async def ws_client(db_engine: AsyncEngine) -> AsyncIterator[TestClient]:
             yield session
         await engine.dispose()
 
+    @asynccontextmanager
+    async def _chat_session_factory() -> AsyncIterator[AsyncSession]:
+        # Mismo problema que `_override_get_db` de acá arriba, para el mismo consumidor
+        # de fondo descripto en `client` (`ChatSystemEventDispatcher`, Épica 6, Módulo
+        # 6.4): una conexión nueva por uso, nunca el `AsyncEngine` de `db_engine`.
+        engine = create_async_engine(database_url)
+        session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+        async with session_factory() as session:
+            yield session
+        await engine.dispose()
+
     app = create_app()
     app.dependency_overrides[get_db] = _override_get_db
+    app.state.db_session_factory = _chat_session_factory
 
     with TestClient(app) as test_client:
         yield test_client

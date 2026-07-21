@@ -228,9 +228,14 @@ tira simplemente muestra su esqueleto mientras carga, ver `SalaPage.tsx`).
 
 ## Trabajo futuro (fuera de alcance de este módulo)
 
-- Cliente WebSocket + `useLiveRemateState` (ver "Preparación para WebSockets" arriba).
+- ~~Cliente WebSocket + `useLiveRemateState`~~ (ver "Preparación para WebSockets"
+  arriba) -- implementado en el Módulo 4.6, ver
+  [28-websocket-tiempo-real-sala.md](28-websocket-tiempo-real-sala.md).
 - Formulario real de "Realizar oferta", con validación del incremento mínimo.
-- Chat, presencia detallada (quién específicamente está conectado, no solo un número),
-  video y streaming.
+- ~~Chat~~ -- implementado en el Módulo 6.4, ver
+  [34-chat-del-remate.md](34-chat-del-remate.md). ~~Presencia detallada (quién
+  específicamente está conectado, no solo un número)~~ -- implementado en el Módulo
+  6.2, ver [33-sistema-de-presencia.md](33-sistema-de-presencia.md). Video y streaming
+  siguen sin implementar.
 - Endpoint de backend para un perfil público del rematador (mismo pendiente que
   ADR-028/ADR-029).

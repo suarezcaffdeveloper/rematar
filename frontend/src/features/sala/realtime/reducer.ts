@@ -142,6 +142,34 @@ export function applyDomainEventToSnapshot(
         ),
       };
 
+    case 'presencia.usuario_conectado': {
+      const detail = snapshot.connected_users_detail;
+      // `null` para un viewer no privilegiado (enmascarado por el backend) -- se
+      // mantiene `null`, solo cambia el conteo. Indexado por `connection_id`, no por
+      // `user_id`: dos pestañas del mismo usuario son dos conexiones distintas.
+      const nextDetail =
+        detail === null
+          ? null
+          : detail.some((entry) => entry.connection_id === event.connection_id)
+            ? detail
+            : [
+                ...detail,
+                {
+                  connection_id: event.connection_id,
+                  user_id: event.user_id,
+                  connected_at: event.occurred_at,
+                },
+              ];
+      return { ...snapshot, connected_users: event.connected_users, connected_users_detail: nextDetail };
+    }
+
+    case 'presencia.usuario_desconectado': {
+      const detail = snapshot.connected_users_detail;
+      const nextDetail =
+        detail === null ? null : detail.filter((entry) => entry.connection_id !== event.connection_id);
+      return { ...snapshot, connected_users: event.connected_users, connected_users_detail: nextDetail };
+    }
+
     // `oferta.placed`: el resultado definitivo llega vía `oferta.accepted`/
     // `oferta.rejected` -- no muta el snapshot por sí solo.
     // `oferta.rejected`: en este módulo `PlaceBidButton` sigue deshabilitado, así que

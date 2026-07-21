@@ -201,14 +201,11 @@ adivinar si lo que ve está actualizado.
 
 ## Limitaciones conocidas (documentadas, no huecos)
 
-- **`connected_users` no se actualiza evento a evento.** El backend todavía no publica
-  presencia en tiempo real (`docs/20-gateway-websocket.md`, `docs/21-sistema-de-salas.md`,
-  "Qué NO se implementa"/"Qué queda para el módulo de salas": presencia sigue pendiente).
-  El número se actualiza en cada reconexión (nuevo `snapshot`, que sí recalcula
-  `RoomManager.connection_count`), pero no en vivo mientras la conexión sigue abierta.
-  Agregar polling para esto contradiría la misma decisión que ya tomó ADR-030, sección C
-  ("sin polling, una sola carga") — se prefiere ser honesto sobre la limitación a simular
-  tiempo real a medias.
+- ~~`connected_users` no se actualiza evento a evento.~~ **Resuelto en el Módulo 6.2**:
+  el backend ahora publica `presencia.usuario_conectado`/`desconectado` en tiempo real
+  (`PresenceService`, `app/presence/`), y `SalaHeader`/`ConsolaHeader` los reflejan en
+  vivo vía `PresenceCounter`, sin polling — ver
+  [33-sistema-de-presencia.md](33-sistema-de-presencia.md).
 - **La ventana entre el snapshot HTTP inicial y el snapshot por WebSocket.** `SalaPage`
   pinta con el snapshot HTTP (rápido, sin esperar el handshake) y lo reemplaza apenas
   llega el snapshot por WebSocket -- un evento ocurrido en esa ventana breve se recibe de
@@ -251,8 +248,11 @@ adivinar si lo que ve está actualizado.
 
 - Formulario real de "Realizar oferta" (`PlaceBidButton` sigue aislado para esto), que
   además podría usar `oferta.rejected` para notificar al propio emisor.
-- Chat por sala, presencia detallada (quién específicamente está conectado), video y
-  streaming -- todos construibles sobre `shared/websocket/client.ts` sin modificarlo
-  (ver "Preparado para Chat/Presencia/Notificaciones/Streaming" arriba).
-- Presencia en tiempo real de `connected_users` (requiere que el backend publique
-  `presencia.usuario_conectado`/`desconectado`, ver "Limitaciones conocidas").
+- ~~Chat por sala~~ -- implementado en el Módulo 6.4, ver
+  [34-chat-del-remate.md](34-chat-del-remate.md); reutilizó `subscribeToRealtime`
+  sobre el mismo `WebSocketClient` de `shared/websocket/client.ts`, sin modificarlo,
+  tal como anticipaba "Preparado para Chat/Presencia/Notificaciones/Streaming" arriba.
+- Video y streaming -- todavía sin implementar.
+- ~~Presencia en tiempo real de `connected_users`~~ y ~~presencia detallada (quién
+  específicamente está conectado)~~ — implementado en el Módulo 6.2, ver
+  [33-sistema-de-presencia.md](33-sistema-de-presencia.md).

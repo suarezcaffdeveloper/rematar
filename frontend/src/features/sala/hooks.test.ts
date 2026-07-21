@@ -132,6 +132,7 @@ function makeSnapshot(overrides: Partial<RemateStateSnapshot> = {}): RemateState
     winning_offer: null,
     recent_offers: [],
     connected_users: 0,
+    connected_users_detail: null,
     generated_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };

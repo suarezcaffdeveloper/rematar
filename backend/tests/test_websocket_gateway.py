@@ -13,6 +13,7 @@ compartida `ws_client`.
 
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import (
@@ -48,8 +49,21 @@ def _build_ws_app(db_engine: AsyncEngine, **settings_overrides: float):
             yield session
         await engine.dispose()
 
+    @asynccontextmanager
+    async def _chat_session_factory() -> AsyncIterator[AsyncSession]:
+        # Mismo problema que `_override_get_db` de acá arriba, para
+        # `ChatSystemEventDispatcher` (Épica 6, Módulo 6.4, ver `tests/conftest.py`,
+        # docstring de `client`) -- ese consumidor de fondo no pasa por
+        # `app.dependency_overrides`.
+        engine = create_async_engine(database_url)
+        session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+        async with session_factory() as session:
+            yield session
+        await engine.dispose()
+
     app = create_app()
     app.dependency_overrides[get_db] = _override_get_db
+    app.state.db_session_factory = _chat_session_factory
 
     if settings_overrides:
         base_settings = get_settings()
@@ -69,6 +83,34 @@ def _register_and_login(client: TestClient, *, email: str, role: str = "comprado
     return login.json()["access_token"]
 
 
+# Prefijos de `event_type` que corresponden a canales "laterales" (Épica 6): eventos
+# que un `join_room`/una transición de remate dispara de forma asíncrona, además de los
+# mensajes de protocolo o de dominio que cada test de esta sección puntualmente espera.
+# Presencia (Módulo 6.2) y Chat (Módulo 6.4, sus mensajes de sistema reaccionan a los
+# mismos `remate.*`/`lote.*` que estos tests publican) son, ambos, ruido acá.
+_SIDE_CHANNEL_EVENT_PREFIXES = ("presencia.", "chat.")
+
+
+def _receive_protocol_message(websocket) -> dict:
+    """`receive_json()` que descarta cualquier `domain_event` de un canal lateral
+    (presencia, chat -- ver `_SIDE_CHANNEL_EVENT_PREFIXES`) que llegue intercalado. Un
+    `join_room`/`leave_room` real publica su propio evento de presencia de forma
+    asíncrona (Redis Pub/Sub -> Event Consumer -> Event Dispatcher, sin cambios), y una
+    transición de remate/lote dispara además un mensaje de sistema de chat -- ninguno de
+    los dos tiene garantía de en qué punto exacto, relativo a los mensajes de protocolo
+    que el Gateway ya manda de forma síncrona (`connected`/`room_joined`/`snapshot`/
+    `error`/`room_left`/`ping`), termina de entregarse. A los tests de esta sección les
+    importa la mecánica del Gateway/salas/snapshot, no presencia ni chat (que tienen sus
+    propias secciones) -- filtra el ruido en vez de asumir un orden fijo entre caminos."""
+    while True:
+        message = websocket.receive_json()
+        is_side_channel_event = message.get("type") == "domain_event" and str(
+            message.get("event_type", "")
+        ).startswith(_SIDE_CHANNEL_EVENT_PREFIXES)
+        if not is_side_channel_event:
+            return message
+
+
 def _drain_join_room_extras(websocket) -> dict:
     """Después de `room_joined`, el Gateway manda un `snapshot` (o, si el `remate_id`
     no corresponde a un remate real, un `error/snapshot_unavailable` -- Módulo 3.6, ver
@@ -77,7 +119,7 @@ def _drain_join_room_extras(websocket) -> dict:
     dominio, ver ADR-024 sección D) -- este helper consume ese mensaje extra sin
     asumir cuál de los dos llega, para no romper el orden de los `receive_json()`
     siguientes."""
-    return websocket.receive_json()
+    return _receive_protocol_message(websocket)
 
 
 # --- Autenticación -------------------------------------------------------------------
@@ -261,7 +303,7 @@ async def test_join_room_creates_room_and_confirms(ws_client: TestClient) -> Non
         websocket.receive_json()  # connected
 
         websocket.send_json({"type": "join_room", "remate_id": str(remate_id)})
-        response = websocket.receive_json()
+        response = _receive_protocol_message(websocket)
 
         assert response == {"schema_version": 1, "type": "room_joined", "remate_id": str(remate_id)}
         assert room_manager.room_count() == 1
@@ -298,7 +340,7 @@ async def test_join_room_already_in_another_room_returns_error(ws_client: TestCl
         _drain_join_room_extras(websocket)  # snapshot o snapshot_unavailable
 
         websocket.send_json({"type": "join_room", "remate_id": str(room_b)})
-        response = websocket.receive_json()
+        response = _receive_protocol_message(websocket)
 
         assert response["type"] == "error"
         assert response["code"] == ERROR_ALREADY_IN_ROOM
@@ -318,10 +360,10 @@ async def test_rejoining_same_room_is_idempotent_over_the_wire(ws_client: TestCl
         websocket.receive_json()  # connected
 
         websocket.send_json({"type": "join_room", "remate_id": str(remate_id)})
-        first = websocket.receive_json()
+        first = _receive_protocol_message(websocket)
         _drain_join_room_extras(websocket)  # snapshot o snapshot_unavailable
         websocket.send_json({"type": "join_room", "remate_id": str(remate_id)})
-        second = websocket.receive_json()
+        second = _receive_protocol_message(websocket)
 
         assert first == second
         assert first["type"] == "room_joined"
@@ -340,7 +382,7 @@ async def test_leave_room_confirms_and_removes_connection(ws_client: TestClient)
         _drain_join_room_extras(websocket)  # snapshot o snapshot_unavailable
 
         websocket.send_json({"type": "leave_room"})
-        response = websocket.receive_json()
+        response = _receive_protocol_message(websocket)
 
         assert response == {"schema_version": 1, "type": "room_left", "remate_id": str(remate_id)}
         assert room_manager.room_count() == 0
@@ -373,10 +415,10 @@ async def test_leave_then_join_a_different_room_succeeds(ws_client: TestClient) 
         _drain_join_room_extras(websocket)  # snapshot o snapshot_unavailable
 
         websocket.send_json({"type": "leave_room"})
-        websocket.receive_json()  # room_left
+        _receive_protocol_message(websocket)  # room_left
 
         websocket.send_json({"type": "join_room", "remate_id": str(room_b)})
-        response = websocket.receive_json()
+        response = _receive_protocol_message(websocket)
 
         assert response == {"schema_version": 1, "type": "room_joined", "remate_id": str(room_b)}
 
@@ -475,7 +517,7 @@ async def test_heartbeat_after_joining_a_room_does_not_break_room_membership(
             websocket.receive_json()  # room_joined
             _drain_join_room_extras(websocket)  # snapshot o snapshot_unavailable
 
-            ping = websocket.receive_json()
+            ping = _receive_protocol_message(websocket)
             assert ping["type"] == "ping"
             websocket.send_json({"type": "pong"})
 
@@ -561,8 +603,8 @@ async def test_join_room_sends_snapshot_right_after_room_joined(ws_client: TestC
     buyer_token = _register_and_login(ws_client, email="snapws1-buyer@example.com")
     websocket = _connect_join(ws_client, buyer_token, remate["id"])
     try:
-        joined = websocket.receive_json()
-        snapshot_msg = websocket.receive_json()
+        joined = _receive_protocol_message(websocket)
+        snapshot_msg = _receive_protocol_message(websocket)
 
         assert joined["type"] == "room_joined"
         assert snapshot_msg["type"] == "snapshot"
@@ -589,8 +631,8 @@ async def test_snapshot_includes_winning_offer_and_history_over_ws(ws_client: Te
 
     websocket = _connect_join(ws_client, buyer_token, remate["id"])
     try:
-        websocket.receive_json()  # room_joined
-        snapshot_msg = websocket.receive_json()
+        _receive_protocol_message(websocket)  # room_joined
+        snapshot_msg = _receive_protocol_message(websocket)
 
         data = snapshot_msg["data"]
         assert data["winning_offer"]["amount"] == "1200.00"
@@ -611,10 +653,10 @@ async def test_snapshot_masks_reserve_price_for_non_owner_over_ws(ws_client: Tes
     owner_ws = _connect_join(ws_client, owner_token, remate["id"])
     buyer_ws = _connect_join(ws_client, buyer_token, remate["id"])
     try:
-        owner_ws.receive_json()  # room_joined
-        owner_snapshot = owner_ws.receive_json()
-        buyer_ws.receive_json()  # room_joined
-        buyer_snapshot = buyer_ws.receive_json()
+        _receive_protocol_message(owner_ws)  # room_joined
+        owner_snapshot = _receive_protocol_message(owner_ws)
+        _receive_protocol_message(buyer_ws)  # room_joined
+        buyer_snapshot = _receive_protocol_message(buyer_ws)
 
         assert owner_snapshot["data"]["active_lote"]["reserve_price"] == "9999.00"
         assert buyer_snapshot["data"]["active_lote"]["reserve_price"] is None
@@ -634,8 +676,8 @@ async def test_join_room_for_nonexistent_remate_sends_snapshot_unavailable_error
         websocket.receive_json()  # connected
         websocket.send_json({"type": "join_room", "remate_id": str(fake_remate_id)})
 
-        joined = websocket.receive_json()
-        error = websocket.receive_json()
+        joined = _receive_protocol_message(websocket)
+        error = _receive_protocol_message(websocket)
 
         # El join a la sala en sí no se deshace ni falla -- ADR-024 sección D ya
         # decidió que RoomManager no valida contra el dominio; ADR-026 lo respeta y
@@ -664,16 +706,223 @@ async def test_snapshot_connected_users_reflects_current_room_size(ws_client: Te
 
     ws_1 = _connect_join(ws_client, buyer_1_token, remate["id"])
     try:
-        ws_1.receive_json()  # room_joined
-        first_snapshot = ws_1.receive_json()
+        _receive_protocol_message(ws_1)  # room_joined
+        first_snapshot = _receive_protocol_message(ws_1)
         assert first_snapshot["data"]["connected_users"] == 1
 
         ws_2 = _connect_join(ws_client, buyer_2_token, remate["id"])
         try:
-            ws_2.receive_json()  # room_joined
-            second_snapshot = ws_2.receive_json()
+            _receive_protocol_message(ws_2)  # room_joined
+            second_snapshot = _receive_protocol_message(ws_2)
             assert second_snapshot["data"]["connected_users"] == 2
         finally:
             ws_2.__exit__(None, None, None)
     finally:
         ws_1.__exit__(None, None, None)
+
+
+# --- Presencia (Épica 6, Módulo 6.2) ----------------------------------------------------
+
+
+def _receive_domain_event(websocket, event_type: str, *, matching: dict | None = None) -> dict:
+    """Sigue leyendo del socket hasta encontrar un `domain_event` del `event_type`
+    pedido (y, si se pasa `matching`, cuyo `payload` coincida en esos campos) --
+    razonamiento inverso al de `_receive_protocol_message`: acá SÍ nos interesa el
+    evento de presencia, pero puede llegar detrás de otro (por ejemplo, el propio
+    `presencia.usuario_conectado` de esta misma conexión, que puede seguir sin leerse en
+    la cola). No hay timeout: se asume que Redis (local, en Docker) entrega de forma
+    confiable, igual que el resto de la suite (`test_realtime_sync.py`)."""
+    while True:
+        message = websocket.receive_json()
+        if message.get("type") != "domain_event" or message.get("event_type") != event_type:
+            continue
+        if matching and any(message["payload"].get(k) != v for k, v in matching.items()):
+            continue
+        return message
+
+
+async def test_join_room_broadcasts_presence_connected_to_existing_room_members(
+    ws_client: TestClient,
+) -> None:
+    token_a = _register_and_login(ws_client, email="presence1a@example.com")
+    token_b = _register_and_login(ws_client, email="presence1b@example.com")
+    remate_id = uuid.uuid4()
+
+    with ws_client.websocket_connect(WS_URL) as ws_a:
+        ws_a.send_json({"type": "auth", "token": token_a})
+        ws_a.receive_json()  # connected
+        ws_a.send_json({"type": "join_room", "remate_id": str(remate_id)})
+        _receive_protocol_message(ws_a)  # room_joined
+        _drain_join_room_extras(ws_a)  # snapshot o snapshot_unavailable
+
+        with ws_client.websocket_connect(WS_URL) as ws_b:
+            ws_b.send_json({"type": "auth", "token": token_b})
+            connected_b = ws_b.receive_json()
+            ws_b.send_json({"type": "join_room", "remate_id": str(remate_id)})
+            _receive_protocol_message(ws_b)  # room_joined
+            _drain_join_room_extras(ws_b)  # snapshot o snapshot_unavailable
+
+            event = _receive_domain_event(
+                ws_a,
+                "presencia.usuario_conectado",
+                matching={"connection_id": connected_b["connection_id"]},
+            )
+
+            assert event["remate_id"] == str(remate_id)
+            assert event["payload"]["user_id"] == connected_b["user_id"]
+            assert event["payload"]["connected_users"] == 2
+
+
+async def test_idempotent_rejoin_does_not_broadcast_a_second_presence_event(
+    ws_client: TestClient,
+) -> None:
+    observer_token = _register_and_login(ws_client, email="presence2-observer@example.com")
+    actor_token = _register_and_login(ws_client, email="presence2-actor@example.com")
+    remate_id = uuid.uuid4()
+
+    with ws_client.websocket_connect(WS_URL) as observer:
+        observer.send_json({"type": "auth", "token": observer_token})
+        observer.receive_json()  # connected
+        observer.send_json({"type": "join_room", "remate_id": str(remate_id)})
+        _receive_protocol_message(observer)  # room_joined
+        _drain_join_room_extras(observer)  # snapshot o snapshot_unavailable
+
+        with ws_client.websocket_connect(WS_URL) as actor:
+            actor.send_json({"type": "auth", "token": actor_token})
+            connected_actor = actor.receive_json()
+            actor.send_json({"type": "join_room", "remate_id": str(remate_id)})
+            _receive_protocol_message(actor)  # room_joined
+            _drain_join_room_extras(actor)  # snapshot o snapshot_unavailable
+
+            _receive_domain_event(
+                observer,
+                "presencia.usuario_conectado",
+                matching={"connection_id": connected_actor["connection_id"]},
+            )
+
+            # Re-join idempotente a la misma sala -- no debería generar un segundo
+            # evento de presencia (ver PresenceService.join_room).
+            actor.send_json({"type": "join_room", "remate_id": str(remate_id)})
+            rejoin_response = _receive_protocol_message(actor)
+            assert rejoin_response["type"] == "room_joined"
+
+            # Verificado con el próximo evento real que sí ocurre (leave), que llega
+            # con connected_users == 1: si el re-join hubiera publicado de nuevo, el
+            # contador de un segundo "conectado" habría quedado en un estado
+            # inconsistente antes de este leave.
+            actor.send_json({"type": "leave_room"})
+            leave_event = _receive_domain_event(
+                observer,
+                "presencia.usuario_desconectado",
+                matching={"connection_id": connected_actor["connection_id"]},
+            )
+            assert leave_event["payload"]["connected_users"] == 1
+
+
+async def test_leave_room_broadcasts_presence_disconnected_to_remaining_room_members(
+    ws_client: TestClient,
+) -> None:
+    token_a = _register_and_login(ws_client, email="presence3a@example.com")
+    token_b = _register_and_login(ws_client, email="presence3b@example.com")
+    remate_id = uuid.uuid4()
+
+    with ws_client.websocket_connect(WS_URL) as ws_a:
+        ws_a.send_json({"type": "auth", "token": token_a})
+        ws_a.receive_json()  # connected
+        ws_a.send_json({"type": "join_room", "remate_id": str(remate_id)})
+        _receive_protocol_message(ws_a)  # room_joined
+        _drain_join_room_extras(ws_a)  # snapshot o snapshot_unavailable
+
+        with ws_client.websocket_connect(WS_URL) as ws_b:
+            ws_b.send_json({"type": "auth", "token": token_b})
+            connected_b = ws_b.receive_json()
+            ws_b.send_json({"type": "join_room", "remate_id": str(remate_id)})
+            _receive_protocol_message(ws_b)  # room_joined
+            _drain_join_room_extras(ws_b)  # snapshot o snapshot_unavailable
+            _receive_domain_event(
+                ws_a,
+                "presencia.usuario_conectado",
+                matching={"connection_id": connected_b["connection_id"]},
+            )
+
+            ws_b.send_json({"type": "leave_room"})
+            _receive_protocol_message(ws_b)  # room_left
+
+            event = _receive_domain_event(
+                ws_a,
+                "presencia.usuario_desconectado",
+                matching={"connection_id": connected_b["connection_id"]},
+            )
+            assert event["payload"]["connected_users"] == 1
+
+
+async def test_client_disconnect_without_leave_room_broadcasts_presence_disconnected(
+    ws_client: TestClient,
+) -> None:
+    """Cubre el `finally` del endpoint principal (`app/websocket/router.py`) -- una
+    desconexión abrupta (cierre de pestaña, red caída) también debe avisar a la sala,
+    no solo un `leave_room` explícito."""
+    token_a = _register_and_login(ws_client, email="presence4a@example.com")
+    token_b = _register_and_login(ws_client, email="presence4b@example.com")
+    remate_id = uuid.uuid4()
+
+    with ws_client.websocket_connect(WS_URL) as ws_a:
+        ws_a.send_json({"type": "auth", "token": token_a})
+        ws_a.receive_json()  # connected
+        ws_a.send_json({"type": "join_room", "remate_id": str(remate_id)})
+        _receive_protocol_message(ws_a)  # room_joined
+        _drain_join_room_extras(ws_a)  # snapshot o snapshot_unavailable
+
+        with ws_client.websocket_connect(WS_URL) as ws_b:
+            ws_b.send_json({"type": "auth", "token": token_b})
+            connected_b = ws_b.receive_json()
+            ws_b.send_json({"type": "join_room", "remate_id": str(remate_id)})
+            _receive_protocol_message(ws_b)  # room_joined
+            _drain_join_room_extras(ws_b)  # snapshot o snapshot_unavailable
+            _receive_domain_event(
+                ws_a,
+                "presencia.usuario_conectado",
+                matching={"connection_id": connected_b["connection_id"]},
+            )
+            # ws_b se desconecta acá (fin del `with` interno), sin mandar `leave_room`.
+
+        event = _receive_domain_event(
+            ws_a,
+            "presencia.usuario_desconectado",
+            matching={"connection_id": connected_b["connection_id"]},
+        )
+        assert event["payload"]["connected_users"] == 1
+
+
+async def test_snapshot_connected_users_detail_present_for_owner_masked_for_buyer_over_ws(
+    ws_client: TestClient,
+) -> None:
+    owner_token = _register_owner(ws_client, "presence5-owner@example.com")
+    remate = _create_remate(ws_client, owner_token)
+    schedule = ws_client.post(
+        f"{REMATES_URL}/{remate['id']}/schedule",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert schedule.status_code == 200, schedule.text
+
+    buyer_token = _register_and_login(ws_client, email="presence5-buyer@example.com")
+
+    owner_ws = _connect_join(ws_client, owner_token, remate["id"])
+    try:
+        _receive_protocol_message(owner_ws)  # room_joined
+        owner_snapshot = _receive_protocol_message(owner_ws)
+
+        assert owner_snapshot["data"]["connected_users_detail"] is not None
+        assert len(owner_snapshot["data"]["connected_users_detail"]) == 1
+
+        buyer_ws = _connect_join(ws_client, buyer_token, remate["id"])
+        try:
+            _receive_protocol_message(buyer_ws)  # room_joined
+            buyer_snapshot = _receive_protocol_message(buyer_ws)
+
+            assert buyer_snapshot["data"]["connected_users"] == 2
+            assert buyer_snapshot["data"]["connected_users_detail"] is None
+        finally:
+            buyer_ws.__exit__(None, None, None)
+    finally:
+        owner_ws.__exit__(None, None, None)

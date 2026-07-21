@@ -76,6 +76,7 @@ function makeSnapshot(overrides: Partial<RemateStateSnapshot> = {}): RemateState
     winning_offer: null,
     recent_offers: [],
     connected_users: 4,
+    connected_users_detail: null,
     generated_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
@@ -94,6 +95,7 @@ function defaultLiveState(): UseLiveRemateStateResult {
     upcomingLotes: [],
     isUpcomingLotesLoading: false,
     connectionStatus: 'open',
+    subscribeToRealtime: () => () => {},
   };
 }
 
@@ -162,5 +164,26 @@ describe('ConsolaOperativaPage', () => {
     renderPage();
     // Aparece dos veces: en el breadcrumb y en el <h1> de ConsolaHeader.
     expect(screen.getAllByText('Remate de hacienda').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('con connected_users_detail (viewer privilegiado), muestra la lista de conectados', () => {
+    mockLiveState({
+      snapshot: makeSnapshot({
+        connected_users_detail: [
+          { connection_id: 'conn-1', user_id: 'user-abcdefgh', connected_at: '2026-07-01T10:00:00Z' },
+        ],
+      }),
+    });
+
+    renderPage();
+
+    expect(screen.getByText('Conectados ahora')).toBeInTheDocument();
+    expect(screen.getByText('Usuario #user-abc')).toBeInTheDocument();
+  });
+
+  it('sin connected_users_detail (comprador, o viewer sin snapshot enmascarado), no muestra la lista', () => {
+    mockLiveState({ snapshot: makeSnapshot({ connected_users_detail: null }) });
+    renderPage();
+    expect(screen.queryByText('Conectados ahora')).not.toBeInTheDocument();
   });
 });

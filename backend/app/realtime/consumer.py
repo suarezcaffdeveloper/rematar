@@ -1,5 +1,6 @@
-"""Event Consumer: escucha Redis Pub/Sub y alimenta al `EventDispatcher` (Épica 3,
-Módulo 3.5). Ver docs/22-sincronizacion-tiempo-real.md y ADR-025.
+"""Event Consumer: escucha Redis Pub/Sub y alimenta a un dispatcher (Épica 3, Módulo
+3.5; generalizado en la Épica 6, Módulo 6.4). Ver docs/22-sincronizacion-tiempo-real.md,
+docs/34-chat-del-remate.md, ADR-025 y ADR-037.
 
 Usa el cliente Redis compartido (`app.state.redis`, Módulo 3.1) directamente — no pasa
 por `RedisPubSub` (`app/redis/pubsub.py`, Módulo 3.1) porque esa clase solo expone
@@ -7,19 +8,34 @@ suscripción a canales exactos y acá hace falta un patrón (`events.*`, un úni
 suscriptor para todos los remates en vez de una suscripción por sala). Es una lectura
 adicional de la misma conexión compartida, no una reestructuración de la infraestructura
 de Redis existente.
+
+`Dispatcher` es un `Protocol` (PEP 544), no la clase concreta `EventDispatcher` — desde
+el Módulo 6.4, `app/main.py` instancia un **segundo** `EventConsumer` (independiente del
+que ya reenvía eventos a los clientes WS) con un dispatcher distinto
+(`ChatSystemEventDispatcher`, `app/modules/chat/realtime.py`) para generar mensajes de
+sistema del chat — mismo mecanismo de suscripción y reconexión, sin duplicar ese código
+(ADR-025, sección "Consecuencias", ya anticipaba: "cada uno [Chat/Notificaciones/
+Presencia] agrega su propio consumidor/dispatcher"). Relajar el tipo no cambió ningún
+comportamiento: `EventConsumer` solo llama `dispatcher.dispatch(...)`, nunca inspeccionó
+nada propio de `EventDispatcher` — de hecho, `tests/test_realtime_consumer.py` ya
+pasaba un dispatcher de prueba que no hereda de `EventDispatcher`, solo implementa
+`dispatch`, así que esto ya funcionaba por duck typing antes de formalizarse acá.
 """
 
 import asyncio
 import contextlib
+from typing import Protocol
 
 import structlog
 from redis.asyncio import Redis
 
-from app.realtime.dispatcher import EventDispatcher
-
 logger = structlog.get_logger(__name__)
 
 DEFAULT_PATTERN = "events.*"
+
+
+class Dispatcher(Protocol):
+    async def dispatch(self, raw_payload: str | bytes) -> None: ...
 
 
 class EventConsumer:
@@ -33,7 +49,7 @@ class EventConsumer:
     def __init__(
         self,
         redis: Redis,
-        dispatcher: EventDispatcher,
+        dispatcher: Dispatcher,
         *,
         pattern: str = DEFAULT_PATTERN,
         retry_base_seconds: float = 1.0,

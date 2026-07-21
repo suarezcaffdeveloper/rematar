@@ -33,6 +33,20 @@ export interface OfertaSnapshotEntry {
 }
 
 /**
+ * `ConnectedUserSummary` -- `backend/app/presence/schemas.py` (Épica 6, Módulo 6.2).
+ * `null` en `RemateStateSnapshot.connected_users_detail` para cualquier viewer que no
+ * sea dueño del remate ni admin (enmascarado por `SnapshotService`, mismo criterio que
+ * `reserve_price`/`buyer_id`) -- no incluye nombre/email, `PresenceService` nunca
+ * conoció `app.modules.users` (ver docs/33-sistema-de-presencia.md, "Limitaciones
+ * conocidas").
+ */
+export interface ConnectedUserSummary {
+  connection_id: string;
+  user_id: string;
+  connected_at: string;
+}
+
+/**
  * `RemateStateSnapshot` -- `backend/app/snapshot/schemas.py`. Es la forma que hoy llena
  * `useRemateSnapshot` con una única llamada HTTP (`GET /remates/{id}/snapshot`) y que,
  * en un módulo futuro, un cliente WebSocket va a mantener actualizada con el mismo
@@ -45,5 +59,6 @@ export interface RemateStateSnapshot {
   winning_offer: OfertaSnapshotEntry | null;
   recent_offers: OfertaSnapshotEntry[];
   connected_users: number;
+  connected_users_detail: ConnectedUserSummary[] | null;
   generated_at: string;
 }

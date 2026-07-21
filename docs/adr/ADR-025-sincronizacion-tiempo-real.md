@@ -190,3 +190,15 @@ mensaje del canal si la falla fue de interpretación del evento.
   tocar el Auction Engine — ver la sección correspondiente de
   [22-sincronizacion-tiempo-real.md](../22-sincronizacion-tiempo-real.md) para el detalle
   de por qué esta arquitectura ya los deja preparados.
+
+  **Confirmado en el Módulo 6.4** (Chat del Remate): a diferencia de Presencia (Módulo
+  6.2, que extendió el registro de eventos sincronizados sobre el `EventConsumer`
+  existente, sin necesitar uno nuevo), Chat sí necesitó su propio consumidor —
+  `ChatSystemEventDispatcher`, una segunda instancia de `EventConsumer` suscripta al
+  mismo patrón `events.*`, para generar mensajes de sistema a partir de eventos de
+  ciclo de vida sin tocar el Auction Engine ni `RemateService`/`LoteService`. Requirió
+  además generalizar el tipo del parámetro `dispatcher` de `EventConsumer` (de la clase
+  concreta `EventDispatcher` a un `Protocol` estructural) — el único ajuste que este
+  módulo necesitó en `app/realtime/consumer.py`, sin cambiar su comportamiento. Ver
+  [34-chat-del-remate.md](../34-chat-del-remate.md) y
+  [ADR-037](ADR-037-chat-del-remate.md), sección D, para el detalle completo.

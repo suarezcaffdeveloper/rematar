@@ -9,11 +9,13 @@ conexión entiende mensajes de gestión de conexión (`pong`) y de gestión de s
 lugar para que un módulo futuro (Event Bus) agregue su propio despacho sin
 reestructurar este bucle (ver ADR-023 y ADR-024).
 
-Única excepción deliberada (Épica 3, Módulo 3.6, ver docs/23-snapshot-service.md y
-ADR-026): tras un `join_room` exitoso, este archivo llama a `SnapshotService.build` — el
-único punto de integración que la épica pidió explícitamente ("el Gateway deberá
-utilizar este servicio únicamente cuando una conexión ingresa correctamente a una
-sala"). `SnapshotService` en sí no sabe que existe un Gateway; acá solo se lo invoca.
+Excepciones deliberadas (las únicas dos): (1) Épica 3, Módulo 3.6, ver
+docs/23-snapshot-service.md y ADR-026 — tras un `join_room` exitoso, este archivo llama
+a `SnapshotService.build`. (2) Épica 6, Módulo 6.2, ver docs/33-sistema-de-presencia.md
+y ADR-036 — el join/leave de sala pasa por `PresenceService` (que internamente sigue
+llamando a `RoomManager.join`/`leave`, sin cambios) en vez de a `RoomManager`
+directamente, para que cada unión/salida real publique su evento de presencia. Ninguno
+de los dos servicios sabe que existe un Gateway; acá solo se los invoca.
 """
 
 import asyncio
@@ -30,12 +32,14 @@ from app.core.exceptions import NotFoundError
 from app.modules.auth.dependencies import get_auth_service
 from app.modules.auth.service import AuthService
 from app.modules.users.models import User
+from app.presence.dependencies import get_presence_service
+from app.presence.service import PresenceService
 from app.snapshot.dependencies import get_snapshot_service
 from app.snapshot.messages import SNAPSHOT_UNAVAILABLE, SnapshotMessage
 from app.snapshot.service import SnapshotService
 from app.websocket import close_codes
 from app.websocket.auth import authenticate_connection
-from app.websocket.dependencies import get_connection_manager, get_room_manager
+from app.websocket.dependencies import get_connection_manager
 from app.websocket.manager import ConnectionContext, ConnectionManager
 from app.websocket.messages import (
     ConnectedMessage,
@@ -46,12 +50,7 @@ from app.websocket.messages import (
     RoomLeftMessage,
     WSMessage,
 )
-from app.websocket.rooms import (
-    ERROR_ALREADY_IN_ROOM,
-    ERROR_INVALID_ROOM_ID,
-    ERROR_NOT_IN_ROOM,
-    RoomManager,
-)
+from app.websocket.rooms import ERROR_ALREADY_IN_ROOM, ERROR_INVALID_ROOM_ID, ERROR_NOT_IN_ROOM
 from app.websocket.utils import safe_close
 
 logger = structlog.get_logger(__name__)
@@ -64,7 +63,7 @@ async def websocket_gateway(
     websocket: WebSocket,
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
     manager: Annotated[ConnectionManager, Depends(get_connection_manager)],
-    room_manager: Annotated[RoomManager, Depends(get_room_manager)],
+    presence_service: Annotated[PresenceService, Depends(get_presence_service)],
     snapshot_service: Annotated[SnapshotService, Depends(get_snapshot_service)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
@@ -83,7 +82,7 @@ async def websocket_gateway(
             ConnectedMessage(connection_id=context.connection_id, user_id=user.id).model_dump_json()
         )
         await _run_connection_loop(
-            websocket, context, settings, room_manager, snapshot_service, user
+            websocket, context, settings, presence_service, snapshot_service, user
         )
     except WebSocketDisconnect:
         pass
@@ -91,7 +90,7 @@ async def websocket_gateway(
         logger.exception("ws_gateway_unexpected_error", connection_id=str(context.connection_id))
         await safe_close(websocket, code=close_codes.INTERNAL_ERROR, reason="Error interno.")
     finally:
-        await room_manager.leave(context.connection_id)
+        await presence_service.leave_room(context.connection_id, context.user_id)
         await manager.unregister(context.connection_id)
 
 
@@ -99,7 +98,7 @@ async def _run_connection_loop(
     websocket: WebSocket,
     context: ConnectionContext,
     settings: Settings,
-    room_manager: RoomManager,
+    presence_service: PresenceService,
     snapshot_service: SnapshotService,
     user: User,
 ) -> None:
@@ -124,14 +123,16 @@ async def _run_connection_loop(
             await websocket.send_text(PingMessage().model_dump_json())
             continue
 
-        await _handle_message(raw_message, context, websocket, room_manager, snapshot_service, user)
+        await _handle_message(
+            raw_message, context, websocket, presence_service, snapshot_service, user
+        )
 
 
 async def _handle_message(
     raw_message: str,
     context: ConnectionContext,
     websocket: WebSocket,
-    room_manager: RoomManager,
+    presence_service: PresenceService,
     snapshot_service: SnapshotService,
     user: User,
 ) -> None:
@@ -148,17 +149,17 @@ async def _handle_message(
         context.last_pong_at = datetime.now(UTC)
     elif message.type == "join_room":
         await _handle_join_room(
-            raw_message, context, websocket, room_manager, snapshot_service, user
+            raw_message, context, websocket, presence_service, snapshot_service, user
         )
     elif message.type == "leave_room":
-        await _handle_leave_room(context, websocket, room_manager)
+        await _handle_leave_room(context, websocket, presence_service)
 
 
 async def _handle_join_room(
     raw_message: str,
     context: ConnectionContext,
     websocket: WebSocket,
-    room_manager: RoomManager,
+    presence_service: PresenceService,
     snapshot_service: SnapshotService,
     user: User,
 ) -> None:
@@ -172,7 +173,9 @@ async def _handle_join_room(
         )
         return
 
-    joined = await room_manager.join(join_message.remate_id, context.connection_id)
+    joined = await presence_service.join_room(
+        join_message.remate_id, context.connection_id, user.id
+    )
     if not joined:
         await websocket.send_text(
             ErrorMessage(
@@ -185,7 +188,9 @@ async def _handle_join_room(
     await websocket.send_text(
         RoomJoinedMessage(remate_id=join_message.remate_id).model_dump_json()
     )
-    await _send_snapshot(websocket, snapshot_service, join_message.remate_id, user, room_manager)
+    await _send_snapshot(
+        websocket, snapshot_service, join_message.remate_id, user, presence_service
+    )
 
 
 async def _send_snapshot(
@@ -193,7 +198,7 @@ async def _send_snapshot(
     snapshot_service: SnapshotService,
     remate_id: uuid.UUID,
     user: User,
-    room_manager: RoomManager,
+    presence_service: PresenceService,
 ) -> None:
     """Se manda una única vez, justo después de confirmar el `join_room` (Épica 3,
     Módulo 3.6) -- de ahí en más la conexión se entera de cambios exclusivamente por los
@@ -202,8 +207,13 @@ async def _send_snapshot(
     `ErrorMessage` sin cerrar la conexión ni deshacer el `join_room` ya confirmado — el
     cliente sigue en la sala y puede reintentar."""
     try:
-        connected_users = room_manager.connection_count(remate_id)
-        snapshot = await snapshot_service.build(remate_id, user, connected_users=connected_users)
+        connected_users_detail = presence_service.connected_users_summary(remate_id)
+        snapshot = await snapshot_service.build(
+            remate_id,
+            user,
+            connected_users=len(connected_users_detail),
+            connected_users_detail=connected_users_detail,
+        )
     except NotFoundError:
         await websocket.send_text(
             ErrorMessage(
@@ -226,9 +236,9 @@ async def _send_snapshot(
 
 
 async def _handle_leave_room(
-    context: ConnectionContext, websocket: WebSocket, room_manager: RoomManager
+    context: ConnectionContext, websocket: WebSocket, presence_service: PresenceService
 ) -> None:
-    remate_id = await room_manager.leave(context.connection_id)
+    remate_id = await presence_service.leave_room(context.connection_id, context.user_id)
     if remate_id is None:
         await websocket.send_text(
             ErrorMessage(

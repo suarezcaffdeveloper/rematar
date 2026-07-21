@@ -5,9 +5,12 @@ import { Breadcrumb } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
+import { useAuth } from '../../auth/hooks';
+import { ChatPanel } from '../../chat/components/ChatPanel';
 import { useLiveRemateState } from '../../sala/hooks';
 import { GavelIcon } from '../../remates/components/icons';
 import type { RemateStatus } from '../../remates/types';
+import { ConnectedUsersList } from '../components/ConnectedUsersList';
 import { ConsolaControlPanel } from '../components/ConsolaControlPanel';
 import { ConsolaHeader } from '../components/ConsolaHeader';
 import { ConsolaLotePanel } from '../components/ConsolaLotePanel';
@@ -54,6 +57,7 @@ function ConsolaSkeleton() {
 export function ConsolaOperativaPage() {
   const { remateId } = useParams<{ remateId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const {
     snapshot,
@@ -62,6 +66,7 @@ export function ConsolaOperativaPage() {
     reload,
     upcomingLotes,
     connectionStatus,
+    subscribeToRealtime,
   } = useLiveRemateState(remateId ?? '');
 
   const [selectedLoteId, setSelectedLoteId] = useState<string | null>(null);
@@ -108,6 +113,7 @@ export function ConsolaOperativaPage() {
     winning_offer: winningOffer,
     recent_offers: recentOffers,
     connected_users: connectedUsers,
+    connected_users_detail: connectedUsersDetail,
   } = snapshot;
   const currency = remate.settings.currency;
   const isOperational = remate.status === 'live' || remate.status === 'paused';
@@ -146,7 +152,10 @@ export function ConsolaOperativaPage() {
                 hasUpcomingLotes={hasUpcomingLotes}
               />
             </div>
-            <ConsolaOfferPanel winningOffer={winningOffer} recentOffers={recentOffers} currency={currency} />
+            <div className="flex flex-col gap-5">
+              <ConsolaOfferPanel winningOffer={winningOffer} recentOffers={recentOffers} currency={currency} />
+              <ConnectedUsersList connectedUsers={connectedUsersDetail} />
+            </div>
           </div>
 
           <div className="flex flex-col gap-3">
@@ -158,6 +167,14 @@ export function ConsolaOperativaPage() {
               selectionEnabled={remate.status === 'live' && !activeLote}
             />
           </div>
+
+          <ChatPanel
+            remateId={remate.id}
+            subscribeToRealtime={subscribeToRealtime}
+            currentUserId={user?.id}
+            connectedUsers={connectedUsers}
+            canModerate
+          />
         </>
       )}
     </div>

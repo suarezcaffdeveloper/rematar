@@ -5,7 +5,7 @@ import { CalendarIcon, PersonIcon } from '../../remates/components/icons';
 import { STATUS_BADGE_VARIANTS, STATUS_LABELS } from '../../remates/labels';
 import type { Remate } from '../../remates/types';
 import { ConnectionStatusBadge } from './ConnectionStatusBadge';
-import { UsersIcon } from './icons';
+import { PresenceCounter } from './PresenceCounter';
 
 export interface SalaHeaderProps {
   remate: Remate;
@@ -14,17 +14,27 @@ export interface SalaHeaderProps {
 }
 
 /** Cabecera de la sala: identidad del remate + quién más está mirando en este momento.
- * `connectedUsers` viene del `RoomManager` (Épica 3.4) a través del snapshot -- es real,
- * no un placeholder, pero solo se actualiza en cada reconexión (nuevo snapshot), no
- * evento a evento: el backend todavía no publica presencia en tiempo real (ver
- * docs/28-websocket-tiempo-real-sala.md, "Limitaciones conocidas"). `connectionStatus`
- * (Épica 4.6) sí es en vivo -- refleja el estado real de la conexión WebSocket. */
+ * `connectedUsers` se mantiene en vivo, evento a evento (Épica 6, Módulo 6.2,
+ * `presencia.usuario_conectado`/`desconectado` vía `PresenceCounter`) -- ya no depende
+ * de esperar una reconexión para reflejar el número real. `connectionStatus` (Épica
+ * 4.6) refleja el estado real de la conexión WebSocket. El badge de estado del remate
+ * lleva un pulso sutil cuando está "en vivo" -- indicador de actividad del remate,
+ * sin agregar un dato ni componente nuevo. */
 export function SalaHeader({ remate, connectedUsers, connectionStatus }: SalaHeaderProps) {
+  const isLive = remate.status === 'live';
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={STATUS_BADGE_VARIANTS[remate.status]}>{STATUS_LABELS[remate.status]}</Badge>
+          <span className="relative inline-flex">
+            {isLive && (
+              <span
+                aria-hidden="true"
+                className="absolute -right-0.5 -top-0.5 h-2 w-2 animate-ping rounded-full bg-success-500"
+              />
+            )}
+            <Badge variant={STATUS_BADGE_VARIANTS[remate.status]}>{STATUS_LABELS[remate.status]}</Badge>
+          </span>
           <ConnectionStatusBadge status={connectionStatus} />
         </div>
         <h1 className="mt-1.5 truncate text-xl font-bold text-slate-900 sm:text-2xl">{remate.title}</h1>
@@ -41,10 +51,7 @@ export function SalaHeader({ remate, connectedUsers, connectionStatus }: SalaHea
           <PersonIcon className="h-4 w-4 shrink-0 text-slate-400" />
           Rematador verificado
         </span>
-        <span className="flex items-center gap-1.5 font-medium text-slate-700">
-          <UsersIcon className="h-4 w-4 shrink-0 text-slate-400" />
-          {connectedUsers} {connectedUsers === 1 ? 'conectado' : 'conectados'}
-        </span>
+        <PresenceCounter count={connectedUsers} />
       </div>
     </div>
   );

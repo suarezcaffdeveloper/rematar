@@ -104,14 +104,28 @@ async def _setup_open_lote(client: AsyncClient, email: str) -> tuple[str, str, s
     return token, remate_id, lote_id
 
 
+# Prefijos de `event_type` que corresponden a canales "laterales" (Épica 6): un evento
+# de ciclo de vida (`remate.finished`, `lote.opened`, `lote.closed`) dispara, de forma
+# asíncrona e independiente, un mensaje de sistema de chat (`ChatSystemEventDispatcher`,
+# Módulo 6.4) sobre el mismo canal `events.<remate_id>` -- sin garantía de en qué
+# posición exacta, relativa a los eventos que estos tests sí quieren observar, termina
+# de llegar. Presencia (Módulo 6.2) no debería publicar acá (esta suite no abre
+# conexiones WebSocket), pero se filtra igual por consistencia con el resto de la suite
+# (ver `test_websocket_gateway.py`/`test_realtime_sync.py`).
+_SIDE_CHANNEL_EVENT_PREFIXES = ("presencia.", "chat.")
+
+
 async def _collect_events(pubsub, count: int) -> list[dict]:
     events = []
-    for _ in range(count):
+    while len(events) < count:
         message = await asyncio.wait_for(
             pubsub.get_message(timeout=1, ignore_subscribe_messages=True), timeout=3
         )
         assert message is not None, "no llegó el evento esperado a tiempo"
-        events.append(json.loads(message["data"]))
+        payload = json.loads(message["data"])
+        if str(payload.get("event_type", "")).startswith(_SIDE_CHANNEL_EVENT_PREFIXES):
+            continue
+        events.append(payload)
     return events
 
 

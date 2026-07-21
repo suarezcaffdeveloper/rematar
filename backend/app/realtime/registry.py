@@ -15,6 +15,7 @@ candidatos naturales si un futuro consumidor los necesita, no como un olvido.
 """
 
 from app.events.base import RemateScopedEvent
+from app.modules.chat.events import ChatMessageDeleted, ChatMessageSent, ChatUserTyping
 from app.modules.ofertas.events import (
     OfertaAccepted,
     OfertaPlaced,
@@ -29,8 +30,10 @@ from app.modules.remates.events import (
     RemateStarted,
 )
 from app.modules.remates.lotes.events import LoteCancelled, LoteClosed, LoteOpened
+from app.presence.events import PresenceUserConnected, PresenceUserDisconnected
 
-# Orden: mismo agrupamiento que los catálogos de origen (Remate, Lote, Oferta).
+# Orden: mismo agrupamiento que los catálogos de origen (Remate, Lote, Oferta,
+# Presencia -- Épica 6, Módulo 6.2 -- Chat -- Épica 6, Módulo 6.4).
 SYNCED_EVENTS: tuple[type[RemateScopedEvent], ...] = (
     RemateStarted,
     RematePaused,
@@ -44,6 +47,11 @@ SYNCED_EVENTS: tuple[type[RemateScopedEvent], ...] = (
     OfertaAccepted,
     OfertaRejected,
     OfertaWinnerChanged,
+    PresenceUserConnected,
+    PresenceUserDisconnected,
+    ChatMessageSent,
+    ChatMessageDeleted,
+    ChatUserTyping,
 )
 
 # `event_type` (el discriminador `Literal` de cada clase) -> la clase concreta, para

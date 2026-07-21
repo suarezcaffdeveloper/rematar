@@ -43,10 +43,11 @@ def _find_forbidden_imports(
 
 
 def test_gateway_websocket_never_imports_domain() -> None:
-    # `app.snapshot` está deliberadamente afuera de esta lista: el Módulo 3.6 pidió
-    # explícitamente que el Gateway use `SnapshotService` al entrar a una sala (ver
-    # docstring de app/websocket/router.py) — es el único paquete "de negocio" que el
-    # Gateway tiene permitido conocer, además de `app.modules.auth` (ADR-023).
+    # `app.snapshot` y `app.presence` están deliberadamente afuera de esta lista: el
+    # Módulo 3.6 pidió explícitamente que el Gateway use `SnapshotService` al entrar a
+    # una sala, y el Módulo 6.2 agregó `PresenceService` para el join/leave (ver
+    # docstring de app/websocket/router.py) — son los únicos paquetes "de negocio" que
+    # el Gateway tiene permitido conocer, además de `app.modules.auth` (ADR-023).
     forbidden_prefixes = ("app.modules.remates", "app.modules.ofertas")
     websocket_dir = APP_DIR / "websocket"
     offenders = _find_forbidden_imports(
@@ -116,4 +117,56 @@ def test_snapshot_messages_only_extends_websocket_protocol() -> None:
     realtime_imports = {n for n in imports if n == "app.realtime" or n.startswith("app.realtime.")}
     assert realtime_imports == set(), (
         f"app/snapshot/messages.py no debería depender de app.realtime: {realtime_imports}"
+    )
+
+
+def test_presence_never_imports_domain_or_realtime_or_snapshot() -> None:
+    """`app/presence/` (Épica 6, Módulo 6.2) no debe conocer los módulos de dominio de
+    remates/ofertas, ni el Event Consumer (`app.realtime`) ni el Snapshot Service
+    (`app.snapshot`) -- la dirección de dependencia es la inversa: `app/snapshot/`
+    importa `app.presence.schemas` (nunca al revés) y `app/realtime/registry.py`
+    importa `app.presence.events` (nunca al revés). Sí puede importar `app.websocket`
+    (necesita `RoomManager`/`ConnectionManager`) y `app.modules.auth`/`app.modules.users`
+    (autenticación de `router.py`, mismo criterio que `app/snapshot/router.py`)."""
+    forbidden_prefixes = (
+        "app.modules.remates",
+        "app.modules.ofertas",
+        "app.realtime",
+        "app.snapshot",
+    )
+    presence_dir = APP_DIR / "presence"
+    offenders = _find_forbidden_imports(
+        list(presence_dir.glob("*.py")), forbidden_prefixes, relative_to=presence_dir
+    )
+    assert offenders == {}, (
+        f"app/presence/ depende de dominio o de otra capa de tiempo real: {offenders}"
+    )
+
+
+def test_chat_never_imports_websocket_realtime_snapshot_presence_or_ofertas() -> None:
+    """`app/modules/chat/` (Épica 6, Módulo 6.4) es un módulo de dominio propio, mismo
+    perfil que `ofertas` (entidad persistida con reglas propias) -- nunca debe conocer
+    el Gateway WebSocket, el Snapshot Service ni el Presence Service (transporte, no
+    dominio), ni el módulo de ofertas (bounded context ajeno). Tampoco debe importar
+    `app.realtime`: la entrega de eventos de chat a los clientes reutiliza
+    `EventDispatcher`/`EventConsumer` sin que `app/modules/chat/` necesite conocerlos
+    (agregar la clase de evento a `app/realtime/registry.py` es la única integración, y
+    esa dirección de import va al revés -- `registry.py` importa `app.modules.chat.events`,
+    nunca al revés); la segunda instancia de `EventConsumer` que genera mensajes de
+    sistema (`ChatSystemEventDispatcher`, `app/modules/chat/realtime.py`) se conecta
+    con `EventConsumer` únicamente en `app/main.py`, no acá."""
+    forbidden_prefixes = (
+        "app.websocket",
+        "app.realtime",
+        "app.snapshot",
+        "app.presence",
+        "app.modules.ofertas",
+    )
+    chat_dir = APP_DIR / "modules" / "chat"
+    offenders = _find_forbidden_imports(
+        list(chat_dir.glob("*.py")), forbidden_prefixes, relative_to=chat_dir
+    )
+    assert offenders == {}, (
+        f"app/modules/chat/ depende de transporte/tiempo real o de un bounded context "
+        f"ajeno: {offenders}"
     )

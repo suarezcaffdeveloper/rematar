@@ -199,10 +199,10 @@ ADR-033, sección A, para por qué no se extendieron los del comprador en su lug
 - **Sin "Cancelar lote"/"Cancelar remate"/"Editar lote" en esta consola** -- no estaban
   en la lista de acciones pedidas por este módulo; quedan para "Gestión completa de
   remates y lotes" (próximo módulo).
-- **Compradores conectados no se actualiza evento a evento** dentro de la misma sesión
-  de la consola (mismo argumento ya documentado en `docs/28`, "Limitaciones conocidas":
-  el backend todavía no publica presencia en tiempo real) -- se actualiza en cada
-  reconexión del WebSocket (nuevo snapshot), no en vivo.
+- ~~Compradores conectados no se actualiza evento a evento~~ -- **resuelto en el Módulo
+  6.2**: se actualiza en vivo vía `PresenceCounter`, igual que en `SalaHeader`, más una
+  lista resumida de conectados (`ConnectedUsersList`) exclusiva de esta consola. Ver
+  [33-sistema-de-presencia.md](33-sistema-de-presencia.md).
 
 ## Checklist del módulo
 
@@ -243,8 +243,11 @@ ADR-033, sección A, para por qué no se extendieron los del comprador en su lug
 
 - Gestión completa de remates y lotes (próximo módulo): crear/editar/reordenar lotes,
   crear/editar/cancelar remates, subida de imágenes.
-- Chat por sala, streaming de video, compartir pantalla, moderación.
-- Presencia en tiempo real de conectados (mismo pendiente que `docs/28`, requiere que el
-  backend publique eventos de presencia).
+- ~~Chat por sala~~ -- implementado en el Módulo 6.4, con moderación (el rematador
+  puede eliminar mensajes) incluida, ver
+  [34-chat-del-remate.md](34-chat-del-remate.md). Streaming de video y compartir
+  pantalla siguen sin implementar.
+- ~~Presencia en tiempo real de conectados~~ -- implementado en el Módulo 6.2, ver
+  [33-sistema-de-presencia.md](33-sistema-de-presencia.md).
 - "Cancelar lote"/"Cancelar remate" desde la consola (endpoints ya existentes,
   `POST .../cancel`, sin consumidor todavía).

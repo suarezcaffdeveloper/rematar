@@ -11,6 +11,8 @@ Los tests de integración a través del Gateway WebSocket están en
 """
 
 import asyncio
+import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest_asyncio
@@ -27,6 +29,7 @@ from app.modules.remates.lotes.repository import LoteRepository
 from app.modules.remates.repository import RemateRepository
 from app.modules.remates.service import RemateService
 from app.modules.users.models import User, UserRole
+from app.presence.schemas import ConnectedUserSummary
 from app.redis.cache import RedisCache
 from app.snapshot.service import SnapshotService
 
@@ -317,6 +320,44 @@ async def test_snapshot_does_not_mask_for_admin_viewer(
 
     assert snapshot.active_lote.reserve_price == Decimal("9999.00")
     assert str(snapshot.winning_offer.buyer_id) == buyer_id
+
+
+# --- Detalle de presencia (Épica 6, Módulo 6.2) -------------------------------------------
+
+
+async def test_snapshot_masks_connected_users_detail_for_non_privileged_viewer(
+    client: AsyncClient, db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    owner_id, owner_token = await _owner(client, "snap-presence1@example.com")
+    buyer_id, _buyer_token = await _buyer(client, "snap-presence1-buyer@example.com")
+    remate = await _create_remate(client, owner_token)
+    # "scheduled" alcanza para que un no-dueño lo vea (RemateService._is_visible) --
+    # "start" exige al menos un lote (RF-08), innecesario para este test.
+    r = await client.post(f"{REMATES_URL}/{remate['id']}/schedule", headers=_auth(owner_token))
+    assert r.status_code == 200, r.text
+
+    owner = await _fetch_user(db_engine, owner_id)
+    buyer = await _fetch_user(db_engine, buyer_id)
+    detail = [
+        ConnectedUserSummary(
+            connection_id=uuid.uuid4(),
+            user_id=uuid.UUID(buyer_id),
+            connected_at=datetime.now(UTC),
+        )
+    ]
+
+    service = _make_service(db_session)
+    owner_snapshot = await service.build(
+        remate["id"], owner, connected_users=1, connected_users_detail=detail
+    )
+    buyer_snapshot = await service.build(
+        remate["id"], buyer, connected_users=1, connected_users_detail=detail
+    )
+
+    assert owner_snapshot.connected_users_detail == detail
+    assert buyer_snapshot.connected_users_detail is None
+    # El conteo sigue visible para cualquiera -- solo se enmascara el detalle.
+    assert buyer_snapshot.connected_users == 1
 
 
 # --- Visibilidad / errores ----------------------------------------------------------------

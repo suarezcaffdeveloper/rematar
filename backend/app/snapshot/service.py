@@ -24,6 +24,7 @@ from app.modules.remates.models import Remate
 from app.modules.remates.schemas import RemateRead
 from app.modules.remates.service import RemateService
 from app.modules.users.models import User, UserRole
+from app.presence.schemas import ConnectedUserSummary
 from app.redis.cache import RedisCache
 from app.snapshot.schemas import OfertaSnapshotEntry, RawRemateState, RemateStateSnapshot
 
@@ -52,12 +53,22 @@ class SnapshotService:
         self._cache_ttl_seconds = cache_ttl_seconds
 
     async def build(
-        self, remate_id: uuid.UUID, viewer: User, *, connected_users: int = 0
+        self,
+        remate_id: uuid.UUID,
+        viewer: User,
+        *,
+        connected_users: int = 0,
+        connected_users_detail: list[ConnectedUserSummary] | None = None,
     ) -> RemateStateSnapshot:
         """Levanta `NotFoundError` (propagada de `RemateService.get_visible_or_raise`,
         `app/core/exceptions.py`) si el remate no existe o no es visible para `viewer` —
         el mismo criterio de visibilidad que ya aplica `GET /remates/{id}`, para que un
-        snapshot nunca exponga más de lo que ese endpoint ya expondría."""
+        snapshot nunca exponga más de lo que ese endpoint ya expondría.
+
+        `connected_users_detail` (Épica 6, Módulo 6.2) llega como una lista simple de
+        `ConnectedUserSummary` -- nunca un `RoomManager`/`ConnectionManager` -- mismo
+        criterio que `connected_users: int` (ADR-026, sección C): este servicio no se
+        acopla a cómo cada transporte lleva la cuenta de conexiones."""
         remate = await self._remate_service.get_visible_or_raise(remate_id, viewer)
         is_privileged = self._is_privileged(remate, viewer)
 
@@ -69,6 +80,9 @@ class SnapshotService:
             winning_offer=self._mask_oferta(raw.winning_offer, is_privileged),
             recent_offers=[self._mask_oferta(o, is_privileged) for o in raw.recent_offers],
             connected_users=connected_users,
+            connected_users_detail=self._mask_connected_users_detail(
+                connected_users_detail, is_privileged
+            ),
             generated_at=datetime.now(UTC),
         )
         logger.info(
@@ -198,3 +212,14 @@ class SnapshotService:
         if oferta is None or is_privileged:
             return oferta
         return oferta.model_copy(update={"buyer_id": None})
+
+    @staticmethod
+    def _mask_connected_users_detail(
+        detail: list[ConnectedUserSummary] | None, is_privileged: bool
+    ) -> list[ConnectedUserSummary] | None:
+        """Solo el dueño del remate o un admin ve quién específicamente está conectado
+        -- mismo criterio que `_mask_lote`/`_mask_oferta`. El conteo (`connected_users:
+        int`) no pasa por acá, sigue visible para cualquiera."""
+        if not is_privileged:
+            return None
+        return detail

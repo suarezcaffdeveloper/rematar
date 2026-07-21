@@ -17,6 +17,14 @@ export function formatDateTime(iso: string): string {
   return DATE_TIME_FORMATTER.format(new Date(iso));
 }
 
+const TIME_FORMATTER = new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit' });
+
+/** `"18:30"` a partir de un ISO 8601 -- para la hora de un mensaje de chat (Épica 6,
+ * Módulo 6.4), donde la fecha completa de `formatDateTime` sería ruido. */
+export function formatTime(iso: string): string {
+  return TIME_FORMATTER.format(new Date(iso));
+}
+
 const currencyFormatterCache = new Map<string, Intl.NumberFormat>();
 
 /**

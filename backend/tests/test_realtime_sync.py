@@ -58,18 +58,43 @@ def _register_and_login(client: TestClient, *, email: str, role: str = "comprado
     return login.json()["access_token"]
 
 
+# Ver el mismo mecanismo, comentado en detalle, en test_websocket_gateway.py.
+_SIDE_CHANNEL_EVENT_PREFIXES = ("presencia.", "chat.")
+
+
+def _receive_non_presence_message(websocket) -> dict:
+    """`receive_json()` que descarta cualquier `domain_event` de un canal lateral
+    (presencia, chat) que llegue intercalado -- un `join_room`/`leave_room` real
+    publica su propio evento de presencia de forma asíncrona (Redis Pub/Sub -> Event
+    Consumer, sin cambios), y publicar `RemateStarted`/`LoteOpened`/etc. (lo que varios
+    tests de este archivo hacen directamente) dispara además un mensaje de sistema de
+    chat -- ninguno de los dos tiene garantía de en qué punto exacto, relativo a los
+    mensajes de protocolo o a los eventos de dominio que estos tests sí quieren
+    observar, termina de entregarse -- incluida la propia conexión que se acaba de unir
+    (recibe su propio `presencia.usuario_conectado`, igual que ya recibía su propio
+    `oferta.accepted` al ofertar). Mismo helper que `_receive_protocol_message` en
+    `test_websocket_gateway.py`."""
+    while True:
+        message = websocket.receive_json()
+        is_side_channel_event = message.get("type") == "domain_event" and str(
+            message.get("event_type", "")
+        ).startswith(_SIDE_CHANNEL_EVENT_PREFIXES)
+        if not is_side_channel_event:
+            return message
+
+
 def _connect_join(ws_client: TestClient, token: str, remate_id: uuid.UUID):
     websocket = ws_client.websocket_connect(WS_URL).__enter__()
     websocket.send_json({"type": "auth", "token": token})
     websocket.receive_json()  # connected
     websocket.send_json({"type": "join_room", "remate_id": str(remate_id)})
-    websocket.receive_json()  # room_joined
+    _receive_non_presence_message(websocket)  # room_joined
     # Épica 3, Módulo 3.6: justo después de `room_joined` llega un `snapshot` (o, para
     # los `remate_id` aleatorios que usan estos tests, un `error/snapshot_unavailable`
     # -- ninguno de los dos es lo que estos tests de sincronización quieren observar).
     # Drenarlo acá, antes de volver al test, evita una carrera real contra los eventos
     # de dominio que el test publique después (ver docs/23-snapshot-service.md).
-    websocket.receive_json()
+    _receive_non_presence_message(websocket)
     return websocket
 
 
@@ -88,7 +113,7 @@ async def test_domain_event_reaches_only_connections_in_the_matching_room(
         await event_bus.publish(RemateStarted(remate_id=room_a))
 
         for ws in (ws_a1, ws_a2):
-            message = ws.receive_json()
+            message = _receive_non_presence_message(ws)
             assert message["type"] == "domain_event"
             assert message["event_type"] == "remate.started"
             assert message["remate_id"] == str(room_a)
@@ -99,7 +124,7 @@ async def test_domain_event_reaches_only_connections_in_the_matching_room(
         # el evento se hubiera filtrado a room_b, esta sería la próxima entrada en su
         # cola y el assert de abajo fallaría.
         ws_b.send_json({"type": "leave_room"})
-        response = ws_b.receive_json()
+        response = _receive_non_presence_message(ws_b)
         assert response == {"schema_version": 1, "type": "room_left", "remate_id": str(room_b)}
     finally:
         ws_a1.__exit__(None, None, None)
@@ -129,9 +154,9 @@ async def test_multiple_registered_event_types_are_synced_in_order(
             )
         )
 
-        first = websocket.receive_json()
-        second = websocket.receive_json()
-        third = websocket.receive_json()
+        first = _receive_non_presence_message(websocket)
+        second = _receive_non_presence_message(websocket)
+        third = _receive_non_presence_message(websocket)
 
         assert [first["event_type"], second["event_type"], third["event_type"]] == [
             "remate.started",
@@ -158,7 +183,7 @@ async def test_unregistered_event_type_is_not_forwarded(
         # técnica: provocar una respuesta propia y verificar que es lo primero que
         # llega, no un domain_event colado antes.
         websocket.send_json({"type": "leave_room"})
-        response = websocket.receive_json()
+        response = _receive_non_presence_message(websocket)
         assert response == {
             "schema_version": 1,
             "type": "room_left",
@@ -182,7 +207,7 @@ async def test_event_for_room_without_connections_does_not_break_anything(
     websocket = _connect_join(ws_client, token, remate_id)
     try:
         await event_bus.publish(RemateStarted(remate_id=remate_id))
-        message = websocket.receive_json()
+        message = _receive_non_presence_message(websocket)
         assert message["event_type"] == "remate.started"
         assert message["remate_id"] == str(remate_id)
     finally:

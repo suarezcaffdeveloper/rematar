@@ -76,6 +76,14 @@ export interface UseLiveRemateStateResult {
   upcomingLotes: Lote[];
   isUpcomingLotesLoading: boolean;
   connectionStatus: ConnectionStatus;
+  /** Reenvía cualquier mensaje ya parseado del ÚNICO `WebSocketClient` de la página
+   * (Épica 6, Módulo 6.4) -- para que un feature hermano (`features/chat/`) pueda
+   * escuchar sus propios eventos (`chat.message_sent`, etc.) sin abrir una segunda
+   * conexión/un segundo `join_room`, que duplicaría el conteo de conectados de
+   * Presencia (dos `connection_id` por usuario real). No filtra por `type`: cada
+   * feature decide qué le importa, mismo criterio que ya documenta
+   * `shared/websocket/client.ts::onMessage`. */
+  subscribeToRealtime: (listener: (message: unknown) => void) => () => void;
 }
 
 /**
@@ -130,6 +138,22 @@ export function useLiveRemateState(remateId: string): UseLiveRemateStateResult {
   const liveLotesRef = useRef<Lote[]>(liveLotes);
   liveLotesRef.current = liveLotes;
 
+  // `Set` creado desde el primer render, independiente de cuándo exista el cliente WS
+  // -- evita una carrera de orden hijo-antes-que-padre de los efectos de React: un
+  // `ChatPanel` hijo que se suscribe en su propio `useEffect` de montaje puede correr
+  // antes de que el `useEffect` de acá abajo (el que crea el cliente) llegue a
+  // ejecutarse. Con este `Set` ya existente desde el principio, `subscribeToRealtime`
+  // nunca depende de ese orden -- el cliente, una vez creado, reenvía todo mensaje
+  // entrante a los listeners que ya estén (o lleguen a estar) en este mismo `Set`.
+  const realtimeListenersRef = useRef<Set<(message: unknown) => void>>(new Set());
+
+  const subscribeToRealtime = useCallback((listener: (message: unknown) => void) => {
+    realtimeListenersRef.current.add(listener);
+    return () => {
+      realtimeListenersRef.current.delete(listener);
+    };
+  }, []);
+
   useEffect(() => {
     if (!remateId) return;
 
@@ -137,6 +161,8 @@ export function useLiveRemateState(remateId: string): UseLiveRemateStateResult {
 
     const unsubscribeStatus = client.onStatusChange(setConnectionStatus);
     const unsubscribeMessage = client.onMessage((message) => {
+      realtimeListenersRef.current.forEach((listener) => listener(message));
+
       if (isSnapshotMessage(message)) {
         setLiveSnapshot(message.data);
         return;
@@ -173,5 +199,6 @@ export function useLiveRemateState(remateId: string): UseLiveRemateStateResult {
     upcomingLotes,
     isUpcomingLotesLoading,
     connectionStatus,
+    subscribeToRealtime,
   };
 }

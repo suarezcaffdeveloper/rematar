@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.modules.ofertas.models import OfertaStatus
 from app.modules.remates.lotes.schemas import LoteRead
 from app.modules.remates.schemas import RemateRead
+from app.presence.schemas import ConnectedUserSummary
 
 
 class OfertaSnapshotEntry(BaseModel):
@@ -45,7 +46,12 @@ class RawRemateState(BaseModel):
 
 class RemateStateSnapshot(BaseModel):
     """Lo que efectivamente recibe un consumidor (HTTP, WebSocket, o lo que sea) —
-    siempre ya enmascarado según quién lo pidió."""
+    siempre ya enmascarado según quién lo pidió.
+
+    `connected_users_detail` (Épica 6, Módulo 6.2) es `None` para cualquier viewer que
+    no sea dueño del remate ni admin -- mismo criterio de enmascarado que ya aplica
+    `SnapshotService._mask_lote`/`_mask_oferta`. `connected_users` (el conteo) sigue
+    visible para cualquiera, sin cambios."""
 
     schema_version: Annotated[int, Field(default=1)]
     remate: RemateRead
@@ -53,4 +59,5 @@ class RemateStateSnapshot(BaseModel):
     winning_offer: OfertaSnapshotEntry | None
     recent_offers: list[OfertaSnapshotEntry]
     connected_users: int
+    connected_users_detail: list[ConnectedUserSummary] | None = None
     generated_at: datetime

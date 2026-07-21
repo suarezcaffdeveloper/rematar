@@ -87,6 +87,17 @@ class Settings(BaseSettings):
     MAX_IMAGE_UPLOAD_BYTES: int = 5 * 1024 * 1024
     ALLOWED_IMAGE_CONTENT_TYPES: list[str] = ["image/jpeg", "image/png", "image/webp"]
 
+    # --- Chat del Remate (Épica 6, Módulo 6.4) ---
+    # Ver docs/34-chat-del-remate.md y ADR-037.
+    CHAT_MESSAGE_MAX_LENGTH: int = 500
+    CHAT_HISTORY_DEFAULT_LIMIT: int = 50
+    # Rate limiting de mensajes: ventana fija (RedisRateLimiter), no delegado al cliente.
+    CHAT_RATE_LIMIT_MAX_MESSAGES: int = 5
+    CHAT_RATE_LIMIT_WINDOW_SECONDS: int = 10
+    # Más laxo que el de mensajes -- "está escribiendo..." es de mejor esfuerzo, no
+    # necesita protegerse tan estrictamente, solo evitar que inunde la sala.
+    CHAT_TYPING_RATE_LIMIT_WINDOW_SECONDS: int = 2
+
 
 @lru_cache
 def get_settings() -> Settings:

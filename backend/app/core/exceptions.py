@@ -67,6 +67,15 @@ class BusinessRuleError(AppError):
     error_code = "business_rule_violation"
 
 
+class RateLimitError(AppError):
+    """El llamador superó un límite de frecuencia explícito (Épica 6, Módulo 6.4,
+    `RedisRateLimiter`) -- distinto de `BusinessRuleError`: no es una regla de negocio
+    violada, es un límite de uso, con el código HTTP estándar para eso (429)."""
+
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    error_code = "rate_limited"
+
+
 def _error_envelope(code: str, message: str, details: object | None = None) -> dict:
     body: dict[str, object] = {"code": code, "message": message}
     if details:

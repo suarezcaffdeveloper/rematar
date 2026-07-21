@@ -17,6 +17,11 @@ estado de remate.** El sistema de salas no sabe qué es un `Remate` más allá d
 es un UUID — es, igual que el Gateway del que depende, deliberadamente "tonto": agrupa
 conexiones, no reacciona a lo que pasa en ellas.
 
+**Actualización posterior**: la lista de "no hay" de arriba describe el alcance de
+este módulo (Módulo 3.4) en su momento — Chat se implementó después, en el Módulo
+6.4, ver [34-chat-del-remate.md](34-chat-del-remate.md); Presencia en el Módulo 6.2,
+ver [33-sistema-de-presencia.md](33-sistema-de-presencia.md).
+
 ## Dónde vive el código
 
 Sigue viviendo en `app/websocket/` — no es un módulo de dominio nuevo, es una extensión

@@ -4,6 +4,8 @@ import { Breadcrumb } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
+import { useAuth } from '../../auth/hooks';
+import { ChatPanel } from '../../chat/components/ChatPanel';
 import { GavelIcon } from '../../remates/components/icons';
 import { ActiveLotePanel } from '../components/ActiveLotePanel';
 import { OfferHistoryPanel } from '../components/OfferHistoryPanel';
@@ -44,6 +46,7 @@ function SalaSkeleton() {
 export function SalaPage() {
   const { remateId } = useParams<{ remateId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const {
     snapshot,
@@ -53,6 +56,7 @@ export function SalaPage() {
     upcomingLotes,
     isUpcomingLotesLoading,
     connectionStatus,
+    subscribeToRealtime,
   } = useLiveRemateState(remateId ?? '');
 
   if (isSnapshotLoading) {
@@ -127,6 +131,14 @@ export function SalaPage() {
           <UpcomingLotesStrip lotes={upcomingLotes} />
         )}
       </div>
+
+      <ChatPanel
+        remateId={remate.id}
+        subscribeToRealtime={subscribeToRealtime}
+        currentUserId={user?.id}
+        connectedUsers={snapshot.connected_users}
+        canModerate={false}
+      />
     </div>
   );
 }

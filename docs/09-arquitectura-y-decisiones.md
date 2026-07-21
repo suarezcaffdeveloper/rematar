@@ -66,6 +66,8 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [033](adr/ADR-033-consola-operativa-rematador.md) | Consola Operativa del Rematador: paneles propios en vez de extender los del comprador, y por qué no refrescar por HTTP después de una acción | Aceptada |
 | [034](adr/ADR-034-gestion-remates-lotes.md) | Gestión completa de Remates y Lotes: "programar"/"publicar" consolidados, duplicar compuesto en el cliente, drag & drop nativo con fallback obligatorio | Aceptada |
 | [035](adr/ADR-035-gestion-multimedia-lotes.md) | Gestión multimedia de lotes: endpoint nuevo de subida a disco local (brecha documentada antes de implementar), galería "viva" con PATCH inmediato, sin galería en modo creación | Aceptada |
+| [036](adr/ADR-036-sistema-de-presencia.md) | Sistema de presencia: `PresenceService` compositor, sin modificar `RoomManager`/`ConnectionManager` | Aceptada |
+| [037](adr/ADR-037-chat-del-remate.md) | Chat del remate: módulo de dominio propio, segundo `EventConsumer` idempotente, keyset sobre offset | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -598,3 +600,99 @@ y [ADR-035](adr/ADR-035-gestion-multimedia-lotes.md). Resumen:
 - Único módulo hasta ahora, desde la fundación del frontend (Épica 4.1), que agrega un
   endpoint nuevo al backend -- de forma puramente aditiva (ningún endpoint, schema ni
   comportamiento existente cambia) y documentada como tal antes de implementarse.
+
+## Épica 6, Módulo 6.2 — notas de arquitectura del Sistema de Presencia
+
+Detalle completo en
+[docs/33-sistema-de-presencia.md](33-sistema-de-presencia.md) y
+[ADR-036](adr/ADR-036-sistema-de-presencia.md). Resumen:
+
+- Cierra un hueco documentado explícitamente desde el Módulo 3.4
+  (`docs/21-sistema-de-salas.md`): presencia en tiempo real ("contadores visibles para
+  otros usuarios, notificaciones de entrada/salida") quedaba pendiente. `docs/22` había
+  incluso anticipado un sketch de implementación (publicar directamente desde
+  `RoomManager.join`/`leave`) -- este módulo lo descarta a propósito (ver ADR-036,
+  sección B) porque hubiera roto la firma de cero argumentos de `RoomManager`/
+  `ConnectionManager` y los tests que ya los instancian así.
+- `PresenceService` nuevo (`app/presence/`), paquete transversal que **compone**
+  `RoomManager`/`ConnectionManager` (Módulos 3.3/3.4, sin modificarlos) y el `EventBus`
+  (Módulo 3.2, sin modificarlo) -- mismo patrón arquitectónico que ya demostró
+  `SnapshotService` (Módulo 3.6): infraestructura nueva que orquesta piezas existentes,
+  en vez de extenderlas.
+- Dos eventos nuevos (`PresenceUserConnected`/`PresenceUserDisconnected`,
+  `event_type` `presencia.usuario_conectado`/`presencia.usuario_desconectado`, ya
+  reservados desde Fase 0 en `docs/06-eventos-del-sistema.md`) se agregan a
+  `SYNCED_EVENTS` (`app/realtime/registry.py`) -- única integración necesaria con el
+  pipeline de sincronización en tiempo real; **cero cambios** en
+  `EventDispatcher`/`EventConsumer` (Módulo 3.5).
+- `RemateStateSnapshot` gana `connected_users_detail` (`app/snapshot/schemas.py`),
+  enmascarado a `None` para no-privilegiados con el mismo mecanismo que ya usan
+  `reserve_price`/`buyer_id` (ADR-026) -- el conteo (`connected_users: int`) sigue
+  visible para cualquiera.
+- `GET /presence/global` (`app/presence/router.py`) -- único endpoint HTTP nuevo de este
+  módulo, cierra el capítulo "sin un endpoint HTTP todavía" que `ADR-024` (sección H)
+  había dejado abierto para las métricas de `RoomManager`.
+- Frontend: `PresenceCounter` (nuevo, `features/sala/components/`) reemplaza el
+  `<span>` de conteo que `SalaHeader`/`ConsolaHeader` duplicaban, ahora en vivo evento a
+  evento; `ConnectedUsersList` (nuevo, `features/rematador/components/`) solo se monta
+  con `connected_users_detail` no nulo. El reducer (`features/sala/realtime/reducer.ts`,
+  Épica 4.6, sin reestructurar) gana dos `case` más, indexados por `connection_id` (no
+  por `user_id`, para no colapsar dos pestañas del mismo usuario).
+- Cero cambios en el dominio (`app/modules/remates/`, `.../lotes/`,
+  `app/modules/ofertas/`), el Auction Engine, la autenticación, `WebSocketClient`
+  (`shared/websocket/client.ts`) ni `useLiveRemateState`.
+
+## Épica 6, Módulo 6.4 — notas de arquitectura del Chat del Remate
+
+Detalle completo en [docs/34-chat-del-remate.md](34-chat-del-remate.md) y
+[ADR-037](adr/ADR-037-chat-del-remate.md). Resumen:
+
+- Cierra la predicción explícita de `docs/22-sincronizacion-tiempo-real.md` (Módulo
+  3.5): "se modela como un evento más (`ChatMessageSent`) publicado por un futuro
+  módulo de dominio `chat`, sincronizado agregando su clase a `registry.py`" —
+  confirmado literalmente, con una precisión: el chat sí necesitó persistencia
+  (historial, moderación), así que se modeló como módulo de dominio propio
+  (`app/modules/chat/`), no como infraestructura transversal (a diferencia de
+  `presence`/`snapshot`) — mismo perfil que `Oferta`.
+- `EventConsumer.dispatcher` (`app/realtime/consumer.py`) se generaliza de la clase
+  concreta `EventDispatcher` a un `Protocol` estructural (`Dispatcher`) — cero cambio
+  de comportamiento, ya funcionaba por duck typing — para admitir un **segundo**
+  `EventConsumer` corriendo en paralelo al existente.
+- `ChatSystemEventDispatcher` (`app/modules/chat/realtime.py`) es ese segundo
+  consumidor: reacciona a una whitelist de 6 eventos de ciclo de vida
+  (`remate.started/paused/resumed/finished`, `lote.opened/closed`) y genera mensajes
+  de sistema, idempotentes vía `source_event_id` + índice único parcial
+  (`uq_chat_messages_source_event_id`) — necesario para no duplicar mensajes en un
+  despliegue con más de una instancia de backend, todas reaccionando al mismo
+  `PUBLISH` de Redis. `RemateService`/`LoteService` no ganan ningún import ni
+  dependencia nueva.
+- Su `session_factory` se inyecta por constructor en vez de importar el singleton
+  `AsyncSessionLocal` — necesario porque una tarea de fondo iniciada en el lifespan no
+  pasa por el sistema de dependencias de FastAPI (a diferencia de `get_db`, ya
+  sobreescrito por test). `app.state.db_session_factory` es el patrón nuevo que queda
+  disponible para cualquier tarea de fondo futura equivalente.
+- Historial paginado con keyset (`(created_at, id) < (:before_created_at, :before_id)`,
+  comparación row-wise), no offset/limit como `OfertaRepository.list_by_lote` —
+  desviación consciente para el escenario de scroll infinito hacia atrás con miles de
+  mensajes.
+- `author_name`/`author_role` denormalizados en `ChatMessage` al momento de enviar —
+  evita un `JOIN` en la lectura más frecuente y preserva el nombre/rol que la persona
+  tenía en ese momento; `author_role` es `String(20)` plano, no el ENUM nativo
+  `user_role` (ADR-010), para no acoplar datos históricos a un catálogo que puede
+  cambiar.
+- Moderación (soft-delete) exclusiva del dueño del remate, sin excepción para admin —
+  mismo criterio restrictivo que el resto de las acciones de escritura sobre un
+  remate. Rate limiting básico (`RedisRateLimiter`, nuevo, infraestructura genérica
+  sobre `INCR`+`EXPIRE`) en el servidor, no solo en el cliente.
+- Envío/borrado/"está escribiendo" van por HTTP, nunca por el Gateway WebSocket —
+  mismo criterio que `AuctionEngine.place_bid`, evita una tercera excepción a "el
+  Gateway no conoce dominio" (las dos existentes son Snapshot y Presencia).
+- Frontend: `subscribeToRealtime` (nuevo en `useLiveRemateState`,
+  `features/sala/hooks.ts`) reenvía cualquier mensaje ya parseado del único
+  `WebSocketClient` de la página a quien se suscriba — el feature `chat/` lo usa para
+  no abrir una segunda conexión, lo que hubiera duplicado el conteo de
+  `connected_users` de Presencia. `ChatPanel` se integra de forma aditiva en
+  `SalaPage`/`ConsolaOperativaPage`, sin modificar ningún panel existente.
+- Cero cambios en el Gateway WebSocket, `RoomManager`, `ConnectionManager`,
+  `EventDispatcher`, `app/presence/`, `app/snapshot/` ni el dominio de
+  remates/ofertas.

@@ -286,6 +286,16 @@ El punto de extensión para los tres es el mismo, y ya existe:
    coordinación entre instancias de backend, se modela como un evento más
    (`ChatMessageSent`) publicado por un futuro módulo de dominio `chat`, sincronizado
    agregando su clase a `registry.py` — el Auction Engine no se entera de que existe.
+   **Implementado en el Módulo 6.4** — se confirmó la segunda vía: el chat sí necesita
+   persistencia (mensajes con historial paginado, moderación) y se modeló como un
+   módulo de dominio propio (`app/modules/chat/`), con `ChatMessageSent`/
+   `ChatMessageDeleted`/`ChatUserTyping` agregados a `SYNCED_EVENTS`
+   (`registry.py`), exactamente como se anticipaba acá. Los mensajes de sistema del
+   ciclo de vida del remate (inicio/pausa/apertura de lote/etc.) se generan con un
+   **segundo** `EventConsumer`, independiente del de este módulo — ver
+   [34-chat-del-remate.md](34-chat-del-remate.md) y
+   [ADR-037](adr/ADR-037-chat-del-remate.md) para el detalle completo, y ADR-025,
+   sección "Consecuencias", para la confirmación de esa predicción específica.
 2. **Notificaciones**: son, típicamente, el mismo evento de dominio que ya se sincroniza
    (`OfertaWinnerChanged`, por ejemplo) pero dirigido a un usuario específico en vez de a
    toda la sala. `ConnectionManager.connections_for_user(user_id)` (Módulo 3.3, ya
@@ -297,11 +307,16 @@ El punto de extensión para los tres es el mismo, y ya existe:
 3. **Presencia online**: un contador de conectados por sala ya es trivial de calcular
    hoy (`RoomManager.connection_count(remate_id)`, Módulo 3.4) — falta únicamente
    *anunciarlo*. Eso es un evento más (`presencia.usuario_conectado`, ya nombrado en
-   [06-eventos-del-sistema.md](06-eventos-del-sistema.md) desde Fase 0) publicado por el
-   propio `RoomManager.join`/`leave` — el único cambio necesario sería agregar un
-   `event_bus.publish(...)` dentro de esos dos métodos (que ya son `async` a propósito,
-   ver ADR-024, sección final) y sincronizarlo con el mismo `EventDispatcher` que ya
-   existe. El Auction Engine no participa en absoluto.
+   [06-eventos-del-sistema.md](06-eventos-del-sistema.md) desde Fase 0) sincronizado con
+   el mismo `EventDispatcher` que ya existe. El Auction Engine no participa en absoluto.
+   **Implementado en el Módulo 6.2** — con una salvedad respecto a lo que se anticipaba
+   acá: el `event_bus.publish(...)` **no** terminó agregado dentro de
+   `RoomManager.join`/`leave` (eso hubiera roto su firma de cero argumentos y los tests
+   que ya lo instancian así); en cambio, un `PresenceService` nuevo
+   (`app/presence/`) envuelve a `RoomManager` desde afuera sin modificarlo. Ver
+   [33-sistema-de-presencia.md](33-sistema-de-presencia.md) y
+   [ADR-036](adr/ADR-036-sistema-de-presencia.md), sección B, para el detalle completo
+   de por qué cambió el plan.
 
 En los tres casos, el patrón se repite: **el dominio (Auction Engine incluido) sigue
 publicando eventos sin saber quién los consume; `app/realtime/` decide qué hacer con

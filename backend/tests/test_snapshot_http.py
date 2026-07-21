@@ -137,5 +137,6 @@ async def test_snapshot_endpoint_same_shape_as_ws_snapshot_message(client: Async
         "winning_offer",
         "recent_offers",
         "connected_users",
+        "connected_users_detail",
         "generated_at",
     }

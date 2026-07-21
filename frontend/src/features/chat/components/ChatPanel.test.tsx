@@ -1,0 +1,157 @@
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { UseChatMessagesResult } from '../hooks';
+import type { ChatMessage } from '../types';
+
+const useChatMessagesMock = vi.hoisted(() => vi.fn());
+vi.mock('../hooks', () => ({ useChatMessages: useChatMessagesMock }));
+
+const { ChatPanel } = await import('./ChatPanel');
+
+function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
+  return {
+    id: 'msg-1',
+    remate_id: 'remate-1',
+    kind: 'user',
+    author_id: 'user-1',
+    author_name: 'Juan',
+    author_role: 'comprador',
+    content: 'Hola',
+    system_event_type: null,
+    is_deleted: false,
+    created_at: '2026-07-20T18:30:00Z',
+    ...overrides,
+  };
+}
+
+function defaultResult(overrides: Partial<UseChatMessagesResult> = {}): UseChatMessagesResult {
+  return {
+    messages: [],
+    isLoading: false,
+    error: null,
+    hasMoreOlder: false,
+    isLoadingOlder: false,
+    loadOlder: vi.fn(),
+    sendMessage: vi.fn().mockResolvedValue(undefined),
+    isSending: false,
+    sendError: null,
+    deleteMessage: vi.fn().mockResolvedValue(undefined),
+    notifyTyping: vi.fn(),
+    typingUsers: [],
+    ...overrides,
+  };
+}
+
+function renderPanel(overrides: Partial<UseChatMessagesResult> = {}, canModerate = false) {
+  useChatMessagesMock.mockReturnValue(defaultResult(overrides));
+  return render(
+    <ChatPanel
+      remateId="remate-1"
+      subscribeToRealtime={() => () => {}}
+      currentUserId="user-1"
+      connectedUsers={3}
+      canModerate={canModerate}
+    />,
+  );
+}
+
+describe('ChatPanel', () => {
+  it('mientras carga el historial, muestra el spinner', () => {
+    renderPanel({ isLoading: true });
+    expect(screen.getByText('Cargando chat…')).toBeInTheDocument();
+  });
+
+  it('ante un error de historial, muestra el mensaje de error', () => {
+    renderPanel({ error: { status: 500, code: 'http_error', message: 'Error.' } });
+    expect(screen.getByText('No se pudo cargar el chat.')).toBeInTheDocument();
+  });
+
+  it('sin mensajes, muestra el estado vacío', () => {
+    renderPanel();
+    expect(screen.getByText('Sin mensajes todavía. ¡Sé el primero en escribir!')).toBeInTheDocument();
+  });
+
+  it('renderiza los mensajes recibidos y el contador de conectados', () => {
+    renderPanel({ messages: [makeMessage({ id: 'msg-1', content: 'Hola' }), makeMessage({ id: 'msg-2', content: 'Buenas' })] });
+    expect(screen.getByText('Hola')).toBeInTheDocument();
+    expect(screen.getByText('Buenas')).toBeInTheDocument();
+    expect(screen.getByText('3 conectados')).toBeInTheDocument();
+  });
+
+  it('sin canModerate, no se puede eliminar ningún mensaje', () => {
+    renderPanel({ messages: [makeMessage()] }, false);
+    expect(screen.queryByRole('button', { name: 'Eliminar mensaje' })).not.toBeInTheDocument();
+  });
+
+  it('con canModerate, confirmar en el modal llama a deleteMessage con el id correcto', async () => {
+    const deleteMessage = vi.fn().mockResolvedValue(undefined);
+    renderPanel({ messages: [makeMessage({ id: 'msg-7' })], deleteMessage }, true);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Eliminar mensaje' }));
+    expect(screen.getByRole('heading', { name: 'Eliminar mensaje' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Eliminar' }));
+    expect(deleteMessage).toHaveBeenCalledWith('msg-7');
+  });
+
+  it('cancelar en el modal de confirmación no elimina el mensaje', async () => {
+    const deleteMessage = vi.fn();
+    renderPanel({ messages: [makeMessage({ id: 'msg-7' })], deleteMessage }, true);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Eliminar mensaje' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+    expect(deleteMessage).not.toHaveBeenCalled();
+  });
+
+  it('muestra el indicador de "está escribiendo" cuando hay usuarios tipeando', () => {
+    renderPanel({ typingUsers: [{ user_id: 'user-2', user_name: 'Pedro', lastSeenAt: Date.now() }] });
+    expect(screen.getByText('Pedro está escribiendo...')).toBeInTheDocument();
+  });
+
+  it('al hacer scroll cerca del final, no dispara loadOlder', () => {
+    const loadOlder = vi.fn();
+    renderPanel({
+      messages: [makeMessage({ id: 'msg-1' })],
+      hasMoreOlder: true,
+      loadOlder,
+    });
+
+    const container = screen.getByText('Hola').closest('.flex-1') as HTMLElement;
+    fireEvent.scroll(container, { target: { scrollTop: 500 } });
+
+    expect(loadOlder).not.toHaveBeenCalled();
+  });
+
+  it('al hacer scroll cerca del principio con hasMoreOlder, dispara loadOlder', () => {
+    const loadOlder = vi.fn();
+    renderPanel({
+      messages: [makeMessage({ id: 'msg-1' })],
+      hasMoreOlder: true,
+      isLoadingOlder: false,
+      loadOlder,
+    });
+
+    // El contenedor con el listener de scroll es el que envuelve la lista de mensajes.
+    const container = screen.getByText('Hola').closest('.flex-1') as HTMLElement;
+    fireEvent.scroll(container, { target: { scrollTop: 10 } });
+
+    expect(loadOlder).toHaveBeenCalledTimes(1);
+  });
+
+  it('no dispara loadOlder si ya está cargando mensajes anteriores', () => {
+    const loadOlder = vi.fn();
+    renderPanel({
+      messages: [makeMessage({ id: 'msg-1' })],
+      hasMoreOlder: true,
+      isLoadingOlder: true,
+      loadOlder,
+    });
+
+    const container = screen.getByText('Hola').closest('.flex-1') as HTMLElement;
+    fireEvent.scroll(container, { target: { scrollTop: 10 } });
+
+    expect(loadOlder).not.toHaveBeenCalled();
+  });
+});

@@ -13,6 +13,7 @@ from redis.asyncio import Redis
 from app.redis.cache import RedisCache
 from app.redis.locks import RedisLockFactory
 from app.redis.pubsub import RedisPubSub
+from app.redis.rate_limit import RedisRateLimiter
 from app.redis.streams import RedisStreams
 
 
@@ -34,3 +35,7 @@ def get_streams(client: Annotated[Redis, Depends(get_redis_client)]) -> RedisStr
 
 def get_lock_factory(client: Annotated[Redis, Depends(get_redis_client)]) -> RedisLockFactory:
     return RedisLockFactory(client)
+
+
+def get_rate_limiter(client: Annotated[Redis, Depends(get_redis_client)]) -> RedisRateLimiter:
+    return RedisRateLimiter(client)

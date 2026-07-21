@@ -12,23 +12,31 @@ concurrencia, tiempo real y escalabilidad — no en la cantidad de pantallas.
 
 ## Estado actual
 
-**Épica 6, Módulo 6.1 — Gestión multimedia de los lotes.** La Gestión de Remates y
-Lotes (Épica 5.3) ya permitía cargar un lote con una única imagen (URL de texto); este
-módulo agrega una galería multimedia completa: subida de múltiples imágenes en paralelo
-con barra de progreso, vista previa antes de que termine de subirse, selección de
-imagen principal, reordenamiento (drag & drop nativo + flechas de fallback) y
-eliminación con confirmación. El backend no tenía ninguna capacidad de subida binaria
-(`Lote.images` era JSONB de URLs de texto, sin storage propio) -- se documentó la
-brecha antes de implementar (siguiendo la instrucción explícita del enunciado) y se
-agregó el único endpoint nuevo de este módulo, `POST .../lotes/{id}/images`, que sube a
-disco local y sirve el archivo vía `StaticFiles`; el array `images` se sigue
-persistiendo con el `PATCH` de Lote ya existente desde la Épica 2.2, sin cambios. Ver
-[32-gestion-multimedia-lotes.md](32-gestion-multimedia-lotes.md). `admin` sigue viendo
-el placeholder de la Módulo 4.1; chat, streaming, notificaciones y video/PDF/
-certificados de lote siguen siendo módulos futuros. Esta carpeta sigue siendo la fuente
-de verdad del proyecto: cada fase nueva debe leerla antes de proponer cambios y
-actualizarla si algo deja de ser cierto. Ver el [README raíz](../README.md) para
-instrucciones de instalación y el estado exacto del código.
+**Épica 6, Módulo 6.4 — Chat del remate.** Cierra el último hueco que
+`docs/22-sincronizacion-tiempo-real.md` venía anticipando desde el Módulo 3.5: un chat
+en tiempo real por remate, con historial persistido. Un módulo de dominio nuevo
+(`app/modules/chat/`, distinto de la infraestructura transversal de
+`presence`/`snapshot` porque persiste datos de negocio reales) centraliza envío,
+borrado (moderación por el dueño del remate) e historial paginado (keyset) de
+mensajes; `ChatMessageSent`/`ChatMessageDeleted`/`ChatUserTyping` se sincronizan por el
+mismo pipeline de eventos de la Épica 3 (`SYNCED_EVENTS`, sin tocar
+`EventDispatcher`). Los mensajes automáticos de sistema (inicio/pausa/reanudación/
+apertura y cierre de lote/finalización) los genera un **segundo** `EventConsumer`
+independiente (`ChatSystemEventDispatcher`), idempotente vía `source_event_id` + índice
+único parcial — necesario para un despliegue con más de una instancia de backend (ver
+[ADR-037](adr/ADR-037-chat-del-remate.md)). Rate limiting básico (`RedisRateLimiter`,
+nuevo, infraestructura genérica) protege tanto el envío de mensajes como el aviso de
+"está escribiendo". En el frontend, `subscribeToRealtime` (nuevo en
+`useLiveRemateState`) permite que el feature `chat/` reciba eventos de dominio sin abrir
+una segunda conexión WebSocket (evitaría duplicar el contador de Presencia); `ChatPanel`
+se integra en la Sala del Remate (comprador) y en la Consola Operativa (rematador, con
+permiso de moderación). Ver [34-chat-del-remate.md](34-chat-del-remate.md). Reacciones,
+hilos de respuesta, adjuntos/emojis, moderación avanzada, seguimiento de remates,
+estadísticas de presencia, streaming y video/PDF/certificados de lote siguen siendo
+módulos futuros. Esta carpeta sigue siendo la fuente de verdad del proyecto: cada fase
+nueva debe leerla antes de proponer cambios y actualizarla si algo deja de ser cierto.
+Ver el [README raíz](../README.md) para instrucciones de instalación y el estado exacto
+del código.
 
 ## Índice
 
@@ -66,6 +74,8 @@ instrucciones de instalación y el estado exacto del código.
 | [30-consola-operativa-rematador.md](30-consola-operativa-rematador.md) | Consola Operativa del Rematador: diagrama, flujo de cada acción, integración con WebSockets (reutilización de `useLiveRemateState`), preparación para la gestión completa de remates y lotes (Épica 5.2) |
 | [31-gestion-remates-lotes.md](31-gestion-remates-lotes.md) | Gestión completa de Remates y Lotes: flujo de creación/edición, drag & drop de reordenamiento, componentes reutilizables (Épica 5.3) |
 | [32-gestion-multimedia-lotes.md](32-gestion-multimedia-lotes.md) | Gestión multimedia de los lotes: endpoint de subida a disco local, flujo de carga de archivos, galería (Épica 6.1) |
+| [33-sistema-de-presencia.md](33-sistema-de-presencia.md) | Sistema de presencia de usuarios: `PresenceService`, flujo de conexión/desconexión, sincronización en tiempo real, conteo global (Épica 6.2) |
+| [34-chat-del-remate.md](34-chat-del-remate.md) | Chat del remate: `ChatService`, envío/historial/moderación, segundo `EventConsumer` para mensajes de sistema, idempotencia, rate limiting (Épica 6.4) |
 | [adr/](adr/) | Registro de decisiones de arquitectura (ADR), una por decisión relevante |
 
 ## Reglas de esta documentación (aplican a todas las fases futuras)
@@ -241,3 +251,37 @@ instrucciones de instalación y el estado exacto del código.
   imágenes, reutilizables por video/PDF/certificados a futuro (`Lote.documents`, ya
   existente, sin consumidor todavía) sin rediseñar. Ver
   [32-gestion-multimedia-lotes.md](32-gestion-multimedia-lotes.md), ADR-035.
+- **Épica 6, Módulo 6.2** (2026-07-31): Sistema de presencia de usuarios --
+  `PresenceService` (`app/presence/`) centraliza join/leave de sala y publica
+  `presencia.usuario_conectado`/`presencia.usuario_desconectado` (ya reservados desde
+  Fase 0) sobre el Event Bus existente, reutilizando el pipeline de sincronización de la
+  Épica 3 sin tocar `RoomManager`/`ConnectionManager`/`EventDispatcher`/`EventConsumer`;
+  `RemateStateSnapshot` gana `connected_users_detail` (enmascarado igual que
+  `reserve_price`/`buyer_id`, Épica 3.6); `GET /presence/global` para el conteo agregado
+  de toda la plataforma; frontend: `PresenceCounter` (nuevo, reemplaza el contador
+  estático duplicado en `SalaHeader`/`ConsolaHeader`) y `ConnectedUsersList` (nuevo, solo
+  en la Consola Operativa) se actualizan evento a evento vía el reducer ya existente
+  (Épica 4.6), indexado por `connection_id` para soportar múltiples pestañas del mismo
+  usuario; indicador de actividad del remate reforzando el badge de estado ya existente,
+  sin dato ni componente nuevo; cero cambios en el dominio, el Auction Engine ni la
+  autenticación. Ver [33-sistema-de-presencia.md](33-sistema-de-presencia.md), ADR-036.
+- **Épica 6, Módulo 6.4** (2026-08-01): Chat del remate -- módulo de dominio nuevo
+  (`app/modules/chat/`, distinto de la infraestructura transversal de
+  `presence`/`snapshot`) para envío/historial (paginación keyset)/moderación
+  (soft-delete, solo el dueño del remate) de mensajes; `ChatMessageSent`/
+  `ChatMessageDeleted`/`ChatUserTyping` sincronizados por el mismo pipeline de eventos
+  de la Épica 3 (`SYNCED_EVENTS`); mensajes automáticos de sistema del ciclo de vida
+  del remate generados por un segundo `EventConsumer` independiente
+  (`ChatSystemEventDispatcher`), idempotente vía `source_event_id` + índice único
+  parcial para despliegues multi-instancia; `EventConsumer.dispatcher` generalizado a
+  un `Protocol` estructural para admitir ese segundo consumidor, sin cambiar su
+  comportamiento; rate limiting básico (`RedisRateLimiter`, nuevo, infraestructura
+  genérica) sobre mensajes y aviso de "está escribiendo"; frontend:
+  `subscribeToRealtime` (nuevo en `useLiveRemateState`) comparte la única conexión
+  WebSocket de la página con el feature `chat/`, sin duplicar el contador de
+  Presencia; `ChatPanel` integrado en la Sala del Remate (comprador) y la Consola
+  Operativa (rematador, con moderación); scroll preservado al leer mensajes
+  anteriores, auto-scroll al último mensaje; cero cambios en el Gateway WebSocket,
+  `RoomManager`, `ConnectionManager`, `EventDispatcher`, `app/presence/`,
+  `app/snapshot/` ni el dominio de remates/ofertas. Ver
+  [34-chat-del-remate.md](34-chat-del-remate.md), ADR-037.

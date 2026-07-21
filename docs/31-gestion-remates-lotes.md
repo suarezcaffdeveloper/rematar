@@ -238,7 +238,9 @@ remate.
 
 ## Trabajo futuro (fuera de alcance de este módulo)
 
-- Chat por sala, streaming de video, notificaciones.
+- ~~Chat por sala~~ -- implementado en el Módulo 6.4, ver
+  [34-chat-del-remate.md](34-chat-del-remate.md). Streaming de video y notificaciones
+  siguen sin implementar.
 - Subida real de imágenes para lotes y portada de remate (hoy, URL de texto).
 - Un endpoint de duplicación real en el backend, si el volumen de lotes por remate
   creciera lo suficiente para que la composición cliente-side (GET + POST secuencial)

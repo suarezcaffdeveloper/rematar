@@ -104,6 +104,29 @@ export interface OfertaWinnerChangedEvent extends DomainEventBase {
   new_amount: string;
 }
 
+/**
+ * Presencia (Épica 6, Módulo 6.2) -- reflejan
+ * `backend/app/presence/events.py::PresenceUserConnected`/`PresenceUserDisconnected`,
+ * sincronizados por el mismo `EventDispatcher` sin ningún cambio (agregados a
+ * `SYNCED_EVENTS` en `app/realtime/registry.py`). `connection_id` es imprescindible --
+ * dos pestañas del mismo `user_id` son dos conexiones distintas (ver
+ * `docs/21-sistema-de-salas.md`), así que el reducer indexa por `connection_id`, nunca
+ * por `user_id` (ver `reducer.ts`).
+ */
+export interface PresenceUserConnectedEvent extends DomainEventBase {
+  event_type: 'presencia.usuario_conectado';
+  connection_id: string;
+  user_id: string;
+  connected_users: number;
+}
+
+export interface PresenceUserDisconnectedEvent extends DomainEventBase {
+  event_type: 'presencia.usuario_desconectado';
+  connection_id: string;
+  user_id: string;
+  connected_users: number;
+}
+
 export type SalaDomainEvent =
   | RemateStartedEvent
   | RematePausedEvent
@@ -116,4 +139,6 @@ export type SalaDomainEvent =
   | OfertaPlacedEvent
   | OfertaAcceptedEvent
   | OfertaRejectedEvent
-  | OfertaWinnerChangedEvent;
+  | OfertaWinnerChangedEvent
+  | PresenceUserConnectedEvent
+  | PresenceUserDisconnectedEvent;

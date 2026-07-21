@@ -230,7 +230,15 @@ sequenceDiagram
    real — el día que unirse a una sala necesite publicar una señal (por ejemplo, un
    evento de presencia sobre Redis Pub/Sub, `presencia.usuario_conectado` de
    [06-eventos-del-sistema.md](06-eventos-del-sistema.md)), el cambio es agregar ese
-   `await` adentro, no cambiar la firma ni ningún call site.
+   `await` adentro, no cambiar la firma ni ningún call site. **Corrección (Épica 6,
+   Módulo 6.2):** en la práctica no se agregó ese `await` dentro de `register`/
+   `unregister` ni de `RoomManager.join`/`leave` -- se optó por un `PresenceService`
+   compositor nuevo que los envuelve desde afuera, precisamente para no tener que
+   cambiarles la firma (hoy toman cero argumentos, y romperla habría afectado a todos
+   los tests que ya los instancian así). Ver
+   [33-sistema-de-presencia.md](33-sistema-de-presencia.md) y
+   [ADR-036](adr/ADR-036-sistema-de-presencia.md), sección B, para el razonamiento
+   completo de por qué se cambió de plan.
 3. **El bucle de vida de la conexión ya tiene un lugar para mensajes nuevos.** Hoy solo
    reconoce `pong` (y descarta silenciosamente cualquier otro tipo); agregar
    `{"type": "join_room", "remate_id": "..."}` es agregar una rama al `match`/`if` que
@@ -261,5 +269,6 @@ salas):
 - ~~Snapshot al conectar/reconectar (RF-16, [ADR-008](adr/ADR-008-snapshot-mas-delta-para-reconexion.md))~~
   — implementado en el Módulo 3.6, ver
   [23-snapshot-service.md](23-snapshot-service.md) y ADR-026.
-- Presencia (contador de conectados por remate) y notificaciones dirigidas
-  ("superado") — todavía sin implementar.
+- ~~Presencia (contador de conectados por remate)~~ — implementado en el Módulo 6.2, ver
+  [33-sistema-de-presencia.md](33-sistema-de-presencia.md) y ADR-036.
+- Notificaciones dirigidas ("superado") — todavía sin implementar.

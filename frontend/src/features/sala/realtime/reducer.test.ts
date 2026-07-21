@@ -57,6 +57,7 @@ function makeSnapshot(overrides: Partial<RemateStateSnapshot> = {}): RemateState
     winning_offer: null,
     recent_offers: [],
     connected_users: 1,
+    connected_users_detail: null,
     generated_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
@@ -284,6 +285,103 @@ describe('applyDomainEventToSnapshot', () => {
       [],
     );
     expect(afterRejected).toBe(snapshot);
+  });
+
+  it('presencia.usuario_conectado actualiza el conteo siempre, y agrega al detalle si no está enmascarado', () => {
+    const snapshot = makeSnapshot({ connected_users: 1, connected_users_detail: null });
+    const result = applyDomainEventToSnapshot(
+      snapshot,
+      {
+        event_type: 'presencia.usuario_conectado',
+        event_id: 'e1',
+        remate_id: 'remate-1',
+        occurred_at: 't',
+        connection_id: 'conn-2',
+        user_id: 'user-2',
+        connected_users: 2,
+      },
+      [],
+    );
+
+    expect(result.connected_users).toBe(2);
+    // El comprador no ve el detalle (enmascarado a null por el backend) -- se mantiene null.
+    expect(result.connected_users_detail).toBeNull();
+  });
+
+  it('presencia.usuario_conectado agrega al detalle cuando el viewer es privilegiado (detalle no nulo)', () => {
+    const snapshot = makeSnapshot({
+      connected_users: 1,
+      connected_users_detail: [{ connection_id: 'conn-1', user_id: 'user-1', connected_at: 't0' }],
+    });
+    const result = applyDomainEventToSnapshot(
+      snapshot,
+      {
+        event_type: 'presencia.usuario_conectado',
+        event_id: 'e1',
+        remate_id: 'remate-1',
+        occurred_at: 't1',
+        connection_id: 'conn-2',
+        user_id: 'user-2',
+        connected_users: 2,
+      },
+      [],
+    );
+
+    expect(result.connected_users_detail).toEqual([
+      { connection_id: 'conn-1', user_id: 'user-1', connected_at: 't0' },
+      { connection_id: 'conn-2', user_id: 'user-2', connected_at: 't1' },
+    ]);
+  });
+
+  it('presencia.usuario_conectado indexa por connection_id -- una segunda pestaña del mismo usuario no pisa la primera', () => {
+    const snapshot = makeSnapshot({
+      connected_users: 1,
+      connected_users_detail: [{ connection_id: 'conn-1', user_id: 'user-1', connected_at: 't0' }],
+    });
+    const result = applyDomainEventToSnapshot(
+      snapshot,
+      {
+        event_type: 'presencia.usuario_conectado',
+        event_id: 'e1',
+        remate_id: 'remate-1',
+        occurred_at: 't1',
+        connection_id: 'conn-1-tab-2',
+        user_id: 'user-1', // mismo usuario, segunda pestaña
+        connected_users: 2,
+      },
+      [],
+    );
+
+    expect(result.connected_users_detail).toHaveLength(2);
+    expect(result.connected_users_detail?.map((e) => e.connection_id)).toEqual(['conn-1', 'conn-1-tab-2']);
+  });
+
+  it('presencia.usuario_desconectado quita únicamente la conexión que se fue (mismo usuario, otra pestaña sigue)', () => {
+    const snapshot = makeSnapshot({
+      connected_users: 2,
+      connected_users_detail: [
+        { connection_id: 'conn-1', user_id: 'user-1', connected_at: 't0' },
+        { connection_id: 'conn-1-tab-2', user_id: 'user-1', connected_at: 't1' },
+      ],
+    });
+    const result = applyDomainEventToSnapshot(
+      snapshot,
+      {
+        event_type: 'presencia.usuario_desconectado',
+        event_id: 'e1',
+        remate_id: 'remate-1',
+        occurred_at: 't2',
+        connection_id: 'conn-1-tab-2',
+        user_id: 'user-1',
+        connected_users: 1,
+      },
+      [],
+    );
+
+    expect(result.connected_users).toBe(1);
+    expect(result.connected_users_detail).toEqual([
+      { connection_id: 'conn-1', user_id: 'user-1', connected_at: 't0' },
+    ]);
   });
 });
 
