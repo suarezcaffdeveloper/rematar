@@ -4,11 +4,19 @@
 usuario acá: el módulo `auth` no es dueño del recurso `User` (lo es `users`), solo lo usa
 para emitir tokens sobre él. Esa es la línea divisoria entre ambos módulos (ver
 `app/modules/users/router.py`).
+
+## Auditoría (Épica 7, Módulo 7.2)
+
+`login`/`logout` dejan constancia vía `AuditLogRepository.record` (ver docs/36 y
+ADR-039), en la misma transacción que ya comitea `issue_tokens`/la revocación del
+refresh token -- nunca vía el Event Bus (best-effort, podría perder el registro).
 """
 
 import uuid
 from datetime import UTC, datetime, timedelta
 
+from app.audit.actions import AuditAction
+from app.audit.repository import AuditLogRepository
 from app.core.config import Settings
 from app.core.exceptions import UnauthorizedError
 from app.core.security import verify_password
@@ -34,11 +42,13 @@ class AuthService:
         user_repository: UserRepository,
         user_service: UserService,
         refresh_token_repository: RefreshTokenRepository,
+        audit_repository: AuditLogRepository,
         settings: Settings,
     ) -> None:
         self._user_repository = user_repository
         self._user_service = user_service
         self._refresh_token_repository = refresh_token_repository
+        self._audit_repository = audit_repository
         self._settings = settings
 
     async def register(self, data: UserCreate) -> User:
@@ -71,6 +81,16 @@ class AuthService:
 
     async def login(self, email: str, password: str) -> Token:
         user = await self.authenticate(email, password)
+        # `issue_tokens` hace el único commit de este flujo -- este `record` (sin
+        # commit propio) queda en esa misma transacción.
+        self._audit_repository.record(
+            actor_id=user.id,
+            actor_name=user.full_name,
+            actor_role=user.role.value,
+            action=AuditAction.AUTH_LOGIN,
+            resource_type="user",
+            resource_id=user.id,
+        )
         return await self.issue_tokens(user)
 
     async def refresh(self, refresh_token: str) -> Token:
@@ -106,6 +126,19 @@ class AuthService:
         stored = await self._refresh_token_repository.get_by_id(token_id)
         if stored is not None and stored.revoked_at is None:
             stored.revoked_at = datetime.now(UTC)
+            # Se busca el User (no viaja en el payload del refresh token) únicamente
+            # para denormalizar nombre/rol en la entrada de auditoría -- un logout no es
+            # un camino de alta frecuencia, el costo de esta consulta puntual por PK es
+            # despreciable.
+            user = await self._user_repository.get_by_id(stored.user_id)
+            self._audit_repository.record(
+                actor_id=stored.user_id,
+                actor_name=user.full_name if user else None,
+                actor_role=user.role.value if user else None,
+                action=AuditAction.AUTH_LOGOUT,
+                resource_type="user",
+                resource_id=stored.user_id,
+            )
             await self._refresh_token_repository.commit()
 
     async def get_current_user_from_access_token(self, token: str) -> User:

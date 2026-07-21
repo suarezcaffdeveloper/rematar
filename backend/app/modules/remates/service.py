@@ -20,6 +20,15 @@ través de `EventBus`, siempre como última instrucción, después de confirmar 
 transacción — ver docs/19-arquitectura-de-eventos.md y ADR-022. Es el único cambio de
 esta fase: ninguna validación ni regla de negocio de las descriptas arriba se modificó.
 
+## Auditoría (Épica 7, Módulo 7.2)
+
+`create`, `update` (`remate.updated`/`remate.settings_changed` según si `settings`
+cambió), `soft_delete` y las seis transiciones de estado (`remate.status_changed`)
+dejan constancia vía `AuditLogRepository.record` (ver docs/36 y ADR-039), **antes** del
+`commit()` que ya existe en cada método -- misma transacción, nunca vía el Event Bus
+(best-effort, podría perderse). `try_auto_finish` también audita, sin actor (es una
+transición automática, no disparada por HTTP).
+
 ## Permisos (ver docs/14-modulo-remate.md para el detalle completo)
 
 - Crear: solo rol `rematador` (aplicado en el router vía `require_roles`).
@@ -34,6 +43,8 @@ esta fase: ninguna validación ni regla de negocio de las descriptas arriba se m
 import uuid
 from datetime import UTC, datetime
 
+from app.audit.actions import AuditAction
+from app.audit.repository import AuditLogRepository
 from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
 from app.events.bus import EventBus
 from app.modules.remates.events import (
@@ -59,10 +70,26 @@ class RemateService:
         repository: RemateRepository,
         lote_repository: LoteRepository,
         event_bus: EventBus,
+        audit_repository: AuditLogRepository,
     ) -> None:
         self._repository = repository
         self._lote_repository = lote_repository
         self._event_bus = event_bus
+        self._audit_repository = audit_repository
+
+    def _record_status_change(
+        self, remate: Remate, actor: User | None, previous_status: RemateStatus, *, trigger: str
+    ) -> None:
+        self._audit_repository.record(
+            actor_id=actor.id if actor else None,
+            actor_name=actor.full_name if actor else None,
+            actor_role=actor.role.value if actor else None,
+            action=AuditAction.REMATE_STATUS_CHANGED,
+            resource_type="remate",
+            resource_id=remate.id,
+            remate_id=remate.id,
+            details={"from": previous_status.value, "to": remate.status.value, "trigger": trigger},
+        )
 
     async def create(self, owner: User, data: RemateCreate) -> Remate:
         remate = Remate(
@@ -77,6 +104,20 @@ class RemateService:
             settings=data.settings.model_dump(),
         )
         self._repository.add(remate)
+        # `remate.id` es un default client-side (`uuid.uuid4`, ver `db/mixins.py`) --
+        # flush lo asigna sin comitear, para poder usarlo como resource_id/remate_id de
+        # la entrada de auditoría y dejarla en el mismo commit único de abajo.
+        await self._audit_repository.flush()
+        self._audit_repository.record(
+            actor_id=owner.id,
+            actor_name=owner.full_name,
+            actor_role=owner.role.value,
+            action=AuditAction.REMATE_CREATED,
+            resource_type="remate",
+            resource_id=remate.id,
+            remate_id=remate.id,
+            details={"title": remate.title, "category": remate.category.value},
+        )
         await self._repository.commit()
         await self._repository.refresh(remate)
         await self._event_bus.publish(
@@ -149,6 +190,21 @@ class RemateService:
         for field, value in changes.items():
             setattr(remate, field, value)
 
+        audit_action = (
+            AuditAction.REMATE_SETTINGS_CHANGED
+            if "settings" in changes
+            else AuditAction.REMATE_UPDATED
+        )
+        self._audit_repository.record(
+            actor_id=owner.id,
+            actor_name=owner.full_name,
+            actor_role=owner.role.value,
+            action=audit_action,
+            resource_type="remate",
+            resource_id=remate.id,
+            remate_id=remate.id,
+            details={"changed_fields": sorted(changes.keys())},
+        )
         await self._repository.commit()
         await self._repository.refresh(remate)
         return remate
@@ -156,6 +212,7 @@ class RemateService:
     async def schedule(self, remate_id: uuid.UUID, owner: User) -> Remate:
         remate = await self.get_owned_or_raise(remate_id, owner)
         assert_transition_allowed(remate.status, RemateStatus.SCHEDULED)
+        previous_status = remate.status
 
         if remate.starts_at is None:
             raise BusinessRuleError(
@@ -165,6 +222,7 @@ class RemateService:
             raise BusinessRuleError("La fecha de inicio debe ser futura.")
 
         remate.status = RemateStatus.SCHEDULED
+        self._record_status_change(remate, owner, previous_status, trigger="manual")
         await self._repository.commit()
         await self._repository.refresh(remate)
         await self._event_bus.publish(
@@ -175,11 +233,27 @@ class RemateService:
     async def cancel(self, remate_id: uuid.UUID, owner: User, reason: str) -> Remate:
         remate = await self.get_owned_or_raise(remate_id, owner)
         assert_transition_allowed(remate.status, RemateStatus.CANCELLED)
+        previous_status = remate.status
 
         remate.status = RemateStatus.CANCELLED
         remate.cancellation_reason = reason
         remate.cancelled_at = datetime.now(UTC)
 
+        self._audit_repository.record(
+            actor_id=owner.id,
+            actor_name=owner.full_name,
+            actor_role=owner.role.value,
+            action=AuditAction.REMATE_STATUS_CHANGED,
+            resource_type="remate",
+            resource_id=remate.id,
+            remate_id=remate.id,
+            details={
+                "from": previous_status.value,
+                "to": remate.status.value,
+                "trigger": "manual",
+                "reason": reason,
+            },
+        )
         await self._repository.commit()
         await self._repository.refresh(remate)
         await self._event_bus.publish(RemateCancelled(remate_id=remate.id, reason=reason))
@@ -194,11 +268,21 @@ class RemateService:
                 current_status=remate.status.value,
             )
         remate.deleted_at = datetime.now(UTC)
+        self._audit_repository.record(
+            actor_id=owner.id,
+            actor_name=owner.full_name,
+            actor_role=owner.role.value,
+            action=AuditAction.REMATE_DELETED,
+            resource_type="remate",
+            resource_id=remate.id,
+            remate_id=remate.id,
+        )
         await self._repository.commit()
 
     async def start(self, remate_id: uuid.UUID, owner: User) -> Remate:
         remate = await self.get_owned_or_raise(remate_id, owner)
         assert_transition_allowed(remate.status, RemateStatus.LIVE)
+        previous_status = remate.status
 
         if await self._lote_repository.count_by_remate(remate_id) == 0:
             raise BusinessRuleError(
@@ -206,6 +290,7 @@ class RemateService:
             )
 
         remate.status = RemateStatus.LIVE
+        self._record_status_change(remate, owner, previous_status, trigger="manual")
         await self._repository.commit()
         await self._repository.refresh(remate)
         await self._event_bus.publish(RemateStarted(remate_id=remate.id))
@@ -214,8 +299,10 @@ class RemateService:
     async def pause(self, remate_id: uuid.UUID, owner: User) -> Remate:
         remate = await self.get_owned_or_raise(remate_id, owner)
         assert_transition_allowed(remate.status, RemateStatus.PAUSED)
+        previous_status = remate.status
 
         remate.status = RemateStatus.PAUSED
+        self._record_status_change(remate, owner, previous_status, trigger="manual")
         await self._repository.commit()
         await self._repository.refresh(remate)
         await self._event_bus.publish(RematePaused(remate_id=remate.id))
@@ -224,8 +311,10 @@ class RemateService:
     async def resume(self, remate_id: uuid.UUID, owner: User) -> Remate:
         remate = await self.get_owned_or_raise(remate_id, owner)
         assert_transition_allowed(remate.status, RemateStatus.LIVE)
+        previous_status = remate.status
 
         remate.status = RemateStatus.LIVE
+        self._record_status_change(remate, owner, previous_status, trigger="manual")
         await self._repository.commit()
         await self._repository.refresh(remate)
         await self._event_bus.publish(RemateResumed(remate_id=remate.id))
@@ -234,6 +323,7 @@ class RemateService:
     async def finish(self, remate_id: uuid.UUID, owner: User) -> Remate:
         remate = await self.get_owned_or_raise(remate_id, owner)
         assert_transition_allowed(remate.status, RemateStatus.FINISHED)
+        previous_status = remate.status
 
         if await self._lote_repository.has_open_lote(remate_id):
             raise BusinessRuleError(
@@ -242,6 +332,7 @@ class RemateService:
 
         remate.status = RemateStatus.FINISHED
         remate.finished_at = datetime.now(UTC)
+        self._record_status_change(remate, owner, previous_status, trigger="manual")
         await self._repository.commit()
         await self._repository.refresh(remate)
         await self._event_bus.publish(RemateFinished(remate_id=remate.id, triggered_by="manual"))
@@ -259,8 +350,11 @@ class RemateService:
         if await self._lote_repository.has_unresolved_lote(remate.id):
             return
 
+        previous_status = remate.status
         remate.status = RemateStatus.FINISHED
         remate.finished_at = datetime.now(UTC)
+        # Sin actor: transición disparada por el sistema, no por un caller HTTP.
+        self._record_status_change(remate, None, previous_status, trigger="auto")
         await self._repository.commit()
         await self._repository.refresh(remate)
         await self._event_bus.publish(RemateFinished(remate_id=remate.id, triggered_by="auto"))

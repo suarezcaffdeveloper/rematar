@@ -42,6 +42,14 @@ Abrir/cerrar/cancelar, en cambio, son acciones del remate **en curso**: exigen `
 (`app/modules/remates/lotes/events.py`) al final, después de confirmar la transacción —
 ver docs/19-arquitectura-de-eventos.md y ADR-022. El CRUD estructural (Módulo 2.2) no
 publica nada, mismo criterio que el catálogo de eventos no lo incluye.
+
+## Auditoría (Épica 7, Módulo 7.2)
+
+`create`/`update`/`soft_delete`/`open`/`open_next`/`close`/`cancel` dejan constancia vía
+`AuditLogRepository.record` (ver docs/36 y ADR-039), antes del `commit()`/
+`_commit_or_raise_conflict()` que ya existen -- misma transacción. `close` distingue
+explícitamente `lote.awarded` (venta) de `lote.closed` (no vendido): son dos ítems
+separados en el enunciado del módulo.
 """
 
 import uuid
@@ -51,6 +59,8 @@ from decimal import Decimal
 from fastapi import UploadFile
 from sqlalchemy.exc import IntegrityError
 
+from app.audit.actions import AuditAction
+from app.audit.repository import AuditLogRepository
 from app.core.config import Settings
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
 from app.events.bus import EventBus
@@ -72,11 +82,13 @@ class LoteService:
         remate_service: RemateService,
         event_bus: EventBus,
         settings: Settings,
+        audit_repository: AuditLogRepository,
     ) -> None:
         self._repository = repository
         self._remate_service = remate_service
         self._event_bus = event_bus
         self._settings = settings
+        self._audit_repository = audit_repository
 
     @staticmethod
     def _assert_structure_editable(remate: Remate) -> None:
@@ -124,9 +136,23 @@ class LoteService:
             reserve_price=data.reserve_price,
         )
         self._repository.add(lote)
-        await self._commit_or_raise_conflict(
+        # `lote.id` es un default client-side -- flush lo asigna sin comitear, para
+        # usarlo como resource_id de la entrada de auditoría en el mismo commit único de
+        # abajo. Ver docstring del módulo.
+        await self._flush_or_raise_conflict(
             f"Ya existe un lote con el número '{data.lot_number}' en este remate."
         )
+        self._audit_repository.record(
+            actor_id=owner.id,
+            actor_name=owner.full_name,
+            actor_role=owner.role.value,
+            action=AuditAction.LOTE_CREATED,
+            resource_type="lote",
+            resource_id=lote.id,
+            remate_id=remate_id,
+            details={"lot_number": lote.lot_number, "title": lote.title},
+        )
+        await self._repository.commit()
         await self._repository.refresh(lote)
         return lote
 
@@ -174,6 +200,16 @@ class LoteService:
         for field, value in changes.items():
             setattr(lote, field, value)
 
+        self._audit_repository.record(
+            actor_id=owner.id,
+            actor_name=owner.full_name,
+            actor_role=owner.role.value,
+            action=AuditAction.LOTE_UPDATED,
+            resource_type="lote",
+            resource_id=lote.id,
+            remate_id=remate_id,
+            details={"changed_fields": sorted(changes.keys())},
+        )
         await self._commit_or_raise_conflict(
             f"Ya existe un lote con el número '{lote.lot_number}' en este remate."
         )
@@ -184,6 +220,15 @@ class LoteService:
         remate, lote = await self._get_owned_lote_or_raise(remate_id, lote_id, owner)
         self._assert_structure_editable(remate)
         lote.deleted_at = datetime.now(UTC)
+        self._audit_repository.record(
+            actor_id=owner.id,
+            actor_name=owner.full_name,
+            actor_role=owner.role.value,
+            action=AuditAction.LOTE_DELETED,
+            resource_type="lote",
+            resource_id=lote.id,
+            remate_id=remate_id,
+        )
         await self._repository.commit()
 
     async def reorder(
@@ -250,6 +295,7 @@ class LoteService:
 
         lote.status = LoteStatus.OPEN
         lote.opened_at = datetime.now(UTC)
+        self._record_lote_action(lote, owner, remate_id, AuditAction.LOTE_OPENED)
         await self._commit_or_raise_conflict(
             "Ya hay un lote abierto en este remate (conflicto de concurrencia)."
         )
@@ -274,6 +320,7 @@ class LoteService:
 
         lote.status = LoteStatus.OPEN
         lote.opened_at = datetime.now(UTC)
+        self._record_lote_action(lote, owner, remate_id, AuditAction.LOTE_OPENED)
         await self._commit_or_raise_conflict(
             "Ya hay un lote abierto en este remate (conflicto de concurrencia)."
         )
@@ -315,6 +362,22 @@ class LoteService:
         lote.status = target
         lote.final_price = final_price
         lote.closed_at = datetime.now(UTC)
+        # Ítems distintos del enunciado: `lote.awarded` cuando se vende (adjudicación),
+        # `lote.closed` cuando no -- ver docstring del módulo.
+        audit_action = AuditAction.LOTE_AWARDED if outcome == LoteCloseOutcome.SOLD else AuditAction.LOTE_CLOSED
+        self._audit_repository.record(
+            actor_id=owner.id,
+            actor_name=owner.full_name,
+            actor_role=owner.role.value,
+            action=audit_action,
+            resource_type="lote",
+            resource_id=lote.id,
+            remate_id=remate_id,
+            details={
+                "outcome": outcome.value,
+                "final_price": str(final_price) if final_price is not None else None,
+            },
+        )
         await self._repository.commit()
         await self._repository.refresh(lote)
         await self._event_bus.publish(
@@ -344,6 +407,16 @@ class LoteService:
         lote.status = LoteStatus.CANCELLED
         lote.cancellation_reason = reason
         lote.cancelled_at = datetime.now(UTC)
+        self._audit_repository.record(
+            actor_id=owner.id,
+            actor_name=owner.full_name,
+            actor_role=owner.role.value,
+            action=AuditAction.LOTE_CANCELLED,
+            resource_type="lote",
+            resource_id=lote.id,
+            remate_id=remate_id,
+            details={"reason": reason},
+        )
         await self._repository.commit()
         await self._repository.refresh(lote)
         await self._event_bus.publish(
@@ -352,6 +425,25 @@ class LoteService:
 
         await self._remate_service.try_auto_finish(remate)
         return lote
+
+    def _record_lote_action(self, lote: Lote, owner: User, remate_id: uuid.UUID, action: str) -> None:
+        self._audit_repository.record(
+            actor_id=owner.id,
+            actor_name=owner.full_name,
+            actor_role=owner.role.value,
+            action=action,
+            resource_type="lote",
+            resource_id=lote.id,
+            remate_id=remate_id,
+            details={"lot_number": lote.lot_number},
+        )
+
+    async def _flush_or_raise_conflict(self, message: str) -> None:
+        try:
+            await self._audit_repository.flush()
+        except IntegrityError as exc:
+            await self._repository.rollback()
+            raise ConflictError(message) from exc
 
     async def _commit_or_raise_conflict(self, message: str) -> None:
         try:

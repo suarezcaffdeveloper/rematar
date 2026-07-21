@@ -20,9 +20,10 @@ import { RegisterPage } from '../features/auth/pages/RegisterPage';
 import { RemateDetailPage } from '../features/remates/pages/RemateDetailPage';
 import { ConsolaOperativaPage } from '../features/rematador/pages/ConsolaOperativaPage';
 import { LotesManagementPage } from '../features/rematador/pages/LotesManagementPage';
+import { RemateAuditLogPage } from '../features/rematador/pages/RemateAuditLogPage';
 import { SalaPage } from '../features/sala/pages/SalaPage';
 import { HomePage } from './pages/HomePage';
-import { AdminPlaceholderPage } from './pages/AdminPlaceholderPage';
+import { AdminAuditLogPage } from './pages/AdminAuditLogPage';
 import { ForbiddenPage } from './pages/ForbiddenPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
@@ -67,10 +68,14 @@ export const router = createBrowserRouter([
               // (crear/editar/eliminar/duplicar/reordenar) antes de que empiece. Mismo
               // criterio sin `RequireRole` que el resto de `/remates/:remateId/*`.
               { path: '/remates/:remateId/lotes', element: <LotesManagementPage /> },
+              // Auditoría de un remate puntual (Épica 7, Módulo 7.2) -- mismo criterio
+              // sin RequireRole que el resto de `/remates/:remateId/*`, el backend
+              // decide (dueño del remate o admin, ver AuditService.list_for_remate).
+              { path: '/remates/:remateId/auditoria', element: <RemateAuditLogPage /> },
               // Protegidas además por rol: RequireRole asume que ya pasó RequireAuth.
               {
                 element: <RequireRole allowedRoles={['admin']} />,
-                children: [{ path: '/admin', element: <AdminPlaceholderPage /> }],
+                children: [{ path: '/admin', element: <AdminAuditLogPage /> }],
               },
             ],
           },

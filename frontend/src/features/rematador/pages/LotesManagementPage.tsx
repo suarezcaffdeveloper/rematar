@@ -217,6 +217,7 @@ export function LotesManagementPage() {
           onCancel={() => setIsCancelModalOpen(true)}
           onDelete={() => setIsDeleteRemateModalOpen(true)}
           onDuplicate={handleDuplicateRemate}
+          onViewAudit={() => navigate(`/remates/${id}/auditoria`)}
           isPublishing={isPublishing}
           isDuplicating={isDuplicatingRemate}
         />

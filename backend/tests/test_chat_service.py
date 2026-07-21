@@ -15,6 +15,7 @@ from httpx import AsyncClient
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from app.audit.repository import AuditLogRepository
 from app.core.config import get_settings
 from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError, RateLimitError
 from app.events.base import DomainEvent
@@ -101,8 +102,9 @@ def _make_service(
     event_bus: _RecordingEventBus,
     **settings_overrides,
 ) -> ChatService:
+    audit_repository = AuditLogRepository(db_session)
     remate_service = RemateService(
-        RemateRepository(db_session), LoteRepository(db_session), event_bus
+        RemateRepository(db_session), LoteRepository(db_session), event_bus, audit_repository
     )
     settings = get_settings().model_copy(update=settings_overrides)
     return ChatService(
@@ -111,6 +113,7 @@ def _make_service(
         event_bus,
         RedisRateLimiter(redis_client),
         settings,
+        audit_repository,
     )
 
 

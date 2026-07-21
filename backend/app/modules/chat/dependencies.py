@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.repository import AuditLogRepository
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
 from app.events.bus import EventBus
@@ -27,5 +28,6 @@ def get_chat_service(
     event_bus: Annotated[EventBus, Depends(get_event_bus)],
     rate_limiter: Annotated[RedisRateLimiter, Depends(get_rate_limiter)],
     settings: Annotated[Settings, Depends(get_settings)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ChatService:
-    return ChatService(repository, remate_service, event_bus, rate_limiter, settings)
+    return ChatService(repository, remate_service, event_bus, rate_limiter, settings, AuditLogRepository(db))

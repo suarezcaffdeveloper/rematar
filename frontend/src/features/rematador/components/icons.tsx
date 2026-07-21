@@ -99,6 +99,23 @@ export function ChevronRightIcon({ className }: IconProps) {
   );
 }
 
+/** Auditoría (Épica 7, Módulo 7.2) -- reloj con flecha de "historial". */
+export function HistoryIcon({ className }: IconProps) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className={className}>
+      <path
+        d="M4 10a6 6 0 1 0 1.8-4.3"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M3.5 4v3h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 7v3l2 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function StarIcon({ className, filled }: IconProps & { filled?: boolean }) {
   return (
     <svg aria-hidden="true" viewBox="0 0 20 20" fill={filled ? 'currentColor' : 'none'} className={className}>

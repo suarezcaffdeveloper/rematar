@@ -5,7 +5,7 @@ import { CoverPlaceholder } from '../../remates/components/CoverPlaceholder';
 import { CalendarIcon, PinIcon } from '../../remates/components/icons';
 import { CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_LABELS } from '../../remates/labels';
 import type { Remate } from '../../remates/types';
-import { CopyIcon, PencilIcon, SendIcon, TrashIcon } from './icons';
+import { CopyIcon, HistoryIcon, PencilIcon, SendIcon, TrashIcon } from './icons';
 
 export interface RemateManagementSidebarProps {
   remate: Remate;
@@ -15,6 +15,7 @@ export interface RemateManagementSidebarProps {
   onCancel: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onViewAudit: () => void;
   isPublishing: boolean;
   isDuplicating: boolean;
 }
@@ -34,6 +35,7 @@ export function RemateManagementSidebar({
   onCancel,
   onDelete,
   onDuplicate,
+  onViewAudit,
   isPublishing,
   isDuplicating,
 }: RemateManagementSidebarProps) {
@@ -109,6 +111,11 @@ export function RemateManagementSidebar({
         <Button variant="secondary" onClick={onDuplicate} isLoading={isDuplicating}>
           <CopyIcon className="h-4 w-4" />
           Duplicar remate
+        </Button>
+
+        <Button variant="secondary" onClick={onViewAudit}>
+          <HistoryIcon className="h-4 w-4" />
+          Ver auditoría
         </Button>
 
         {isCancellable && (

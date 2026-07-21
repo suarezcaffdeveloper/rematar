@@ -57,7 +57,10 @@ def test_gateway_websocket_never_imports_domain() -> None:
 
 
 def test_auction_engine_never_imports_websockets_realtime_or_snapshot() -> None:
-    forbidden_prefixes = ("app.websocket", "app.realtime", "app.snapshot")
+    # `app.analytics` (Épica 7, Módulo 7.1) también está prohibido: es un consumidor de
+    # lectura del dominio, la dependencia va en un solo sentido (analytics -> ofertas),
+    # nunca al revés.
+    forbidden_prefixes = ("app.websocket", "app.realtime", "app.snapshot", "app.analytics")
     ofertas_dir = APP_DIR / "modules" / "ofertas"
     offenders = _find_forbidden_imports(
         list(ofertas_dir.glob("*.py")), forbidden_prefixes, relative_to=ofertas_dir
@@ -68,7 +71,9 @@ def test_auction_engine_never_imports_websockets_realtime_or_snapshot() -> None:
 
 
 def test_remates_and_lotes_never_import_websockets_realtime_or_snapshot() -> None:
-    forbidden_prefixes = ("app.websocket", "app.realtime", "app.snapshot")
+    # `app.analytics` (Épica 7, Módulo 7.1): mismo razonamiento que arriba -- lee de
+    # remates/lotes, nunca al revés.
+    forbidden_prefixes = ("app.websocket", "app.realtime", "app.snapshot", "app.analytics")
     remates_dir = APP_DIR / "modules" / "remates"
     offenders = _find_forbidden_imports(
         list(remates_dir.rglob("*.py")), forbidden_prefixes, relative_to=remates_dir
@@ -169,4 +174,83 @@ def test_chat_never_imports_websocket_realtime_snapshot_presence_or_ofertas() ->
     assert offenders == {}, (
         f"app/modules/chat/ depende de transporte/tiempo real o de un bounded context "
         f"ajeno: {offenders}"
+    )
+
+
+def test_analytics_never_imports_websocket_realtime_snapshot_or_chat() -> None:
+    """`app/analytics/` (Épica 7, Módulo 7.1) es un compositor de lectura, mismo perfil
+    que `app/snapshot/`/`app/presence/` -- nunca debe conocer el Gateway WebSocket, el
+    Event Consumer ni el Snapshot Service (ninguna métrica pasa por ahí, todo sale de
+    consultas propias a Postgres + `PresenceService`), ni el módulo de Chat (bounded
+    context ajeno, ninguna métrica pedida depende de él). A diferencia de
+    `app/presence/`/`app/snapshot/` (que evitan el dominio por completo), Analítica sí
+    importa `app.modules.remates`/`app.modules.ofertas`/`app.modules.users` a propósito
+    -- cada métrica es una consulta directa sobre esos modelos (ver docstring de
+    `repository.py`)."""
+    forbidden_prefixes = (
+        "app.websocket",
+        "app.realtime",
+        "app.snapshot",
+        "app.modules.chat",
+    )
+    analytics_dir = APP_DIR / "analytics"
+    offenders = _find_forbidden_imports(
+        list(analytics_dir.glob("*.py")), forbidden_prefixes, relative_to=analytics_dir
+    )
+    assert offenders == {}, (
+        f"app/analytics/ depende de transporte/tiempo real o del módulo de chat: {offenders}"
+    )
+
+
+def test_audit_never_imports_websocket_realtime_snapshot_or_chat() -> None:
+    """`app/audit/` (Épica 7, Módulo 7.2) nunca debe conocer el Gateway WebSocket, el
+    Event Consumer ni el Snapshot Service (el registro de auditoría se escribe por
+    llamada directa desde cada servicio de dominio, nunca escuchando el pipeline de
+    tiempo real -- ver ADR-039 sección A), ni el módulo de Chat ni el de Ofertas
+    (bounded contexts ajenos: `AuditService.list_for_remate` solo necesita
+    `RemateService` para resolver ownership/visibilidad, mismo criterio que
+    `AnalyticsService`)."""
+    forbidden_prefixes = (
+        "app.websocket",
+        "app.realtime",
+        "app.snapshot",
+        "app.modules.chat",
+        "app.modules.ofertas",
+    )
+    audit_dir = APP_DIR / "audit"
+    offenders = _find_forbidden_imports(
+        list(audit_dir.glob("*.py")), forbidden_prefixes, relative_to=audit_dir
+    )
+    assert offenders == {}, (
+        f"app/audit/ depende de transporte/tiempo real o de un bounded context ajeno: {offenders}"
+    )
+
+
+def test_domain_modules_only_use_audit_write_surface() -> None:
+    """Los módulos de dominio (remates/lotes, ofertas, chat, auth) dependen de
+    `app.audit.repository`/`app.audit.models`/`app.audit.actions` -- la superficie de
+    **escritura** de Auditoría (Épica 7, Módulo 7.2), sin dependencias de `app.modules.*`
+    -- para dejar constancia de sus propias acciones (ver ADR-039 sección C). Nunca
+    deben importar `app.audit.service` ni `app.audit.router` (la superficie de
+    **lectura**, exclusiva del panel admin/rematador): esa dirección cerraría un ciclo,
+    porque `app.audit.service` ya depende de `RemateService` -- mismo criterio
+    "LoteRepository, no LoteService" que ya evita el ciclo simétrico documentado en
+    ADR-019."""
+    forbidden_prefixes = ("app.audit.service", "app.audit.router")
+    domain_dirs = [
+        APP_DIR / "modules" / "remates",
+        APP_DIR / "modules" / "ofertas",
+        APP_DIR / "modules" / "chat",
+        APP_DIR / "modules" / "auth",
+    ]
+    offenders: dict[str, set[str]] = {}
+    for domain_dir in domain_dirs:
+        offenders.update(
+            _find_forbidden_imports(
+                list(domain_dir.rglob("*.py")), forbidden_prefixes, relative_to=APP_DIR
+            )
+        )
+    assert offenders == {}, (
+        f"Un módulo de dominio depende de la superficie de lectura de auditoría "
+        f"(app.audit.service/router) en vez de solo la de escritura: {offenders}"
     )

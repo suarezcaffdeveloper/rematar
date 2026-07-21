@@ -98,6 +98,20 @@ class Settings(BaseSettings):
     # necesita protegerse tan estrictamente, solo evitar que inunde la sala.
     CHAT_TYPING_RATE_LIMIT_WINDOW_SECONDS: int = 2
 
+    # --- Dashboard de Analítica en Tiempo Real (Épica 7, Módulo 7.1) ---
+    # Ver docs/35-dashboard-analitica-tiempo-real.md y ADR-038.
+    # TTL corto de la caché Redis de agregados (mismo criterio que
+    # SNAPSHOT_CACHE_TTL_SECONDS): absorbe ráfagas de refetch sin servir un número viejo
+    # por mucho tiempo.
+    ANALYTICS_CACHE_TTL_SECONDS: float = 3.0
+    ANALYTICS_BIDS_TIMELINE_MINUTES: int = 20
+    ANALYTICS_RECENT_EVENTS_LIMIT: int = 15
+    ANALYTICS_OFFERS_RATE_WINDOW_SECONDS: int = 60
+
+    # --- Sistema de Auditoría y Trazabilidad (Épica 7, Módulo 7.2) ---
+    # Ver docs/36-sistema-de-auditoria-y-trazabilidad.md y ADR-039.
+    AUDIT_LOG_DEFAULT_PAGE_SIZE: int = 50
+
 
 @lru_cache
 def get_settings() -> Settings:

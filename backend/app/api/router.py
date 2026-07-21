@@ -21,10 +21,21 @@ docs/33-sistema-de-presencia.md).
 criterio que `snapshot_router`, un módulo de dominio propio (`app/modules/chat/`) que
 no vive dentro de `app/modules/remates/` pero cuelga del mismo prefijo efectivo (ver
 docs/34-chat-del-remate.md).
+
+`analytics_router` (Épica 7, Módulo 7.1) expone `GET /remates/{remate_id}/analytics` —
+mismo criterio que `snapshot_router`, un paquete transversal (`app/analytics/`, sin
+modelo propio) montado directamente acá (ver docs/35-dashboard-analitica-tiempo-real.md).
+
+`audit_router` (Épica 7, Módulo 7.2) expone `GET /audit` (global, solo admin) y
+`GET /remates/{remate_id}/audit` (dueño o admin) — mismo criterio que `snapshot_router`/
+`analytics_router`, un paquete transversal (`app/audit/`) montado directamente acá (ver
+docs/36-sistema-de-auditoria-y-trazabilidad.md).
 """
 
 from fastapi import APIRouter
 
+from app.analytics.router import router as analytics_router
+from app.audit.router import router as audit_router
 from app.modules.auth.router import router as auth_router
 from app.modules.chat.router import router as chat_router
 from app.modules.remates.router import router as remates_router
@@ -40,4 +51,6 @@ api_router.include_router(remates_router, prefix="/remates", tags=["remates"])
 api_router.include_router(snapshot_router, tags=["snapshot"])
 api_router.include_router(presence_router, tags=["presence"])
 api_router.include_router(chat_router, tags=["chat"])
+api_router.include_router(analytics_router, tags=["analytics"])
+api_router.include_router(audit_router, tags=["audit"])
 api_router.include_router(websocket_router, tags=["websocket"])

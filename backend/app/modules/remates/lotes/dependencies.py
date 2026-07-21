@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.repository import AuditLogRepository
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
 from app.events.bus import EventBus
@@ -22,5 +23,6 @@ def get_lote_service(
     remate_service: Annotated[RemateService, Depends(get_remate_service)],
     event_bus: Annotated[EventBus, Depends(get_event_bus)],
     settings: Annotated[Settings, Depends(get_settings)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LoteService:
-    return LoteService(repository, remate_service, event_bus, settings)
+    return LoteService(repository, remate_service, event_bus, settings, AuditLogRepository(db))

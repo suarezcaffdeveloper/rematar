@@ -34,6 +34,7 @@ function baseProps(overrides: Partial<Parameters<typeof RemateManagementSidebar>
     onCancel: vi.fn(),
     onDelete: vi.fn(),
     onDuplicate: vi.fn(),
+    onViewAudit: vi.fn(),
     isPublishing: false,
     isDuplicating: false,
     ...overrides,

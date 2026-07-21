@@ -5,6 +5,15 @@ enunciado. Inyecta `RemateService` completo (no solo su repositorio), mismo patr
 `AuctionEngine` (`app/modules/ofertas/engine.py`) para reutilizar
 `get_visible_or_raise`/`get_owned_or_raise` sin duplicar la lógica de visibilidad/
 propiedad de un remate.
+
+## Auditoría (Épica 7, Módulo 7.2)
+
+`delete_message` deja constancia vía `AuditLogRepository.record` (ver docs/36 y
+ADR-039), antes del `commit()` que ya existe -- misma transacción. `send_message`/
+`record_system_message`/`notify_typing` no auditan nada: solo la eliminación
+(moderación) está pedida por el enunciado, y auditar cada mensaje enviado sería un
+volumen alto sin valor de auditoría real (el propio historial de chat ya es su
+registro).
 """
 
 import uuid
@@ -13,6 +22,8 @@ from datetime import UTC, datetime
 import structlog
 from sqlalchemy.exc import IntegrityError
 
+from app.audit.actions import AuditAction
+from app.audit.repository import AuditLogRepository
 from app.core.config import Settings
 from app.core.exceptions import BusinessRuleError, NotFoundError, RateLimitError
 from app.events.bus import EventBus
@@ -35,12 +46,14 @@ class ChatService:
         event_bus: EventBus,
         rate_limiter: RedisRateLimiter,
         settings: Settings,
+        audit_repository: AuditLogRepository,
     ) -> None:
         self._repository = repository
         self._remate_service = remate_service
         self._event_bus = event_bus
         self._rate_limiter = rate_limiter
         self._settings = settings
+        self._audit_repository = audit_repository
 
     async def send_message(
         self, remate_id: uuid.UUID, author: User, data: ChatMessageCreate
@@ -96,6 +109,16 @@ class ChatService:
 
         message.deleted_at = datetime.now(UTC)
         message.deleted_by = moderator.id
+        self._audit_repository.record(
+            actor_id=moderator.id,
+            actor_name=moderator.full_name,
+            actor_role=moderator.role.value,
+            action=AuditAction.CHAT_MESSAGE_DELETED,
+            resource_type="chat_message",
+            resource_id=message.id,
+            remate_id=remate_id,
+            details={"content_preview": message.content[:100]},
+        )
         await self._repository.commit()
         await self._repository.refresh(message)
         await self._event_bus.publish(

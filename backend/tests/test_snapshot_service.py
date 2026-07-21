@@ -20,6 +20,7 @@ from httpx import AsyncClient
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from app.audit.repository import AuditLogRepository
 from app.core.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.core.security import hash_password
@@ -141,7 +142,10 @@ def _make_service(
     db_session: AsyncSession, *, cache: RedisCache | None = None, **kwargs
 ) -> SnapshotService:
     remate_service = RemateService(
-        RemateRepository(db_session), LoteRepository(db_session), _NoOpEventBus()
+        RemateRepository(db_session),
+        LoteRepository(db_session),
+        _NoOpEventBus(),
+        AuditLogRepository(db_session),
     )
     return SnapshotService(
         db_session, remate_service, OfertaRepository(db_session), cache=cache, **kwargs

@@ -12,6 +12,8 @@ from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.dependencies import get_audit_log_repository
+from app.audit.repository import AuditLogRepository
 from app.core.config import Settings, get_settings
 from app.core.exceptions import ForbiddenError
 from app.db.session import get_db
@@ -41,12 +43,14 @@ def get_auth_service(
     refresh_token_repository: Annotated[
         RefreshTokenRepository, Depends(get_refresh_token_repository)
     ],
+    audit_repository: Annotated[AuditLogRepository, Depends(get_audit_log_repository)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AuthService:
     return AuthService(
         user_repository=user_repository,
         user_service=user_service,
         refresh_token_repository=refresh_token_repository,
+        audit_repository=audit_repository,
         settings=settings,
     )
 

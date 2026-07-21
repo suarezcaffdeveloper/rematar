@@ -12,31 +12,43 @@ concurrencia, tiempo real y escalabilidad — no en la cantidad de pantallas.
 
 ## Estado actual
 
-**Épica 6, Módulo 6.4 — Chat del remate.** Cierra el último hueco que
-`docs/22-sincronizacion-tiempo-real.md` venía anticipando desde el Módulo 3.5: un chat
-en tiempo real por remate, con historial persistido. Un módulo de dominio nuevo
-(`app/modules/chat/`, distinto de la infraestructura transversal de
-`presence`/`snapshot` porque persiste datos de negocio reales) centraliza envío,
-borrado (moderación por el dueño del remate) e historial paginado (keyset) de
-mensajes; `ChatMessageSent`/`ChatMessageDeleted`/`ChatUserTyping` se sincronizan por el
-mismo pipeline de eventos de la Épica 3 (`SYNCED_EVENTS`, sin tocar
-`EventDispatcher`). Los mensajes automáticos de sistema (inicio/pausa/reanudación/
-apertura y cierre de lote/finalización) los genera un **segundo** `EventConsumer`
-independiente (`ChatSystemEventDispatcher`), idempotente vía `source_event_id` + índice
-único parcial — necesario para un despliegue con más de una instancia de backend (ver
-[ADR-037](adr/ADR-037-chat-del-remate.md)). Rate limiting básico (`RedisRateLimiter`,
-nuevo, infraestructura genérica) protege tanto el envío de mensajes como el aviso de
-"está escribiendo". En el frontend, `subscribeToRealtime` (nuevo en
-`useLiveRemateState`) permite que el feature `chat/` reciba eventos de dominio sin abrir
-una segunda conexión WebSocket (evitaría duplicar el contador de Presencia); `ChatPanel`
-se integra en la Sala del Remate (comprador) y en la Consola Operativa (rematador, con
-permiso de moderación). Ver [34-chat-del-remate.md](34-chat-del-remate.md). Reacciones,
-hilos de respuesta, adjuntos/emojis, moderación avanzada, seguimiento de remates,
-estadísticas de presencia, streaming y video/PDF/certificados de lote siguen siendo
-módulos futuros. Esta carpeta sigue siendo la fuente de verdad del proyecto: cada fase
-nueva debe leerla antes de proponer cambios y actualizarla si algo deja de ser cierto.
-Ver el [README raíz](../README.md) para instrucciones de instalación y el estado exacto
-del código.
+**Épica 7, Módulo 7.2 — Sistema de Auditoría y Trazabilidad.** Un Audit Service
+centralizado (`app/audit/`, paquete transversal nuevo, mismo nivel que
+`app/analytics/`/`app/presence/`/`app/snapshot/`, pero -- a diferencia de esos tres --
+sí persiste) que registra login/logout, creación/modificación/eliminación de remates,
+cambios de estado del remate, creación/modificación/eliminación/apertura/cierre de
+lotes, adjudicación de lotes (distinguida de un cierre sin venta), ofertas
+realizadas/rechazadas, mensajes de chat eliminados y cambios de configuración
+(`Remate.settings`). Cada entrada guarda fecha/hora, actor (id, nombre y rol
+denormalizados), tipo de acción, tipo y id del recurso, el remate asociado si
+corresponde, y metadata libre por acción. La escritura (`AuditLogRepository.record`) se
+llama **directo** desde cinco servicios de dominio existentes (`AuthService`,
+`RemateService`, `LoteService`, `AuctionEngine`, `ChatService`), síncrona y sin
+comitear, siempre antes del `commit()` que cada uno ya ejecutaba -- la entrada queda en
+la misma transacción que la acción que audita, nunca vía el Event Bus (best-effort por
+diseño, ADR-022 -- incompatible con la garantía de "nunca perder un registro" que
+necesita un log de auditoría). `action` es un namespace de string abierto
+(`app/audit/actions.py`), no un `Enum` nativo de Postgres -- sumar una acción nueva es
+una constante + una llamada, sin migración (ver
+[ADR-039](adr/ADR-039-sistema-de-auditoria-y-trazabilidad.md)). `AuditLogRepository`
+(escritura, sin dependencias de dominio) y `AuditService` (lectura del panel, compone
+`RemateService`) viven separados a propósito para evitar un ciclo de imports, mismo
+criterio "`LoteRepository`, no `LoteService`" de ADR-019. Control de acceso: `GET
+/audit` (global) exclusivo de `admin`; `GET /remates/{id}/audit` (scoped) para el dueño
+del remate o `admin`. En el frontend, `features/audit/` expone un único componente
+(`AuditLogView`) reutilizado por el panel global del admin (`/admin`, reemplaza el
+placeholder de la Épica 4.1) y el panel scoped del rematador
+(`/remates/:id/auditoria`, nuevo); tarjetas agrupadas por día
+(`AuditLogTimeline`), sin tabla, con búsqueda/filtros/orden -- sin tiempo real (a
+diferencia de Analítica, un log histórico se actualiza al cambiar filtro o página, no
+ante eventos de dominio). Ver
+[36-sistema-de-auditoria-y-trazabilidad.md](36-sistema-de-auditoria-y-trazabilidad.md).
+Exportación a un SIEM externo, un picker de usuario por id en los filtros, y reversión
+de una acción a partir de su entrada de auditoría siguen siendo módulos/piezas futuras.
+Esta carpeta sigue siendo la fuente de verdad del proyecto: cada fase nueva debe leerla
+antes de proponer cambios y actualizarla si algo deja de ser cierto. Ver el
+[README raíz](../README.md) para instrucciones de instalación y el estado exacto del
+código.
 
 ## Índice
 
@@ -76,6 +88,8 @@ del código.
 | [32-gestion-multimedia-lotes.md](32-gestion-multimedia-lotes.md) | Gestión multimedia de los lotes: endpoint de subida a disco local, flujo de carga de archivos, galería (Épica 6.1) |
 | [33-sistema-de-presencia.md](33-sistema-de-presencia.md) | Sistema de presencia de usuarios: `PresenceService`, flujo de conexión/desconexión, sincronización en tiempo real, conteo global (Épica 6.2) |
 | [34-chat-del-remate.md](34-chat-del-remate.md) | Chat del remate: `ChatService`, envío/historial/moderación, segundo `EventConsumer` para mensajes de sistema, idempotencia, rate limiting (Épica 6.4) |
+| [35-dashboard-analitica-tiempo-real.md](35-dashboard-analitica-tiempo-real.md) | Dashboard de analítica en tiempo real: `AnalyticsService`, origen de cada métrica, control de acceso, refetch debounced (Épica 7.1) |
+| [36-sistema-de-auditoria-y-trazabilidad.md](36-sistema-de-auditoria-y-trazabilidad.md) | Sistema de auditoría y trazabilidad: `Audit Service`, acciones registradas, escritura atada a la transacción de dominio, estructura de almacenamiento, panel admin/rematador (Épica 7.2) |
 | [adr/](adr/) | Registro de decisiones de arquitectura (ADR), una por decisión relevante |
 
 ## Reglas de esta documentación (aplican a todas las fases futuras)
@@ -285,3 +299,41 @@ del código.
   `RoomManager`, `ConnectionManager`, `EventDispatcher`, `app/presence/`,
   `app/snapshot/` ni el dominio de remates/ofertas. Ver
   [34-chat-del-remate.md](34-chat-del-remate.md), ADR-037.
+- **Épica 7, Módulo 7.1** (2026-08-02): Dashboard de analítica en tiempo real --
+  paquete transversal nuevo (`app/analytics/`, sin modelo propio, mismo nivel que
+  `presence`/`snapshot`) 100% de lectura: cada métrica pedida (conectados, ofertas por
+  minuto, total de ofertas, lotes vendidos/restantes, tiempo promedio por lote, valor
+  adjudicado, oferta más alta, lote con más ofertas) es una consulta agregada de
+  Postgres sobre columnas ya persistidas desde las Épicas 2.2-2.4, sin eventos de
+  dominio nuevos ni consumidor propio (contraste explícito con Chat, que sí necesitó
+  ambos); control de acceso propio -- deniega con 403 (no enmascara) a quien no sea
+  dueño ni admin; caché Redis corta (3s) sobre los agregados, nunca sobre los conteos
+  de Presencia; frontend: `useRemateAnalytics` dispara un refetch HTTP debounced
+  (~1.2s) ante eventos de dominio relevantes en vez de un reducer incremental,
+  reutilizando `subscribeToRealtime` (Módulo 6.4) sin abrir una segunda conexión;
+  `BidsTimelineChart`/`EventsTimeline` (SVG/HTML a mano, sin librería nueva) integrados
+  en la Consola Operativa del rematador; cero cambios en `app/realtime/`, el Gateway
+  WebSocket, `app/presence/`, `app/snapshot/` ni el dominio de remates/lotes/ofertas.
+  Ver [35-dashboard-analitica-tiempo-real.md](35-dashboard-analitica-tiempo-real.md),
+  ADR-038.
+- **Épica 7, Módulo 7.2** (2026-08-03): Sistema de Auditoría y Trazabilidad -- Audit
+  Service centralizado (`app/audit/`, paquete transversal nuevo que, a diferencia de
+  Analítica, sí persiste) para login/logout, CRUD y cambios de estado de remates,
+  CRUD/apertura/cierre/adjudicación de lotes, ofertas realizadas/rechazadas, mensajes
+  de chat eliminados y cambios de `Remate.settings`; escritura llamada directo desde
+  cinco servicios de dominio existentes (`AuthService`/`RemateService`/`LoteService`/
+  `AuctionEngine`/`ChatService`), síncrona y en la misma transacción de la acción que
+  audita -- nunca vía el Event Bus (best-effort por diseño, incompatible con "nunca
+  perder un registro"); `action` como namespace de string abierto, no un `Enum` nativo
+  de Postgres, para extender el catálogo sin migraciones; `AuditLogRepository`
+  (escritura) separado de `AuditService` (lectura del panel) para evitar un ciclo de
+  imports con `RemateService`, mismo criterio que ADR-019; control de acceso admin
+  (global) / dueño-o-admin (scoped a un remate); frontend: `features/audit/`, un único
+  componente (`AuditLogView`) para el panel global del admin (`/admin`, reemplaza el
+  placeholder de la Épica 4.1) y el panel scoped del rematador
+  (`/remates/:id/auditoria`, nuevo), tarjetas agrupadas por día, sin tabla, sin tiempo
+  real (log histórico); cero cambios en `app/realtime/`, el Gateway WebSocket,
+  `app/presence/`, `app/snapshot/` ni ninguna regla de negocio existente de
+  remates/lotes/ofertas/chat. Ver
+  [36-sistema-de-auditoria-y-trazabilidad.md](36-sistema-de-auditoria-y-trazabilidad.md),
+  ADR-039.

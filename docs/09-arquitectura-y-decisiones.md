@@ -68,6 +68,8 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [035](adr/ADR-035-gestion-multimedia-lotes.md) | Gestión multimedia de lotes: endpoint nuevo de subida a disco local (brecha documentada antes de implementar), galería "viva" con PATCH inmediato, sin galería en modo creación | Aceptada |
 | [036](adr/ADR-036-sistema-de-presencia.md) | Sistema de presencia: `PresenceService` compositor, sin modificar `RoomManager`/`ConnectionManager` | Aceptada |
 | [037](adr/ADR-037-chat-del-remate.md) | Chat del remate: módulo de dominio propio, segundo `EventConsumer` idempotente, keyset sobre offset | Aceptada |
+| [038](adr/ADR-038-dashboard-analitica-tiempo-real.md) | Dashboard de analítica en tiempo real: 100% derivado de Postgres, sin persistencia ni consumidor propio, refetch debounced sobre reducer incremental | Aceptada |
+| [039](adr/ADR-039-sistema-de-auditoria-y-trazabilidad.md) | Sistema de auditoría y trazabilidad: escritura atada a la transacción de dominio (no al Event Bus), namespace de acciones abierto, `AuditLogRepository`/`AuditService` separados para evitar un ciclo con `RemateService` | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -696,3 +698,99 @@ Detalle completo en [docs/34-chat-del-remate.md](34-chat-del-remate.md) y
 - Cero cambios en el Gateway WebSocket, `RoomManager`, `ConnectionManager`,
   `EventDispatcher`, `app/presence/`, `app/snapshot/` ni el dominio de
   remates/ofertas.
+
+## Épica 7, Módulo 7.1 — notas de arquitectura del Dashboard de Analítica en Tiempo Real
+
+Detalle completo en
+[docs/35-dashboard-analitica-tiempo-real.md](35-dashboard-analitica-tiempo-real.md) y
+[ADR-038](adr/ADR-038-dashboard-analitica-tiempo-real.md). Resumen:
+
+- `app/analytics/` — paquete transversal nuevo, sin modelo de base de datos, mismo
+  nivel que `app/presence/`/`app/snapshot/`. A diferencia de Chat (Módulo 6.4), que
+  necesitó un segundo `EventConsumer` porque persiste datos nuevos, este módulo es
+  100% de lectura: cada métrica pedida es una consulta agregada de Postgres sobre
+  columnas ya persistidas desde las Épicas 2.2-2.4 (`Lote.opened_at`/`closed_at`/
+  `final_price`, `Oferta.created_at`/`amount`/`status`) -- sin eventos de dominio
+  nuevos, sin consumidor propio, sin nada que idempotizar.
+- `AnalyticsRepository` corre siete consultas (una consolidada con `FILTER` para
+  lotes vendidos/no vendidos/restantes/cancelados + duración promedio + valor
+  adjudicado, evitando tres round trips separados), todas directas sobre `Oferta`/
+  `Lote`/`User` -- sin tocar `OfertaRepository`/`LoteRepository`/`UserRepository`
+  existentes. `Oferta` no tiene `remate_id` propio: toda agregación por remate hace
+  `JOIN lotes` sobre índices ya existentes (`lotes(remate_id)`,
+  `ix_ofertas_lote_id_created_at`) -- se descartó denormalizar `remate_id` en
+  `Oferta` (tabla de auditoría inmutable, RF-25) porque el join es barato a la escala
+  del dominio (catálogos de lotes acotados, RF-08).
+- Control de acceso propio, deliberadamente distinto de `SnapshotService`: en vez de
+  enmascarar campos sensibles y devolver `200` siempre, `AnalyticsService.build`
+  **deniega** con `ForbiddenError` (403) a cualquier viewer que no sea dueño del
+  remate ni admin -- no hay una vista parcial de agregados de negocio (dinero,
+  cantidad de ofertas) con sentido para un comprador ajeno. Reusa
+  `RemateService.get_visible_or_raise` (no `get_owned_or_raise`, que excluye admin y
+  es para escrituras) + `_is_privileged` reimplementado localmente, mismo criterio
+  que `SnapshotService._is_privileged` (ADR-026, sección D).
+- Caché Redis corta (`ANALYTICS_CACHE_TTL_SECONDS`, 3s) sobre los agregados derivados
+  de Postgres, mismo patrón best-effort que `SnapshotService`; los conteos de
+  Presencia (`connected_users_total`/`connected_buyers`) nunca se cachean.
+- Frontend: `useRemateAnalytics` reutiliza `subscribeToRealtime` (`useLiveRemateState`,
+  Módulo 6.4) para recibir eventos de dominio sin abrir una segunda conexión, y
+  dispara un **refetch HTTP debounced** (~1.2s, trailing edge) ante cualquier evento
+  relevante -- no un reducer incremental por campo como el de
+  `features/sala/realtime/reducer.ts`: varias métricas (tasa en ventana, promedio,
+  conteo filtrado por rol, "top N") no son una función pura de `(valor previo, un
+  evento)` sin arriesgar deriva silenciosa. Inconsistencia de UX aceptada y
+  documentada: el badge "Conectados" del header sigue actualizándose al instante
+  (reducer existente), la tarjeta KPI de Analítica queda ~1.2s atrás.
+  `BidsTimelineChart`/`EventsTimeline` son SVG/HTML a mano, sin librería de gráficos
+  nueva (ADR-027).
+- Integrado únicamente en `ConsolaOperativaPage.tsx` (no en `SalaPage.tsx` -- panel
+  exclusivo del rematador), debajo de `ChatPanel`.
+- Cero cambios en `app/realtime/`, el Gateway WebSocket, `RoomManager`/
+  `ConnectionManager`, `app/presence/`, `app/snapshot/` ni el dominio de
+  remates/lotes/ofertas.
+
+## Épica 7, Módulo 7.2 — notas de arquitectura del Sistema de Auditoría y Trazabilidad
+
+Detalle completo en
+[docs/36-sistema-de-auditoria-y-trazabilidad.md](36-sistema-de-auditoria-y-trazabilidad.md)
+y [ADR-039](adr/ADR-039-sistema-de-auditoria-y-trazabilidad.md). Resumen:
+
+- `app/audit/` -- paquete transversal nuevo, top-level, mismo nivel que
+  `app/analytics/`/`app/presence/`/`app/snapshot/`, pero -- a diferencia de esos tres --
+  **sí** persiste (`AuditLogEntry`, insert-only: sin `updated_at` ni borrado lógico).
+  Namespace de acciones abierto (`action: String`, catálogo en `app/audit/actions.py`),
+  no un `Enum` nativo de Postgres (ADR-010) -- extensible sin migraciones, mismo
+  criterio que `DomainEvent.event_type`.
+- Escritura (`AuditLogRepository.record`) llamada **directo** desde cinco servicios de
+  dominio (`AuthService`, `RemateService`, `LoteService`, `AuctionEngine`,
+  `ChatService`), síncrona y sin comitear, siempre antes del `commit()` que cada uno ya
+  ejecutaba -- la entrada de auditoría queda en la misma transacción que la acción que
+  audita, nunca vía el Event Bus (best-effort por diseño, ADR-022 -- incompatible con
+  "nunca perder un registro"). Mismo costo mecánico que agregar `event_bus` a estos
+  mismos servicios en la Épica 3.2: un parámetro de constructor + una línea antes de
+  cada `commit()` existente, sin reordenar ninguna regla de negocio.
+- `AuditLogRepository` (superficie de escritura, sin dependencias de `app.modules.*`) y
+  `AuditService` (superficie de lectura del panel, compone `RemateService`) viven
+  deliberadamente separados -- evita el ciclo de imports que se cerraría si los
+  servicios de dominio dependieran de `AuditService`, mismo criterio "`LoteRepository`,
+  no `LoteService`" ya aplicado en ADR-019.
+  `test_architecture_boundaries.py` verifica ambas direcciones: `app/audit/` nunca
+  importa transporte/tiempo real ni chat/ofertas, y ningún módulo de dominio importa
+  `app.audit.service`/`app.audit.router`.
+- FKs (`actor_id`, `remate_id`) con `ON DELETE SET NULL`, al revés del criterio
+  `RESTRICT` que el resto del proyecto aplica a sus propias tablas de auditoría
+  (`ChatMessage.remate_id`, `Oferta.lote_id`) -- acá la tabla *es* el registro de
+  auditoría, debe tolerar que lo que referencia desaparezca, nunca bloquearlo.
+- Control de acceso: `GET /audit` (global) exclusivo de `admin`; `GET /remates/{id}/audit`
+  (scoped) para el dueño del remate o `admin`, mismo patrón 404-oculta-borrador +
+  403-si-no-es-dueño-ni-admin que `AnalyticsService.build`.
+- Frontend: `features/audit/` (paralelo a `features/analytics/`), un único componente
+  (`AuditLogView`) reutilizado por el panel global del admin (`/admin`, reemplaza el
+  placeholder de la Épica 4.1) y el panel scoped del rematador
+  (`/remates/:id/auditoria`, nuevo, enlazado desde `RemateManagementSidebar`); tarjetas
+  agrupadas por día (`AuditLogTimeline`), sin tabla, pedido explícito de diseño; sin
+  refetch en tiempo real (a diferencia de Analítica) -- un log histórico se actualiza
+  al cambiar filtro o página, no ante eventos de dominio.
+- Cero cambios en `app/realtime/`, el Gateway WebSocket, `RoomManager`/
+  `ConnectionManager`, `app/presence/`, `app/snapshot/`, ni ninguna validación/regla de
+  negocio existente de remates, lotes, ofertas o chat.

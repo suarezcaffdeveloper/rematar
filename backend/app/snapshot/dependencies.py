@@ -28,6 +28,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import HTTPConnection
 
+from app.audit.repository import AuditLogRepository
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
 from app.events.bus import EventBus
@@ -54,7 +55,7 @@ def _get_remate_service(
     db: Annotated[AsyncSession, Depends(get_db)],
     event_bus: Annotated[EventBus, Depends(_get_event_bus)],
 ) -> RemateService:
-    return RemateService(RemateRepository(db), LoteRepository(db), event_bus)
+    return RemateService(RemateRepository(db), LoteRepository(db), event_bus, AuditLogRepository(db))
 
 
 def get_snapshot_service(

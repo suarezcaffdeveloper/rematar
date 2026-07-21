@@ -28,6 +28,7 @@ from collections.abc import Callable
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.audit.repository import AuditLogRepository
 from app.core.config import Settings
 from app.events.bus import EventBus
 from app.modules.chat.repository import ChatMessageRepository
@@ -128,12 +129,16 @@ class ChatSystemEventDispatcher:
 
         try:
             async with self._session_factory() as db:
+                audit_repository = AuditLogRepository(db)
                 chat_service = ChatService(
                     ChatMessageRepository(db),
-                    RemateService(RemateRepository(db), LoteRepository(db), self._event_bus),
+                    RemateService(
+                        RemateRepository(db), LoteRepository(db), self._event_bus, audit_repository
+                    ),
                     self._event_bus,
                     self._rate_limiter,
                     self._settings,
+                    audit_repository,
                 )
                 await chat_service.record_system_message(
                     remate_id,

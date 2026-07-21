@@ -5,6 +5,7 @@ import { Breadcrumb } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
+import { AnalyticsPanel } from '../../analytics/components/AnalyticsPanel';
 import { useAuth } from '../../auth/hooks';
 import { ChatPanel } from '../../chat/components/ChatPanel';
 import { useLiveRemateState } from '../../sala/hooks';
@@ -174,6 +175,12 @@ export function ConsolaOperativaPage() {
             currentUserId={user?.id}
             connectedUsers={connectedUsers}
             canModerate
+          />
+
+          <AnalyticsPanel
+            remateId={remate.id}
+            subscribeToRealtime={subscribeToRealtime}
+            currency={currency}
           />
         </>
       )}
