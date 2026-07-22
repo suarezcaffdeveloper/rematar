@@ -1,0 +1,28 @@
+import { Breadcrumb } from '../../../shared/components/Breadcrumb';
+import { FinishedRemateList } from '../components/FinishedRemateList';
+
+/**
+ * Historial de remates del rematador (Épica 7, Módulo 7.3), en `/historial` -- listado
+ * de sus propios remates finalizados/cancelados (`FinishedRemateList` sin `showOwner`:
+ * siempre son los suyos, mostrar su propio nombre en cada tarjeta sería ruido). El
+ * backend (`HistoryService.list_finished`) fuerza el scope al dueño autenticado; un
+ * `comprador` que llegara acá por URL directa recibe 403 del backend (sin `RequireRole`
+ * a nivel de ruta, mismo criterio que el resto de rutas de remate). Ver
+ * docs/37-historial-y-resultados-de-remates.md.
+ */
+export function RemateHistoryListPage() {
+  return (
+    <div className="flex flex-col gap-6">
+      <Breadcrumb items={[{ label: 'Mis remates', to: '/' }, { label: 'Historial' }]} />
+
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Historial de remates</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Resultados de tus remates finalizados y cancelados.
+        </p>
+      </div>
+
+      <FinishedRemateList />
+    </div>
+  );
+}

@@ -44,10 +44,15 @@ export function RematadorDashboardPage() {
             Administrá tus remates: creá, preparalos, iniciá, reanudá y finalizá desde acá.
           </p>
         </div>
-        <Button onClick={() => setIsCreateModalOpen(true)}>
-          <PlusIcon className="h-4 w-4" />
-          Crear remate
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => navigate('/historial')}>
+            Ver historial
+          </Button>
+          <Button onClick={() => setIsCreateModalOpen(true)}>
+            <PlusIcon className="h-4 w-4" />
+            Crear remate
+          </Button>
+        </div>
       </div>
 
       {!isLoading && !error && <RematadorDashboardStats remates={remates} />}

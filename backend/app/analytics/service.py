@@ -149,8 +149,8 @@ class AnalyticsService:
             total_awarded_value=lote_row.total_awarded_value,
             total_ofertas=total_ofertas,
             ofertas_last_minute=ofertas_last_minute,
-            highest_oferta=self._build_highest_oferta(highest_row),
-            top_lote_by_offers=self._build_top_lote(top_lote_row),
+            highest_oferta=HighestOferta.from_row(highest_row) if highest_row is not None else None,
+            top_lote_by_offers=TopLoteByOffers.from_row(top_lote_row) if top_lote_row is not None else None,
             bids_timeline=self._build_bids_timeline(timeline_rows, since_timeline, now),
             recent_events=self._build_recent_events(transition_lotes, remate),
         )
@@ -179,32 +179,6 @@ class AnalyticsService:
             closed_unsold=row.closed_unsold,
             cancelled=row.cancelled,
             total=row.total,
-        )
-
-    @staticmethod
-    def _build_highest_oferta(row: Row | None) -> HighestOferta | None:
-        if row is None:
-            return None
-        return HighestOferta(
-            oferta_id=row.oferta_id,
-            lote_id=row.lote_id,
-            lot_number=row.lot_number,
-            lote_title=row.lote_title,
-            buyer_id=row.buyer_id,
-            amount=row.amount,
-            status=row.status,
-            created_at=row.created_at,
-        )
-
-    @staticmethod
-    def _build_top_lote(row: Row | None) -> TopLoteByOffers | None:
-        if row is None:
-            return None
-        return TopLoteByOffers(
-            lote_id=row.lote_id,
-            lot_number=row.lot_number,
-            lote_title=row.lote_title,
-            offer_count=row.offer_count,
         )
 
     def _build_bids_timeline(

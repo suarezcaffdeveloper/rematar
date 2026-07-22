@@ -30,12 +30,19 @@ modelo propio) montado directamente acá (ver docs/35-dashboard-analitica-tiempo
 `GET /remates/{remate_id}/audit` (dueño o admin) — mismo criterio que `snapshot_router`/
 `analytics_router`, un paquete transversal (`app/audit/`) montado directamente acá (ver
 docs/36-sistema-de-auditoria-y-trazabilidad.md).
+
+`history_router` (Épica 7, Módulo 7.3) expone `GET /history/remates` (listado global o
+scoped según rol), `GET /history/remates/{remate_id}` y
+`GET /history/remates/{remate_id}/lotes/{lote_id}` — mismo criterio que `audit_router`,
+un paquete transversal (`app/history/`) montado directamente acá (ver
+docs/37-historial-y-resultados-de-remates.md).
 """
 
 from fastapi import APIRouter
 
 from app.analytics.router import router as analytics_router
 from app.audit.router import router as audit_router
+from app.history.router import router as history_router
 from app.modules.auth.router import router as auth_router
 from app.modules.chat.router import router as chat_router
 from app.modules.remates.router import router as remates_router
@@ -53,4 +60,5 @@ api_router.include_router(presence_router, tags=["presence"])
 api_router.include_router(chat_router, tags=["chat"])
 api_router.include_router(analytics_router, tags=["analytics"])
 api_router.include_router(audit_router, tags=["audit"])
+api_router.include_router(history_router, tags=["history"])
 api_router.include_router(websocket_router, tags=["websocket"])

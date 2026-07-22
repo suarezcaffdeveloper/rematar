@@ -12,39 +12,40 @@ concurrencia, tiempo real y escalabilidad — no en la cantidad de pantallas.
 
 ## Estado actual
 
-**Épica 7, Módulo 7.2 — Sistema de Auditoría y Trazabilidad.** Un Audit Service
-centralizado (`app/audit/`, paquete transversal nuevo, mismo nivel que
-`app/analytics/`/`app/presence/`/`app/snapshot/`, pero -- a diferencia de esos tres --
-sí persiste) que registra login/logout, creación/modificación/eliminación de remates,
-cambios de estado del remate, creación/modificación/eliminación/apertura/cierre de
-lotes, adjudicación de lotes (distinguida de un cierre sin venta), ofertas
-realizadas/rechazadas, mensajes de chat eliminados y cambios de configuración
-(`Remate.settings`). Cada entrada guarda fecha/hora, actor (id, nombre y rol
-denormalizados), tipo de acción, tipo y id del recurso, el remate asociado si
-corresponde, y metadata libre por acción. La escritura (`AuditLogRepository.record`) se
-llama **directo** desde cinco servicios de dominio existentes (`AuthService`,
-`RemateService`, `LoteService`, `AuctionEngine`, `ChatService`), síncrona y sin
-comitear, siempre antes del `commit()` que cada uno ya ejecutaba -- la entrada queda en
-la misma transacción que la acción que audita, nunca vía el Event Bus (best-effort por
-diseño, ADR-022 -- incompatible con la garantía de "nunca perder un registro" que
-necesita un log de auditoría). `action` es un namespace de string abierto
-(`app/audit/actions.py`), no un `Enum` nativo de Postgres -- sumar una acción nueva es
-una constante + una llamada, sin migración (ver
-[ADR-039](adr/ADR-039-sistema-de-auditoria-y-trazabilidad.md)). `AuditLogRepository`
-(escritura, sin dependencias de dominio) y `AuditService` (lectura del panel, compone
-`RemateService`) viven separados a propósito para evitar un ciclo de imports, mismo
-criterio "`LoteRepository`, no `LoteService`" de ADR-019. Control de acceso: `GET
-/audit` (global) exclusivo de `admin`; `GET /remates/{id}/audit` (scoped) para el dueño
-del remate o `admin`. En el frontend, `features/audit/` expone un único componente
-(`AuditLogView`) reutilizado por el panel global del admin (`/admin`, reemplaza el
-placeholder de la Épica 4.1) y el panel scoped del rematador
-(`/remates/:id/auditoria`, nuevo); tarjetas agrupadas por día
-(`AuditLogTimeline`), sin tabla, con búsqueda/filtros/orden -- sin tiempo real (a
-diferencia de Analítica, un log histórico se actualiza al cambiar filtro o página, no
-ante eventos de dominio). Ver
-[36-sistema-de-auditoria-y-trazabilidad.md](36-sistema-de-auditoria-y-trazabilidad.md).
-Exportación a un SIEM externo, un picker de usuario por id en los filtros, y reversión
-de una acción a partir de su entrada de auditoría siguen siendo módulos/piezas futuras.
+**Épica 7, Módulo 7.3 — Historial y Resultados de Remates.** Un History Service
+(`app/history/`, paquete transversal nuevo, mismo nivel que
+`app/analytics/`/`app/audit/`, sin modelo propio ni migración) que da una vista
+retrospectiva de remates ya finalizados/cancelados: un listado con KPIs agregados
+(cantidad de lotes, lotes vendidos, monto total adjudicado, compradores participantes,
+duración total), un detalle completo por remate (métricas finales, línea de tiempo,
+actividad de chat, participantes) y un detalle por lote (ganador, precios, cantidad de
+ofertas, tiempo abierto, historial de ofertas, estado final). Reutilización real, no
+conceptual: `HistoryService.get_detail` inyecta `AnalyticsRepository` directo (no
+`AnalyticsService`, acoplado a `PresenceService`/caché Redis pensados para "ahora
+mismo") y ejecuta las mismas cuatro consultas que ya alimentan el panel en vivo de
+Analítica (Módulo 7.1); `HighestOferta.from_row`/`TopLoteByOffers.from_row`
+(classmethods nuevos en `app/analytics/schemas.py`) comparten el mapeo `Row -> DTO`
+entre ambos módulos. La línea de tiempo de eventos importantes **no** se resuelve en
+el backend: el frontend embebe `AuditLogView` (Módulo 7.2) tal cual, `scope=remate`,
+contra el mismo endpoint que ya usa `/remates/:id/auditoria` -- cero código nuevo para
+esa sección. El listado agregado usa dos subconsultas `GROUP BY` (lotes, ofertas)
+unidas por `LEFT JOIN` sobre `remates`, no un join triple (que duplicaría filas por
+fan-out y rompería las sumas). `participants_count` ("usuarios conectados durante el
+evento") es una aproximación documentada -- unión de compradores que ofertaron y
+autores de chat, porque Presencia es en memoria sin historial persistido (ADR-009); no
+se agregó persistencia nueva solo para este dato secundario. Control de acceso:
+listado global (admin) o forzado al dueño (rematador), `comprador` 403; detalle
+dueño-o-admin + remate en estado terminal (`FINISHED`/`CANCELLED`), si no
+`BusinessRuleError` (422). Exportación a PDF/Excel: arquitectura preparada (los DTOs
+del detalle ya son el contrato de datos completo), no construida -- sin endpoints ni
+botones especulativos (ver
+[ADR-040](adr/ADR-040-historial-y-resultados-de-remates.md)). En el frontend,
+`features/history/` expone `FinishedRemateList` (sin prop de `scope`, a diferencia de
+`AuditLogView`: un único endpoint que el backend ya resuelve por rol) reutilizado por
+`/historial` (rematador) y la pestaña "Historial" de `/admin` (que ahora tiene
+selector de pestañas Auditoría/Historial); `RemateHistorySummary` reutiliza `KpiCard`
+de Analítica. Ver
+[37-historial-y-resultados-de-remates.md](37-historial-y-resultados-de-remates.md).
 Esta carpeta sigue siendo la fuente de verdad del proyecto: cada fase nueva debe leerla
 antes de proponer cambios y actualizarla si algo deja de ser cierto. Ver el
 [README raíz](../README.md) para instrucciones de instalación y el estado exacto del
@@ -90,6 +91,7 @@ código.
 | [34-chat-del-remate.md](34-chat-del-remate.md) | Chat del remate: `ChatService`, envío/historial/moderación, segundo `EventConsumer` para mensajes de sistema, idempotencia, rate limiting (Épica 6.4) |
 | [35-dashboard-analitica-tiempo-real.md](35-dashboard-analitica-tiempo-real.md) | Dashboard de analítica en tiempo real: `AnalyticsService`, origen de cada métrica, control de acceso, refetch debounced (Épica 7.1) |
 | [36-sistema-de-auditoria-y-trazabilidad.md](36-sistema-de-auditoria-y-trazabilidad.md) | Sistema de auditoría y trazabilidad: `Audit Service`, acciones registradas, escritura atada a la transacción de dominio, estructura de almacenamiento, panel admin/rematador (Épica 7.2) |
+| [37-historial-y-resultados-de-remates.md](37-historial-y-resultados-de-remates.md) | Historial y resultados de remates: `History Service`, reutilización de Analytics/Audit, detalle de remate y de lote, preparación para reportes (Épica 7.3) |
 | [adr/](adr/) | Registro de decisiones de arquitectura (ADR), una por decisión relevante |
 
 ## Reglas de esta documentación (aplican a todas las fases futuras)
@@ -337,3 +339,23 @@ código.
   remates/lotes/ofertas/chat. Ver
   [36-sistema-de-auditoria-y-trazabilidad.md](36-sistema-de-auditoria-y-trazabilidad.md),
   ADR-039.
+- **Épica 7, Módulo 7.3** (2026-08-04): Historial y Resultados de Remates -- History
+  Service (`app/history/`, paquete transversal nuevo, sin modelo propio) para consultar
+  remates finalizados/cancelados: listado con KPIs agregados (lotes, vendidos, monto
+  adjudicado, compradores, duración), detalle por remate (métricas finales, línea de
+  tiempo, actividad de chat, participantes) y detalle por lote (ganador, precios,
+  historial de ofertas); reutilización real de Analítica (`AnalyticsRepository`
+  inyectado directo, no `AnalyticsService`, para las mismas cuatro consultas del panel
+  en vivo; `HighestOferta.from_row`/`TopLoteByOffers.from_row` nuevos en
+  `app/analytics/schemas.py` comparten el mapeo `Row -> DTO`) y de Auditoría
+  (`AuditLogView` embebido tal cual en el frontend para la línea de tiempo, cero código
+  de backend nuevo); listado agregado con dos subconsultas `GROUP BY` en vez de un join
+  triple (evita fan-out); `participants_count` como aproximación documentada
+  (Presencia no persiste historial, ADR-009); control de acceso dueño-o-admin + remate
+  en estado terminal; preparación arquitectónica (no construida) para exportación a
+  PDF/Excel; frontend: `features/history/`, pestaña "Historial" nueva en `/admin`,
+  ruta `/historial` para el rematador; cero cambios en `app/realtime/`, el Gateway
+  WebSocket, `app/presence/`, `app/snapshot/`, `app/audit/` ni el dominio de
+  remates/lotes/ofertas/chat. Ver
+  [37-historial-y-resultados-de-remates.md](37-historial-y-resultados-de-remates.md),
+  ADR-040.

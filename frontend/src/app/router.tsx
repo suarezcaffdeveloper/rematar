@@ -21,6 +21,9 @@ import { RemateDetailPage } from '../features/remates/pages/RemateDetailPage';
 import { ConsolaOperativaPage } from '../features/rematador/pages/ConsolaOperativaPage';
 import { LotesManagementPage } from '../features/rematador/pages/LotesManagementPage';
 import { RemateAuditLogPage } from '../features/rematador/pages/RemateAuditLogPage';
+import { LoteHistoryDetailPage } from '../features/history/pages/LoteHistoryDetailPage';
+import { RemateHistoryDetailPage } from '../features/history/pages/RemateHistoryDetailPage';
+import { RemateHistoryListPage } from '../features/history/pages/RemateHistoryListPage';
 import { SalaPage } from '../features/sala/pages/SalaPage';
 import { HomePage } from './pages/HomePage';
 import { AdminAuditLogPage } from './pages/AdminAuditLogPage';
@@ -72,6 +75,16 @@ export const router = createBrowserRouter([
               // sin RequireRole que el resto de `/remates/:remateId/*`, el backend
               // decide (dueño del remate o admin, ver AuditService.list_for_remate).
               { path: '/remates/:remateId/auditoria', element: <RemateAuditLogPage /> },
+              // Historial y resultados de remates (Épica 7, Módulo 7.3) -- mismo
+              // criterio sin RequireRole que el resto de `/remates/:remateId/*`: el
+              // backend decide (dueño del remate o admin, exige además que el remate
+              // esté finalizado/cancelado, ver HistoryService).
+              { path: '/historial', element: <RemateHistoryListPage /> },
+              { path: '/remates/:remateId/historial', element: <RemateHistoryDetailPage /> },
+              {
+                path: '/remates/:remateId/historial/lotes/:loteId',
+                element: <LoteHistoryDetailPage />,
+              },
               // Protegidas además por rol: RequireRole asume que ya pasó RequireAuth.
               {
                 element: <RequireRole allowedRoles={['admin']} />,

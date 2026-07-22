@@ -5,6 +5,12 @@ docs/35-dashboard-analitica-tiempo-real.md.
 Presencia -- mismo criterio que `RawRemateState` en `app/snapshot/schemas.py`).
 `RemateAnalyticsSnapshot` es la respuesta final, siempre construida con datos frescos
 de Presencia (nunca cacheados, ver `AnalyticsService`).
+
+`HighestOferta.from_row`/`TopLoteByOffers.from_row` (Épica 7, Módulo 7.3): el mapeo
+`Row -> DTO` vive en el propio schema, no en `AnalyticsService`, para que
+`app/history/service.py` reutilice exactamente la misma construcción sobre las mismas
+consultas de `AnalyticsRepository` sin duplicar los ocho campos a mano -- ver
+docs/37-historial-y-resultados-de-remates.md y ADR-040.
 """
 
 import uuid
@@ -13,6 +19,7 @@ from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.engine import Row
 
 from app.modules.ofertas.models import OfertaStatus
 
@@ -38,6 +45,19 @@ class HighestOferta(BaseModel):
     status: OfertaStatus
     created_at: datetime
 
+    @classmethod
+    def from_row(cls, row: Row) -> "HighestOferta":
+        return cls(
+            oferta_id=row.oferta_id,
+            lote_id=row.lote_id,
+            lot_number=row.lot_number,
+            lote_title=row.lote_title,
+            buyer_id=row.buyer_id,
+            amount=row.amount,
+            status=row.status,
+            created_at=row.created_at,
+        )
+
 
 class TopLoteByOffers(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -46,6 +66,15 @@ class TopLoteByOffers(BaseModel):
     lot_number: str
     lote_title: str
     offer_count: int
+
+    @classmethod
+    def from_row(cls, row: Row) -> "TopLoteByOffers":
+        return cls(
+            lote_id=row.lote_id,
+            lot_number=row.lot_number,
+            lote_title=row.lote_title,
+            offer_count=row.offer_count,
+        )
 
 
 class BidsTimelineBucket(BaseModel):

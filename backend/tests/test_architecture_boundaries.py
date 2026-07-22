@@ -254,3 +254,32 @@ def test_domain_modules_only_use_audit_write_surface() -> None:
         f"Un módulo de dominio depende de la superficie de lectura de auditoría "
         f"(app.audit.service/router) en vez de solo la de escritura: {offenders}"
     )
+
+
+def test_history_never_imports_websocket_realtime_snapshot_audit_or_analytics_service() -> None:
+    """`app/history/` (Épica 7, Módulo 7.3) nunca debe conocer el Gateway WebSocket, el
+    Event Consumer ni el Snapshot Service (es un compositor de solo lectura sobre datos
+    ya persistidos, sin transporte propio). Tampoco debe importar `app.audit` en
+    absoluto -- la línea de tiempo del detalle de un remate se resuelve reutilizando el
+    panel de auditoría ya construido del lado del **frontend** (`AuditLogView`,
+    `scope=remate`), nunca desde el backend, ver ADR-040. Ni `app.analytics.service`
+    (solo `app.analytics.repository`/`schemas`, que son puros -- `AnalyticsService` está
+    acoplado a `PresenceService`/caché Redis, pensados para "ahora mismo", no para un
+    remate ya terminado). A diferencia de `app/analytics/`/`app/audit/`, **sí** puede
+    importar `app.modules.chat` (necesita `ChatMessage` para la actividad de chat del
+    detalle de un remate, ver `repository.py`)."""
+    forbidden_prefixes = (
+        "app.websocket",
+        "app.realtime",
+        "app.snapshot",
+        "app.audit",
+        "app.analytics.service",
+    )
+    history_dir = APP_DIR / "history"
+    offenders = _find_forbidden_imports(
+        list(history_dir.glob("*.py")), forbidden_prefixes, relative_to=history_dir
+    )
+    assert offenders == {}, (
+        f"app/history/ depende de transporte/tiempo real, de app.audit, o del "
+        f"AnalyticsService acoplado a Presencia/caché: {offenders}"
+    )
