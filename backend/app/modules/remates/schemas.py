@@ -20,10 +20,15 @@ class RemateSettings(BaseModel):
 
     anti_sniping_enabled: bool = False
     # Segundos que se extiende el cierre de un lote ante una oferta de último momento
-    # (ADR-007 de Fase 0). Solo tiene efecto si anti_sniping_enabled es true.
+    # (ADR-007 de Fase 0, implementado en ADR-043). Solo tiene efecto si
+    # anti_sniping_enabled es true -- mismo número sirve de umbral de disparo ("oferta
+    # dentro de los últimos N segundos") y de segundos a extender.
     anti_sniping_extension_seconds: int = Field(default=60, ge=10, le=600)
     # Código ISO 4217 de 3 letras, ej. "ARS", "USD".
     currency: str = Field(default="ARS")
+    # Cuenta regresiva por lote (Épica 8, "cuenta regresiva y cierre automático",
+    # ADR-043) -- `None` es "sin timer" para este remate, opt-in explícito.
+    lote_timer_seconds: int | None = Field(default=None, ge=5, le=3600)
 
     @field_validator("currency")
     @classmethod

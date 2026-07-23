@@ -15,6 +15,8 @@ from app.modules.ofertas.models import Oferta
 from app.modules.remates.lotes.models import Lote
 from app.modules.remates.models import Remate
 from app.modules.users.models import User
+from app.notifications.models import Notification
+from app.postauction.models import PostAuctionCase, PostAuctionTimelineEntry
 
 __all__ = [
     "Base",
@@ -25,4 +27,7 @@ __all__ = [
     "Oferta",
     "ChatMessage",
     "AuditLogEntry",
+    "PostAuctionCase",
+    "PostAuctionTimelineEntry",
+    "Notification",
 ]

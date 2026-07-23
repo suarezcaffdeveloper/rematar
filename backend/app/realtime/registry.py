@@ -29,11 +29,26 @@ from app.modules.remates.events import (
     RemateResumed,
     RemateStarted,
 )
-from app.modules.remates.lotes.events import LoteCancelled, LoteClosed, LoteOpened
+from app.modules.remates.lotes.events import (
+    LoteCancelled,
+    LoteClosed,
+    LoteOpened,
+    LoteTimerAdjusted,
+    LoteTimerAutoCloseToggled,
+    LoteTimerExpired,
+    LoteTimerExtended,
+    LoteTimerPaused,
+    LoteTimerReset,
+    LoteTimerResumed,
+    LoteTimerStarted,
+    LoteWinnerDetermined,
+)
+from app.postauction.events import PostAuctionCaseCreated, PostAuctionStatusChanged
 from app.presence.events import PresenceUserConnected, PresenceUserDisconnected
 
 # Orden: mismo agrupamiento que los catálogos de origen (Remate, Lote, Oferta,
-# Presencia -- Épica 6, Módulo 6.2 -- Chat -- Épica 6, Módulo 6.4).
+# Presencia -- Épica 6, Módulo 6.2 -- Chat -- Épica 6, Módulo 6.4 -- Timer -- Épica 8 --
+# PostAuction -- Épica 7, Módulo 7.5).
 SYNCED_EVENTS: tuple[type[RemateScopedEvent], ...] = (
     RemateStarted,
     RematePaused,
@@ -43,6 +58,15 @@ SYNCED_EVENTS: tuple[type[RemateScopedEvent], ...] = (
     LoteOpened,
     LoteClosed,
     LoteCancelled,
+    LoteWinnerDetermined,
+    LoteTimerStarted,
+    LoteTimerPaused,
+    LoteTimerResumed,
+    LoteTimerReset,
+    LoteTimerAdjusted,
+    LoteTimerAutoCloseToggled,
+    LoteTimerExtended,
+    LoteTimerExpired,
     OfertaPlaced,
     OfertaAccepted,
     OfertaRejected,
@@ -52,6 +76,8 @@ SYNCED_EVENTS: tuple[type[RemateScopedEvent], ...] = (
     ChatMessageSent,
     ChatMessageDeleted,
     ChatUserTyping,
+    PostAuctionCaseCreated,
+    PostAuctionStatusChanged,
 )
 
 # `event_type` (el discriminador `Literal` de cada clase) -> la clase concreta, para

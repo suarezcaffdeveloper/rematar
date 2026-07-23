@@ -1,0 +1,376 @@
+"""`PostAuctionService` (Épica 7, Módulo 7.5). Ver docs/41-gestion-post-remate.md y
+ADR-044.
+
+Compone `RemateRepository`/`LoteRepository`/`UserRepository` directo (nunca sus
+`Service`) para resolver título de remate/lote y nombre de comprador/rematador -- mismo
+criterio "repositorio del vecino, no su service" que ya usan `HistoryService`/
+`LoteService` (ver ADR-019): la ownership acá no necesita `RemateService.get_owned_or_raise`
+porque `PostAuctionCase.rematador_id` ya es el owner del remate, denormalizado al crear el
+caso -- comparar contra `viewer.id` alcanza, sin resolver el remate para autorizar.
+
+`create_case_from_winner` es el único punto de entrada que no llega por HTTP: lo llama
+`PostAuctionEventDispatcher` (`realtime.py`) al reaccionar a `lote.winner_determined`. Es
+idempotente sobre `lote_id` (única por caso) -- un evento redespachado (o dos instancias
+del dispatcher, no debería ocurrir pero no está descartado) no crea un segundo caso.
+"""
+
+import uuid
+from datetime import UTC, datetime
+from decimal import Decimal
+
+from app.audit.actions import AuditAction
+from app.audit.repository import AuditLogRepository
+from app.core.exceptions import ForbiddenError, NotFoundError
+from app.events.bus import EventBus
+from app.modules.remates.lotes.repository import LoteRepository
+from app.modules.remates.repository import RemateRepository
+from app.modules.users.models import User, UserRole
+from app.modules.users.repository import UserRepository
+from app.notifications.repository import NotificationRepository
+from app.postauction.events import PostAuctionCaseCreated, PostAuctionStatusChanged
+from app.postauction.models import PostAuctionCase, PostAuctionStatus, PostAuctionTimelineEntry
+from app.postauction.repository import PostAuctionRepository
+from app.postauction.schemas import PostAuctionCaseDetail, PostAuctionCaseRead, TimelineEntryRead
+from app.postauction.state_machine import STATUS_MILESTONE_FIELD, assert_transition_allowed
+
+_STATUS_LABELS: dict[PostAuctionStatus, str] = {
+    PostAuctionStatus.ADJUDICADO: "Adjudicado",
+    PostAuctionStatus.PENDIENTE_CONTACTO: "Pendiente de contacto",
+    PostAuctionStatus.PAGO_PENDIENTE: "Pago pendiente",
+    PostAuctionStatus.PAGO_RECIBIDO: "Pago recibido",
+    PostAuctionStatus.PREPARANDO_ENTREGA: "Preparando entrega",
+    PostAuctionStatus.ENVIADO: "Enviado",
+    PostAuctionStatus.ENTREGADO: "Entregado",
+    PostAuctionStatus.FINALIZADO: "Finalizado",
+}
+
+
+class PostAuctionService:
+    def __init__(
+        self,
+        repository: PostAuctionRepository,
+        remate_repository: RemateRepository,
+        lote_repository: LoteRepository,
+        user_repository: UserRepository,
+        audit_repository: AuditLogRepository,
+        notification_repository: NotificationRepository,
+        event_bus: EventBus,
+    ) -> None:
+        self._repository = repository
+        self._remate_repository = remate_repository
+        self._lote_repository = lote_repository
+        self._user_repository = user_repository
+        self._audit_repository = audit_repository
+        self._notification_repository = notification_repository
+        self._event_bus = event_bus
+
+    # --- Creación automática (disparada por `realtime.py`, no por HTTP) -----------------
+
+    async def create_case_from_winner(
+        self,
+        *,
+        remate_id: uuid.UUID,
+        lote_id: uuid.UUID,
+        buyer_id: uuid.UUID,
+        final_price: Decimal,
+    ) -> PostAuctionCase | None:
+        existing = await self._repository.get_by_lote_id(lote_id)
+        if existing is not None:
+            return existing
+
+        remate = await self._remate_repository.get_by_id(remate_id)
+        lote = await self._lote_repository.get_by_id(lote_id)
+        buyer = await self._user_repository.get_by_id(buyer_id)
+        if remate is None or lote is None or buyer is None:
+            # Defensivo: el evento ya trae ids válidos en la práctica (los publica
+            # `LoteService.auto_close` sobre entidades recién confirmadas), pero un
+            # consumidor de fondo nunca debe reventar por una referencia que no resuelve.
+            return None
+
+        case = PostAuctionCase(
+            lote_id=lote_id,
+            remate_id=remate_id,
+            buyer_id=buyer_id,
+            rematador_id=remate.owner_id,
+            final_price=final_price,
+            status=PostAuctionStatus.ADJUDICADO,
+        )
+        self._repository.add_case(case)
+        await self._repository.flush()
+
+        self._audit_repository.record(
+            actor_id=None,
+            actor_name=None,
+            actor_role=None,
+            action=AuditAction.POSTAUCTION_CASE_CREATED,
+            resource_type="postauction_case",
+            resource_id=case.id,
+            remate_id=remate_id,
+            details={"lote_id": str(lote_id), "buyer_id": str(buyer_id)},
+        )
+        self._repository.add_timeline_entry(
+            PostAuctionTimelineEntry(
+                case_id=case.id,
+                occurred_at=datetime.now(UTC),
+                actor_id=None,
+                actor_name=None,
+                actor_role=None,
+                action="case_created",
+                previous_status=None,
+                new_status=PostAuctionStatus.ADJUDICADO,
+            )
+        )
+
+        rematador = await self._user_repository.get_by_id(remate.owner_id)
+        self._notification_repository.create(
+            user_id=buyer_id,
+            type="postauction.case_created",
+            title="¡Ganaste un lote!",
+            message=(
+                f"Ganaste el lote '{lote.title}' del remate '{remate.title}' por "
+                f"${final_price}. El rematador se pondrá en contacto para coordinar el "
+                "pago y la entrega."
+            ),
+            resource_type="postauction_case",
+            resource_id=case.id,
+            remate_id=remate_id,
+        )
+        if rematador is not None:
+            self._notification_repository.create(
+                user_id=rematador.id,
+                type="postauction.case_created",
+                title="Lote adjudicado",
+                message=(
+                    f"El lote '{lote.title}' del remate '{remate.title}' fue adjudicado "
+                    f"a {buyer.full_name} por ${final_price}."
+                ),
+                resource_type="postauction_case",
+                resource_id=case.id,
+                remate_id=remate_id,
+            )
+
+        await self._repository.commit()
+        await self._repository.refresh(case)
+        await self._event_bus.publish(
+            PostAuctionCaseCreated(
+                remate_id=remate_id, case_id=case.id, lote_id=lote_id, buyer_id=buyer_id
+            )
+        )
+        return case
+
+    # --- Escritura (rematador dueño del caso, o admin) ----------------------------------
+
+    async def change_status(
+        self,
+        case_id: uuid.UUID,
+        actor: User,
+        *,
+        new_status: PostAuctionStatus,
+        note: str | None,
+        occurred_at: datetime | None,
+    ) -> PostAuctionCase:
+        case = await self._get_owned_case_or_raise(case_id, actor)
+        assert_transition_allowed(case.status, new_status)
+        previous_status = case.status
+
+        case.status = new_status
+        milestone_field = STATUS_MILESTONE_FIELD.get(new_status)
+        timestamp = occurred_at or datetime.now(UTC)
+        if milestone_field is not None and getattr(case, milestone_field) is None:
+            setattr(case, milestone_field, timestamp)
+        if note:
+            case.notes = note
+
+        self._audit_repository.record(
+            actor_id=actor.id,
+            actor_name=actor.full_name,
+            actor_role=actor.role.value,
+            action=AuditAction.POSTAUCTION_STATUS_CHANGED,
+            resource_type="postauction_case",
+            resource_id=case.id,
+            remate_id=case.remate_id,
+            details={"from": previous_status.value, "to": new_status.value},
+        )
+        self._repository.add_timeline_entry(
+            PostAuctionTimelineEntry(
+                case_id=case.id,
+                occurred_at=datetime.now(UTC),
+                actor_id=actor.id,
+                actor_name=actor.full_name,
+                actor_role=actor.role.value,
+                action="status_changed",
+                previous_status=previous_status,
+                new_status=new_status,
+                note=note,
+            )
+        )
+
+        lote = await self._lote_repository.get_by_id(case.lote_id)
+        lote_title = lote.title if lote is not None else "tu compra"
+        self._notification_repository.create(
+            user_id=case.buyer_id,
+            type="postauction.status_changed",
+            title=_notification_title(new_status),
+            message=(
+                f"El estado de tu compra del lote '{lote_title}' cambió a "
+                f"'{_STATUS_LABELS[new_status]}'."
+            ),
+            resource_type="postauction_case",
+            resource_id=case.id,
+            remate_id=case.remate_id,
+        )
+
+        await self._repository.commit()
+        await self._repository.refresh(case)
+        await self._event_bus.publish(
+            PostAuctionStatusChanged(
+                remate_id=case.remate_id,
+                case_id=case.id,
+                lote_id=case.lote_id,
+                previous_status=previous_status.value,
+                new_status=new_status.value,
+            )
+        )
+        return case
+
+    async def add_note(self, case_id: uuid.UUID, actor: User, note: str) -> PostAuctionCase:
+        case = await self._get_owned_case_or_raise(case_id, actor)
+        case.notes = note
+
+        self._audit_repository.record(
+            actor_id=actor.id,
+            actor_name=actor.full_name,
+            actor_role=actor.role.value,
+            action=AuditAction.POSTAUCTION_NOTE_ADDED,
+            resource_type="postauction_case",
+            resource_id=case.id,
+            remate_id=case.remate_id,
+        )
+        self._repository.add_timeline_entry(
+            PostAuctionTimelineEntry(
+                case_id=case.id,
+                occurred_at=datetime.now(UTC),
+                actor_id=actor.id,
+                actor_name=actor.full_name,
+                actor_role=actor.role.value,
+                action="note_added",
+                previous_status=None,
+                new_status=None,
+                note=note,
+            )
+        )
+        await self._repository.commit()
+        await self._repository.refresh(case)
+        return case
+
+    # --- Lectura -------------------------------------------------------------------------
+
+    async def list_for_rematador(
+        self,
+        viewer: User,
+        *,
+        status: PostAuctionStatus | None,
+        remate_id: uuid.UUID | None,
+        search: str | None,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[PostAuctionCaseRead], int]:
+        if viewer.role not in (UserRole.REMATADOR, UserRole.ADMIN):
+            raise ForbiddenError(
+                "Solo un rematador o un administrador pueden ver ventas adjudicadas."
+            )
+        offset = (page - 1) * page_size
+        cases, total = await self._repository.list_for_rematador(
+            rematador_id=viewer.id,
+            status=status,
+            remate_id=remate_id,
+            search=search,
+            offset=offset,
+            limit=page_size,
+        )
+        return await self._to_read_list(cases), total
+
+    async def list_for_buyer(
+        self, viewer: User, *, page: int, page_size: int
+    ) -> tuple[list[PostAuctionCaseRead], int]:
+        offset = (page - 1) * page_size
+        cases, total = await self._repository.list_for_buyer(
+            buyer_id=viewer.id, offset=offset, limit=page_size
+        )
+        return await self._to_read_list(cases), total
+
+    async def get_detail_for_rematador(
+        self, case_id: uuid.UUID, viewer: User
+    ) -> PostAuctionCaseDetail:
+        case = await self._get_owned_case_or_raise(case_id, viewer)
+        return await self._to_detail(case)
+
+    async def get_detail_for_buyer(
+        self, case_id: uuid.UUID, viewer: User
+    ) -> PostAuctionCaseDetail:
+        case = await self._repository.get_by_id(case_id)
+        if case is None or (viewer.role != UserRole.ADMIN and case.buyer_id != viewer.id):
+            raise NotFoundError("Compra no encontrada.")
+        return await self._to_detail(case)
+
+    # --- Compartido ------------------------------------------------------------------
+
+    async def _get_owned_case_or_raise(
+        self, case_id: uuid.UUID, actor: User
+    ) -> PostAuctionCase:
+        case = await self._repository.get_by_id(case_id)
+        if case is None:
+            raise NotFoundError("Venta adjudicada no encontrada.")
+        if actor.role != UserRole.ADMIN and case.rematador_id != actor.id:
+            raise ForbiddenError(
+                "Solo el rematador dueño de esta venta (o un administrador) puede "
+                "gestionarla."
+            )
+        return case
+
+    async def _to_read_list(self, cases: list[PostAuctionCase]) -> list[PostAuctionCaseRead]:
+        return [await self._build_read(case) for case in cases]
+
+    async def _build_read(self, case: PostAuctionCase) -> PostAuctionCaseRead:
+        lote = await self._lote_repository.get_by_id(case.lote_id)
+        remate = await self._remate_repository.get_by_id(case.remate_id)
+        buyer = await self._user_repository.get_by_id(case.buyer_id)
+        rematador = await self._user_repository.get_by_id(case.rematador_id)
+        return PostAuctionCaseRead(
+            id=case.id,
+            lote_id=case.lote_id,
+            lot_number=lote.lot_number if lote else "",
+            lote_title=lote.title if lote else "",
+            remate_id=case.remate_id,
+            remate_title=remate.title if remate else "",
+            buyer_id=case.buyer_id,
+            buyer_name=buyer.full_name if buyer else None,
+            rematador_id=case.rematador_id,
+            rematador_name=rematador.full_name if rematador else None,
+            final_price=case.final_price,
+            status=case.status,
+            contacted_at=case.contacted_at,
+            payment_at=case.payment_at,
+            shipped_at=case.shipped_at,
+            delivered_at=case.delivered_at,
+            finalized_at=case.finalized_at,
+            notes=case.notes,
+            created_at=case.created_at,
+            updated_at=case.updated_at,
+        )
+
+    async def _to_detail(self, case: PostAuctionCase) -> PostAuctionCaseDetail:
+        read = await self._build_read(case)
+        timeline = await self._repository.list_timeline(case.id)
+        return PostAuctionCaseDetail(
+            **read.model_dump(),
+            timeline=[TimelineEntryRead.model_validate(entry) for entry in timeline],
+        )
+
+
+def _notification_title(new_status: PostAuctionStatus) -> str:
+    if new_status == PostAuctionStatus.PAGO_RECIBIDO:
+        return "Pago registrado"
+    if new_status == PostAuctionStatus.ENTREGADO:
+        return "Entrega confirmada"
+    return "Actualización de tu compra"

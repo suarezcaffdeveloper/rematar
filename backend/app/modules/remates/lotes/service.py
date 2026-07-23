@@ -50,6 +50,16 @@ publica nada, mismo criterio que el catálogo de eventos no lo incluye.
 `_commit_or_raise_conflict()` que ya existen -- misma transacción. `close` distingue
 explícitamente `lote.awarded` (venta) de `lote.closed` (no vendido): son dos ítems
 separados en el enunciado del módulo.
+
+## Cuenta regresiva y cierre automático (Épica 8, ver docs/40-cuenta-regresiva-y-cierre-automatico.md y ADR-043)
+
+`open`/`open_next` arrancan el timer del lote (`TimerService.start_for_lote`, mutador
+puro estático) si el remate configuró `settings.lote_timer_seconds` -- sin cambiar su
+comportamiento si no. `close()` se refactorizó en `_apply_close` (mutación + auditoría,
+compartida) sin cambiar su firma ni comportamiento externo; `auto_close()` es el nuevo
+método que llama `TimerExpiryScheduler` (`app/timer/scheduler.py`) para adjudicar
+automáticamente al vencer el timer, reusando `_apply_close` en vez de duplicar la
+lógica de cierre.
 """
 
 import uuid
@@ -65,7 +75,12 @@ from app.core.config import Settings
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
 from app.events.bus import EventBus
 from app.modules.remates.lotes import media_storage
-from app.modules.remates.lotes.events import LoteCancelled, LoteClosed, LoteOpened
+from app.modules.remates.lotes.events import (
+    LoteCancelled,
+    LoteClosed,
+    LoteOpened,
+    LoteWinnerDetermined,
+)
 from app.modules.remates.lotes.models import Lote, LoteStatus
 from app.modules.remates.lotes.repository import LoteRepository
 from app.modules.remates.lotes.schemas import LoteCloseOutcome, LoteCreate, LoteUpdate
@@ -73,6 +88,7 @@ from app.modules.remates.lotes.state_machine import assert_transition_allowed
 from app.modules.remates.models import Remate, RemateStatus
 from app.modules.remates.service import RemateService
 from app.modules.users.models import User, UserRole
+from app.timer.service import TimerService
 
 
 class LoteService:
@@ -295,6 +311,11 @@ class LoteService:
 
         lote.status = LoteStatus.OPEN
         lote.opened_at = datetime.now(UTC)
+        # Cuenta regresiva (Épica 8, ADR-043): mutación en memoria sobre el mismo
+        # `lote`, sin commit propio -- el `commit()` de acá abajo (ya existente) la
+        # persiste junto con la apertura. `None` si el remate no configuró
+        # `settings.lote_timer_seconds` -- comportamiento intacto.
+        timer_started = TimerService.start_for_lote(lote, remate)
         self._record_lote_action(lote, owner, remate_id, AuditAction.LOTE_OPENED)
         await self._commit_or_raise_conflict(
             "Ya hay un lote abierto en este remate (conflicto de concurrencia)."
@@ -308,6 +329,8 @@ class LoteService:
                 display_order=lote.display_order,
             )
         )
+        if timer_started is not None:
+            await self._event_bus.publish(timer_started)
         return lote
 
     async def open_next(self, remate_id: uuid.UUID, owner: User) -> Lote:
@@ -320,6 +343,7 @@ class LoteService:
 
         lote.status = LoteStatus.OPEN
         lote.opened_at = datetime.now(UTC)
+        timer_started = TimerService.start_for_lote(lote, remate)
         self._record_lote_action(lote, owner, remate_id, AuditAction.LOTE_OPENED)
         await self._commit_or_raise_conflict(
             "Ya hay un lote abierto en este remate (conflicto de concurrencia)."
@@ -333,6 +357,8 @@ class LoteService:
                 display_order=lote.display_order,
             )
         )
+        if timer_started is not None:
+            await self._event_bus.publish(timer_started)
         return lote
 
     async def close(
@@ -351,6 +377,46 @@ class LoteService:
                 current_status=remate.status.value,
             )
 
+        self._apply_close(
+            lote,
+            remate_id,
+            outcome,
+            final_price,
+            actor_id=owner.id,
+            actor_name=owner.full_name,
+            actor_role=owner.role.value,
+            trigger="manual",
+        )
+        await self._repository.commit()
+        await self._repository.refresh(lote)
+        await self._event_bus.publish(
+            LoteClosed(
+                remate_id=remate.id,
+                lote_id=lote.id,
+                outcome=outcome.value,
+                final_price=final_price,
+                triggered_by="manual",
+            )
+        )
+
+        await self._remate_service.try_auto_finish(remate)
+        return lote
+
+    def _apply_close(
+        self,
+        lote: Lote,
+        remate_id: uuid.UUID,
+        outcome: LoteCloseOutcome,
+        final_price: Decimal | None,
+        *,
+        actor_id: uuid.UUID | None,
+        actor_name: str | None,
+        actor_role: str | None,
+        trigger: str,
+    ) -> None:
+        """Mutación + auditoría compartidas entre `close()` (manual, con dueño) y
+        `auto_close()` (Épica 8, sistema -- ver docstring del módulo) -- sin commit ni
+        publish, cada caller hace lo suyo después, igual que el resto del módulo."""
         target = (
             LoteStatus.CLOSED_SOLD if outcome == LoteCloseOutcome.SOLD else LoteStatus.CLOSED_UNSOLD
         )
@@ -362,13 +428,17 @@ class LoteService:
         lote.status = target
         lote.final_price = final_price
         lote.closed_at = datetime.now(UTC)
+        # Cuenta regresiva (Épica 8, ADR-043): un cierre (manual o automático) siempre
+        # termina cualquier timer en curso -- un lote cerrado no tiene countdown.
+        lote.timer_ends_at = None
+        lote.timer_paused_remaining_seconds = None
         # Ítems distintos del enunciado: `lote.awarded` cuando se vende (adjudicación),
         # `lote.closed` cuando no -- ver docstring del módulo.
         audit_action = AuditAction.LOTE_AWARDED if outcome == LoteCloseOutcome.SOLD else AuditAction.LOTE_CLOSED
         self._audit_repository.record(
-            actor_id=owner.id,
-            actor_name=owner.full_name,
-            actor_role=owner.role.value,
+            actor_id=actor_id,
+            actor_name=actor_name,
+            actor_role=actor_role,
             action=audit_action,
             resource_type="lote",
             resource_id=lote.id,
@@ -376,7 +446,44 @@ class LoteService:
             details={
                 "outcome": outcome.value,
                 "final_price": str(final_price) if final_price is not None else None,
+                "trigger": trigger,
             },
+        )
+
+    async def auto_close(
+        self,
+        lote: Lote,
+        remate: Remate,
+        *,
+        leading_oferta_id: uuid.UUID | None,
+        leading_buyer_id: uuid.UUID | None,
+        leading_amount: Decimal | None,
+    ) -> Lote:
+        """Adjudicación automática al vencer el timer (Épica 8, "cuenta regresiva y
+        cierre automático", ADR-043) -- llamado únicamente por
+        `app/timer/scheduler.py::TimerExpiryScheduler`, que ya tiene `lote`/`remate`
+        cargados y bloqueados (`LoteRepository.get_by_id_for_update`, ADR-004) en su
+        propia sesión: acá no se vuelve a bloquear ni a chequear ownership (no hay un
+        `owner` humano) -- son las mismas primitivas de `_apply_close` que ya usa el
+        cierre manual, sin duplicar esa lógica.
+
+        `SOLD` con el monto de la oferta líder si existe, `UNSOLD` si el lote no tuvo
+        ninguna oferta aceptada -- misma validación `final_price >= base_price` que ya
+        aplica `close()`, ninguna regla nueva. Sin actor (`actor_id=None`): mismo
+        patrón exacto que `RemateService.try_auto_finish`/`_record_status_change` para
+        transiciones disparadas por el sistema, no por un caller HTTP."""
+        outcome = LoteCloseOutcome.SOLD if leading_oferta_id is not None else LoteCloseOutcome.UNSOLD
+        final_price = leading_amount if outcome == LoteCloseOutcome.SOLD else None
+
+        self._apply_close(
+            lote,
+            remate.id,
+            outcome,
+            final_price,
+            actor_id=None,
+            actor_name=None,
+            actor_role=None,
+            trigger="auto",
         )
         await self._repository.commit()
         await self._repository.refresh(lote)
@@ -386,8 +493,22 @@ class LoteService:
                 lote_id=lote.id,
                 outcome=outcome.value,
                 final_price=final_price,
+                triggered_by="auto",
             )
         )
+        if outcome == LoteCloseOutcome.SOLD:
+            assert leading_oferta_id is not None
+            assert leading_buyer_id is not None
+            assert leading_amount is not None
+            await self._event_bus.publish(
+                LoteWinnerDetermined(
+                    remate_id=remate.id,
+                    lote_id=lote.id,
+                    oferta_id=leading_oferta_id,
+                    buyer_id=leading_buyer_id,
+                    amount=leading_amount,
+                )
+            )
 
         await self._remate_service.try_auto_finish(remate)
         return lote

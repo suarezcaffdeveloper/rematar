@@ -45,6 +45,9 @@ export function RematadorDashboardPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => navigate('/ventas-adjudicadas')}>
+            Ventas adjudicadas
+          </Button>
           <Button variant="secondary" onClick={() => navigate('/historial')}>
             Ver historial
           </Button>

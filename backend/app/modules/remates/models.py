@@ -62,6 +62,9 @@ DEFAULT_REMATE_SETTINGS: dict = {
     "anti_sniping_enabled": False,
     "anti_sniping_extension_seconds": 60,
     "currency": "ARS",
+    # Segundos de cuenta regresiva por lote al abrirlo -- `None` es "sin timer" (opt-in,
+    # Épica 8, Módulo "cuenta regresiva y cierre automático"). Ver ADR-007/ADR-043.
+    "lote_timer_seconds": None,
 }
 
 

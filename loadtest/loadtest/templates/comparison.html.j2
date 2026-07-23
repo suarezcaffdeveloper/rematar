@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>RematAR -- Comparación de escenarios de carga</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 2rem;
+         max-width: 1100px; margin-inline: auto; line-height: 1.5; color: #1c1c1c; background: #fafafa; }
+  h1 { font-size: 1.6rem; margin-bottom: 0.2rem; }
+  h2 { font-size: 1.15rem; margin-top: 2.2rem; border-bottom: 2px solid #ddd; padding-bottom: 0.3rem; }
+  .subtitle { color: #666; margin-top: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 0.8rem 0; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #e5e5e5; }
+  th { background: #f0f0f0; }
+  .chart { margin: 1rem 0; }
+  .chart img { max-width: 100%; border: 1px solid #e5e5e5; border-radius: 6px; background: #fff; }
+  footer { margin-top: 3rem; font-size: 0.8rem; color: #888; }
+  code { background: #eee; padding: 0.1rem 0.3rem; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<h1>RematAR -- Comparación entre escenarios de carga</h1>
+<p class="subtitle">Generado {{ generated_at }} -- {{ rows|length }} corridas comparadas</p>
+
+<h2>Tabla comparativa</h2>
+<table>
+<tr>
+  <th>Escenario</th><th>Duración (s)</th><th>Req/s</th><th>Msgs WS/s</th>
+  <th>Oferta p95 (ms)</th><th>Difusión p95 (ms)</th><th>Errores</th>
+</tr>
+{% for row in rows %}
+<tr>
+  <td>{{ row.label }}</td>
+  <td>{{ "%.1f"|format(row.duration_seconds) }}</td>
+  <td>{{ "%.1f"|format(row.requests_per_second) }}</td>
+  <td>{{ "%.1f"|format(row.ws_messages_per_second) }}</td>
+  <td>{{ "%.0f"|format(row.ofertas_p95_ms) }}</td>
+  <td>{{ "%.0f"|format(row.broadcast_p95_ms) }}</td>
+  <td>{{ row.errors }}</td>
+</tr>
+{% endfor %}
+</table>
+
+<h2>Gráficos comparativos</h2>
+{% for key, image in charts.items() %}
+  <div class="chart"><img src="data:image/png;base64,{{ image }}" alt="{{ key }}"></div>
+{% endfor %}
+
+<footer>
+  RematAR -- Épica 8, Módulo 8.2 (Pruebas de carga y rendimiento). Generado por
+  <code>loadtest/</code> -- ver <code>docs/39-pruebas-de-carga-y-rendimiento.md</code>.
+</footer>
+
+</body>
+</html>

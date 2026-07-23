@@ -6,6 +6,7 @@ SQL), acá la visibilidad se resuelve en `LoteService` a partir del `Remate` pad
 """
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -104,6 +105,20 @@ class LoteRepository:
             .limit(1)
         )
         return (await self._db.execute(stmt)).scalar_one_or_none()
+
+    async def list_expired_open_lote_ids(self, now: datetime) -> list[uuid.UUID]:
+        """Usado por `TimerExpiryScheduler` (`app/timer/scheduler.py`, Épica 8) --
+        candidatos a cerrar automáticamente. Solo IDs, sin `FOR UPDATE`: el scheduler
+        vuelve a buscar y bloquea cada uno individualmente (`get_by_id_for_update`) para
+        no mantener un lock sobre N filas mientras procesa la lista completa."""
+        stmt = select(Lote.id).where(
+            Lote.status == LoteStatus.OPEN,
+            Lote.timer_ends_at.is_not(None),
+            Lote.timer_ends_at <= now,
+            Lote.timer_auto_close_enabled.is_(True),
+            Lote.deleted_at.is_(None),
+        )
+        return list((await self._db.execute(stmt)).scalars().all())
 
     def add(self, lote: Lote) -> None:
         self._db.add(lote)

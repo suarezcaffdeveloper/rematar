@@ -6,6 +6,7 @@ oferta vigente, idempotencia vía `client_token`, la oferta vigente (`/leading`)
 historial completo (`GET .../ofertas`, solo dueño/admin).
 """
 
+import asyncio
 from decimal import Decimal
 
 from httpx import AsyncClient
@@ -200,6 +201,55 @@ async def test_second_bid_meeting_increment_outbids_first(client: AsyncClient) -
     assert by_id[second.json()["id"]] == "accepted"
 
 
+async def test_two_concurrent_bids_are_serialized_by_the_row_lock(client: AsyncClient) -> None:
+    """Dos compradores ofertando *al mismo tiempo* (`asyncio.gather`, no secuencial como
+    el resto de este archivo) -- verifica el invariante de RNF-09 bajo concurrencia
+    real, no solo bajo una simulación secuencial: el `SELECT ... FOR UPDATE` de
+    `LoteRepository.get_by_id_for_update` (ADR-004) serializa ambas transacciones sobre
+    la misma fila de lote, sin importar cuál llegue primero al proceso.
+
+    Los montos se eligen para que el resultado tenga un invariante verificable pase lo
+    que pase con el orden real de ejecución (no controlable desde el test): la oferta
+    de $1200 siempre termina `accepted` (le alcanza para ganar sin importar si la de
+    $1000 se procesó antes o después), y la de $1000 termina `outbid` (si se procesó
+    primero y después la superaron) o `rejected` (si se procesó después de la de $1200,
+    ya no alcanza el incremento mínimo) -- nunca `accepted` ella también, que sería la
+    violación de RNF-09 (dos ofertas "vigentes" contradictorias)."""
+    owner_token, remate_id, lote_id = await _setup_open_lote(client, "rematador4c@example.com")
+    comprador_a = await _register_and_login(
+        client, email="comprador4c-a@example.com", role="comprador"
+    )
+    comprador_b = await _register_and_login(
+        client, email="comprador4c-b@example.com", role="comprador"
+    )
+
+    response_a, response_b = await asyncio.gather(
+        _bid(client, comprador_a, remate_id, lote_id, "1000.00"),
+        _bid(client, comprador_b, remate_id, lote_id, "1200.00"),
+    )
+
+    assert response_a.status_code == 201, response_a.text
+    assert response_b.status_code == 201, response_b.text
+
+    # OJO: no se evalúa `status` sobre `response_a.json()`/`response_b.json()` --
+    # son la foto del momento en que CADA respuesta se generó (ADR-020, sección D: el
+    # cuerpo siempre 201, el resultado va adentro), y si la otra oferta llega después
+    # y la supera, esa foto queda vieja (no se vuelve a serializar). El estado final
+    # real hay que leerlo del historial, igual que ya hace
+    # `test_second_bid_meeting_increment_outbids_first` de acá arriba.
+    history = await client.get(_ofertas_url(remate_id, lote_id), headers=_auth(owner_token))
+    assert history.status_code == 200
+    items = history.json()["items"]
+    assert len(items) == 2, "Ambas ofertas deben quedar persistidas, ninguna perdida"
+
+    accepted = [item for item in items if item["status"] == "accepted"]
+    assert len(accepted) == 1, "Debe haber exactamente una oferta vigente, nunca dos ni cero (RNF-09)"
+    assert Decimal(str(accepted[0]["amount"])) == Decimal("1200.00")
+
+    other = [item for item in items if item["id"] != accepted[0]["id"]][0]
+    assert other["status"] in ("outbid", "rejected")
+
+
 # --- Reglas duras ----------------------------------------------------------------------
 
 
@@ -315,6 +365,35 @@ async def test_bid_when_remate_paused_rejected(client: AsyncClient) -> None:
     response = await _bid(client, comprador_token, remate_id, lote_id, "1000.00")
     assert response.status_code == 201
     assert response.json()["status"] == "rejected"
+
+
+async def test_bid_when_remate_finished_rejected(client: AsyncClient) -> None:
+    """El sentido más literal de "remate cerrado": a diferencia de
+    `test_bid_when_remate_not_started_rejected` (nunca estuvo LIVE) y
+    `test_bid_when_remate_paused_rejected` (LIVE pero pausado), acá el remate
+    efectivamente estuvo LIVE y terminó en FINISHED de verdad -- vía la finalización
+    automática (RF-10, `RemateService.try_auto_finish`) que ya dispara
+    `LoteService.close` al cerrar el único lote del remate, sin necesidad de llamar
+    `POST .../finish` a mano."""
+    owner_token, remate_id, lote_id = await _setup_open_lote(client, "rematador11b@example.com")
+    close = await client.post(
+        f"{_lotes_url(remate_id)}/{lote_id}/close",
+        json={"outcome": "unsold"},
+        headers=_auth(owner_token),
+    )
+    assert close.status_code == 200
+
+    remate = await client.get(f"{REMATES_URL}/{remate_id}", headers=_auth(owner_token))
+    assert remate.status_code == 200
+    assert remate.json()["status"] == "finished"
+
+    comprador_token = await _register_and_login(
+        client, email="comprador11b@example.com", role="comprador"
+    )
+    response = await _bid(client, comprador_token, remate_id, lote_id, "1000.00")
+    assert response.status_code == 201
+    assert response.json()["status"] == "rejected"
+    assert response.json()["rejection_reason"] == "El remate no está en vivo."
 
 
 async def test_bid_on_pending_lote_rejected(client: AsyncClient) -> None:

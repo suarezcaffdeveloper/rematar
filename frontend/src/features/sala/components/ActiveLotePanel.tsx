@@ -1,15 +1,20 @@
 import { Badge } from '../../../shared/components/Badge';
 import { formatCurrency } from '../../../shared/lib/format';
+import type { UserRole } from '../../auth/types';
 import { CATEGORY_LABELS, LOTE_STATUS_BADGE_VARIANTS, LOTE_STATUS_LABELS } from '../../remates/labels';
-import type { Lote } from '../../remates/types';
+import type { Lote, RemateStatus } from '../../remates/types';
 import type { OfertaSnapshotEntry } from '../types';
 import { ImageGallery } from './ImageGallery';
+import { LoteCountdown } from './LoteCountdown';
 import { PlaceBidButton } from './PlaceBidButton';
 
 export interface ActiveLotePanelProps {
+  remateId: string;
   lote: Lote;
   currency: string;
   winningOffer: OfertaSnapshotEntry | null;
+  remateStatus: RemateStatus;
+  viewerRole: UserRole | undefined;
 }
 
 function formatAttributeKey(key: string): string {
@@ -24,7 +29,14 @@ function formatAttributeKey(key: string): string {
  * sin asumir qué claves va a tener un lote puntual (distinto tipo de remate, distintos
  * atributos).
  */
-export function ActiveLotePanel({ lote, currency, winningOffer }: ActiveLotePanelProps) {
+export function ActiveLotePanel({
+  remateId,
+  lote,
+  currency,
+  winningOffer,
+  remateStatus,
+  viewerRole,
+}: ActiveLotePanelProps) {
   const attributeEntries = Object.entries(lote.attributes);
   const currentOfferAmount = winningOffer?.amount ?? lote.base_price;
 
@@ -70,6 +82,8 @@ export function ActiveLotePanel({ lote, currency, winningOffer }: ActiveLotePane
         )}
       </div>
 
+      <LoteCountdown endsAt={lote.timer_ends_at} pausedRemainingSeconds={lote.timer_paused_remaining_seconds} />
+
       <div className="grid grid-cols-2 gap-4 rounded-lg border border-slate-200 p-4 sm:grid-cols-3">
         <div>
           <p className="text-xs text-slate-400">Precio inicial</p>
@@ -85,7 +99,14 @@ export function ActiveLotePanel({ lote, currency, winningOffer }: ActiveLotePane
         </div>
       </div>
 
-      <PlaceBidButton />
+      <PlaceBidButton
+        remateId={remateId}
+        lote={lote}
+        currency={currency}
+        winningOffer={winningOffer}
+        remateStatus={remateStatus}
+        viewerRole={viewerRole}
+      />
     </div>
   );
 }

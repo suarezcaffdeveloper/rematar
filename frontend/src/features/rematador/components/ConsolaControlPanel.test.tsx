@@ -12,6 +12,11 @@ const { apiMocks, toastPushMock } = vi.hoisted(() => ({
     pauseRemateRequest: vi.fn(),
     resumeRemateRequest: vi.fn(),
     finishRemateRequest: vi.fn(),
+    pauseLoteTimerRequest: vi.fn(),
+    resumeLoteTimerRequest: vi.fn(),
+    resetLoteTimerRequest: vi.fn(),
+    setLoteTimerRemainingRequest: vi.fn(),
+    setLoteTimerAutoCloseRequest: vi.fn(),
   },
   toastPushMock: vi.fn(),
 }));
@@ -33,7 +38,7 @@ function makeRemate(overrides: Partial<Remate> = {}): Remate {
     starts_at: '2026-07-18T10:00:00Z',
     ends_at: null,
     status: 'live',
-    settings: { anti_sniping_enabled: false, anti_sniping_extension_seconds: 60, currency: 'ARS' },
+    settings: { anti_sniping_enabled: false, anti_sniping_extension_seconds: 60, currency: 'ARS', lote_timer_seconds: null },
     cancellation_reason: null,
     cancelled_at: null,
     finished_at: null,
@@ -61,6 +66,9 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
     reserve_price: null,
     final_price: null,
     status: 'open',
+    timer_ends_at: null,
+    timer_paused_remaining_seconds: null,
+    timer_auto_close_enabled: true,
     created_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
@@ -239,6 +247,72 @@ describe('ConsolaControlPanel', () => {
 
       expect(screen.getByText('Precio inválido.')).toBeInTheDocument();
       expect(screen.getByText('Cerrar lote 1')).toBeInTheDocument();
+    });
+  });
+
+  describe('cuenta regresiva del lote', () => {
+    it('sin timer configurado (ambos campos null), no muestra la sección', () => {
+      renderPanel({ activeLote: makeLote() });
+      expect(screen.queryByText('Cuenta regresiva del lote')).not.toBeInTheDocument();
+    });
+
+    it('con timer corriendo, "Pausar" habilitado y "Reanudar" deshabilitado', () => {
+      renderPanel({ activeLote: makeLote({ timer_ends_at: '2026-08-01T00:01:00Z' }) });
+
+      expect(screen.getByRole('button', { name: 'Pausar timer' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Reanudar timer' })).toBeDisabled();
+    });
+
+    it('con timer pausado, "Reanudar" habilitado y "Pausar" deshabilitado', () => {
+      renderPanel({ activeLote: makeLote({ timer_ends_at: null, timer_paused_remaining_seconds: 20 }) });
+
+      expect(screen.getByRole('button', { name: 'Pausar timer' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Reanudar timer' })).toBeEnabled();
+    });
+
+    it('al pausar, llama a pauseLoteTimerRequest y confirma con un toast', async () => {
+      apiMocks.pauseLoteTimerRequest.mockResolvedValue(makeLote());
+      renderPanel({ activeLote: makeLote({ timer_ends_at: '2026-08-01T00:01:00Z' }) });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Pausar timer' }));
+
+      expect(apiMocks.pauseLoteTimerRequest).toHaveBeenCalledWith('remate-1', 'lote-1');
+      expect(toastPushMock).toHaveBeenCalledWith('success', expect.stringContaining('pausó'));
+    });
+
+    it('al reiniciar, llama a resetLoteTimerRequest', async () => {
+      apiMocks.resetLoteTimerRequest.mockResolvedValue(makeLote());
+      renderPanel({ activeLote: makeLote({ timer_ends_at: '2026-08-01T00:01:00Z' }) });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Reiniciar timer' }));
+
+      expect(apiMocks.resetLoteTimerRequest).toHaveBeenCalledWith('remate-1', 'lote-1');
+    });
+
+    it('el botón de cierre automático alterna según el estado actual y llama con el valor opuesto', async () => {
+      apiMocks.setLoteTimerAutoCloseRequest.mockResolvedValue(makeLote());
+      renderPanel({
+        activeLote: makeLote({ timer_ends_at: '2026-08-01T00:01:00Z', timer_auto_close_enabled: true }),
+      });
+
+      const button = screen.getByRole('button', { name: 'Desactivar cierre automático' });
+      await userEvent.click(button);
+
+      expect(apiMocks.setLoteTimerAutoCloseRequest).toHaveBeenCalledWith('remate-1', 'lote-1', false);
+    });
+
+    it('fijar tiempo restante: deshabilitado con el campo vacío, habilitado con un número válido', async () => {
+      apiMocks.setLoteTimerRemainingRequest.mockResolvedValue(makeLote());
+      renderPanel({ activeLote: makeLote({ timer_ends_at: '2026-08-01T00:01:00Z' }) });
+
+      const submitButton = screen.getByRole('button', { name: 'Fijar tiempo restante' });
+      expect(submitButton).toBeDisabled();
+
+      await userEvent.type(screen.getByLabelText('Tiempo restante (segundos)'), '45');
+      expect(submitButton).toBeEnabled();
+
+      await userEvent.click(submitButton);
+      expect(apiMocks.setLoteTimerRemainingRequest).toHaveBeenCalledWith('remate-1', 'lote-1', 45);
     });
   });
 });

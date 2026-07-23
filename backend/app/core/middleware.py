@@ -14,6 +14,15 @@ respuestas en streaming, pero esta API no expone (todavía) ningún endpoint de 
 — eso llegará recién con WebSockets en una fase futura, que de todos modos no pasa por
 este middleware HTTP. Si en el futuro se agrega un endpoint de streaming HTTP (no WS),
 esta decisión debe revisarse.
+
+## Métrica de tiempo de respuesta (Épica 8, Módulo 8.1)
+
+`duration_ms` ya se calculaba y logueaba desde la Fase 1; lo único nuevo es una llamada
+additiva a `RedisMetricsRecorder.record_timing` (`app/redis/metrics.py`) que alimenta
+`avg_api_response_ms` en `GET /monitoring/metrics` -- best-effort (nunca puede romper
+un request: si Redis está caído, se loguea una advertencia y se sigue, mismo criterio
+que `EventBus.publish`, ADR-022). El logging existente (`request_completed`) no cambió
+un bit.
 """
 
 import time
@@ -23,6 +32,8 @@ import structlog
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
+
+from app.redis.metrics import RedisMetricsRecorder
 
 logger = structlog.get_logger(__name__)
 
@@ -46,5 +57,19 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         response.headers[REQUEST_ID_HEADER] = request_id
         logger.info("request_completed", status_code=response.status_code, duration_ms=duration_ms)
+        await self._record_metric(request, duration_ms)
 
         return response
+
+    @staticmethod
+    async def _record_metric(request: Request, duration_ms: float) -> None:
+        try:
+            redis_client = request.app.state.redis
+        except AttributeError:
+            return  # tests que no levantan el lifespan completo (sin app.state.redis)
+        try:
+            await RedisMetricsRecorder(redis_client).record_timing(
+                "api_response", duration_ms, now=time.time()
+            )
+        except Exception:  # noqa: BLE001 -- best-effort, nunca debe romper un request
+            logger.warning("api_response_metric_record_failed")

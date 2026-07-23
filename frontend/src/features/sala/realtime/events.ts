@@ -52,12 +52,81 @@ export interface LoteClosedEvent extends DomainEventBase {
   lote_id: string;
   outcome: 'sold' | 'unsold';
   final_price: string | null;
+  // Épica 8, "cuenta regresiva y cierre automático" -- distingue el cierre manual del
+  // rematador del cierre automático al vencer el timer (`TimerExpiryScheduler`).
+  triggered_by: 'manual' | 'auto';
 }
 
 export interface LoteCancelledEvent extends DomainEventBase {
   event_type: 'lote.cancelled';
   lote_id: string;
   reason: string;
+}
+
+/**
+ * Adjudicación automática (Épica 8, "cuenta regresiva y cierre automático") -- solo se
+ * publica cuando `TimerExpiryScheduler` cierra un lote como `sold` (nunca en un cierre
+ * manual, ver `backend/app/modules/remates/lotes/events.py::LoteWinnerDetermined`).
+ */
+export interface LoteWinnerDeterminedEvent extends DomainEventBase {
+  event_type: 'lote.winner_determined';
+  lote_id: string;
+  oferta_id: string;
+  buyer_id: string;
+  amount: string;
+}
+
+export interface LoteTimerStartedEvent extends DomainEventBase {
+  event_type: 'lote.timer_started';
+  lote_id: string;
+  ends_at: string;
+  duration_seconds: number;
+}
+
+export interface LoteTimerPausedEvent extends DomainEventBase {
+  event_type: 'lote.timer_paused';
+  lote_id: string;
+  remaining_seconds: number;
+}
+
+export interface LoteTimerResumedEvent extends DomainEventBase {
+  event_type: 'lote.timer_resumed';
+  lote_id: string;
+  ends_at: string;
+}
+
+export interface LoteTimerResetEvent extends DomainEventBase {
+  event_type: 'lote.timer_reset';
+  lote_id: string;
+  ends_at: string;
+  duration_seconds: number;
+}
+
+export interface LoteTimerAdjustedEvent extends DomainEventBase {
+  event_type: 'lote.timer_adjusted';
+  lote_id: string;
+  ends_at: string | null;
+  remaining_seconds: number;
+}
+
+export interface LoteTimerAutoCloseToggledEvent extends DomainEventBase {
+  event_type: 'lote.timer_auto_close_toggled';
+  lote_id: string;
+  enabled: boolean;
+}
+
+/** Anti-sniping (ADR-007/ADR-043) -- una oferta aceptada dentro de la ventana
+ * configurada extendió el cierre. */
+export interface LoteTimerExtendedEvent extends DomainEventBase {
+  event_type: 'lote.timer_extended';
+  lote_id: string;
+  ends_at: string;
+  extended_by_seconds: number;
+}
+
+export interface LoteTimerExpiredEvent extends DomainEventBase {
+  event_type: 'lote.timer_expired';
+  lote_id: string;
 }
 
 /** Se publica ante cualquier intento de oferta, aceptada o no -- este módulo no lo usa
@@ -136,6 +205,15 @@ export type SalaDomainEvent =
   | LoteOpenedEvent
   | LoteClosedEvent
   | LoteCancelledEvent
+  | LoteWinnerDeterminedEvent
+  | LoteTimerStartedEvent
+  | LoteTimerPausedEvent
+  | LoteTimerResumedEvent
+  | LoteTimerResetEvent
+  | LoteTimerAdjustedEvent
+  | LoteTimerAutoCloseToggledEvent
+  | LoteTimerExtendedEvent
+  | LoteTimerExpiredEvent
   | OfertaPlacedEvent
   | OfertaAcceptedEvent
   | OfertaRejectedEvent

@@ -12,6 +12,11 @@ auditoría de transiciones (`opened_at`, `closed_at`, `final_price`,
 (Fase 0) sin agregar un `PAUSED` propio de lote — la pausa es un concepto de `Remate` que
 ya alcanza a cualquier lote `OPEN` en curso (ver docs/15-modulo-lote.md). `category`
 reutiliza `RemateCategory` en vez de una taxonomía propia (ADR-014).
+
+Los tres campos `timer_*` (Épica 8, "cuenta regresiva y cierre automático", ADR-007/
+ADR-043) tampoco agregan un estado propio de `LoteStatus`: la pausa del *timer* (distinta
+de la pausa del remate) se representa con estas columnas, no con una transición nueva.
+Ver docs/40-cuenta-regresiva-y-cierre-automatico.md.
 """
 
 import enum
@@ -20,6 +25,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     Enum,
@@ -88,6 +94,13 @@ class Lote(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
             postgresql_where=text("status = 'open' AND deleted_at IS NULL"),
         ),
         Index("ix_lotes_remate_id_display_order", "remate_id", "display_order"),
+        # Usado por `TimerExpiryScheduler` (app/timer/scheduler.py) para encontrar
+        # lotes con timer vencido sin escanear los que no tienen uno corriendo.
+        Index(
+            "ix_lotes_open_timer_ends_at",
+            "timer_ends_at",
+            postgresql_where=text("status = 'open' AND timer_ends_at IS NOT NULL"),
+        ),
     )
 
     # RESTRICT, no CASCADE: mismo razonamiento que Remate.owner_id -> users. Un lote es
@@ -165,6 +178,17 @@ class Lote(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     final_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     cancellation_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Cuenta regresiva y cierre automático (Épica 8, ADR-007/ADR-043) -- estado del
+    # timer vive en Postgres, nunca en memoria de una instancia (ADR-007), para que
+    # cualquier réplica del backend pueda evaluarlo igual. `TimerService`
+    # (`app/timer/`) es el único que las escribe. Nunca ambas no-nulas a la vez:
+    # `timer_ends_at` mientras corre (deadline absoluto), `timer_paused_remaining_seconds`
+    # mientras está pausado (segundos congelados); ambas `None` si el lote nunca tuvo
+    # timer (el remate no configuró `settings.lote_timer_seconds`).
+    timer_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    timer_paused_remaining_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    timer_auto_close_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     def __repr__(self) -> str:
         return (

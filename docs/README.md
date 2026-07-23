@@ -12,42 +12,130 @@ concurrencia, tiempo real y escalabilidad — no en la cantidad de pantallas.
 
 ## Estado actual
 
-**Épica 7, Módulo 7.3 — Historial y Resultados de Remates.** Un History Service
-(`app/history/`, paquete transversal nuevo, mismo nivel que
-`app/analytics/`/`app/audit/`, sin modelo propio ni migración) que da una vista
-retrospectiva de remates ya finalizados/cancelados: un listado con KPIs agregados
-(cantidad de lotes, lotes vendidos, monto total adjudicado, compradores participantes,
-duración total), un detalle completo por remate (métricas finales, línea de tiempo,
-actividad de chat, participantes) y un detalle por lote (ganador, precios, cantidad de
-ofertas, tiempo abierto, historial de ofertas, estado final). Reutilización real, no
-conceptual: `HistoryService.get_detail` inyecta `AnalyticsRepository` directo (no
-`AnalyticsService`, acoplado a `PresenceService`/caché Redis pensados para "ahora
-mismo") y ejecuta las mismas cuatro consultas que ya alimentan el panel en vivo de
-Analítica (Módulo 7.1); `HighestOferta.from_row`/`TopLoteByOffers.from_row`
-(classmethods nuevos en `app/analytics/schemas.py`) comparten el mapeo `Row -> DTO`
-entre ambos módulos. La línea de tiempo de eventos importantes **no** se resuelve en
-el backend: el frontend embebe `AuditLogView` (Módulo 7.2) tal cual, `scope=remate`,
-contra el mismo endpoint que ya usa `/remates/:id/auditoria` -- cero código nuevo para
-esa sección. El listado agregado usa dos subconsultas `GROUP BY` (lotes, ofertas)
-unidas por `LEFT JOIN` sobre `remates`, no un join triple (que duplicaría filas por
-fan-out y rompería las sumas). `participants_count` ("usuarios conectados durante el
-evento") es una aproximación documentada -- unión de compradores que ofertaron y
-autores de chat, porque Presencia es en memoria sin historial persistido (ADR-009); no
-se agregó persistencia nueva solo para este dato secundario. Control de acceso:
-listado global (admin) o forzado al dueño (rematador), `comprador` 403; detalle
-dueño-o-admin + remate en estado terminal (`FINISHED`/`CANCELLED`), si no
-`BusinessRuleError` (422). Exportación a PDF/Excel: arquitectura preparada (los DTOs
-del detalle ya son el contrato de datos completo), no construida -- sin endpoints ni
-botones especulativos (ver
-[ADR-040](adr/ADR-040-historial-y-resultados-de-remates.md)). En el frontend,
-`features/history/` expone `FinishedRemateList` (sin prop de `scope`, a diferencia de
-`AuditLogView`: un único endpoint que el backend ya resuelve por rol) reutilizado por
-`/historial` (rematador) y la pestaña "Historial" de `/admin` (que ahora tiene
-selector de pestañas Auditoría/Historial); `RemateHistorySummary` reutiliza `KpiCard`
-de Analítica. Ver
-[37-historial-y-resultados-de-remates.md](37-historial-y-resultados-de-remates.md).
-Esta carpeta sigue siendo la fuente de verdad del proyecto: cada fase nueva debe leerla
-antes de proponer cambios y actualizarla si algo deja de ser cierto. Ver el
+**Épica 7, Módulo 7.5 — Gestión Post-Remate.** Un PostAuction Service desacoplado
+(`app/postauction/`, paquete transversal top-level, mismo nivel que `app/audit/`/
+`app/history/`/`app/monitoring/`) administra el seguimiento de pago y entrega entre
+comprador y rematador tras la adjudicación de un lote, sin que el Auction Engine se
+entere: reacciona a `lote.winner_determined` (ya publicado por `LoteService.auto_close`
+desde la Épica 8) con una **tercera** instancia de `EventConsumer`
+(`PostAuctionEventDispatcher`, mismo patrón que `ChatSystemEventDispatcher`) que lee el
+JSON crudo del evento sin importar su clase -- `app/modules/remates/lotes/service.py` no
+gana un solo import nuevo, garantía verificada con dos tests nuevos en
+`test_architecture_boundaries.py`. Flujo de ocho estados (Adjudicado → Pendiente de
+contacto → Pago pendiente → Pago recibido → Preparando entrega → Enviado → Entregado →
+Finalizado) con una máquina de estados forward-only (`ALLOWED_TRANSITIONS` derivado de
+una lista ordenada: cualquier estado posterior, nunca hacia atrás, con saltos
+permitidos) -- un único endpoint de cambio de estado cubre también "registrar fecha de
+contacto/pago/envío/entrega" (la fecha hito se estampa según a qué estado se llega).
+Línea de tiempo propia insert-only (`PostAuctionTimelineEntry`), estructuralmente igual
+a `AuditLogEntry` pero propia del módulo (no reutiliza Historial, que no tiene
+escritura, ni Auditoría, transversal a toda la plataforma). El enunciado pedía
+reutilizar un "Notification Service" que, verificado explícitamente, no existía en el
+código -- se construyó una versión mínima y genérica (`app/notifications/`, sin
+`service.py`, sin conocer a `postauction` ni a ningún módulo de dominio) que persiste en
+la misma transacción que la mutación que la origina, disparada en los cuatro momentos
+pedidos (adjudicación, cambio de estado, pago, entrega). Frontend:
+`features/postauction/` ("Ventas adjudicadas" del rematador con buscar/filtrar por
+estado, "Mis compras" del comprador), `ProgressStepper`/`Timeline` compartidos, botones
+de entrada nuevos en ambos dashboards. Limitación documentada: el cierre manual de un
+lote vendido (ADR-018) no genera un caso automático, al no haber comprador asociado en
+ese flujo. Cero cambios en `AuctionEngine`, `RemateService`, `LoteService`,
+`app/websocket/`, `app/snapshot/`, `app/audit/service.py`. Ver
+[41-gestion-post-remate.md](41-gestion-post-remate.md), ADR-044.
+
+**Épica 8 — Cuenta Regresiva y Cierre Automático de Lotes.** Implementa por primera
+vez algo reservado desde Fase 0: [ADR-007](adr/ADR-007-anti-sniping.md) ya había
+decidido el anti-sniping completo (`RemateSettings.anti_sniping_enabled`/
+`anti_sniping_extension_seconds`, schema del Módulo 2.1) pero ninguna línea de código
+los leía. Timer Service nuevo (`app/timer/`, paquete transversal top-level, mismo
+nivel que `app/snapshot/`, sin modelo propio -- el estado del timer vive en tres
+columnas nuevas de `Lote`: `timer_ends_at`/`timer_paused_remaining_seconds`/
+`timer_auto_close_enabled`, nunca las dos primeras no-`None` a la vez). Arranque del
+timer (`LoteService.open`/`open_next`) y extensión anti-sniping
+(`AuctionEngine.place_bid`) son llamadas **síncronas** a `@staticmethod`s puros de
+`TimerService` -- deliberadamente no vía el Event Bus: una extensión asíncrona podría
+perderse justo contra `TimerExpiryScheduler` cerrando el lote en la misma ventana,
+mismo razonamiento que ya descartó el Event Bus para auditoría (ADR-039). El cierre
+automático sí necesita una tarea de fondo nueva (nada dispara "se acabó el tiempo" por
+sí solo): `TimerExpiryScheduler`, mismo patrón que `EventConsumer`/
+`ChatSystemEventDispatcher` (arranca/se detiene en el `lifespan`), sondea cada 1s y
+reusa el lock de fila de ADR-004 (`get_by_id_for_update`, primera vez usado por algo
+distinto del Auction Engine) para serializarse contra un bid o una acción del
+rematador en curso. `LoteService.close()` se refactorizó (`_apply_close` privado,
+mutación + auditoría compartida) sin cambiar su firma ni comportamiento externo; el
+nuevo `auto_close()` lo reusa para la adjudicación automática (`lote.winner_determined`,
+implementa `lote.ganador_determinado` reservado desde Fase 0), auditada con
+`actor_id=None` (mismo patrón que `RemateService.try_auto_finish`). Nueve eventos de
+dominio nuevos, sincronizados por el pipeline ya existente sin tocar
+`app/websocket/`/`app/realtime/`. Frontend: `LoteCountdown.tsx` (Sala del comprador y
+Consola del rematador) recibe el deadline absoluto del backend y solo recalcula
+`endsAt - Date.now()` localmente para el tictac -- el backend decide exclusivamente
+cuándo cerrar, nunca el cliente; cinco controles nuevos en `ConsolaControlPanel.tsx`
+(pausar/reanudar/reiniciar/fijar tiempo restante/alternar cierre automático). Ver
+[40-cuenta-regresiva-y-cierre-automatico.md](40-cuenta-regresiva-y-cierre-automatico.md),
+ADR-043.
+
+**Épica 8, Módulo 8.2 — Pruebas de Carga y Rendimiento.** Segunda fase puramente de
+infraestructura/operabilidad -- cero funcionalidad de negocio nueva, y a diferencia de
+todos los módulos anteriores (incluido el 8.1), vive **fuera** de `backend/`/
+`frontend/`: un entorno de carga propio (`loadtest/`, proyecto Python independiente,
+venv/dependencias propias -- `httpx`/`websockets`/`matplotlib`/`jinja2`, ninguna se
+agrega al backend) que habla con RematAR únicamente por HTTP/WebSocket, reimplementando
+el protocolo del Gateway (`docs/20-gateway-websocket.md`) desde su documentación
+pública en vez de importar código de `app/websocket/`. Cinco escenarios parametrizables
+(no siete scripts distintos): `connected_buyers` (100/500/1000 compradores conectados a
+un remate en vivo, RNF-04), `concurrent_remates` (compradores repartidos entre N
+remates `LIVE` simultáneos, RNF-06), `bid_storm` (miles de ofertas consecutivas sobre
+un lote, stress del Auction Engine y su `SELECT FOR UPDATE`, ADR-004), `chat_concurrency`
+(chat a alta frecuencia respetando el rate limiting existente) y
+`notifications_broadcast` (mide la latencia de difusión de un evento de dominio a N
+clientes conectados, valida directamente RNF-01: <300ms p95). Las métricas de servidor
+(CPU/memoria/conectados/timings) no se instrumentan de nuevo: un `MonitoringPoller`
+sondea el `GET /monitoring/metrics` del Módulo 8.1 ya existente durante cada corrida,
+reutilizando esa inversión en vez de duplicarla -- best-effort, si el login de admin
+falla la corrida sigue sin esa serie temporal. El seed de datos (compradores,
+rematador, remates/lotes `LIVE`+`OPEN`) se hace exclusivamente vía la API pública, cero
+acceso directo a la base. Cada corrida genera `summary.json` (datos crudos) +
+`report.html` (autocontenido, gráficos como PNG embebidos, sin servidor) con un motor
+de recomendaciones básico contra los umbrales de RNF-01/02/04
+([04-requisitos-no-funcionales.md](04-requisitos-no-funcionales.md)); `loadtest compare`
+genera `comparison.html` entre corridas (ver
+[ADR-042](adr/ADR-042-pruebas-de-carga-y-rendimiento.md)). Ver
+[39-pruebas-de-carga-y-rendimiento.md](39-pruebas-de-carga-y-rendimiento.md) para el
+diseño completo y [loadtest/README.md](../loadtest/README.md) para cómo instalarlo y
+correr cada escenario.
+
+**Épica 8, Módulo 8.1 — Observabilidad y Monitoreo.** Primera fase puramente de
+infraestructura/operabilidad -- cero funcionalidad de negocio nueva. Un Monitoring
+Service (`app/monitoring/`, paquete transversal nuevo, mismo nivel que
+`app/analytics/`/`app/audit/`/`app/history/`, sin modelo propio ni migración) expone
+`GET /monitoring/health` (público, para probes de infraestructura: API, PostgreSQL,
+Redis, Gateway WebSocket -- distinto del `/health` ya existente, que se deja intacto
+por si algo externo depende de su forma actual) y `GET /monitoring/metrics`
+(admin-only: usuarios conectados/WebSockets activos vía `ConnectionManager`, mensajes
+de chat y ofertas por minuto vía consultas globales nuevas a Postgres, tiempo promedio
+de procesamiento de una oferta y de respuesta de la API, errores recientes, memoria/CPU
+del proceso). La instrumentación de timing es deliberadamente no invasiva: el router de
+ofertas envuelve la llamada ya existente a `AuctionEngine.place_bid(...)` con un timer
+sin tocar el motor (el componente más sensible del sistema), y
+`RequestContextMiddleware` gana una línea additiva sobre `duration_ms` que ya
+calculaba -- ambos best-effort vía `RedisMetricsRecorder` (`app/redis/metrics.py`,
+nuevo, mismo patrón fixed-window por minuto que `RedisRateLimiter`). Logging: cuatro
+logs nuevos de ciclo de vida del proceso completo
+(`app_starting`/`app_started`/`app_shutting_down`/`app_stopped`) -- errores
+inesperados, advertencias y logs estructurados ya estaban cubiertos desde la Fase 1.
+Memoria/CPU son del **proceso** de este backend (`psutil`, dependencia nueva), no del
+host -- en el despliegue multi-instancia que el proyecto ya asume (ADR-001), un número
+de host agregado no sería atribuible a ninguna instancia. Preparación para
+Prometheus/Grafana: arquitectónica, no construida -- `GET /monitoring/metrics` ya es
+el contrato JSON limpio que un exportador futuro traduciría sin tocar
+`MonitoringService` (ver [ADR-041](adr/ADR-041-observabilidad-y-monitoreo.md)). En el
+frontend, `features/monitoring/` agrega una tercera pestaña "Monitoreo" a `/admin`
+(junto a Auditoría e Historial), con `usePlatformMonitoring` (polling cada 10s) y
+tarjetas KPI que reutilizan `KpiCard` de Analítica. Ver
+[38-observabilidad-y-monitoreo.md](38-observabilidad-y-monitoreo.md). Esta carpeta
+sigue siendo la fuente de verdad del proyecto: cada fase nueva debe leerla antes de
+proponer cambios y actualizarla si algo deja de ser cierto. Ver el
 [README raíz](../README.md) para instrucciones de instalación y el estado exacto del
 código.
 
@@ -92,6 +180,10 @@ código.
 | [35-dashboard-analitica-tiempo-real.md](35-dashboard-analitica-tiempo-real.md) | Dashboard de analítica en tiempo real: `AnalyticsService`, origen de cada métrica, control de acceso, refetch debounced (Épica 7.1) |
 | [36-sistema-de-auditoria-y-trazabilidad.md](36-sistema-de-auditoria-y-trazabilidad.md) | Sistema de auditoría y trazabilidad: `Audit Service`, acciones registradas, escritura atada a la transacción de dominio, estructura de almacenamiento, panel admin/rematador (Épica 7.2) |
 | [37-historial-y-resultados-de-remates.md](37-historial-y-resultados-de-remates.md) | Historial y resultados de remates: `History Service`, reutilización de Analytics/Audit, detalle de remate y de lote, preparación para reportes (Épica 7.3) |
+| [38-observabilidad-y-monitoreo.md](38-observabilidad-y-monitoreo.md) | Observabilidad y monitoreo: `Monitoring Service`, health checks, cada métrica explicada, logging, preparación para Prometheus/Grafana (Épica 8.1) |
+| [39-pruebas-de-carga-y-rendimiento.md](39-pruebas-de-carga-y-rendimiento.md) | Pruebas de carga y rendimiento: entorno `loadtest/` separado, los cinco escenarios, cada métrica y su origen, reportes, recomendaciones básicas (Épica 8.2) |
+| [40-cuenta-regresiva-y-cierre-automatico.md](40-cuenta-regresiva-y-cierre-automatico.md) | Cuenta regresiva y cierre automático de lotes: `Timer Service`, los nueve eventos, extensión anti-sniping síncrona, `TimerExpiryScheduler`, adjudicación automática (Épica 8, implementa ADR-007) |
+| [41-gestion-post-remate.md](41-gestion-post-remate.md) | Gestión Post-Remate: `PostAuction Service` desacoplado vía eventos, flujo de 8 estados, línea de tiempo, `Notification Service` nuevo (Épica 7, Módulo 7.5) |
 | [adr/](adr/) | Registro de decisiones de arquitectura (ADR), una por decisión relevante |
 
 ## Reglas de esta documentación (aplican a todas las fases futuras)
@@ -359,3 +451,114 @@ código.
   remates/lotes/ofertas/chat. Ver
   [37-historial-y-resultados-de-remates.md](37-historial-y-resultados-de-remates.md),
   ADR-040.
+- **Épica 8, Módulo 8.1** (2026-08-05): Observabilidad y Monitoreo -- primera fase
+  puramente de infraestructura, cero funcionalidad de negocio nueva. Monitoring
+  Service (`app/monitoring/`, paquete transversal nuevo, sin modelo propio):
+  `GET /monitoring/health` (público: API/PostgreSQL/Redis/WebSocket, sin tocar el
+  `/health` ya existente) y `GET /monitoring/metrics` (admin: conectados/WebSockets
+  activos vía `ConnectionManager`, mensajes de chat/ofertas por minuto vía consultas
+  globales nuevas a Postgres, timings promedio y errores recientes vía
+  `RedisMetricsRecorder` nuevo -- mismo patrón fixed-window por minuto que
+  `RedisRateLimiter` --, memoria/CPU del proceso vía `psutil`, dependencia nueva);
+  instrumentación de timing deliberadamente no invasiva -- el router de ofertas
+  envuelve `AuctionEngine.place_bid(...)` con un timer sin tocar el motor,
+  `RequestContextMiddleware` gana una línea additiva sobre `duration_ms` que ya
+  calculaba, todo best-effort; cuatro logs nuevos de ciclo de vida del proceso
+  (`app_starting`/`app_started`/`app_shutting_down`/`app_stopped`); memoria/CPU por
+  proceso, no por host (ADR-001, despliegue multi-instancia); preparación
+  arquitectónica (no construida) para Prometheus/Grafana; frontend:
+  `features/monitoring/`, tercera pestaña "Monitoreo" en `/admin` con polling cada
+  10s, `MetricsGrid` reutiliza `KpiCard` de Analítica; cero cambios en
+  `AuctionEngine`, `RemateService`, `LoteService`, `ChatService`, `AuthService`,
+  `app/realtime/`, `app/presence/`, `app/snapshot/`, `app/audit/`, `app/analytics/`
+  ni `app/history/`. Ver
+  [38-observabilidad-y-monitoreo.md](38-observabilidad-y-monitoreo.md), ADR-041.
+- **Épica 8, Módulo 8.2** (2026-07-22): Pruebas de Carga y Rendimiento -- segunda fase
+  puramente de infraestructura, cero funcionalidad de negocio nueva, y la primera que
+  vive fuera de `backend/`/`frontend/`: un entorno de carga propio (`loadtest/`,
+  proyecto Python independiente, venv/dependencias propias --
+  `httpx`/`websockets`/`matplotlib`/`jinja2` -- ninguna tocó el `pyproject.toml` del
+  backend) que reimplementa el protocolo del Gateway WebSocket (`docs/20`) desde su
+  documentación pública, sin importar un solo símbolo de `app/websocket/`. Cinco
+  escenarios parametrizables: `connected_buyers` (100/500/1000 compradores
+  conectados, RNF-04), `concurrent_remates` (múltiples remates `LIVE` simultáneos,
+  RNF-06), `bid_storm` (miles de ofertas consecutivas, stress del `SELECT FOR UPDATE`
+  del Auction Engine, ADR-004), `chat_concurrency` (chat a alta frecuencia respetando
+  el rate limiting existente) y `notifications_broadcast` (latencia de difusión de un
+  evento de dominio a N clientes, valida RNF-01 directamente). Las métricas de
+  servidor (CPU/memoria/conectados/timings) no se instrumentaron de nuevo: un
+  `MonitoringPoller` reutiliza `GET /monitoring/metrics` del Módulo 8.1 durante cada
+  corrida, best-effort (si el login de admin falla, la corrida sigue sin esa serie).
+  Seed de datos (compradores/rematador/remates/lotes `LIVE`+`OPEN`) exclusivamente
+  vía la API pública, cero acceso directo a la base. Cada corrida genera
+  `summary.json` + `report.html` autocontenido (gráficos como PNG embebidos vía
+  matplotlib, sin servidor) con un motor de recomendaciones básico contra los
+  umbrales de RNF-01/02/04; `loadtest compare` genera `comparison.html` entre
+  corridas; cero cambios en `backend/app`/`frontend/src`. Ver
+  [39-pruebas-de-carga-y-rendimiento.md](39-pruebas-de-carga-y-rendimiento.md),
+  ADR-042, y [loadtest/README.md](../loadtest/README.md) para la guía de ejecución.
+- **Épica 8** (2026-07-23): Cuenta Regresiva y Cierre Automático de Lotes -- implementa
+  por primera vez [ADR-007](adr/ADR-007-anti-sniping.md) (Fase 0, anti-sniping
+  completo, nunca construido). Timer Service nuevo (`app/timer/`, paquete
+  transversal top-level, sin modelo propio -- tres columnas nuevas en `Lote`:
+  `timer_ends_at`/`timer_paused_remaining_seconds`/`timer_auto_close_enabled`, nunca
+  las dos primeras no-`None` a la vez, sin un `PAUSED` nuevo en `LoteStatus`).
+  Arranque del timer (`LoteService.open`/`open_next`) y extensión anti-sniping
+  (`AuctionEngine.place_bid`) son llamadas síncronas a `@staticmethod`s puros de
+  `TimerService` -- deliberadamente no vía el Event Bus, para que
+  `TimerExpiryScheduler` nunca pueda cerrar el lote en la misma ventana en que una
+  extensión asíncrona todavía no se aplicó (mismo razonamiento que ya descartó el
+  Event Bus para auditoría, ADR-039). `TimerExpiryScheduler` (tarea de fondo nueva,
+  mismo patrón que `EventConsumer`/`ChatSystemEventDispatcher`) sondea cada 1s y
+  reusa el lock de fila de ADR-004 (`get_by_id_for_update`, primera vez usado por
+  algo distinto del Auction Engine) para serializarse contra un bid o una acción del
+  rematador en curso, y respeta la pausa del remate (no adjudica mientras nadie
+  puede ofertar). `LoteService.close()` se refactorizó (`_apply_close` privado)
+  sin cambiar su firma ni comportamiento externo; el nuevo `auto_close()` lo reusa
+  para la adjudicación automática (`lote.winner_determined`, implementa
+  `lote.ganador_determinado` reservado desde Fase 0), auditada con `actor_id=None`
+  (mismo patrón que `RemateService.try_auto_finish`). Nueve eventos de dominio
+  nuevos, sincronizados por el pipeline ya existente (`app/realtime/registry.py`)
+  sin tocar `app/websocket/`/`app/realtime/consumer.py`/`dispatcher.py`. Cinco
+  acciones nuevas del rematador (pausar/reanudar/reiniciar/fijar tiempo restante/
+  alternar cierre automático, `app/timer/router.py`, montado sin tocar
+  `lotes/router.py`, mismo criterio que `snapshot_router`). Frontend:
+  `LoteCountdown.tsx` (Sala del comprador y Consola del rematador) recibe el
+  deadline absoluto del backend y solo recalcula localmente para el tictac visual
+  -- el backend decide exclusivamente cuándo cerrar; cinco controles nuevos en
+  `ConsolaControlPanel.tsx`; toast de adjudicación en `SalaPage.tsx`. Cero cambios
+  en la lógica de aceptación/rechazo de ofertas del Auction Engine, en
+  `app/websocket/`, `app/realtime/consumer.py`/`dispatcher.py`. Ver
+  [40-cuenta-regresiva-y-cierre-automatico.md](40-cuenta-regresiva-y-cierre-automatico.md),
+  ADR-043.
+- **Épica 7, Módulo 7.5** (2026-07-23): Gestión Post-Remate -- PostAuction Service
+  desacoplado (`app/postauction/`, paquete transversal nuevo, mismo nivel que
+  `app/audit/`/`app/history/`/`app/monitoring/`) que reacciona a `lote.winner_determined`
+  con su propia (tercera) instancia de `EventConsumer`
+  (`PostAuctionEventDispatcher`, mismo patrón que `ChatSystemEventDispatcher`) --
+  `app/modules/remates/lotes/service.py` no gana un solo import nuevo, garantía
+  verificada por dos tests nuevos en `test_architecture_boundaries.py`. Flujo de ocho
+  estados (Adjudicado → Pendiente de contacto → Pago pendiente → Pago recibido →
+  Preparando entrega → Enviado → Entregado → Finalizado), máquina de estados
+  forward-only con saltos permitidos (`ALLOWED_TRANSITIONS` derivado de una lista
+  ordenada, no una tabla de transiciones puntuales como `LoteStatus`); un único
+  endpoint de cambio de estado cubre también "registrar fecha de contacto/pago/envío/
+  entrega" (la fecha hito se estampa según a qué estado se llega,
+  `STATUS_MILESTONE_FIELD`). Línea de tiempo propia insert-only
+  (`PostAuctionTimelineEntry`, `case_id` en `CASCADE`) -- no reutiliza Historial (no
+  tiene escritura) ni Auditoría (transversal a toda la plataforma, no específico de un
+  caso). El enunciado pedía reutilizar un "Notification Service" que, verificado
+  explícitamente, no existía -- se construyó una versión mínima y genérica
+  (`app/notifications/`, sin `service.py`, sin conocer a `postauction` ni a ningún otro
+  módulo de dominio) que persiste en la misma transacción que la mutación que la
+  origina (mismo criterio que `AuditLogRepository.record`), disparada en los cuatro
+  momentos pedidos (adjudicación, cambio de estado, pago, entrega); los eventos del
+  módulo también se sincronizan por el pipeline de WebSocket existente si el usuario ya
+  está en la sala del remate. "Ventas adjudicadas" (rematador, buscar/filtrar por
+  estado) y "Mis compras" (comprador) en `features/postauction/`, con un indicador
+  visual de progreso (`ProgressStepper`) y una línea de tiempo (`Timeline`) compartidos;
+  botones de entrada nuevos en ambos dashboards. Limitación documentada: el cierre
+  manual de un lote vendido (ADR-018) no genera un caso automático, al no haber
+  comprador asociado en ese flujo. Cero cambios en `AuctionEngine`, `RemateService`,
+  `LoteService`, `app/websocket/`, `app/snapshot/`, `app/audit/service.py`. Ver
+  [41-gestion-post-remate.md](41-gestion-post-remate.md), ADR-044.

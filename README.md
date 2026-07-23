@@ -4,19 +4,24 @@ Plataforma de remates en vivo con ofertas en tiempo real. Ver [`docs/`](docs/) p
 diseño completo del sistema (visión, requisitos, arquitectura, ADRs) — este README cubre
 solo cómo levantar y trabajar con lo que existe hoy.
 
-**Estado del proyecto: Épica 6, Módulo 6.1 — Gestión multimedia de los lotes.** La
-Gestión de Remates y Lotes (Épica 5.3) ya cargaba un lote con una única imagen (URL de
-texto); este módulo agrega una galería completa: subida de múltiples imágenes en
-paralelo con barra de progreso, vista previa antes de terminar de subir, selección de
-imagen principal, reordenamiento (drag & drop nativo + flechas de fallback) y
-eliminación con confirmación. El backend no tenía ninguna capacidad de subida binaria —
-se documentó esa brecha antes de implementar (instrucción explícita del enunciado) y se
-agregó un único endpoint nuevo, `POST .../lotes/{id}/images` (multipart, disco local,
-servido vía `StaticFiles`); el array de imágenes se sigue persistiendo con el `PATCH` de
-Lote ya existente desde la Épica 2.2, sin cambios. Ver
-[docs/32](docs/32-gestion-multimedia-lotes.md). Chat, streaming, notificaciones y
-video/PDF/certificados de lote siguen siendo módulos futuros (ver
-[Próximos pasos](#próximos-pasos)).
+**Estado del proyecto: Épica 8 — Cuenta Regresiva y Cierre Automático de Lotes.**
+Implementa por primera vez [ADR-007](docs/adr/ADR-007-anti-sniping.md) (Fase 0,
+anti-sniping completo, nunca construido hasta ahora). Timer Service nuevo
+(`app/timer/`, transversal, sin modelo propio -- tres columnas nuevas en `Lote`,
+Postgres como única fuente de verdad del timer). El arranque del timer y la extensión
+anti-sniping son llamadas síncronas dentro de la misma transacción que abre/oferta
+(nunca vía el Event Bus, para que un cierre automático nunca pueda ganarle la carrera
+a una extensión); el cierre automático sí necesita una tarea de fondo nueva
+(`TimerExpiryScheduler`, mismo patrón que los `EventConsumer` ya existentes), que
+reusa el lock de fila de ADR-004 para nunca dejar un bid y un cierre automático en un
+estado inconsistente entre sí. Nueve eventos de dominio nuevos, sincronizados por el
+pipeline ya existente. Frontend: cuenta regresiva (`LoteCountdown.tsx`) con el backend
+como única fuente de verdad del tiempo restante, cinco controles nuevos para el
+rematador. Ver [docs/40](docs/40-cuenta-regresiva-y-cierre-automatico.md),
+[ADR-043](docs/adr/ADR-043-cuenta-regresiva-y-cierre-automatico.md). Esta sección de
+estado se actualiza en cada fase nueva; ver [docs/README.md](docs/README.md) para el
+historial completo de todas las fases anteriores que este párrafo no repite en
+detalle.
 
 ## Stack
 
@@ -381,6 +386,30 @@ Typecheck y lint:
 npx tsc -b            # o: npm run build, que además genera frontend/dist/
 npm run lint           # oxlint
 ```
+
+## Pruebas de carga (Épica 8, Módulo 8.2)
+
+Entorno de carga separado del backend/frontend (`loadtest/`, proyecto Python propio,
+venv/dependencias propias) que simula compradores conectados, remates simultáneos,
+ráfagas de ofertas, chat de alta concurrencia y notificaciones en tiempo real contra
+el stack ya levantado arriba. Guía completa de instalación y de cada escenario en
+[`loadtest/README.md`](loadtest/README.md); diseño completo en
+[docs/39-pruebas-de-carga-y-rendimiento.md](docs/39-pruebas-de-carga-y-rendimiento.md)
+y [ADR-042](docs/adr/ADR-042-pruebas-de-carga-y-rendimiento.md).
+
+```bash
+cd loadtest
+python -m venv .venv
+./.venv/Scripts/pip install -e ".[dev]"   # en Linux/Mac: .venv/bin/pip
+
+# Requiere el stack de arriba levantado (docker compose up) y un admin bootstrapeado
+# (paso 3 de instalación) -- si el login de admin falla, la corrida sigue igual, solo
+# sin las métricas de servidor (CPU/memoria/conectados) en el reporte.
+./.venv/Scripts/python -m loadtest run connected_buyers --num-buyers 100
+```
+
+Cada corrida genera `summary.json` + `report.html` (autocontenido, se abre con doble
+click) bajo `loadtest/results/`.
 
 ## Próximos pasos
 

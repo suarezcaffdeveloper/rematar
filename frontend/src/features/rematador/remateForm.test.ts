@@ -117,7 +117,7 @@ describe('remateToFormValues', () => {
       starts_at: '2026-08-01T14:00:00Z',
       ends_at: null,
       status: 'draft',
-      settings: { anti_sniping_enabled: true, anti_sniping_extension_seconds: 90, currency: 'USD' },
+      settings: { anti_sniping_enabled: true, anti_sniping_extension_seconds: 90, currency: 'USD', lote_timer_seconds: null },
       cancellation_reason: null,
       cancelled_at: null,
       finished_at: null,

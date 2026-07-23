@@ -146,6 +146,49 @@ export async function closeLoteRequest(
 }
 
 /**
+ * Acciones del rematador sobre el timer de un lote (Épica 8, "cuenta regresiva y
+ * cierre automático", `backend/app/timer/router.py`) -- consumidas por
+ * `ConsolaControlPanel`. Mismo criterio que `openLoteRequest`/`closeLoteRequest`:
+ * exigen lote `open` con un timer en curso (422 si no).
+ */
+export async function pauseLoteTimerRequest(remateId: string, loteId: string): Promise<Lote> {
+  const { data } = await apiClient.post<Lote>(`/remates/${remateId}/lotes/${loteId}/timer/pause`);
+  return data;
+}
+
+export async function resumeLoteTimerRequest(remateId: string, loteId: string): Promise<Lote> {
+  const { data } = await apiClient.post<Lote>(`/remates/${remateId}/lotes/${loteId}/timer/resume`);
+  return data;
+}
+
+export async function resetLoteTimerRequest(remateId: string, loteId: string): Promise<Lote> {
+  const { data } = await apiClient.post<Lote>(`/remates/${remateId}/lotes/${loteId}/timer/reset`);
+  return data;
+}
+
+export async function setLoteTimerRemainingRequest(
+  remateId: string,
+  loteId: string,
+  seconds: number,
+): Promise<Lote> {
+  const { data } = await apiClient.post<Lote>(`/remates/${remateId}/lotes/${loteId}/timer/remaining`, {
+    seconds,
+  });
+  return data;
+}
+
+export async function setLoteTimerAutoCloseRequest(
+  remateId: string,
+  loteId: string,
+  enabled: boolean,
+): Promise<Lote> {
+  const { data } = await apiClient.post<Lote>(`/remates/${remateId}/lotes/${loteId}/timer/auto-close`, {
+    enabled,
+  });
+  return data;
+}
+
+/**
  * CRUD y reordenamiento de `Lote` (Épica 2, Módulo 2.2, `backend/app/modules/remates/
  * lotes/router.py`) -- consumido por la Gestión de Remates y Lotes (Épica 5, Módulo
  * 5.3). Las cuatro requieren que el remate padre esté `draft`/`scheduled`

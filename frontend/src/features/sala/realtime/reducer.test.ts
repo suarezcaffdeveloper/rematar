@@ -16,7 +16,7 @@ function makeRemate(overrides: Partial<Remate> = {}): Remate {
     starts_at: null,
     ends_at: null,
     status: 'live',
-    settings: { anti_sniping_enabled: false, anti_sniping_extension_seconds: 60, currency: 'ARS' },
+    settings: { anti_sniping_enabled: false, anti_sniping_extension_seconds: 60, currency: 'ARS', lote_timer_seconds: null },
     cancellation_reason: null,
     cancelled_at: null,
     finished_at: null,
@@ -44,6 +44,9 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
     reserve_price: null,
     final_price: null,
     status: 'pending',
+    timer_ends_at: null,
+    timer_paused_remaining_seconds: null,
+    timer_auto_close_enabled: true,
     created_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
@@ -169,14 +172,14 @@ describe('applyDomainEventToSnapshot', () => {
 
     const closedOther = applyDomainEventToSnapshot(
       snapshot,
-      { event_type: 'lote.closed', event_id: 'e1', remate_id: 'remate-1', occurred_at: 't', lote_id: 'otro', outcome: 'sold', final_price: '1200.00' },
+      { event_type: 'lote.closed', event_id: 'e1', remate_id: 'remate-1', occurred_at: 't', lote_id: 'otro', outcome: 'sold', final_price: '1200.00', triggered_by: 'manual' },
       [],
     );
     expect(closedOther).toBe(snapshot);
 
     const closedActive = applyDomainEventToSnapshot(
       snapshot,
-      { event_type: 'lote.closed', event_id: 'e2', remate_id: 'remate-1', occurred_at: 't', lote_id: 'lote-1', outcome: 'sold', final_price: '1200.00' },
+      { event_type: 'lote.closed', event_id: 'e2', remate_id: 'remate-1', occurred_at: 't', lote_id: 'lote-1', outcome: 'sold', final_price: '1200.00', triggered_by: 'manual' },
       [],
     );
     expect(closedActive.active_lote).toBeNull();
@@ -190,6 +193,199 @@ describe('applyDomainEventToSnapshot', () => {
       [],
     );
     expect(result.active_lote).toBeNull();
+  });
+
+  describe('cuenta regresiva (Épica 8)', () => {
+    it('lote.timer_started fija timer_ends_at del lote activo', () => {
+      const snapshot = makeSnapshot({ active_lote: makeLote({ id: 'lote-1', timer_ends_at: null }) });
+      const result = applyDomainEventToSnapshot(
+        snapshot,
+        {
+          event_type: 'lote.timer_started',
+          event_id: 'e1',
+          remate_id: 'remate-1',
+          occurred_at: 't',
+          lote_id: 'lote-1',
+          ends_at: '2026-08-01T00:01:00Z',
+          duration_seconds: 60,
+        },
+        [],
+      );
+      expect(result.active_lote?.timer_ends_at).toBe('2026-08-01T00:01:00Z');
+      expect(result.active_lote?.timer_paused_remaining_seconds).toBeNull();
+    });
+
+    it('lote.timer_paused limpia timer_ends_at y fija los segundos restantes', () => {
+      const snapshot = makeSnapshot({
+        active_lote: makeLote({ id: 'lote-1', timer_ends_at: '2026-08-01T00:01:00Z' }),
+      });
+      const result = applyDomainEventToSnapshot(
+        snapshot,
+        {
+          event_type: 'lote.timer_paused',
+          event_id: 'e1',
+          remate_id: 'remate-1',
+          occurred_at: 't',
+          lote_id: 'lote-1',
+          remaining_seconds: 42,
+        },
+        [],
+      );
+      expect(result.active_lote?.timer_ends_at).toBeNull();
+      expect(result.active_lote?.timer_paused_remaining_seconds).toBe(42);
+    });
+
+    it('lote.timer_resumed vuelve a fijar timer_ends_at y limpia los segundos pausados', () => {
+      const snapshot = makeSnapshot({
+        active_lote: makeLote({ id: 'lote-1', timer_ends_at: null, timer_paused_remaining_seconds: 42 }),
+      });
+      const result = applyDomainEventToSnapshot(
+        snapshot,
+        {
+          event_type: 'lote.timer_resumed',
+          event_id: 'e1',
+          remate_id: 'remate-1',
+          occurred_at: 't',
+          lote_id: 'lote-1',
+          ends_at: '2026-08-01T00:02:00Z',
+        },
+        [],
+      );
+      expect(result.active_lote?.timer_ends_at).toBe('2026-08-01T00:02:00Z');
+      expect(result.active_lote?.timer_paused_remaining_seconds).toBeNull();
+    });
+
+    it('lote.timer_reset y lote.timer_extended fijan el nuevo timer_ends_at', () => {
+      const snapshot = makeSnapshot({ active_lote: makeLote({ id: 'lote-1' }) });
+      const reset = applyDomainEventToSnapshot(
+        snapshot,
+        {
+          event_type: 'lote.timer_reset',
+          event_id: 'e1',
+          remate_id: 'remate-1',
+          occurred_at: 't',
+          lote_id: 'lote-1',
+          ends_at: '2026-08-01T00:05:00Z',
+          duration_seconds: 300,
+        },
+        [],
+      );
+      expect(reset.active_lote?.timer_ends_at).toBe('2026-08-01T00:05:00Z');
+
+      const extended = applyDomainEventToSnapshot(
+        snapshot,
+        {
+          event_type: 'lote.timer_extended',
+          event_id: 'e2',
+          remate_id: 'remate-1',
+          occurred_at: 't',
+          lote_id: 'lote-1',
+          ends_at: '2026-08-01T00:00:15Z',
+          extended_by_seconds: 15,
+        },
+        [],
+      );
+      expect(extended.active_lote?.timer_ends_at).toBe('2026-08-01T00:00:15Z');
+    });
+
+    it('lote.timer_adjusted en corriendo fija ends_at; en pausado fija solo los segundos restantes', () => {
+      const runningSnapshot = makeSnapshot({ active_lote: makeLote({ id: 'lote-1' }) });
+      const adjustedRunning = applyDomainEventToSnapshot(
+        runningSnapshot,
+        {
+          event_type: 'lote.timer_adjusted',
+          event_id: 'e1',
+          remate_id: 'remate-1',
+          occurred_at: 't',
+          lote_id: 'lote-1',
+          ends_at: '2026-08-01T00:00:30Z',
+          remaining_seconds: 30,
+        },
+        [],
+      );
+      expect(adjustedRunning.active_lote?.timer_ends_at).toBe('2026-08-01T00:00:30Z');
+      expect(adjustedRunning.active_lote?.timer_paused_remaining_seconds).toBeNull();
+
+      const pausedSnapshot = makeSnapshot({
+        active_lote: makeLote({ id: 'lote-1', timer_ends_at: null, timer_paused_remaining_seconds: 5 }),
+      });
+      const adjustedPaused = applyDomainEventToSnapshot(
+        pausedSnapshot,
+        {
+          event_type: 'lote.timer_adjusted',
+          event_id: 'e2',
+          remate_id: 'remate-1',
+          occurred_at: 't',
+          lote_id: 'lote-1',
+          ends_at: null,
+          remaining_seconds: 30,
+        },
+        [],
+      );
+      expect(adjustedPaused.active_lote?.timer_ends_at).toBeNull();
+      expect(adjustedPaused.active_lote?.timer_paused_remaining_seconds).toBe(30);
+    });
+
+    it('lote.timer_auto_close_toggled fija timer_auto_close_enabled', () => {
+      const snapshot = makeSnapshot({ active_lote: makeLote({ id: 'lote-1', timer_auto_close_enabled: true }) });
+      const result = applyDomainEventToSnapshot(
+        snapshot,
+        {
+          event_type: 'lote.timer_auto_close_toggled',
+          event_id: 'e1',
+          remate_id: 'remate-1',
+          occurred_at: 't',
+          lote_id: 'lote-1',
+          enabled: false,
+        },
+        [],
+      );
+      expect(result.active_lote?.timer_auto_close_enabled).toBe(false);
+    });
+
+    it('lote.timer_expired y lote.winner_determined no mutan el snapshot (misma referencia)', () => {
+      const snapshot = makeSnapshot({ active_lote: makeLote({ id: 'lote-1' }) });
+      const expired = applyDomainEventToSnapshot(
+        snapshot,
+        { event_type: 'lote.timer_expired', event_id: 'e1', remate_id: 'remate-1', occurred_at: 't', lote_id: 'lote-1' },
+        [],
+      );
+      expect(expired).toBe(snapshot);
+
+      const winnerDetermined = applyDomainEventToSnapshot(
+        snapshot,
+        {
+          event_type: 'lote.winner_determined',
+          event_id: 'e2',
+          remate_id: 'remate-1',
+          occurred_at: 't',
+          lote_id: 'lote-1',
+          oferta_id: 'oferta-1',
+          buyer_id: 'comprador-1',
+          amount: '1500.00',
+        },
+        [],
+      );
+      expect(winnerDetermined).toBe(snapshot);
+    });
+
+    it('un evento de timer de OTRO lote no afecta active_lote', () => {
+      const snapshot = makeSnapshot({ active_lote: makeLote({ id: 'lote-1', timer_ends_at: null }) });
+      const result = applyDomainEventToSnapshot(
+        snapshot,
+        {
+          event_type: 'lote.timer_started',
+          event_id: 'e1',
+          remate_id: 'remate-1',
+          occurred_at: 't',
+          lote_id: 'otro-lote',
+          ends_at: '2026-08-01T00:01:00Z',
+          duration_seconds: 60,
+        },
+        [],
+      );
+      expect(result).toBe(snapshot);
+    });
   });
 
   it('oferta.accepted agrega la entrada al historial (con buyer_id anonimizado) y la marca ganadora', () => {
@@ -411,6 +607,7 @@ describe('applyDomainEventToLotes', () => {
       lote_id: 'lote-1',
       outcome: 'sold',
       final_price: '1500.00',
+      triggered_by: 'manual',
     });
     expect(sold[0].status).toBe('closed_sold');
     expect(sold[0].final_price).toBe('1500.00');
@@ -423,6 +620,7 @@ describe('applyDomainEventToLotes', () => {
       lote_id: 'lote-1',
       outcome: 'unsold',
       final_price: null,
+      triggered_by: 'auto',
     });
     expect(unsold[0].status).toBe('closed_unsold');
   });
@@ -466,5 +664,59 @@ describe('applyDomainEventToLotes', () => {
       occurred_at: 't',
     });
     expect(result).toBe(lotes);
+  });
+
+  it('lote.closed limpia el timer del lote cerrado', () => {
+    const lotes = [makeLote({ id: 'lote-1', status: 'open', timer_ends_at: '2026-08-01T00:01:00Z' })];
+    const result = applyDomainEventToLotes(lotes, {
+      event_type: 'lote.closed',
+      event_id: 'e1',
+      remate_id: 'remate-1',
+      occurred_at: 't',
+      lote_id: 'lote-1',
+      outcome: 'unsold',
+      final_price: null,
+      triggered_by: 'auto',
+    });
+    expect(result[0].timer_ends_at).toBeNull();
+    expect(result[0].timer_paused_remaining_seconds).toBeNull();
+  });
+
+  it('lote.timer_paused / lote.timer_resumed alternan timer_ends_at y timer_paused_remaining_seconds', () => {
+    const lotes = [makeLote({ id: 'lote-1', timer_ends_at: '2026-08-01T00:01:00Z' })];
+    const paused = applyDomainEventToLotes(lotes, {
+      event_type: 'lote.timer_paused',
+      event_id: 'e1',
+      remate_id: 'remate-1',
+      occurred_at: 't',
+      lote_id: 'lote-1',
+      remaining_seconds: 33,
+    });
+    expect(paused[0].timer_ends_at).toBeNull();
+    expect(paused[0].timer_paused_remaining_seconds).toBe(33);
+
+    const resumed = applyDomainEventToLotes(paused, {
+      event_type: 'lote.timer_resumed',
+      event_id: 'e2',
+      remate_id: 'remate-1',
+      occurred_at: 't',
+      lote_id: 'lote-1',
+      ends_at: '2026-08-01T00:02:00Z',
+    });
+    expect(resumed[0].timer_ends_at).toBe('2026-08-01T00:02:00Z');
+    expect(resumed[0].timer_paused_remaining_seconds).toBeNull();
+  });
+
+  it('lote.timer_auto_close_toggled fija timer_auto_close_enabled', () => {
+    const lotes = [makeLote({ id: 'lote-1', timer_auto_close_enabled: true })];
+    const result = applyDomainEventToLotes(lotes, {
+      event_type: 'lote.timer_auto_close_toggled',
+      event_id: 'e1',
+      remate_id: 'remate-1',
+      occurred_at: 't',
+      lote_id: 'lote-1',
+      enabled: false,
+    });
+    expect(result[0].timer_auto_close_enabled).toBe(false);
   });
 });

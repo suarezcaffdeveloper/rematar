@@ -8,8 +8,13 @@ import {
   finishRemateRequest,
   openLoteRequest,
   openNextLoteRequest,
+  pauseLoteTimerRequest,
   pauseRemateRequest,
+  resetLoteTimerRequest,
+  resumeLoteTimerRequest,
   resumeRemateRequest,
+  setLoteTimerAutoCloseRequest,
+  setLoteTimerRemainingRequest,
 } from '../../remates/api';
 import type { Lote, Remate } from '../../remates/types';
 
@@ -20,7 +25,19 @@ export interface ConsolaControlPanelProps {
   hasUpcomingLotes: boolean;
 }
 
-type PendingAction = 'pause' | 'resume' | 'finish' | 'openSelected' | 'openNext' | 'close' | null;
+type PendingAction =
+  | 'pause'
+  | 'resume'
+  | 'finish'
+  | 'openSelected'
+  | 'openNext'
+  | 'close'
+  | 'timerPause'
+  | 'timerResume'
+  | 'timerReset'
+  | 'timerRemaining'
+  | 'timerAutoClose'
+  | null;
 
 /**
  * Panel de control de la Consola Operativa (Épica 5, Módulo 5.2): las seis acciones
@@ -55,9 +72,25 @@ export function ConsolaControlPanel({ remate, activeLote, selectedLoteId, hasUpc
   const [closeOutcome, setCloseOutcome] = useState<'sold' | 'unsold'>('sold');
   const [finalPrice, setFinalPrice] = useState('');
   const [closeError, setCloseError] = useState<string | null>(null);
+  const [remainingSecondsInput, setRemainingSecondsInput] = useState('');
 
   const isLive = remate.status === 'live';
   const isPaused = remate.status === 'paused';
+
+  // Cuenta regresiva (Épica 8, "cuenta regresiva y cierre automático") -- sin timer
+  // en absoluto (el remate no configuró `settings.lote_timer_seconds`) los cinco
+  // controles ni siquiera se muestran, mismo criterio que el resto del panel
+  // (deshabilitar según precondición, nunca dejar pasar una acción que el backend
+  // rechazaría con 422).
+  const hasTimer = Boolean(
+    activeLote && (activeLote.timer_ends_at !== null || activeLote.timer_paused_remaining_seconds !== null),
+  );
+  const isTimerPaused = Boolean(activeLote && activeLote.timer_paused_remaining_seconds !== null);
+  const parsedRemainingSeconds = Number(remainingSecondsInput);
+  const isRemainingSecondsValid =
+    remainingSecondsInput.trim() !== '' &&
+    Number.isInteger(parsedRemainingSeconds) &&
+    parsedRemainingSeconds >= 0;
 
   async function runSimpleAction(
     action: Exclude<PendingAction, 'close' | null>,
@@ -91,6 +124,20 @@ export function ConsolaControlPanel({ remate, activeLote, selectedLoteId, hasUpc
   function cancelCloseForm() {
     setIsClosingLote(false);
     setCloseError(null);
+  }
+
+  async function submitRemainingSeconds() {
+    if (!activeLote || !isRemainingSecondsValid) return;
+    setPendingAction('timerRemaining');
+    try {
+      await setLoteTimerRemainingRequest(remate.id, activeLote.id, parsedRemainingSeconds);
+      useToastStore.getState().push('success', 'Se actualizó el tiempo restante del timer.');
+      setRemainingSecondsInput('');
+    } catch (err) {
+      useToastStore.getState().push('error', normalizeApiError(err).message);
+    } finally {
+      setPendingAction(null);
+    }
   }
 
   const basePrice = activeLote ? Number(activeLote.base_price) : 0;
@@ -244,6 +291,98 @@ export function ConsolaControlPanel({ remate, activeLote, selectedLoteId, hasUpc
           Finalizar remate
         </Button>
       </div>
+
+      {hasTimer && activeLote && (
+        <div className="flex flex-col gap-3 border-t border-slate-100 pt-4">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Cuenta regresiva del lote
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              onClick={() =>
+                runSimpleAction(
+                  'timerPause',
+                  () => pauseLoteTimerRequest(remate.id, activeLote.id),
+                  'El timer se pausó.',
+                )
+              }
+              isLoading={pendingAction === 'timerPause'}
+              disabled={!isLive || isTimerPaused || pendingAction !== null}
+            >
+              Pausar timer
+            </Button>
+
+            <Button
+              onClick={() =>
+                runSimpleAction(
+                  'timerResume',
+                  () => resumeLoteTimerRequest(remate.id, activeLote.id),
+                  'El timer se reanudó.',
+                )
+              }
+              isLoading={pendingAction === 'timerResume'}
+              disabled={!isLive || !isTimerPaused || pendingAction !== null}
+            >
+              Reanudar timer
+            </Button>
+
+            <Button
+              variant="secondary"
+              onClick={() =>
+                runSimpleAction(
+                  'timerReset',
+                  () => resetLoteTimerRequest(remate.id, activeLote.id),
+                  'El timer se reinició.',
+                )
+              }
+              isLoading={pendingAction === 'timerReset'}
+              disabled={!isLive || pendingAction !== null}
+            >
+              Reiniciar timer
+            </Button>
+
+            <Button
+              variant="secondary"
+              onClick={() =>
+                runSimpleAction(
+                  'timerAutoClose',
+                  () => setLoteTimerAutoCloseRequest(remate.id, activeLote.id, !activeLote.timer_auto_close_enabled),
+                  activeLote.timer_auto_close_enabled
+                    ? 'Se desactivó el cierre automático.'
+                    : 'Se activó el cierre automático.',
+                )
+              }
+              isLoading={pendingAction === 'timerAutoClose'}
+              disabled={!isLive || pendingAction !== null}
+            >
+              {activeLote.timer_auto_close_enabled ? 'Desactivar cierre automático' : 'Activar cierre automático'}
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="w-40">
+              <Input
+                label="Tiempo restante (segundos)"
+                type="number"
+                min={0}
+                step={1}
+                value={remainingSecondsInput}
+                onChange={(event) => setRemainingSecondsInput(event.target.value)}
+                disabled={!isLive || pendingAction !== null}
+              />
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => void submitRemainingSeconds()}
+              isLoading={pendingAction === 'timerRemaining'}
+              disabled={!isLive || !isRemainingSecondsValid || pendingAction !== null}
+            >
+              Fijar tiempo restante
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -41,10 +41,43 @@ export function applyDomainEventToLotes(lotes: Lote[], event: SalaDomainEvent): 
       return patchLote(lotes, event.lote_id, { status: 'open' });
     case 'lote.closed': {
       const status: LoteStatus = event.outcome === 'sold' ? 'closed_sold' : 'closed_unsold';
-      return patchLote(lotes, event.lote_id, { status, final_price: event.final_price });
+      return patchLote(lotes, event.lote_id, {
+        status,
+        final_price: event.final_price,
+        timer_ends_at: null,
+        timer_paused_remaining_seconds: null,
+      });
     }
     case 'lote.cancelled':
       return patchLote(lotes, event.lote_id, { status: 'cancelled' });
+    // Cuenta regresiva (Épica 8, "cuenta regresiva y cierre automático", ADR-043) --
+    // cada evento de timer parchea únicamente los tres campos de timer del lote
+    // afectado, mismo criterio "solo lo que cambió" que ya aplica el resto de este
+    // reducer (ver docstring del módulo).
+    case 'lote.timer_started':
+    case 'lote.timer_reset':
+    case 'lote.timer_extended':
+      return patchLote(lotes, event.lote_id, {
+        timer_ends_at: event.ends_at,
+        timer_paused_remaining_seconds: null,
+      });
+    case 'lote.timer_resumed':
+      return patchLote(lotes, event.lote_id, {
+        timer_ends_at: event.ends_at,
+        timer_paused_remaining_seconds: null,
+      });
+    case 'lote.timer_paused':
+      return patchLote(lotes, event.lote_id, {
+        timer_ends_at: null,
+        timer_paused_remaining_seconds: event.remaining_seconds,
+      });
+    case 'lote.timer_adjusted':
+      return patchLote(lotes, event.lote_id, {
+        timer_ends_at: event.ends_at,
+        timer_paused_remaining_seconds: event.ends_at === null ? event.remaining_seconds : null,
+      });
+    case 'lote.timer_auto_close_toggled':
+      return patchLote(lotes, event.lote_id, { timer_auto_close_enabled: event.enabled });
     default:
       return lotes;
   }
@@ -124,6 +157,60 @@ export function applyDomainEventToSnapshot(
     case 'lote.cancelled':
       if (snapshot.active_lote?.id !== event.lote_id) return snapshot;
       return { ...snapshot, active_lote: null };
+
+    // Cuenta regresiva (Épica 8, "cuenta regresiva y cierre automático", ADR-043) --
+    // mismo criterio "solo lo que cambió" que el resto de este reducer: cada evento
+    // parchea únicamente los campos de timer de `active_lote`, sin tocar nada más.
+    case 'lote.timer_started':
+    case 'lote.timer_reset':
+    case 'lote.timer_extended':
+    case 'lote.timer_resumed':
+      if (snapshot.active_lote?.id !== event.lote_id) return snapshot;
+      return {
+        ...snapshot,
+        active_lote: {
+          ...snapshot.active_lote,
+          timer_ends_at: event.ends_at,
+          timer_paused_remaining_seconds: null,
+        },
+      };
+
+    case 'lote.timer_paused':
+      if (snapshot.active_lote?.id !== event.lote_id) return snapshot;
+      return {
+        ...snapshot,
+        active_lote: {
+          ...snapshot.active_lote,
+          timer_ends_at: null,
+          timer_paused_remaining_seconds: event.remaining_seconds,
+        },
+      };
+
+    case 'lote.timer_adjusted':
+      if (snapshot.active_lote?.id !== event.lote_id) return snapshot;
+      return {
+        ...snapshot,
+        active_lote: {
+          ...snapshot.active_lote,
+          timer_ends_at: event.ends_at,
+          timer_paused_remaining_seconds: event.ends_at === null ? event.remaining_seconds : null,
+        },
+      };
+
+    case 'lote.timer_auto_close_toggled':
+      if (snapshot.active_lote?.id !== event.lote_id) return snapshot;
+      return {
+        ...snapshot,
+        active_lote: { ...snapshot.active_lote, timer_auto_close_enabled: event.enabled },
+      };
+
+    // `lote.timer_expired`/`lote.winner_determined`: puramente informativos -- el
+    // cierre real (que sí muta `active_lote`) llega vía `lote.closed`, ya manejado
+    // arriba. `SalaPage` los escucha por separado (`subscribeToRealtime`) para el
+    // mensaje de adjudicación, sin que este reducer necesite tocar el snapshot.
+    case 'lote.timer_expired':
+    case 'lote.winner_determined':
+      return snapshot;
 
     case 'oferta.accepted': {
       const entry = toOfertaSnapshotEntry(event);

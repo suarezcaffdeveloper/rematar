@@ -36,6 +36,24 @@ scoped según rol), `GET /history/remates/{remate_id}` y
 `GET /history/remates/{remate_id}/lotes/{lote_id}` — mismo criterio que `audit_router`,
 un paquete transversal (`app/history/`) montado directamente acá (ver
 docs/37-historial-y-resultados-de-remates.md).
+
+`monitoring_router` (Épica 8, Módulo 8.1) expone `GET /monitoring/health` (público) y
+`GET /monitoring/metrics` (admin) — mismo criterio que `audit_router`/`history_router`,
+un paquete transversal (`app/monitoring/`) montado directamente acá (ver
+docs/38-observabilidad-y-monitoreo.md).
+
+`timer_router` (Épica 8, "cuenta regresiva y cierre automático") expone
+`/remates/{remate_id}/lotes/{lote_id}/timer/...` — mismo criterio que `snapshot_router`,
+un paquete transversal (`app/timer/`) montado directamente acá (ver
+docs/40-cuenta-regresiva-y-cierre-automatico.md).
+
+`postauction_router` (Épica 7, Módulo 7.5) expone `/postauction/ventas` (rematador) y
+`/postauction/mis-compras` (comprador) — mismo criterio que `audit_router`/`history_router`,
+un paquete transversal (`app/postauction/`) montado directamente acá (ver
+docs/41-gestion-post-remate.md).
+
+`notifications_router` (Épica 7, Módulo 7.5) expone `/notifications` — paquete genérico
+propio (`app/notifications/`), montado directamente acá igual que cualquier otro.
 """
 
 from fastapi import APIRouter
@@ -47,8 +65,12 @@ from app.modules.auth.router import router as auth_router
 from app.modules.chat.router import router as chat_router
 from app.modules.remates.router import router as remates_router
 from app.modules.users.router import router as users_router
+from app.monitoring.router import router as monitoring_router
+from app.notifications.router import router as notifications_router
+from app.postauction.router import router as postauction_router
 from app.presence.router import router as presence_router
 from app.snapshot.router import router as snapshot_router
+from app.timer.router import router as timer_router
 from app.websocket.router import router as websocket_router
 
 api_router = APIRouter()
@@ -56,9 +78,13 @@ api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
 api_router.include_router(users_router, prefix="/users", tags=["users"])
 api_router.include_router(remates_router, prefix="/remates", tags=["remates"])
 api_router.include_router(snapshot_router, tags=["snapshot"])
+api_router.include_router(timer_router, tags=["timer"])
 api_router.include_router(presence_router, tags=["presence"])
 api_router.include_router(chat_router, tags=["chat"])
 api_router.include_router(analytics_router, tags=["analytics"])
 api_router.include_router(audit_router, tags=["audit"])
 api_router.include_router(history_router, tags=["history"])
+api_router.include_router(monitoring_router, tags=["monitoring"])
+api_router.include_router(postauction_router, tags=["postauction"])
+api_router.include_router(notifications_router, tags=["notifications"])
 api_router.include_router(websocket_router, tags=["websocket"])

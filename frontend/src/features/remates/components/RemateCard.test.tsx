@@ -28,7 +28,7 @@ const REMATE: Remate = {
   starts_at: '2026-08-01T14:30:00Z',
   ends_at: null,
   status: 'scheduled',
-  settings: { anti_sniping_enabled: false, anti_sniping_extension_seconds: 60, currency: 'ARS' },
+  settings: { anti_sniping_enabled: false, anti_sniping_extension_seconds: 60, currency: 'ARS', lote_timer_seconds: null },
   cancellation_reason: null,
   cancelled_at: null,
   finished_at: null,

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>RematAR -- Reporte de carga: {{ summary.scenario }}</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 2rem;
+         max-width: 1100px; margin-inline: auto; line-height: 1.5; color: #1c1c1c; background: #fafafa; }
+  h1 { font-size: 1.6rem; margin-bottom: 0.2rem; }
+  h2 { font-size: 1.15rem; margin-top: 2.2rem; border-bottom: 2px solid #ddd; padding-bottom: 0.3rem; }
+  .subtitle { color: #666; margin-top: 0; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.8rem; margin: 1rem 0; }
+  .kpi-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 0.8rem 1rem; }
+  .kpi-card .label { font-size: 0.75rem; color: #777; text-transform: uppercase; letter-spacing: 0.02em; }
+  .kpi-card .value { font-size: 1.4rem; font-weight: 600; margin-top: 0.2rem; }
+  table { border-collapse: collapse; width: 100%; margin: 0.8rem 0; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #e5e5e5; }
+  th { background: #f0f0f0; }
+  .chart { margin: 1rem 0; }
+  .chart img { max-width: 100%; border: 1px solid #e5e5e5; border-radius: 6px; background: #fff; }
+  .recommendations { background: #fff8e6; border: 1px solid #f0d98a; border-radius: 8px; padding: 1rem 1.2rem; }
+  .recommendations li { margin-bottom: 0.5rem; }
+  .errors-sample { font-family: ui-monospace, monospace; font-size: 0.8rem; background: #fff0f0;
+                   border: 1px solid #f0caca; border-radius: 6px; padding: 0.8rem; max-height: 220px; overflow-y: auto; }
+  footer { margin-top: 3rem; font-size: 0.8rem; color: #888; }
+  code { background: #eee; padding: 0.1rem 0.3rem; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<h1>RematAR -- Pruebas de carga y rendimiento</h1>
+<p class="subtitle">Escenario <code>{{ summary.scenario }}</code> -- duración {{ "%.1f"|format(summary.duration_seconds) }}s -- generado {{ generated_at }}</p>
+
+<h2>Configuración de la corrida</h2>
+<table>
+{% for key, value in summary.config.items() %}
+  <tr><th>{{ key }}</th><td>{{ value }}</td></tr>
+{% endfor %}
+</table>
+
+<h2>Resumen ejecutivo</h2>
+<div class="kpi-grid">
+  <div class="kpi-card"><div class="label">Requests/segundo</div><div class="value">{{ "%.1f"|format(summary.http.requests_per_second) }}</div></div>
+  <div class="kpi-card"><div class="label">Mensajes WS/segundo</div><div class="value">{{ "%.1f"|format(summary.websocket.messages_per_second) }}</div></div>
+  <div class="kpi-card"><div class="label">Ofertas/segundo</div><div class="value">{{ "%.1f"|format(summary.ofertas.processed_per_second) }}</div></div>
+  <div class="kpi-card"><div class="label">Errores detectados</div><div class="value">{{ summary.errors.count }}</div></div>
+  {% if summary.ofertas.client_perceived.count %}
+  <div class="kpi-card"><div class="label">Oferta p95 (cliente)</div><div class="value">{{ "%.0f"|format(summary.ofertas.client_perceived.p95_ms) }}ms</div></div>
+  {% endif %}
+  {% if summary.broadcast.client_perceived.count %}
+  <div class="kpi-card"><div class="label">Difusión p95</div><div class="value">{{ "%.0f"|format(summary.broadcast.client_perceived.p95_ms) }}ms</div></div>
+  {% endif %}
+</div>
+
+<h2>Recomendaciones</h2>
+<ul class="recommendations">
+{% for rec in recommendations %}
+  <li>{{ rec }}</li>
+{% endfor %}
+</ul>
+
+<h2>Latencia HTTP por tipo de llamada</h2>
+<table>
+<tr><th>Llamada</th><th>Conteo</th><th>OK</th><th>Error</th><th>Prom.</th><th>p50</th><th>p95</th><th>p99</th><th>Máx.</th></tr>
+{% for label, stats in summary.http.by_label.items() %}
+<tr>
+  <td>{{ label }}</td><td>{{ stats.count }}</td><td>{{ stats.ok_count }}</td><td>{{ stats.error_count }}</td>
+  <td>{{ "%.0f"|format(stats.avg_ms) }}ms</td><td>{{ "%.0f"|format(stats.p50_ms) }}ms</td>
+  <td>{{ "%.0f"|format(stats.p95_ms) }}ms</td><td>{{ "%.0f"|format(stats.p99_ms) }}ms</td>
+  <td>{{ "%.0f"|format(stats.max_ms) }}ms</td>
+</tr>
+{% endfor %}
+</table>
+
+<h2>WebSocket</h2>
+<table>
+<tr><th>Métrica</th><th>Valor</th></tr>
+<tr><td>Conexiones exitosas</td><td>{{ summary.websocket.connect.ok_count }} / {{ summary.websocket.connect.count }}</td></tr>
+<tr><td>Tiempo de conexión (p50 / p95 / máx.)</td><td>{{ "%.0f"|format(summary.websocket.connect.p50_ms) }}ms / {{ "%.0f"|format(summary.websocket.connect.p95_ms) }}ms / {{ "%.0f"|format(summary.websocket.connect.max_ms) }}ms</td></tr>
+<tr><td>Mensajes recibidos</td><td>{{ summary.websocket.messages_received }}</td></tr>
+<tr><td>Mensajes enviados</td><td>{{ summary.websocket.messages_sent }}</td></tr>
+</table>
+
+{% if summary.extra %}
+<h2>Detalle específico del escenario</h2>
+<table>
+{% for key, value in summary.extra.items() %}
+  <tr><th>{{ key }}</th><td>{{ value }}</td></tr>
+{% endfor %}
+</table>
+{% endif %}
+
+<h2>Gráficos</h2>
+{% for key, image in charts.items() %}
+  {% if image %}
+  <div class="chart">
+    <img src="data:image/png;base64,{{ image }}" alt="{{ key }}">
+  </div>
+  {% endif %}
+{% endfor %}
+
+{% if summary.errors.sample %}
+<h2>Muestra de errores ({{ summary.errors.count }} en total)</h2>
+<div class="errors-sample">
+{% for error in summary.errors.sample %}
+  {{ error }}<br>
+{% endfor %}
+</div>
+{% endif %}
+
+<footer>
+  RematAR -- Épica 8, Módulo 8.2 (Pruebas de carga y rendimiento). Generado por
+  <code>loadtest/</code>, herramienta separada del backend/frontend -- ver
+  <code>docs/39-pruebas-de-carga-y-rendimiento.md</code>.
+</footer>
+
+</body>
+</html>

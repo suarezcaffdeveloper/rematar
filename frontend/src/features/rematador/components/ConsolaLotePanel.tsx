@@ -2,6 +2,7 @@ import { Badge } from '../../../shared/components/Badge';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { formatCurrency } from '../../../shared/lib/format';
 import { ImageGallery } from '../../sala/components/ImageGallery';
+import { LoteCountdown } from '../../sala/components/LoteCountdown';
 import type { OfertaSnapshotEntry } from '../../sala/types';
 import { GavelIcon } from '../../remates/components/icons';
 import { CATEGORY_LABELS, LOTE_STATUS_BADGE_VARIANTS, LOTE_STATUS_LABELS } from '../../remates/labels';
@@ -95,6 +96,11 @@ export function ConsolaLotePanel({ activeLote, currency, winningOffer, hasUpcomi
           </div>
         )}
       </div>
+
+      <LoteCountdown
+        endsAt={activeLote.timer_ends_at}
+        pausedRemainingSeconds={activeLote.timer_paused_remaining_seconds}
+      />
 
       <div className="grid grid-cols-2 gap-4 rounded-lg border border-slate-200 p-4 sm:grid-cols-3">
         <div>

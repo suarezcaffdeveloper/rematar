@@ -16,6 +16,7 @@
  * enviado), así que guardar el resto de los campos del lote nunca pisa sus imágenes.
  */
 
+import { isPositiveDecimal } from '../../shared/lib/validation';
 import type { Lote, LoteAttributeValue, LoteFormPayload, RemateCategory } from '../remates/types';
 
 export interface AttributeRow {
@@ -57,10 +58,6 @@ export type LoteFormErrors = Partial<
 
 const MAX_ATTRIBUTES = 30;
 const MAX_ATTRIBUTE_KEY_LENGTH = 100;
-
-function isPositiveDecimal(value: string): boolean {
-  return /^\d+(\.\d{1,2})?$/.test(value.trim()) && Number(value) > 0;
-}
 
 export function loteToFormValues(lote: Lote): LoteFormValues {
   const { peso_kg, ...otherAttributes } = lote.attributes;

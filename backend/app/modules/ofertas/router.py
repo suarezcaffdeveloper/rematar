@@ -4,12 +4,24 @@
 
 Cada endpoint delega enteramente en `AuctionEngine`, sin lógica propia acá — ver
 docs/17-auction-engine.md.
+
+`place_bid` mide el tiempo de `engine.place_bid(...)` y lo registra en
+`RedisMetricsRecorder` (Épica 8, Módulo 8.1, `app/redis/metrics.py`) -- alimenta
+`avg_oferta_processing_ms` en `GET /monitoring/metrics`. El wrapper mide desde **afuera**
+del motor, sin modificar una sola línea de `AuctionEngine`: es exactamente el mismo
+criterio no invasivo que `RequestContextMiddleware` ya aplica a todos los requests,
+aplicado acá con más precisión a la única acción cuyo tiempo de procesamiento pide el
+enunciado explícitamente. Best-effort (nunca puede convertir una oferta exitosa en un
+error por una falla de Redis).
 """
 
+import time
 import uuid
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Depends, Query, status
+from redis.asyncio import Redis
 
 from app.common.schemas import Page
 from app.modules.auth.dependencies import get_current_user
@@ -18,6 +30,10 @@ from app.modules.ofertas.engine import AuctionEngine
 from app.modules.ofertas.models import Oferta
 from app.modules.ofertas.schemas import LeadingOfferRead, OfertaCreate, OfertaRead
 from app.modules.users.models import User
+from app.redis.dependencies import get_redis_client
+from app.redis.metrics import RedisMetricsRecorder
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
@@ -34,8 +50,18 @@ async def place_bid(
     data: OfertaCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     engine: Annotated[AuctionEngine, Depends(get_auction_engine)],
+    redis_client: Annotated[Redis, Depends(get_redis_client)],
 ) -> Oferta:
-    return await engine.place_bid(remate_id, lote_id, current_user, data)
+    start = time.perf_counter()
+    oferta = await engine.place_bid(remate_id, lote_id, current_user, data)
+    duration_ms = (time.perf_counter() - start) * 1000
+    try:
+        await RedisMetricsRecorder(redis_client).record_timing(
+            "oferta_processing", duration_ms, now=time.time()
+        )
+    except Exception:  # noqa: BLE001 -- best-effort, nunca debe afectar la respuesta
+        logger.warning("oferta_processing_metric_record_failed")
+    return oferta
 
 
 @router.get(

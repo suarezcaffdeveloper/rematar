@@ -192,5 +192,10 @@ class LoteRead(BaseModel):
     final_price: Decimal | None
     cancellation_reason: str | None
     cancelled_at: datetime | None
+    # Cuenta regresiva (Épica 8, ADR-007/ADR-043) -- ver docstring de
+    # `app/modules/remates/lotes/models.py::Lote` para el significado de cada campo.
+    timer_ends_at: datetime | None
+    timer_paused_remaining_seconds: int | None
+    timer_auto_close_enabled: bool
     created_at: datetime
     updated_at: datetime

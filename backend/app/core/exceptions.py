@@ -16,6 +16,7 @@ que el frontend (y cualquier cliente) parseen errores de una única forma consis
 
 from __future__ import annotations
 
+import time
 import uuid
 from decimal import Decimal
 
@@ -25,7 +26,24 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.redis.metrics import RedisMetricsRecorder
+
 logger = structlog.get_logger(__name__)
+
+
+async def _record_error_metric(request: Request) -> None:
+    """Contador de errores no manejados (Épica 8, Módulo 8.1) -- alimenta
+    `errors_last_minute` en `GET /monitoring/metrics`, un indicador de "eventos
+    críticos" recientes. Best-effort: una falla acá nunca debe impedir devolver la
+    respuesta de error ya construida (que es lo único que realmente importa acá)."""
+    try:
+        redis_client = request.app.state.redis
+    except AttributeError:
+        return
+    try:
+        await RedisMetricsRecorder(redis_client).record_event("errors_total", now=time.time())
+    except Exception:  # noqa: BLE001
+        logger.warning("error_metric_record_failed")
 
 
 class AppError(Exception):
@@ -149,6 +167,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
         incident_id = str(uuid.uuid4())
         logger.exception("unhandled_exception", incident_id=incident_id, path=request.url.path)
+        await _record_error_metric(request)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=_error_envelope(

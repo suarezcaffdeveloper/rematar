@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Alert } from '../../../shared/components/Alert';
 import { Button } from '../../../shared/components/Button';
 import { EmptyState } from '../../../shared/components/EmptyState';
@@ -21,6 +22,7 @@ const SKELETON_COUNT = 6;
  * seguro de mostrar tal cual.
  */
 export function CompradorDashboardPage() {
+  const navigate = useNavigate();
   const { remates, isLoading, error, reload } = useRemates();
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
 
@@ -30,11 +32,16 @@ export function CompradorDashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Remates disponibles</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Explorá los remates en vivo y programados a los que podés sumarte.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Remates disponibles</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Explorá los remates en vivo y programados a los que podés sumarte.
+          </p>
+        </div>
+        <Button variant="secondary" onClick={() => navigate('/mis-compras')}>
+          Mis compras
+        </Button>
       </div>
 
       <DashboardToolbar filters={filters} onChange={setFilters} />

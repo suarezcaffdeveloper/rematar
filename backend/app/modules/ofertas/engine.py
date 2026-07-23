@@ -46,6 +46,15 @@ docs/19-arquitectura-de-eventos.md y ADR-022.
 ganadora: es un efecto secundario de una oferta ya auditada, de alto volumen, no pedido
 por el enunciado. El camino de reintento idempotente tampoco audita nada nuevo, mismo
 criterio que no publica ningún evento.
+
+## Anti-sniping (Épica 8, ver docs/40-cuenta-regresiva-y-cierre-automatico.md y ADR-043)
+
+Una oferta aceptada dentro de la ventana configurada extiende el timer del lote --
+`TimerService.maybe_extend_for_bid(lote, remate)` (mutador puro estático), llamado
+síncronamente antes de `_save`, nunca vía el Event Bus (debe correr en la misma
+transacción que acepta la oferta, ver docstring de ese método). Si el lote no tiene
+timer corriendo o el remate no habilita anti-sniping, no hace nada -- comportamiento
+intacto.
 """
 
 import uuid
@@ -71,6 +80,7 @@ from app.modules.remates.lotes.repository import LoteRepository
 from app.modules.remates.models import Remate, RemateStatus
 from app.modules.remates.service import RemateService
 from app.modules.users.models import User, UserRole
+from app.timer.service import TimerService
 
 
 class AuctionEngine:
@@ -144,6 +154,15 @@ class AuctionEngine:
         if leading is not None:
             leading.status = OfertaStatus.OUTBID
 
+        # Anti-sniping (ADR-007, implementado en ADR-043): mutación en memoria sobre
+        # el mismo `lote` ya bloqueado más arriba (`get_by_id_for_update`) -- debe ser
+        # síncrono, dentro de esta misma transacción, para que `TimerExpiryScheduler`
+        # nunca pueda cerrar el lote entre que se acepta esta oferta y se procesaría la
+        # extensión si fuera async (ver docstring de `TimerService.maybe_extend_for_bid`).
+        # `None` si el lote no tiene timer corriendo o el remate no habilita
+        # anti-sniping -- comportamiento intacto.
+        timer_extended = TimerService.maybe_extend_for_bid(lote, remate)
+
         oferta = Oferta(
             lote_id=lote_id,
             buyer_id=buyer.id,
@@ -163,6 +182,8 @@ class AuctionEngine:
                 amount=oferta.amount,
             )
         )
+        if timer_extended is not None:
+            await self._event_bus.publish(timer_extended)
         if leading is not None:
             await self._event_bus.publish(
                 OfertaWinnerChanged(

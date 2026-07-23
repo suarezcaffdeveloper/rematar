@@ -62,3 +62,20 @@ export interface RemateStateSnapshot {
   connected_users_detail: ConnectedUserSummary[] | null;
   generated_at: string;
 }
+
+/**
+ * `OfertaRead` -- `backend/app/modules/ofertas/schemas.py`. A diferencia de
+ * `OfertaSnapshotEntry`, esta es la respuesta directa de `POST .../ofertas` para quien
+ * ofertó -- acá `buyer_id` no está enmascarado (es la propia oferta de quien pregunta)
+ * y viene `rejection_reason`, que el snapshot nunca expone.
+ */
+export interface OfertaCreateResult {
+  id: string;
+  lote_id: string;
+  buyer_id: string;
+  amount: string;
+  status: OfertaStatus;
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}

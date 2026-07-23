@@ -25,3 +25,7 @@ docker-compose.override.yml
 # Media subida por el usuario (Épica 6, Módulo 6.1) -- runtime, no fuente
 backend/media/
 backend/media_test/
+
+# Pruebas de carga (Épica 8, Módulo 8.2) -- credenciales sintéticas y reportes generados
+loadtest/.cache/
+loadtest/results/

@@ -23,7 +23,7 @@ function makeRemate(overrides: Partial<Remate> = {}): Remate {
     starts_at: '2026-08-01T14:00:00Z',
     ends_at: '2026-08-01T18:00:00Z',
     status: 'draft',
-    settings: { anti_sniping_enabled: true, anti_sniping_extension_seconds: 90, currency: 'USD' },
+    settings: { anti_sniping_enabled: true, anti_sniping_extension_seconds: 90, currency: 'USD', lote_timer_seconds: null },
     cancellation_reason: null,
     cancelled_at: null,
     finished_at: null,
@@ -51,6 +51,9 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
     reserve_price: '1200.00',
     final_price: null,
     status: 'pending',
+    timer_ends_at: null,
+    timer_paused_remaining_seconds: null,
+    timer_auto_close_enabled: true,
     created_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };

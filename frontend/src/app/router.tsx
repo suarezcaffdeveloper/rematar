@@ -24,6 +24,10 @@ import { RemateAuditLogPage } from '../features/rematador/pages/RemateAuditLogPa
 import { LoteHistoryDetailPage } from '../features/history/pages/LoteHistoryDetailPage';
 import { RemateHistoryDetailPage } from '../features/history/pages/RemateHistoryDetailPage';
 import { RemateHistoryListPage } from '../features/history/pages/RemateHistoryListPage';
+import { MiCompraDetailPage } from '../features/postauction/pages/MiCompraDetailPage';
+import { MisComprasPage } from '../features/postauction/pages/MisComprasPage';
+import { VentaAdjudicadaDetailPage } from '../features/postauction/pages/VentaAdjudicadaDetailPage';
+import { VentasAdjudicadasPage } from '../features/postauction/pages/VentasAdjudicadasPage';
 import { SalaPage } from '../features/sala/pages/SalaPage';
 import { HomePage } from './pages/HomePage';
 import { AdminAuditLogPage } from './pages/AdminAuditLogPage';
@@ -85,6 +89,14 @@ export const router = createBrowserRouter([
                 path: '/remates/:remateId/historial/lotes/:loteId',
                 element: <LoteHistoryDetailPage />,
               },
+              // Gestión Post-Remate (Épica 7, Módulo 7.5) -- mismo criterio sin
+              // RequireRole que /historial: el backend decide (rematador dueño del
+              // caso o admin para "ventas adjudicadas"; comprador dueño para "mis
+              // compras"), ver docs/41-gestion-post-remate.md.
+              { path: '/ventas-adjudicadas', element: <VentasAdjudicadasPage /> },
+              { path: '/ventas-adjudicadas/:caseId', element: <VentaAdjudicadaDetailPage /> },
+              { path: '/mis-compras', element: <MisComprasPage /> },
+              { path: '/mis-compras/:caseId', element: <MiCompraDetailPage /> },
               // Protegidas además por rol: RequireRole asume que ya pasó RequireAuth.
               {
                 element: <RequireRole allowedRoles={['admin']} />,

@@ -14,7 +14,7 @@ function makeRemate(overrides: Partial<Remate>): Remate {
     starts_at: null,
     ends_at: null,
     status: 'scheduled',
-    settings: { anti_sniping_enabled: false, anti_sniping_extension_seconds: 60, currency: 'ARS' },
+    settings: { anti_sniping_enabled: false, anti_sniping_extension_seconds: 60, currency: 'ARS', lote_timer_seconds: null },
     cancellation_reason: null,
     cancelled_at: null,
     finished_at: null,

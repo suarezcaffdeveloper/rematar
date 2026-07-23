@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Alert } from '../../../shared/components/Alert';
 import { Breadcrumb } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
+import { useToastStore } from '../../../shared/toast/toastStore';
 import { useAuth } from '../../auth/hooks';
 import { ChatPanel } from '../../chat/components/ChatPanel';
 import { GavelIcon } from '../../remates/components/icons';
@@ -12,6 +14,7 @@ import { OfferHistoryPanel } from '../components/OfferHistoryPanel';
 import { SalaHeader } from '../components/SalaHeader';
 import { UpcomingLotesStrip } from '../components/UpcomingLotesStrip';
 import { useLiveRemateState } from '../hooks';
+import { isDomainEventMessage } from '../realtime/messages';
 
 function SalaSkeleton() {
   return (
@@ -58,6 +61,23 @@ export function SalaPage() {
     connectionStatus,
     subscribeToRealtime,
   } = useLiveRemateState(remateId ?? '');
+
+  // Mensaje de adjudicación (Épica 8, "cuenta regresiva y cierre automático") -- un
+  // toast, no un cambio de `active_lote` (eso ya lo resuelve `reducer.ts` en
+  // `lote.closed`, que lo limpia a `null` y hace que este mismo render caiga al
+  // `EmptyState` de abajo). Se escucha acá, no en el reducer (puro, sin efectos).
+  useEffect(() => {
+    return subscribeToRealtime((message) => {
+      if (!isDomainEventMessage(message) || message.payload.event_type !== 'lote.closed') return;
+      const { outcome } = message.payload;
+      useToastStore
+        .getState()
+        .push(
+          outcome === 'sold' ? 'success' : 'info',
+          outcome === 'sold' ? 'El lote fue adjudicado.' : 'El lote se cerró sin ofertas.',
+        );
+    });
+  }, [subscribeToRealtime]);
 
   if (isSnapshotLoading) {
     return <SalaSkeleton />;
@@ -106,7 +126,14 @@ export function SalaPage() {
       {activeLote ? (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <ActiveLotePanel lote={activeLote} currency={currency} winningOffer={winningOffer} />
+            <ActiveLotePanel
+              remateId={remate.id}
+              lote={activeLote}
+              currency={currency}
+              winningOffer={winningOffer}
+              remateStatus={remate.status}
+              viewerRole={user?.role}
+            />
           </div>
           <OfferHistoryPanel winningOffer={winningOffer} recentOffers={recentOffers} currency={currency} />
         </div>

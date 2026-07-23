@@ -28,7 +28,17 @@ class AuditAction:
     LOTE_AWARDED = "lote.awarded"
     LOTE_CANCELLED = "lote.cancelled"
 
+    LOTE_TIMER_PAUSED = "lote.timer_paused"
+    LOTE_TIMER_RESUMED = "lote.timer_resumed"
+    LOTE_TIMER_RESET = "lote.timer_reset"
+    LOTE_TIMER_ADJUSTED = "lote.timer_adjusted"
+    LOTE_TIMER_AUTO_CLOSE_TOGGLED = "lote.timer_auto_close_toggled"
+
     OFERTA_PLACED = "oferta.placed"
     OFERTA_REJECTED = "oferta.rejected"
 
     CHAT_MESSAGE_DELETED = "chat.message_deleted"
+
+    POSTAUCTION_CASE_CREATED = "postauction.case_created"
+    POSTAUCTION_STATUS_CHANGED = "postauction.status_changed"
+    POSTAUCTION_NOTE_ADDED = "postauction.note_added"

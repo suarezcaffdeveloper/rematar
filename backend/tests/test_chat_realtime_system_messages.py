@@ -154,7 +154,11 @@ async def test_lote_closed_text_depends_on_outcome(
     dispatcher = _make_dispatcher(db_engine, redis_client, event_bus)
 
     sold = LoteClosed(
-        remate_id=remate_id, lote_id=uuid.uuid4(), outcome="sold", final_price=Decimal("100")
+        remate_id=remate_id,
+        lote_id=uuid.uuid4(),
+        outcome="sold",
+        final_price=Decimal("100"),
+        triggered_by="manual",
     )
     await dispatcher.dispatch(sold.model_dump_json())
 

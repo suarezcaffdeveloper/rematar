@@ -283,3 +283,142 @@ def test_history_never_imports_websocket_realtime_snapshot_audit_or_analytics_se
         f"app/history/ depende de transporte/tiempo real, de app.audit, o del "
         f"AnalyticsService acoplado a Presencia/caché: {offenders}"
     )
+
+
+def test_monitoring_never_imports_realtime_snapshot_audit_history_or_analytics() -> None:
+    """`app/monitoring/` (Épica 8, Módulo 8.1) nunca debe conocer el Event Consumer ni
+    el Snapshot Service (health checks/métricas no pasan por ahí), ni ningún otro
+    compositor de lectura (`app.audit`, `app.history`, `app.analytics` -- bounded
+    contexts hermanos, sin relación con observabilidad de la plataforma). A diferencia
+    de `app/analytics/`/`app/audit/`/`app/history/`, **sí** puede importar
+    `app.websocket` (necesita `ConnectionManager` para contar conexiones activas,
+    mismo criterio ya aceptado en `app/presence/dependencies.py`) y
+    `app.modules.chat`/`app.modules.ofertas` (necesita `ChatMessage`/`Oferta` para los
+    conteos "por minuto", ver `repository.py`)."""
+    forbidden_prefixes = (
+        "app.realtime",
+        "app.snapshot",
+        "app.audit",
+        "app.history",
+        "app.analytics",
+    )
+    monitoring_dir = APP_DIR / "monitoring"
+    offenders = _find_forbidden_imports(
+        list(monitoring_dir.glob("*.py")), forbidden_prefixes, relative_to=monitoring_dir
+    )
+    assert offenders == {}, (
+        f"app/monitoring/ depende de tiempo real o de otro compositor de lectura ajeno "
+        f"a observabilidad: {offenders}"
+    )
+
+
+def test_timer_never_imports_websocket_realtime_snapshot_audit_history_analytics_or_chat() -> None:
+    """`app/timer/` (Épica 8, "cuenta regresiva y cierre automático") nunca debe
+    conocer el Gateway WebSocket, el Event Consumer, el Snapshot Service, ni ningún
+    compositor de lectura hermano (`app.history`/`app.analytics`) ni el módulo de Chat
+    -- ninguno de esos tiene relación con el timer de un lote. Sí puede importar
+    `app.modules.remates`/`app.modules.remates.lotes` (dueño de las columnas del
+    timer) y, únicamente en `scheduler.py`, `app.modules.ofertas` (necesita
+    `OfertaRepository.get_leading_offer` para la adjudicación automática, ver
+    docstring de `TimerExpiryScheduler`) -- `service.py`/`router.py`/`dependencies.py`
+    no deberían necesitarlo. Como cualquier módulo de dominio (ADR-039, sección C),
+    **sí** puede depender de `app.audit.repository`/`app.audit.actions` (la superficie
+    de *escritura* de Auditoría, para dejar constancia de pausar/reanudar/reiniciar/
+    ajustar el timer) -- nunca de `app.audit.service`/`app.audit.router` (la
+    superficie de *lectura*, exclusiva del panel admin/rematador)."""
+    forbidden_prefixes = (
+        "app.websocket",
+        "app.realtime",
+        "app.snapshot",
+        "app.audit.service",
+        "app.audit.router",
+        "app.history",
+        "app.analytics",
+        "app.modules.chat",
+    )
+    timer_dir = APP_DIR / "timer"
+    non_scheduler_files = [p for p in timer_dir.glob("*.py") if p.name != "scheduler.py"]
+    offenders = _find_forbidden_imports(
+        non_scheduler_files, forbidden_prefixes, relative_to=timer_dir
+    )
+    assert offenders == {}, (
+        f"app/timer/ depende de tiempo real o de un compositor de lectura ajeno: {offenders}"
+    )
+
+    scheduler_offenders = _find_forbidden_imports(
+        [timer_dir / "scheduler.py"], forbidden_prefixes, relative_to=timer_dir
+    )
+    assert scheduler_offenders == {}, (
+        f"app/timer/scheduler.py depende de tiempo real o de un compositor de lectura "
+        f"ajeno (más allá de app.modules.ofertas, permitido para la adjudicación "
+        f"automática): {scheduler_offenders}"
+    )
+
+
+def test_postauction_never_imports_websocket_realtime_snapshot_analytics_or_chat() -> None:
+    """`app/postauction/` (Épica 7, Módulo 7.5) nunca debe conocer el Gateway WebSocket,
+    el Event Consumer ni el Snapshot Service (se entera de la adjudicación reaccionando a
+    `lote.winner_determined` con su propia instancia de `EventConsumer`, cableada
+    únicamente en `app/main.py` -- no acá, mismo criterio que
+    `ChatSystemEventDispatcher`/`app/modules/chat/`). Tampoco debe importar
+    `app.analytics`/`app.modules.chat` (bounded contexts ajenos, sin relación con el
+    proceso post-adjudicación). Sí puede importar `app.modules.remates`/
+    `app.modules.remates.lotes`/`app.modules.users` (lectura de remate/lote/comprador,
+    mismo criterio "repositorio del vecino" que `app/history/`), `app.audit.repository`/
+    `app.audit.actions` (superficie de escritura de auditoría, como cualquier módulo de
+    dominio) y `app.notifications.repository` (para notificar sin importar su router)."""
+    forbidden_prefixes = (
+        "app.websocket",
+        "app.realtime",
+        "app.snapshot",
+        "app.analytics",
+        "app.modules.chat",
+        "app.audit.service",
+        "app.audit.router",
+        "app.notifications.router",
+    )
+    postauction_dir = APP_DIR / "postauction"
+    offenders = _find_forbidden_imports(
+        list(postauction_dir.glob("*.py")), forbidden_prefixes, relative_to=postauction_dir
+    )
+    assert offenders == {}, (
+        f"app/postauction/ depende de transporte/tiempo real, de un bounded context "
+        f"ajeno, o de una superficie de lectura que no le corresponde: {offenders}"
+    )
+
+
+def test_notifications_never_imports_postauction_or_domain() -> None:
+    """`app/notifications/` (Épica 7, Módulo 7.5) es genérico -- no debe conocer
+    `app.postauction` ni ningún módulo de dominio propio: la dirección de dependencia va
+    en un solo sentido (postauction -> notifications), igual que `app.audit`/
+    `app.history` respecto de los módulos que los usan. `app.modules.auth`/
+    `app.modules.users` sí están permitidos en `router.py` -- autenticación del usuario
+    actual, mismo criterio que cualquier otro router del proyecto (`audit`/`history`/
+    `monitoring`)."""
+    forbidden_prefixes = (
+        "app.postauction",
+        "app.modules.remates",
+        "app.modules.ofertas",
+        "app.modules.chat",
+    )
+    notifications_dir = APP_DIR / "notifications"
+    offenders = _find_forbidden_imports(
+        list(notifications_dir.glob("*.py")), forbidden_prefixes, relative_to=notifications_dir
+    )
+    assert offenders == {}, (
+        f"app/notifications/ depende de app.postauction o de un módulo de dominio, "
+        f"rompiendo su carácter genérico: {offenders}"
+    )
+
+
+def test_domain_and_postauction_never_import_postauction_from_domain() -> None:
+    """`app/modules/remates/` (incluido `lotes/`) nunca debe importar `app.postauction`
+    -- es la garantía de decoupling central del Módulo 7.5 (ADR-044): el Auction Engine
+    no sabe que este módulo existe, se entera exclusivamente reaccionando a eventos ya
+    publicados vía su propio `EventConsumer` (ver `app/postauction/realtime.py`)."""
+    forbidden_prefixes = ("app.postauction",)
+    remates_dir = APP_DIR / "modules" / "remates"
+    offenders = _find_forbidden_imports(
+        list(remates_dir.rglob("*.py")), forbidden_prefixes, relative_to=remates_dir
+    )
+    assert offenders == {}, f"app/modules/remates/ depende de app.postauction: {offenders}"

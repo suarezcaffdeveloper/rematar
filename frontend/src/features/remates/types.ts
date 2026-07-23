@@ -27,13 +27,16 @@ export type RemateCategory =
   | 'indumentaria'
   | 'otros';
 
-/** `RemateSettings` -- `backend/app/modules/remates/schemas.py`. Solo `currency` se usa
- * hoy (Sala del Remate, Épica 4.5, para formatear precios) -- los otros dos campos
- * (anti-sniping) se reflejan igual por fidelidad con el schema del backend. */
+/** `RemateSettings` -- `backend/app/modules/remates/schemas.py`. `currency` (formatear
+ * precios) y, desde Épica 8 ("cuenta regresiva y cierre automático"), los tres campos
+ * de timer/anti-sniping ya se usan en la Consola Operativa y la Sala del Remate --
+ * `anti_sniping_*` existían desde antes en el tipo por fidelidad con el schema, ahora
+ * también tienen efecto real (ver `features/sala/components/LoteCountdown.tsx`). */
 export interface RemateSettings {
   anti_sniping_enabled: boolean;
   anti_sniping_extension_seconds: number;
   currency: string;
+  lote_timer_seconds: number | null;
 }
 
 /** `RemateRead` -- `backend/app/modules/remates/schemas.py`. */
@@ -133,6 +136,12 @@ export interface Lote {
   reserve_price: string | null;
   final_price: string | null;
   status: LoteStatus;
+  // Cuenta regresiva (Épica 8, "cuenta regresiva y cierre automático", ADR-043) --
+  // `timer_ends_at` es el deadline absoluto (ISO 8601, UTC) mientras corre; `null` si
+  // está pausado o el lote nunca tuvo timer. Ver `features/sala/components/LoteCountdown.tsx`.
+  timer_ends_at: string | null;
+  timer_paused_remaining_seconds: number | null;
+  timer_auto_close_enabled: boolean;
   created_at: string;
 }
 
