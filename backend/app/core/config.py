@@ -18,6 +18,16 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+def get_async_database_url(database_url: str) -> str:
+    url = database_url.replace(
+        "postgresql://",
+        "postgresql+asyncpg://",
+    )
+
+    if "?" in url:
+        url = url.split("?")[0]
+
+    return url
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
