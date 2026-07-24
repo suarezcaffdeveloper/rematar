@@ -8,6 +8,7 @@ valor separado en `alembic.ini`, para que nunca puedan desincronizarse.
 
 import asyncio
 from logging.config import fileConfig
+import ssl
 
 from alembic import context
 from sqlalchemy import pool
@@ -51,10 +52,13 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_migrations_online() -> None:
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    connectable = create_async_engine(
+        config.get_main_option("sqlalchemy.url"),
         poolclass=pool.NullPool,
+        connect_args={
+            "ssl": ssl.create_default_context(),
+            "prepared_statement_cache_size": 0,
+        },
     )
 
     async with connectable.connect() as connection:

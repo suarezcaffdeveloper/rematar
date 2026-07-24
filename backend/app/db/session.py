@@ -23,9 +23,13 @@ database_url = settings.DATABASE_URL.replace(
 ssl_context = ssl.create_default_context()
 
 engine = create_async_engine(
-    get_async_database_url(settings.DATABASE_URL),
+    settings.DATABASE_URL,
     pool_pre_ping=True,
     echo=False,
+    connect_args={
+        "ssl": ssl_context,
+        "prepared_statement_cache_size": 0,
+    },
 )
 
 AsyncSessionLocal = async_sessionmaker(
