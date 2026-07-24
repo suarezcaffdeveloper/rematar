@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { HomePage } from './HomePage';
+
+function renderHomePage() {
+  return render(
+    <MemoryRouter>
+      <HomePage />
+    </MemoryRouter>,
+  );
+}
 
 const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
 vi.mock('../../features/auth/hooks', () => ({ useAuth: useAuthMock }));
@@ -15,7 +24,7 @@ describe('HomePage', () => {
   it('para un comprador, renderiza el dashboard real de remates', () => {
     useAuthMock.mockReturnValue({ user: { full_name: 'Ana', role: 'comprador' } });
 
-    render(<HomePage />);
+    renderHomePage();
 
     expect(screen.getByText('Dashboard del comprador')).toBeInTheDocument();
   });
@@ -23,17 +32,18 @@ describe('HomePage', () => {
   it('para un rematador, renderiza su propio dashboard (Épica 5.1)', () => {
     useAuthMock.mockReturnValue({ user: { full_name: 'Beto', role: 'rematador' } });
 
-    render(<HomePage />);
+    renderHomePage();
 
     expect(screen.getByText('Dashboard del rematador')).toBeInTheDocument();
     expect(screen.queryByText('Bienvenido, Beto')).not.toBeInTheDocument();
   });
 
-  it('para un admin, sigue mostrando el placeholder', () => {
+  it('para un admin, muestra un link real al panel de administrador', () => {
     useAuthMock.mockReturnValue({ user: { full_name: 'Cami', role: 'admin' } });
 
-    render(<HomePage />);
+    renderHomePage();
 
     expect(screen.getByText('Bienvenido, Cami')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ir al panel de administrador' })).toBeInTheDocument();
   });
 });

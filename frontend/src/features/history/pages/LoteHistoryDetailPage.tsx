@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
 import { Alert } from '../../../shared/components/Alert';
 import { Badge } from '../../../shared/components/Badge';
-import { Breadcrumb } from '../../../shared/components/Breadcrumb';
+import type { BreadcrumbItem } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { Card } from '../../../shared/components/Card';
 import { EmptyState } from '../../../shared/components/EmptyState';
@@ -38,6 +39,18 @@ export function LoteHistoryDetailPage() {
   const { remate, isLoading: isRemateLoading } = useRemateDetail(rId);
   const { data, isLoading, error } = useLoteHistoryDetail(rId, lId, page, PAGE_SIZE);
 
+  const items: BreadcrumbItem[] =
+    isLoading || isRemateLoading
+      ? []
+      : error || !data
+        ? [{ label: 'Mis remates', to: '/' }, { label: 'Lote no encontrado' }]
+        : [
+            { label: 'Mis remates', to: '/' },
+            { label: remate?.title ?? 'Remate', to: `/remates/${rId}/historial` },
+            { label: `Lote ${data.lot_number}` },
+          ];
+  useBreadcrumb(items);
+
   if (isLoading || isRemateLoading) {
     return (
       <div className="flex flex-col gap-6">
@@ -50,7 +63,6 @@ export function LoteHistoryDetailPage() {
   if (error || !data) {
     return (
       <div className="flex flex-col gap-6">
-        <Breadcrumb items={[{ label: 'Mis remates', to: '/' }, { label: 'Lote no encontrado' }]} />
         <Alert variant="error">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{error?.message ?? 'No se pudo cargar el historial de este lote.'}</span>
@@ -68,14 +80,6 @@ export function LoteHistoryDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Breadcrumb
-        items={[
-          { label: 'Mis remates', to: '/' },
-          { label: remate?.title ?? 'Remate', to: `/remates/${rId}/historial` },
-          { label: `Lote ${data.lot_number}` },
-        ]}
-      />
-
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">

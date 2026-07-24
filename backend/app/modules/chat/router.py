@@ -4,6 +4,13 @@ Montado directamente en `app/api/router.py` con el path efectivo
 `/remates/{remate_id}/chat/...`, sin vivir dentro de `app/modules/remates/` -- mismo
 criterio que `app/snapshot/router.py` (Módulo 3.6): un módulo top-level propio que no
 necesita tocar el router de remates para exponerse bajo su mismo prefijo.
+
+`send_chat_message` gana un chequeo de moderación (Épica 7, Módulo 7.6, ver
+docs/42-moderacion-en-tiempo-real.md y ADR-045) **antes** de llamar a
+`ChatService.send_message` -- silenciado individual o bloqueo de sala completa,
+ambos estado efímero en Redis (`ModerationRedisGateway`, no `ModerationService`: esta
+única lectura no necesita el resto de lo que compone el servicio completo). `ChatService`
+no se modifica en absoluto.
 """
 
 import uuid
@@ -12,6 +19,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 
+from app.core.exceptions import ForbiddenError
+from app.moderation.dependencies import get_moderation_redis_gateway
+from app.moderation.redis_state import ModerationRedisGateway
 from app.modules.auth.dependencies import get_current_user
 from app.modules.chat.dependencies import get_chat_service
 from app.modules.chat.models import ChatMessage
@@ -20,6 +30,15 @@ from app.modules.chat.service import ChatService
 from app.modules.users.models import User
 
 router = APIRouter()
+
+
+async def _assert_can_send_message(
+    remate_id: uuid.UUID, user_id: uuid.UUID, gateway: ModerationRedisGateway
+) -> None:
+    if await gateway.is_chat_locked(remate_id):
+        raise ForbiddenError("El chat está bloqueado temporalmente por el rematador.")
+    if await gateway.is_muted(remate_id, user_id):
+        raise ForbiddenError("Estás silenciado temporalmente en este chat.")
 
 
 @router.post(
@@ -33,7 +52,11 @@ async def send_chat_message(
     data: ChatMessageCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     service: Annotated[ChatService, Depends(get_chat_service)],
+    moderation_gateway: Annotated[
+        ModerationRedisGateway, Depends(get_moderation_redis_gateway)
+    ],
 ) -> ChatMessage:
+    await _assert_can_send_message(remate_id, current_user.id, moderation_gateway)
     return await service.send_message(remate_id, current_user, data)
 
 

@@ -125,25 +125,52 @@ describe('ConsolaControlPanel', () => {
     expect(screen.getByRole('button', { name: 'Cerrar lote' })).toBeEnabled();
   });
 
-  it('clic en "Pausar remate" llama al endpoint y muestra un toast de éxito', async () => {
+  it('"Pausar remate" pide confirmación en un modal -- no llama al endpoint hasta confirmar', async () => {
     apiMocks.pauseRemateRequest.mockResolvedValue(makeRemate({ status: 'paused' }));
     renderPanel();
 
     await userEvent.click(screen.getByRole('button', { name: 'Pausar remate' }));
+    expect(apiMocks.pauseRemateRequest).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toHaveTextContent('Remate de hacienda');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
 
     expect(apiMocks.pauseRemateRequest).toHaveBeenCalledWith('remate-1');
     expect(toastPushMock).toHaveBeenCalledWith('success', 'El remate se pausó.');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('"Finalizar remate" pide confirmación -- si se cancela, no llama al endpoint', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('"Pausar remate" -- cancelar el modal no llama al endpoint', async () => {
+    renderPanel();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Pausar remate' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+    expect(apiMocks.pauseRemateRequest).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('"Finalizar remate" pide confirmación en un modal -- si se cancela, no llama al endpoint', async () => {
     renderPanel();
 
     await userEvent.click(screen.getByRole('button', { name: 'Finalizar remate' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('no se puede deshacer');
 
-    expect(confirmSpy).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+
     expect(apiMocks.finishRemateRequest).not.toHaveBeenCalled();
-    confirmSpy.mockRestore();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('"Finalizar remate" -- confirmar en el modal sí llama al endpoint', async () => {
+    apiMocks.finishRemateRequest.mockResolvedValue(makeRemate({ status: 'finished' }));
+    renderPanel();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Finalizar remate' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar' }));
+
+    expect(apiMocks.finishRemateRequest).toHaveBeenCalledWith('remate-1');
+    expect(toastPushMock).toHaveBeenCalledWith('success', 'El remate se finalizó.');
   });
 
   it('"Abrir lote" llama a openLoteRequest con el lote seleccionado', async () => {

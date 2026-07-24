@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import clsx from 'clsx';
+import { StatCard } from '../../../shared/components/StatCard';
 import { STATUS_LABELS } from '../../remates/labels';
 import type { Remate, RemateStatus } from '../../remates/types';
 
@@ -21,22 +21,13 @@ const ACCENT_CLASSES: Record<RemateStatus, string> = {
 // (pensado para un `<select>`, no para una fila de indicadores).
 const STATS_ORDER: RemateStatus[] = ['live', 'paused', 'scheduled', 'draft', 'finished', 'cancelled'];
 
-function StatChip({ label, value, accentClassName }: { label: string; value: number; accentClassName: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className={clsx('h-8 w-1.5 shrink-0 rounded-full', accentClassName)} aria-hidden="true" />
-      <div className="min-w-0">
-        <p className="text-lg font-bold leading-none text-slate-900">{value}</p>
-        <p className="mt-1 truncate text-xs text-slate-500">{label}</p>
-      </div>
-    </div>
-  );
-}
-
 /**
  * Fila de indicadores del dashboard -- pedido explícito de este módulo: "apariencia de
  * consola profesional", sin tablas. Se calcula client-side sobre la misma lista ya
  * cargada por `useRemates` (`RematadorDashboardPage`), sin ningún endpoint nuevo.
+ * Reusa `StatCard` (`shared/components/`, Épica 9 Etapa 3) en vez de un `StatChip`
+ * local -- mismo componente que Analítica/Monitoreo/Historial, `showTrend={false}`
+ * porque un conteo por categoría no necesita flecha de tendencia.
  */
 export function RematadorDashboardStats({ remates }: RematadorDashboardStatsProps) {
   const counts = useMemo(() => {
@@ -56,9 +47,22 @@ export function RematadorDashboardStats({ remates }: RematadorDashboardStatsProp
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-      <StatChip label="Total" value={remates.length} accentClassName="bg-slate-800" />
+      <StatCard
+        label="Total"
+        value={remates.length}
+        formattedValue={String(remates.length)}
+        accentClassName="bg-slate-800"
+        showTrend={false}
+      />
       {STATS_ORDER.map((status) => (
-        <StatChip key={status} label={STATUS_LABELS[status]} value={counts[status]} accentClassName={ACCENT_CLASSES[status]} />
+        <StatCard
+          key={status}
+          label={STATUS_LABELS[status]}
+          value={counts[status]}
+          formattedValue={String(counts[status])}
+          accentClassName={ACCENT_CLASSES[status]}
+          showTrend={false}
+        />
       ))}
     </div>
   );

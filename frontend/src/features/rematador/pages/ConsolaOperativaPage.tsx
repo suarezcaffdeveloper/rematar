@@ -1,21 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
+import { useWideLayout } from '../../../app/layouts/useWideLayout';
 import { Alert } from '../../../shared/components/Alert';
-import { Breadcrumb } from '../../../shared/components/Breadcrumb';
+import type { BreadcrumbItem } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
 import { AnalyticsPanel } from '../../analytics/components/AnalyticsPanel';
 import { useAuth } from '../../auth/hooks';
-import { ChatPanel } from '../../chat/components/ChatPanel';
 import { useLiveRemateState } from '../../sala/hooks';
 import { GavelIcon } from '../../remates/components/icons';
 import type { RemateStatus } from '../../remates/types';
-import { ConnectedUsersList } from '../components/ConnectedUsersList';
 import { ConsolaControlPanel } from '../components/ConsolaControlPanel';
 import { ConsolaHeader } from '../components/ConsolaHeader';
 import { ConsolaLotePanel } from '../components/ConsolaLotePanel';
-import { ConsolaOfferPanel } from '../components/ConsolaOfferPanel';
+import { ConsolaSidebar } from '../components/ConsolaSidebar';
 import { ConsolaUpcomingLotesPanel } from '../components/ConsolaUpcomingLotesPanel';
 
 const NOT_OPERATIONAL_MESSAGES: Partial<Record<RemateStatus, string>> = {
@@ -27,15 +27,14 @@ const NOT_OPERATIONAL_MESSAGES: Partial<Record<RemateStatus, string>> = {
 
 function ConsolaSkeleton() {
   return (
-    <div className="flex flex-col gap-6">
-      <Skeleton className="h-4 w-48" />
+    <div className="flex flex-col gap-4">
       <Skeleton className="h-24 w-full rounded-xl" />
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <div className="flex flex-col gap-4 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_380px]">
+        <div className="flex flex-col gap-4">
           <Skeleton className="aspect-video w-full rounded-xl" />
-          <Skeleton className="h-24 w-full rounded-xl" />
+          <Skeleton className="h-40 w-full rounded-xl" />
         </div>
-        <Skeleton className="h-64 w-full rounded-xl" />
+        <Skeleton className="h-96 w-full rounded-xl" />
       </div>
       <Skeleton className="h-32 w-full rounded-xl" />
     </div>
@@ -43,13 +42,24 @@ function ConsolaSkeleton() {
 }
 
 /**
- * Consola Operativa del Rematador (Épica 5, Módulo 5.2) -- la pantalla desde donde se
- * opera un remate en vivo. Reusa `useLiveRemateState` de `features/sala/hooks.ts` tal
- * cual (Épica 4.6, sin modificarlo): mismo snapshot inicial + reconciliación por
- * WebSocket + eventos incrementales que ya usa la Sala del comprador -- la consola es,
- * en los hechos, una segunda conexión a la misma sala, viendo exactamente los mismos
- * eventos en tiempo real. Ver docs/30-consola-operativa-rematador.md para el flujo
- * completo y el diagrama.
+ * Consola Operativa del Rematador (Épica 5, Módulo 5.2; rediseñada en la Épica 9,
+ * Etapa 5). Reusa `useLiveRemateState` de `features/sala/hooks.ts` tal cual (Épica 4.6,
+ * sin modificarlo): mismo snapshot inicial + reconciliación por WebSocket + eventos
+ * incrementales que ya usa la Sala del comprador -- la consola es, en los hechos, una
+ * segunda conexión a la misma sala, viendo exactamente los mismos eventos en tiempo
+ * real. Ver docs/30-consola-operativa-rematador.md para el flujo completo.
+ *
+ * Layout nuevo (Épica 9, Etapa 5): mismo patrón que la Sala del comprador (Etapa 4) --
+ * `useWideLayout()` + grid `xl:grid-cols-[1fr_380px]`. Antes era un apilado de 5-6
+ * cards a lo ancho completo (lote+ofertas en grid, próximos lotes, chat, moderación,
+ * analítica); un rematador tenía que hacer scroll más allá del chat y la moderación
+ * para llegar a la analítica, y el panel de control quedaba a un scroll de la cabecera.
+ * Ahora: columna principal con lote activo + panel de control (lo que hace falta ver/
+ * operar todo el tiempo) + analítica más abajo; `ConsolaSidebar` (`sticky`, alto de
+ * viewport) con pestañas Chat/Ofertas/Conectados/Moderación -- a diferencia de la Sala
+ * (que apila Chat+Ofertas sin pestañas, son solo dos), acá son cuatro secciones y la
+ * mayoría de uso ocasional, así que pestañas evitan que cuatro paneles compitan por el
+ * mismo espacio angosto sin agregar un scroll de página.
  *
  * Reemplaza la ruta `/remates/:remateId/gestionar` que hasta ahora mostraba
  * `GestionRematePlaceholderPage` (Épica 5.1) -- mismo patrón que la Sala reemplazó su
@@ -59,6 +69,7 @@ export function ConsolaOperativaPage() {
   const { remateId } = useParams<{ remateId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  useWideLayout();
 
   const {
     snapshot,
@@ -83,6 +94,13 @@ export function ConsolaOperativaPage() {
 
   const hasUpcomingLotes = upcomingLotes.length > 0;
 
+  const breadcrumbItems: BreadcrumbItem[] = isLoading
+    ? []
+    : error || !snapshot
+      ? [{ label: 'Mis remates', to: '/' }, { label: 'Consola no disponible' }]
+      : [{ label: 'Mis remates', to: '/' }, { label: snapshot.remate.title }];
+  useBreadcrumb(breadcrumbItems);
+
   if (isLoading) {
     return <ConsolaSkeleton />;
   }
@@ -90,7 +108,6 @@ export function ConsolaOperativaPage() {
   if (error || !snapshot) {
     return (
       <div className="flex flex-col gap-6">
-        <Breadcrumb items={[{ label: 'Mis remates', to: '/' }, { label: 'Consola no disponible' }]} />
         <Alert variant="error">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{error?.message ?? 'No se pudo cargar la consola de este remate.'}</span>
@@ -114,15 +131,12 @@ export function ConsolaOperativaPage() {
     winning_offer: winningOffer,
     recent_offers: recentOffers,
     connected_users: connectedUsers,
-    connected_users_detail: connectedUsersDetail,
   } = snapshot;
   const currency = remate.settings.currency;
   const isOperational = remate.status === 'live' || remate.status === 'paused';
 
   return (
-    <div className="flex flex-col gap-6">
-      <Breadcrumb items={[{ label: 'Mis remates', to: '/' }, { label: remate.title }]} />
-
+    <div className="flex flex-col gap-4">
       <ConsolaHeader remate={remate} connectedUsers={connectedUsers} connectionStatus={connectionStatus} />
 
       {!isOperational ? (
@@ -138,8 +152,8 @@ export function ConsolaOperativaPage() {
         />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-            <div className="flex flex-col gap-5 lg:col-span-2">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_380px]">
+            <div className="flex min-w-0 flex-col gap-4">
               <ConsolaLotePanel
                 activeLote={activeLote}
                 currency={currency}
@@ -153,10 +167,16 @@ export function ConsolaOperativaPage() {
                 hasUpcomingLotes={hasUpcomingLotes}
               />
             </div>
-            <div className="flex flex-col gap-5">
-              <ConsolaOfferPanel winningOffer={winningOffer} recentOffers={recentOffers} currency={currency} />
-              <ConnectedUsersList connectedUsers={connectedUsersDetail} />
-            </div>
+
+            <ConsolaSidebar
+              remateId={remate.id}
+              subscribeToRealtime={subscribeToRealtime}
+              currentUserId={user?.id}
+              connectedUsers={connectedUsers}
+              winningOffer={winningOffer}
+              recentOffers={recentOffers}
+              currency={currency}
+            />
           </div>
 
           <div className="flex flex-col gap-3">
@@ -169,19 +189,7 @@ export function ConsolaOperativaPage() {
             />
           </div>
 
-          <ChatPanel
-            remateId={remate.id}
-            subscribeToRealtime={subscribeToRealtime}
-            currentUserId={user?.id}
-            connectedUsers={connectedUsers}
-            canModerate
-          />
-
-          <AnalyticsPanel
-            remateId={remate.id}
-            subscribeToRealtime={subscribeToRealtime}
-            currency={currency}
-          />
+          <AnalyticsPanel remateId={remate.id} subscribeToRealtime={subscribeToRealtime} currency={currency} />
         </>
       )}
     </div>

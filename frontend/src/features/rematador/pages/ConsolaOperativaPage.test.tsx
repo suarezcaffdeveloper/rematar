@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { useBreadcrumbStore } from '../../../app/layouts/breadcrumbStore';
+import { useLayoutPreferencesStore } from '../../../app/layouts/layoutPreferencesStore';
 import { ConsolaOperativaPage } from './ConsolaOperativaPage';
 import type { Lote, Remate } from '../../remates/types';
 import type { UseLiveRemateStateResult } from '../../sala/hooks';
@@ -148,7 +150,7 @@ describe('ConsolaOperativaPage', () => {
     expect(screen.getByText(/ya finalizó/)).toBeInTheDocument();
   });
 
-  it('remate "live", con lote activo: muestra los cuatro paneles operativos', () => {
+  it('remate "live", con lote activo: muestra el lote, el control y los próximos lotes', () => {
     mockLiveState({
       snapshot: makeSnapshot(),
       upcomingLotes: [makeLote({ id: 'lote-2', title: 'Vaquillona', status: 'pending' })],
@@ -158,35 +160,47 @@ describe('ConsolaOperativaPage', () => {
 
     expect(screen.getByText('Toro Angus')).toBeInTheDocument(); // ConsolaLotePanel
     expect(screen.getByText('Panel de control')).toBeInTheDocument(); // ConsolaControlPanel
-    expect(screen.getByText('Comprador líder')).toBeInTheDocument(); // ConsolaOfferPanel
     expect(screen.getByText('Vaquillona')).toBeInTheDocument(); // ConsolaUpcomingLotesPanel
+  });
+
+  it('la pestaña de Ofertas del sidebar muestra el comprador líder', async () => {
+    mockLiveState({ snapshot: makeSnapshot() });
+
+    renderPage();
+    await userEvent.click(screen.getByRole('tab', { name: 'Ofertas' }));
+
+    expect(screen.getByText('Comprador líder')).toBeInTheDocument();
   });
 
   it('el breadcrumb muestra el título del remate', () => {
     mockLiveState({ snapshot: makeSnapshot() });
     renderPage();
-    // Aparece dos veces: en el breadcrumb y en el <h1> de ConsolaHeader.
-    expect(screen.getAllByText('Remate de hacienda').length).toBeGreaterThanOrEqual(2);
+    // El breadcrumb ya no se renderiza dentro de la página (Épica 9, Etapa 2) -- lo
+    // dibuja el `Header` global a partir de `useBreadcrumbStore`, que la página setea.
+    expect(useBreadcrumbStore.getState().items).toEqual([
+      { label: 'Mis remates', to: '/' },
+      { label: 'Remate de hacienda' },
+    ]);
   });
 
-  it('con connected_users_detail (viewer privilegiado), muestra la lista de conectados', () => {
-    mockLiveState({
-      snapshot: makeSnapshot({
-        connected_users_detail: [
-          { connection_id: 'conn-1', user_id: 'user-abcdefgh', connected_at: '2026-07-01T10:00:00Z' },
-        ],
-      }),
-    });
-
+  it('el sidebar tiene una pestaña de Conectados (compradores, vía Moderación)', () => {
+    // Épica 9, Etapa 5: reemplaza al `ConnectedUsersList` genérico (anonimizado, sin
+    // acciones) que vivía antes acá -- ahora reusa `ConnectedBuyersList` de Moderación
+    // (nombre, búsqueda, silenciar/expulsar), ver `ConsolaSidebar.test.tsx` para la
+    // cobertura del cambio de pestañas en detalle.
+    mockLiveState({ snapshot: makeSnapshot() });
     renderPage();
 
-    expect(screen.getByText('Conectados ahora')).toBeInTheDocument();
-    expect(screen.getByText('Usuario #user-abc')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Conectados' })).toBeInTheDocument();
   });
 
-  it('sin connected_users_detail (comprador, o viewer sin snapshot enmascarado), no muestra la lista', () => {
-    mockLiveState({ snapshot: makeSnapshot({ connected_users_detail: null }) });
-    renderPage();
-    expect(screen.queryByText('Conectados ahora')).not.toBeInTheDocument();
+  it('pide el layout ancho (Épica 9, Etapa 5 -- sidebar con pestañas)', () => {
+    mockLiveState({ snapshot: makeSnapshot() });
+
+    const { unmount } = renderPage();
+    expect(useLayoutPreferencesStore.getState().isWide).toBe(true);
+
+    unmount();
+    expect(useLayoutPreferencesStore.getState().isWide).toBe(false);
   });
 });

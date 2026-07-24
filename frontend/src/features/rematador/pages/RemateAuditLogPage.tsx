@@ -1,8 +1,9 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { AuditLogView } from '../../audit/components/AuditLogView';
 import { useRemateDetail } from '../../remates/hooks';
+import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
 import { Alert } from '../../../shared/components/Alert';
-import { Breadcrumb } from '../../../shared/components/Breadcrumb';
+import type { BreadcrumbItem } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { Skeleton } from '../../../shared/components/Skeleton';
 
@@ -21,6 +22,17 @@ export function RemateAuditLogPage() {
 
   const { remate, isLoading, error, reload } = useRemateDetail(id);
 
+  const items: BreadcrumbItem[] = isLoading
+    ? []
+    : error || !remate
+      ? [{ label: 'Mis remates', to: '/' }, { label: 'Remate no encontrado' }]
+      : [
+          { label: 'Mis remates', to: '/' },
+          { label: remate.title, to: `/remates/${id}/lotes` },
+          { label: 'Auditoría' },
+        ];
+  useBreadcrumb(items);
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-4">
@@ -33,7 +45,6 @@ export function RemateAuditLogPage() {
   if (error || !remate) {
     return (
       <div className="flex flex-col gap-6">
-        <Breadcrumb items={[{ label: 'Mis remates', to: '/' }, { label: 'Remate no encontrado' }]} />
         <Alert variant="error">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{error?.message ?? 'No se pudo cargar este remate.'}</span>
@@ -53,14 +64,6 @@ export function RemateAuditLogPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Breadcrumb
-        items={[
-          { label: 'Mis remates', to: '/' },
-          { label: remate.title, to: `/remates/${id}/lotes` },
-          { label: 'Auditoría' },
-        ]}
-      />
-
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Auditoría del remate</h1>
         <p className="mt-1 text-sm text-slate-600">

@@ -32,6 +32,16 @@ const ACTION_LABELS: Record<string, AuditActionLabel> = {
   'oferta.placed': { label: 'Oferta realizada', variant: 'success' },
   'oferta.rejected': { label: 'Oferta rechazada', variant: 'warning' },
   'chat.message_deleted': { label: 'Mensaje de chat eliminado', variant: 'danger' },
+  'moderacion.usuario_expulsado': { label: 'Comprador expulsado', variant: 'danger' },
+  'moderacion.usuario_silenciado': { label: 'Comprador silenciado', variant: 'warning' },
+  'moderacion.chat_bloqueado': { label: 'Chat bloqueado temporalmente', variant: 'warning' },
+  'moderacion.mensaje_destacado': { label: 'Mensaje destacado', variant: 'brand' },
+  'moderacion.mensaje_no_destacado': { label: 'Mensaje quitado de destacados', variant: 'neutral' },
+  'moderacion.intento_oferta_invalida': { label: 'Intento de oferta inválida', variant: 'neutral' },
+  'moderacion.umbral_ofertas_invalidas_superado': {
+    label: 'Umbral de ofertas inválidas superado',
+    variant: 'danger',
+  },
 };
 
 export function describeAction(action: string): AuditActionLabel {

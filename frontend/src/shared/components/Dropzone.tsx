@@ -1,4 +1,5 @@
 import { type ChangeEvent, type DragEvent, useId, useRef, useState } from 'react';
+import { UploadCloud } from 'lucide-react';
 import clsx from 'clsx';
 
 export interface DropzoneProps {
@@ -68,11 +69,12 @@ export function Dropzone({
       onDragLeave={() => setIsDragOver(false)}
       onDrop={handleDrop}
       className={clsx(
-        'flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed p-6 text-center transition-colors',
+        'flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-6 text-center transition-colors',
         disabled && 'cursor-not-allowed opacity-50',
         isDragOver ? 'border-brand-500 bg-brand-50' : 'border-slate-300 hover:border-slate-400',
       )}
     >
+      <UploadCloud aria-hidden="true" className={clsx('mb-1 h-7 w-7', isDragOver ? 'text-brand-500' : 'text-slate-400')} />
       <p className="text-sm font-medium text-slate-600">{label}</p>
       {hint && <p className="text-xs text-slate-400">{hint}</p>}
       <input

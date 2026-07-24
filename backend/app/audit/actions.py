@@ -42,3 +42,11 @@ class AuditAction:
     POSTAUCTION_CASE_CREATED = "postauction.case_created"
     POSTAUCTION_STATUS_CHANGED = "postauction.status_changed"
     POSTAUCTION_NOTE_ADDED = "postauction.note_added"
+
+    MODERATION_USER_KICKED = "moderacion.usuario_expulsado"
+    MODERATION_USER_MUTED = "moderacion.usuario_silenciado"
+    MODERATION_CHAT_LOCKED = "moderacion.chat_bloqueado"
+    MODERATION_MESSAGE_PINNED = "moderacion.mensaje_destacado"
+    MODERATION_MESSAGE_UNPINNED = "moderacion.mensaje_no_destacado"
+    MODERATION_INVALID_BID_ATTEMPT = "moderacion.intento_oferta_invalida"
+    MODERATION_INVALID_BID_THRESHOLD_EXCEEDED = "moderacion.umbral_ofertas_invalidas_superado"

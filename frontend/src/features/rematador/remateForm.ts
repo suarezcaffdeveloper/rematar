@@ -21,6 +21,12 @@ export interface RemateFormValues {
   currency: string;
   anti_sniping_enabled: boolean;
   anti_sniping_extension_seconds: string;
+  /** Cuenta regresiva por lote (Épica 8, ADR-043) -- `null` en `RemateSettings` es "sin
+   * timer", mismo patrón opt-in que `anti_sniping_enabled`. Hasta esta revisión (Épica
+   * 8.0) el campo existía en el backend y se consumía en la Consola Operativa
+   * (`ConsolaControlPanel`) pero no había forma de configurarlo desde este formulario. */
+  lote_timer_enabled: boolean;
+  lote_timer_seconds: string;
 }
 
 export const DEFAULT_REMATE_FORM_VALUES: RemateFormValues = {
@@ -34,6 +40,8 @@ export const DEFAULT_REMATE_FORM_VALUES: RemateFormValues = {
   currency: 'ARS',
   anti_sniping_enabled: false,
   anti_sniping_extension_seconds: '60',
+  lote_timer_enabled: false,
+  lote_timer_seconds: '60',
 };
 
 export type RemateFormErrors = Partial<Record<keyof RemateFormValues, string>>;
@@ -74,6 +82,11 @@ export function remateToFormValues(remate: Remate): RemateFormValues {
     currency: remate.settings.currency,
     anti_sniping_enabled: remate.settings.anti_sniping_enabled,
     anti_sniping_extension_seconds: String(remate.settings.anti_sniping_extension_seconds),
+    lote_timer_enabled: remate.settings.lote_timer_seconds !== null,
+    lote_timer_seconds:
+      remate.settings.lote_timer_seconds !== null
+        ? String(remate.settings.lote_timer_seconds)
+        : DEFAULT_REMATE_FORM_VALUES.lote_timer_seconds,
   };
 }
 
@@ -114,6 +127,12 @@ export function validateRemateForm(values: RemateFormValues): RemateFormErrors {
       errors.anti_sniping_extension_seconds = 'Debe ser un número entre 10 y 600 segundos.';
     }
   }
+  if (values.lote_timer_enabled) {
+    const seconds = Number(values.lote_timer_seconds);
+    if (!Number.isInteger(seconds) || seconds < 5 || seconds > 3600) {
+      errors.lote_timer_seconds = 'Debe ser un número entero entre 5 y 3600 segundos.';
+    }
+  }
 
   return errors;
 }
@@ -133,6 +152,7 @@ export function buildRemateFormPayload(values: RemateFormValues): RemateFormPayl
       anti_sniping_extension_seconds: values.anti_sniping_enabled
         ? Number(values.anti_sniping_extension_seconds)
         : 60,
+      lote_timer_seconds: values.lote_timer_enabled ? Number(values.lote_timer_seconds) : null,
     },
   };
 }

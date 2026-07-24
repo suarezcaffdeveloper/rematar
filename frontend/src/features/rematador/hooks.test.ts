@@ -12,7 +12,7 @@ const salaApiMocks = vi.hoisted(() => ({
 vi.mock('../remates/api', () => rematesApiMocks);
 vi.mock('../sala/api', () => salaApiMocks);
 
-const { useRemateOperationalInfo, useElapsedTime } = await import('./hooks');
+const { useRemateOperationalInfo, useElapsedTime, useLiveOperationalSummary } = await import('./hooks');
 
 function lote(id: string, status: 'pending' | 'open' | 'closed_sold' | 'closed_unsold' | 'cancelled') {
   return { id, title: `Lote ${id}`, status };
@@ -176,5 +176,43 @@ describe('useElapsedTime', () => {
 
   it('sin remate (null), devuelve null', () => {
     expect(renderHook(() => useElapsedTime(null)).result.current).toBeNull();
+  });
+});
+
+describe('useLiveOperationalSummary', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('suma compradores conectados y cuenta lotes abiertos a través de los remates en vivo', async () => {
+    salaApiMocks.fetchRemateSnapshotRequest.mockImplementation(async (remateId: string) => {
+      if (remateId === 'r1') return { connected_users: 3, active_lote: { id: 'lote-1' } };
+      return { connected_users: 5, active_lote: null };
+    });
+
+    const { result } = renderHook(() => useLiveOperationalSummary(['r1', 'r2']));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.data).toEqual({ connectedUsers: 8, openLotes: 1 });
+    expect(salaApiMocks.fetchRemateSnapshotRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it('con la lista vacía, no pide nada y devuelve ceros', () => {
+    const { result } = renderHook(() => useLiveOperationalSummary([]));
+
+    expect(salaApiMocks.fetchRemateSnapshotRequest).not.toHaveBeenCalled();
+    expect(result.current.data).toEqual({ connectedUsers: 0, openLotes: 0 });
+  });
+
+  it('si un snapshot falla, lo ignora sin romper el agregado del resto', async () => {
+    salaApiMocks.fetchRemateSnapshotRequest.mockImplementation(async (remateId: string) => {
+      if (remateId === 'r1') throw new Error('falló');
+      return { connected_users: 4, active_lote: { id: 'lote-2' } };
+    });
+
+    const { result } = renderHook(() => useLiveOperationalSummary(['r1', 'r2']));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.data).toEqual({ connectedUsers: 4, openLotes: 1 });
   });
 });

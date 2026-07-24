@@ -77,7 +77,7 @@ describe('ConsolaLotePanel', () => {
     render(
       <ConsolaLotePanel activeLote={makeLote()} currency="ARS" winningOffer={null} hasUpcomingLotes />,
     );
-    expect(screen.getByText('Sin ofertas todavía')).toBeInTheDocument();
+    expect(screen.getByText('Precio inicial')).toBeInTheDocument();
   });
 
   it('no incluye ningún botón (las acciones viven en el panel de control)', () => {

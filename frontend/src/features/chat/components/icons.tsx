@@ -33,6 +33,20 @@ export function TrashIcon({ className }: IconProps) {
   );
 }
 
+export function PinIcon({ className }: IconProps) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className={className}>
+      <path
+        d="M10 2.5v4l3 3-1 1.5H5.5l-1-1.5 3-3v-4M10 11v6.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function ChatBubbleIcon({ className }: IconProps) {
   return (
     <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className={className}>

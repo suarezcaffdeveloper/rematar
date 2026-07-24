@@ -109,39 +109,34 @@ export function PlaceBidButton({
         : 'El lote no está abierto para ofertar.';
 
     return (
-      <div className="flex flex-col gap-2 border-t border-slate-100 pt-4">
-        <Button disabled className="w-full sm:w-auto" title={disabledReason}>
+      <div className="flex flex-col gap-2">
+        <Button disabled className="w-full py-3 text-base" title={disabledReason}>
           Realizar oferta
         </Button>
-        <p className="text-xs text-slate-400">{disabledReason}</p>
+        <p className="text-center text-xs text-slate-400">{disabledReason}</p>
       </div>
     );
   }
 
   return (
-    <form
-      onSubmit={(event) => void handleSubmit(event)}
-      className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-end"
-    >
-      <div className="flex-1">
-        <Input
-          label={`Tu oferta (mínimo ${formatCurrency(minimumAmount, currency)})`}
-          type="text"
-          inputMode="decimal"
-          value={amount}
-          onChange={(event) => {
-            setTouched(true);
-            setAmount(event.target.value);
-          }}
-          error={validationError ?? undefined}
-          disabled={isSubmitting}
-        />
-      </div>
+    <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-3">
+      <Input
+        label={`Tu oferta (mínimo ${formatCurrency(minimumAmount, currency)})`}
+        type="text"
+        inputMode="decimal"
+        value={amount}
+        onChange={(event) => {
+          setTouched(true);
+          setAmount(event.target.value);
+        }}
+        error={validationError ?? undefined}
+        disabled={isSubmitting}
+      />
       <Button
         type="submit"
         isLoading={isSubmitting}
         disabled={Boolean(validationError)}
-        className="w-full sm:w-auto"
+        className="w-full py-3 text-base font-semibold"
       >
         Ofertar
       </Button>

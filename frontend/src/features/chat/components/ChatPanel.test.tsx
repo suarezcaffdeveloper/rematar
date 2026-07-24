@@ -3,9 +3,21 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { UseChatMessagesResult } from '../hooks';
 import type { ChatMessage } from '../types';
+import type { PinnedMessage } from '../../moderation/types';
 
 const useChatMessagesMock = vi.hoisted(() => vi.fn());
 vi.mock('../hooks', () => ({ useChatMessages: useChatMessagesMock }));
+
+const usePinnedMessagesMock = vi.hoisted(() =>
+  vi.fn(() => ({ data: [] as PinnedMessage[], isLoading: false, error: null, reload: vi.fn() })),
+);
+vi.mock('../../moderation/hooks', () => ({ usePinnedMessages: usePinnedMessagesMock }));
+
+const moderationApiMocks = vi.hoisted(() => ({
+  pinMessageRequest: vi.fn().mockResolvedValue(undefined),
+  unpinMessageRequest: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('../../moderation/api', () => moderationApiMocks);
 
 const { ChatPanel } = await import('./ChatPanel');
 
@@ -153,5 +165,43 @@ describe('ChatPanel', () => {
     fireEvent.scroll(container, { target: { scrollTop: 10 } });
 
     expect(loadOlder).not.toHaveBeenCalled();
+  });
+
+  // --- Mensajes destacados (Épica 7, Módulo 7.6) ----------------------------------------
+
+  it('sin canModerate, no muestra el botón de destacar', () => {
+    renderPanel({ messages: [makeMessage()] }, false);
+    expect(screen.queryByRole('button', { name: 'Destacar mensaje' })).not.toBeInTheDocument();
+  });
+
+  it('con canModerate, destacar un mensaje llama a pinMessageRequest', async () => {
+    renderPanel({ messages: [makeMessage({ id: 'msg-7' })] }, true);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Destacar mensaje' }));
+
+    expect(moderationApiMocks.pinMessageRequest).toHaveBeenCalledWith('remate-1', 'msg-7');
+  });
+
+  it('un mensaje ya destacado muestra el botón para quitar el destacado', async () => {
+    usePinnedMessagesMock.mockReturnValueOnce({
+      data: [
+        {
+          message_id: 'msg-7',
+          content: 'Hola',
+          author_name: 'Juan',
+          pinned_by: 'rematador-1',
+          pinned_at: '2026-07-20T18:31:00Z',
+        },
+      ],
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+    renderPanel({ messages: [makeMessage({ id: 'msg-7' })] }, true);
+
+    const button = screen.getByRole('button', { name: 'Quitar destacado' });
+    await userEvent.click(button);
+
+    expect(moderationApiMocks.unpinMessageRequest).toHaveBeenCalledWith('remate-1', 'msg-7');
   });
 });

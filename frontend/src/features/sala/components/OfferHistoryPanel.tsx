@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import clsx from 'clsx';
 import { Badge } from '../../../shared/components/Badge';
 import { formatCurrency, formatDateTime } from '../../../shared/lib/format';
 import { OFERTA_STATUS_BADGE_VARIANTS, OFERTA_STATUS_LABELS } from '../labels';
@@ -8,6 +9,13 @@ export interface OfferHistoryPanelProps {
   winningOffer: OfertaSnapshotEntry | null;
   recentOffers: OfertaSnapshotEntry[];
   currency: string;
+  /** Altura del panel -- `h-72` por default. `SalaPage` (Épica 9, "refinamiento
+   * visual") lo fija en un valor exacto para que el panel nunca crezca a medida que
+   * llegan ofertas nuevas -- antes solo la lista interna tenía `max-h-72`, pero la
+   * tarjeta entera (encabezado + lista) sí crecía con cada oferta nueva hasta tocar ese
+   * tope, empujando y achicando visualmente al `ChatPanel` de al lado (`flex-1` en el
+   * mismo sidebar de altura fija). Mismo patrón que el `className` de `ChatPanel`. */
+  className?: string;
 }
 
 /** Una fila del historial. `memo`: la lista completa vuelve a montarse cada vez que
@@ -41,10 +49,15 @@ const OfferHistoryEntry = memo(function OfferHistoryEntry({
  * acá refleja exactamente eso, "ofertas recientes", nunca se presenta como el total
  * histórico del lote (que el backend no expone en ningún endpoint hoy).
  */
-export function OfferHistoryPanel({ winningOffer, recentOffers, currency }: OfferHistoryPanelProps) {
+export function OfferHistoryPanel({ winningOffer, recentOffers, currency, className }: OfferHistoryPanelProps) {
   return (
-    <div className="flex flex-col gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div>
+    <div
+      className={clsx(
+        'flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm',
+        className ?? 'h-72 shrink-0',
+      )}
+    >
+      <div className="shrink-0">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Comprador líder</h2>
         {winningOffer ? (
           <div className="mt-2">
@@ -56,8 +69,8 @@ export function OfferHistoryPanel({ winningOffer, recentOffers, currency }: Offe
         )}
       </div>
 
-      <div className="border-t border-slate-100 pt-4">
-        <div className="flex items-center justify-between">
+      <div className="flex min-h-0 flex-1 flex-col border-t border-slate-100 pt-4">
+        <div className="flex shrink-0 items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Ofertas recientes</h2>
           <span className="text-sm font-semibold text-slate-700">{recentOffers.length}</span>
         </div>
@@ -65,7 +78,7 @@ export function OfferHistoryPanel({ winningOffer, recentOffers, currency }: Offe
         {recentOffers.length === 0 ? (
           <p className="mt-2 text-sm text-slate-500">Sin ofertas todavía.</p>
         ) : (
-          <ul className="mt-3 flex flex-col gap-2">
+          <ul className="mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
             {recentOffers.map((offer) => (
               <OfferHistoryEntry key={offer.id} offer={offer} currency={currency} />
             ))}

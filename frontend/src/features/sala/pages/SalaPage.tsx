@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
+import { useWideLayout } from '../../../app/layouts/useWideLayout';
 import { Alert } from '../../../shared/components/Alert';
-import { Breadcrumb } from '../../../shared/components/Breadcrumb';
+import type { BreadcrumbItem } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
@@ -18,15 +20,14 @@ import { isDomainEventMessage } from '../realtime/messages';
 
 function SalaSkeleton() {
   return (
-    <div className="flex flex-col gap-6">
-      <Skeleton className="h-4 w-48" />
+    <div className="flex flex-col gap-4">
       <Skeleton className="h-24 w-full rounded-xl" />
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <div className="flex flex-col gap-4 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_380px]">
+        <div className="flex flex-col gap-4">
           <Skeleton className="aspect-video w-full rounded-xl" />
-          <Skeleton className="h-32 w-full rounded-xl" />
+          <Skeleton className="h-40 w-full rounded-xl" />
         </div>
-        <Skeleton className="h-64 w-full rounded-xl" />
+        <Skeleton className="h-96 w-full rounded-xl" />
       </div>
       <Skeleton className="h-40 w-full rounded-xl" />
     </div>
@@ -34,22 +35,31 @@ function SalaSkeleton() {
 }
 
 /**
- * Sala del remate (Épica 4, Módulo 4.5 + 4.6) -- la pantalla arranca con el Snapshot
- * Service (`useRemateSnapshot`, vía HTTP, sin cambios) y a partir de acá se mantiene
- * actualizada por WebSocket (`useLiveRemateState`, Módulo 4.6): eventos de dominio
- * (`lote.opened`, `oferta.accepted`, etc.) actualizan únicamente la parte de la
+ * Sala del remate (Épica 4, Módulo 4.5 + 4.6; rediseñada en la Épica 9, Etapa 4 -- la
+ * pantalla más importante del sistema según el enunciado). La sala arranca con el
+ * Snapshot Service (`useRemateSnapshot`, vía HTTP, sin cambios) y a partir de acá se
+ * mantiene actualizada por WebSocket (`useLiveRemateState`, Módulo 4.6): eventos de
+ * dominio (`lote.opened`, `oferta.accepted`, etc.) actualizan únicamente la parte de la
  * pantalla que corresponde, sin recargar nada. Ver
  * docs/28-websocket-tiempo-real-sala.md para el flujo completo.
  *
- * Ningún componente de presentación de acá para abajo (`SalaHeader`, `ActiveLotePanel`,
- * `OfferHistoryPanel`, `UpcomingLotesStrip`) sabe que existe un WebSocket -- siguen
- * recibiendo los mismos props ya resueltos que en la Módulo 4.5, tal como anticipaba
- * `docs/27-sala-del-remate.md`, "Preparación para WebSockets".
+ * Layout nuevo (Épica 9, Etapa 4): `useWideLayout()` le pide a `AppLayout` un `<main>`
+ * más ancho (sin esto, el sidebar de ofertas+chat no entra cómodo junto al lote). Desde
+ * `xl:` (1280px), grid de dos columnas -- lote activo a la izquierda (la información
+ * que hace falta ver/hacer ahora: precio, cuenta regresiva, ofertar, todo dentro de
+ * `ActiveLotePanel`) y un sidebar fijo a la derecha (`sticky`, alto de viewport) con
+ * ofertas recientes arriba y chat ocupando el resto -- todo lo importante visible sin
+ * scroll de la página en desktop, pedido explícito del enunciado. Por debajo de `xl:`
+ * (tablet/mobile), se apila en una sola columna como ya hacía antes -- ningún
+ * componente de presentación de acá para abajo (`SalaHeader`, `ActiveLotePanel`,
+ * `OfferHistoryPanel`, `UpcomingLotesStrip`) sabe que existe un WebSocket, tal como
+ * anticipaba `docs/27-sala-del-remate.md`, "Preparación para WebSockets".
  */
 export function SalaPage() {
   const { remateId } = useParams<{ remateId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  useWideLayout();
 
   const {
     snapshot,
@@ -79,6 +89,17 @@ export function SalaPage() {
     });
   }, [subscribeToRealtime]);
 
+  const breadcrumbItems: BreadcrumbItem[] = isSnapshotLoading
+    ? []
+    : snapshotError || !snapshot
+      ? [{ label: 'Dashboard', to: '/' }, { label: 'Sala no disponible' }]
+      : [
+          { label: 'Dashboard', to: '/' },
+          { label: snapshot.remate.title, to: `/remates/${snapshot.remate.id}` },
+          { label: 'Sala en vivo' },
+        ];
+  useBreadcrumb(breadcrumbItems);
+
   if (isSnapshotLoading) {
     return <SalaSkeleton />;
   }
@@ -86,7 +107,6 @@ export function SalaPage() {
   if (snapshotError || !snapshot) {
     return (
       <div className="flex flex-col gap-6">
-        <Breadcrumb items={[{ label: 'Dashboard', to: '/' }, { label: 'Sala no disponible' }]} />
         <Alert variant="error">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{snapshotError?.message ?? 'No se pudo cargar la sala de este remate.'}</span>
@@ -108,24 +128,16 @@ export function SalaPage() {
   const currency = remate.settings.currency;
 
   return (
-    <div className="flex flex-col gap-6">
-      <Breadcrumb
-        items={[
-          { label: 'Dashboard', to: '/' },
-          { label: remate.title, to: `/remates/${remate.id}` },
-          { label: 'Sala en vivo' },
-        ]}
-      />
-
+    <div className="flex flex-col gap-4">
       <SalaHeader
         remate={remate}
         connectedUsers={snapshot.connected_users}
         connectionStatus={connectionStatus}
       />
 
-      {activeLote ? (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-          <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_380px]">
+        <div className="min-w-0">
+          {activeLote ? (
             <ActiveLotePanel
               remateId={remate.id}
               lote={activeLote}
@@ -134,21 +146,46 @@ export function SalaPage() {
               remateStatus={remate.status}
               viewerRole={user?.role}
             />
-          </div>
-          <OfferHistoryPanel winningOffer={winningOffer} recentOffers={recentOffers} currency={currency} />
+          ) : (
+            <EmptyState
+              icon={<GavelIcon className="h-10 w-10" />}
+              title="No hay ningún lote abierto en este momento"
+              description="El rematador todavía no abrió un lote para ofertar. Volvé a intentar en unos minutos."
+              action={
+                <Button variant="secondary" onClick={reloadSnapshot}>
+                  Actualizar
+                </Button>
+              }
+            />
+          )}
         </div>
-      ) : (
-        <EmptyState
-          icon={<GavelIcon className="h-10 w-10" />}
-          title="No hay ningún lote abierto en este momento"
-          description="El rematador todavía no abrió un lote para ofertar. Volvé a intentar en unos minutos."
-          action={
-            <Button variant="secondary" onClick={reloadSnapshot}>
-              Actualizar
-            </Button>
-          }
-        />
-      )}
+
+        {/* Sidebar: ofertas + chat, siempre visibles sin scroll de página en desktop
+         * (`xl:sticky` + alto de viewport) -- "Historial de ofertas" y "Chat lateral"
+         * son dos pedidos separados del enunciado, así que van apiladas (no en tabs,
+         * que ocultarían una mientras se ve la otra). Alturas fijas en las dos
+         * (`OfferHistoryPanel` en `h-72 shrink-0`, `ChatPanel` en `flex-1`) para que
+         * ninguna empuje a la otra al crecer -- antes `OfferHistoryPanel` crecía con
+         * cada oferta nueva (hasta un tope interno) y de paso achicaba visualmente al
+         * chat, que absorbía lo que quedaba del alto fijo del sidebar. Cada una scrollea
+         * su propio contenido cuando no entra, ninguna cambia de tamaño. */}
+        <div className="flex flex-col gap-4 xl:sticky xl:top-20 xl:h-[calc(100vh-7rem)]">
+          <OfferHistoryPanel
+            winningOffer={winningOffer}
+            recentOffers={recentOffers}
+            currency={currency}
+            className="h-72 shrink-0"
+          />
+          <ChatPanel
+            remateId={remate.id}
+            subscribeToRealtime={subscribeToRealtime}
+            currentUserId={user?.id}
+            connectedUsers={snapshot.connected_users}
+            canModerate={false}
+            className="min-h-0 flex-1"
+          />
+        </div>
+      </div>
 
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold text-slate-900">Próximos lotes</h2>
@@ -158,14 +195,6 @@ export function SalaPage() {
           <UpcomingLotesStrip lotes={upcomingLotes} />
         )}
       </div>
-
-      <ChatPanel
-        remateId={remate.id}
-        subscribeToRealtime={subscribeToRealtime}
-        currentUserId={user?.id}
-        connectedUsers={snapshot.connected_users}
-        canModerate={false}
-      />
     </div>
   );
 }

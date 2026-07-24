@@ -12,6 +12,34 @@ concurrencia, tiempo real y escalabilidad — no en la cantidad de pantallas.
 
 ## Estado actual
 
+**Épica 7, Módulo 7.6 — Moderación y Administración en Tiempo Real.** Un Moderation
+Service desacoplado (`app/moderation/`, paquete transversal top-level, hermano de
+`app/modules/chat/`/`app/modules/ofertas/`) da al rematador expulsar/silenciar
+compradores, bloquear el chat completo temporalmente, destacar mensajes, y detectar
+intentos reiterados de ofertas inválidas -- sin tocar `ChatService`, `ChatMessage`,
+`AuctionEngine` ni `Oferta`. Se entera de ofertas inválidas reaccionando a
+`oferta.rejected` (ya publicado por `AuctionEngine.place_bid`) con un **cuarto**
+`EventConsumer` (`ModerationEventDispatcher`, mismo patrón que los tres anteriores) --
+cero import nuevo en `app/modules/ofertas/`. Dos puntos de enganche síncronos,
+deliberadamente asimétricos: `chat/router.py` usa solo `ModerationRedisGateway` (silenciar/
+bloquear-chat, estado efímero con TTL) antes de `ChatService.send_message`, sin tocar el
+servicio; `app/websocket/router.py` usa el `ModerationService` completo como **tercera
+excepción** documentada a su regla de cero conocimiento de dominio (las otras dos ya son
+`SnapshotService`/`PresenceService`), chequeando un ban persistido (`RemateBan`, Postgres
+-- debe sobrevivir un restart) antes de admitir un `join_room`. Expulsar es una única
+acción (ban + cierre forzado de las conexiones activas de ese usuario en esa sala) que
+reutiliza el `finally` de limpieza ya existente del Gateway en vez de duplicarlo. Destacar
+mensajes usa una tabla propia (`ModerationPinnedMessage`) sin agregar ninguna columna a
+`ChatMessage`. El "historial reciente" del panel reutiliza el Audit Service (Épica 7.2)
+en vez de una tabla nueva -- `AuditLogRepository.list_paginated` gana un filtro
+backward-compatible por lista de acciones. El umbral de ofertas inválidas nunca se
+publica en el chat (privacidad): solo genera una `Notification` privada al rematador.
+Frontend: `features/moderation/` (panel de conectados con búsqueda y acciones rápidas,
+bloqueo de chat, historial), integrado en `ConsolaOperativaPage` junto a `ChatPanel`/
+`AnalyticsPanel`; `ChatMessageItem`/`ChatPanel` ganan un botón de destacar (solo UI, cero
+cambios de backend de Chat). Ver
+[42-moderacion-en-tiempo-real.md](42-moderacion-en-tiempo-real.md), ADR-045.
+
 **Épica 7, Módulo 7.5 — Gestión Post-Remate.** Un PostAuction Service desacoplado
 (`app/postauction/`, paquete transversal top-level, mismo nivel que `app/audit/`/
 `app/history/`/`app/monitoring/`) administra el seguimiento de pago y entrega entre
@@ -184,6 +212,14 @@ código.
 | [39-pruebas-de-carga-y-rendimiento.md](39-pruebas-de-carga-y-rendimiento.md) | Pruebas de carga y rendimiento: entorno `loadtest/` separado, los cinco escenarios, cada métrica y su origen, reportes, recomendaciones básicas (Épica 8.2) |
 | [40-cuenta-regresiva-y-cierre-automatico.md](40-cuenta-regresiva-y-cierre-automatico.md) | Cuenta regresiva y cierre automático de lotes: `Timer Service`, los nueve eventos, extensión anti-sniping síncrona, `TimerExpiryScheduler`, adjudicación automática (Épica 8, implementa ADR-007) |
 | [41-gestion-post-remate.md](41-gestion-post-remate.md) | Gestión Post-Remate: `PostAuction Service` desacoplado vía eventos, flujo de 8 estados, línea de tiempo, `Notification Service` nuevo (Épica 7, Módulo 7.5) |
+| [42-moderacion-en-tiempo-real.md](42-moderacion-en-tiempo-real.md) | Moderación y administración en tiempo real: `Moderation Service` desacoplado, expulsar/silenciar/bloquear-chat/destacar, detección de ofertas inválidas repetidas (Épica 7, Módulo 7.6) |
+| [43-sistema-de-diseno.md](43-sistema-de-diseno.md) | Sistema de Diseño del rediseño integral de UI/UX: tokens de color/tipografía, inventario de los 17 primitivos + `Tooltip`/`Table` nuevos, adopción de `lucide-react` (Épica 9, Etapa 1) |
+| [44-navegacion.md](44-navegacion.md) | Navegación del rediseño integral de UI/UX: `Sidebar` por rol, `Header` delgado, `breadcrumbStore`/`useBreadcrumb`, migración de las 12 páginas que renderizaban su propio breadcrumb (Épica 9, Etapa 2) |
+| [45-dashboards.md](45-dashboards.md) | Dashboards del rediseño integral de UI/UX: `StatCard` (unifica `KpiCard`/`StatChip`), feature `Notifications` nuevo (primer consumidor del Notification Service), KPIs ampliados en ambos dashboards, migración de íconos a `lucide-react` (Épica 9, Etapa 3) |
+| [46-sala-del-remate-rediseno.md](46-sala-del-remate-rediseno.md) | Sala del Remate del rediseño integral de UI/UX: `useWideLayout`, layout de dos columnas (lote activo + sidebar sticky de ofertas/chat), zona de acción destacada en `ActiveLotePanel` (precio/cuenta regresiva/ofertar) (Épica 9, Etapa 4) |
+| [47-consola-operativa-rediseno.md](47-consola-operativa-rediseno.md) | Consola Operativa del rediseño integral de UI/UX: `Tabs` compartido, `ConsolaSidebar` (Chat/Ofertas/Conectados/Moderación en pestañas), consolidación de `ConnectedUsersList` en `ConnectedBuyersList` (Épica 9, Etapa 5) |
+| [48-gestion-post-remate-rediseno.md](48-gestion-post-remate-rediseno.md) | Gestión Post-Remate del rediseño integral de UI/UX: zona de estado destacada (progreso + precio final) en el detalle de compra/venta, ícono de check en `ProgressStepper`, `Badge` por acción en `Timeline`, migración de `AdminAuditLogPage` a `Tabs` compartido (Épica 9, Etapa 6) |
+| [49-accesibilidad-final.md](49-accesibilidad-final.md) | Accesibilidad Final del rediseño integral de UI/UX: `useFocusTrap` compartido (`Modal`/drawer de `Sidebar`), navegación por flechas en `DropdownMenu`/`NotificationBell`/`Tabs`, link de "saltar al contenido" + foco en cambios de ruta, `prefers-reduced-motion` global, corrección del antipatrón de `aria-live` por segundo en `LoteCountdown` (Épica 9, Etapa 7 -- última del rediseño) |
 | [adr/](adr/) | Registro de decisiones de arquitectura (ADR), una por decisión relevante |
 
 ## Reglas de esta documentación (aplican a todas las fases futuras)
@@ -531,6 +567,23 @@ código.
   `app/websocket/`, `app/realtime/consumer.py`/`dispatcher.py`. Ver
   [40-cuenta-regresiva-y-cierre-automatico.md](40-cuenta-regresiva-y-cierre-automatico.md),
   ADR-043.
+- **Épica 8, Módulo 8.0** (2026-07-23): Pulido y Consolidación del Sistema -- revisión
+  funcional/UX/consistencia de los 14 flujos existentes, sin funcionalidad de negocio
+  nueva ni cambios de arquitectura. Dos bugs funcionales reales corregidos: la cuenta
+  regresiva (`settings.lote_timer_seconds`, Módulo 8) no tenía forma de configurarse
+  desde `RemateFormModal` pese a que el backend y la Consola Operativa ya la
+  consumían; un `admin` no tenía ningún link de navegación hacia `/admin` (agregado en
+  `AppLayout`/`HomePage`). Confirmado sin cambios (ya cumplían el estándar): la
+  reconexión WebSocket con resync vía Snapshot Service (Épica 4.6), validación de
+  formularios cliente/servidor, y los estados de carga/vacío/error/confirmación en
+  los dashboards y paneles existentes. Refactor técnico: `shared/hooks/
+  useAsyncResource.ts` (nuevo) unifica el boilerplate de fetch/cancelación/reload que
+  se repetía en `features/{moderation,postauction,history,audit,sala,remates}/
+  hooks.ts`, sin cambiar la interfaz pública de ningún hook. Consistencia de íconos:
+  eliminada la duplicación de `UsersIcon` (`features/sala/`) y `ChevronDownIcon`
+  (`features/rematador/`), ambos ya existentes en otro feature. Sin ADR propio (sin
+  decisiones de arquitectura nuevas) -- ver la sección correspondiente en
+  [09-arquitectura-y-decisiones.md](09-arquitectura-y-decisiones.md).
 - **Épica 7, Módulo 7.5** (2026-07-23): Gestión Post-Remate -- PostAuction Service
   desacoplado (`app/postauction/`, paquete transversal nuevo, mismo nivel que
   `app/audit/`/`app/history/`/`app/monitoring/`) que reacciona a `lote.winner_determined`
@@ -562,3 +615,150 @@ código.
   comprador asociado en ese flujo. Cero cambios en `AuctionEngine`, `RemateService`,
   `LoteService`, `app/websocket/`, `app/snapshot/`, `app/audit/service.py`. Ver
   [41-gestion-post-remate.md](41-gestion-post-remate.md), ADR-044.
+- **Épica 7, Módulo 7.6** (2026-07-23): Moderación y Administración en Tiempo Real --
+  Moderation Service desacoplado (`app/moderation/`, paquete transversal nuevo, hermano
+  de `app/modules/chat/`/`app/modules/ofertas/`) que reacciona a `oferta.rejected` con
+  un **cuarto** `EventConsumer` (`ModerationEventDispatcher`, mismo patrón que los tres
+  anteriores) para detectar intentos reiterados de ofertas inválidas -- cero import
+  nuevo en `app/modules/ofertas/`. Dos puntos de enganche síncronos deliberadamente
+  asimétricos: `chat/router.py` gana una dependencia liviana
+  (`ModerationRedisGateway`, silenciar/bloquear-chat efímero en Redis) antes de
+  `ChatService.send_message`, sin tocar `ChatService`; `app/websocket/router.py` usa el
+  `ModerationService` completo como **tercera excepción** documentada a su regla de
+  cero conocimiento de dominio (las otras dos ya son `SnapshotService`/
+  `PresenceService`), chequeando un ban persistido (`RemateBan`, Postgres) antes de
+  admitir un `join_room`. Expulsar es una única acción (ban + cierre forzado de las
+  conexiones activas de ese usuario en esa sala, `close_codes.KICKED = 4403`) que
+  reutiliza el `finally` de limpieza ya existente del Gateway (`presence_service.
+  leave_room`/`manager.unregister` vía el `WebSocketDisconnect` resultante) en vez de
+  duplicarlo. Destacar mensajes usa una tabla propia (`ModerationPinnedMessage`) sin
+  agregar ninguna columna a `ChatMessage`. El "historial reciente" del panel reutiliza
+  el Audit Service (Épica 7.2, `AuditLogRepository.list_paginated` gana un filtro
+  backward-compatible por lista de acciones) en vez de una tabla nueva. El umbral de
+  ofertas inválidas nunca se publica en el chat (privacidad) -- solo genera una
+  `Notification` privada al rematador (Notification Service, Épica 7.5) tras superar
+  un umbral configurable. Sin motor de reglas de moderación genérico -- preparado, no
+  construido: cada acción es un método independiente y componible de
+  `ModerationService`. Frontend: `features/moderation/` (panel de conectados con
+  búsqueda y acciones rápidas, bloqueo de chat, historial), integrado en
+  `ConsolaOperativaPage` junto a `ChatPanel`/`AnalyticsPanel`; `ChatMessageItem`/
+  `ChatPanel` ganan un botón de destacar (solo UI, cero cambios de backend de Chat).
+  Cero cambios en `ChatService`, `ChatMessage`, `AuctionEngine`, `Oferta`,
+  `RoomManager`, `ConnectionManager`, `PresenceService`. Ver
+  [42-moderacion-en-tiempo-real.md](42-moderacion-en-tiempo-real.md), ADR-045.
+- **Épica 9, Etapa 1** (2026-07-23): Rediseño Integral de UI/UX — Sistema de Diseño.
+  Primera de 7 etapas planeadas, exclusivamente visual -- cero cambios de backend/API/
+  WebSockets/arquitectura. Escalas de color completas 50-900 para `brand`/`danger`/
+  `success` (antes solo 3-5 tonos sueltos) y `warning` nueva (antes simulada con
+  `amber` crudo), anclando los mismos valores hex ya en producción para no romper la
+  identidad de marca. Tipografía Inter self-hosted (`@fontsource/inter`). Adopción de
+  `lucide-react` (confirmada con el usuario, revierte puntualmente ADR-027/028 en lo
+  que a íconos respecta) para los íconos de `shared/components/`; los íconos por
+  feature se migran gradualmente en las etapas siguientes. Los 17 primitivos
+  compartidos existentes fueron restyled (misma API pública) con foco unificado por
+  `ring`; `Input`/`Select`/`Textarea` consolidados sobre un `FieldWrapper` compartido
+  (eliminando la triplicación de su wrapper label+error+`useId`); `ToastViewport` gana
+  variante `warning`, íconos por variante, transición de entrada/salida sin librería,
+  y una región `aria-live="polite"` siempre montada (gap de accesibilidad corregido).
+  Dos primitivos nuevos pedidos explícitamente: `Tooltip` (hover + foco de teclado,
+  posicionamiento CSS simple) y `Table` (disponible para pantallas futuras, sin
+  reemplazar los listados de cards ya usados en auditoría/historial/lotes). Ver
+  [43-sistema-de-diseno.md](43-sistema-de-diseno.md), ADR-046.
+- **Épica 9, Etapa 2** (2026-07-23): Rediseño Integral de UI/UX — Navegación.
+  Reemplaza el único header de `AppLayout.tsx` (sin sidebar, sin navegación
+  persistente) por `Sidebar` (navegación por rol -- comprador: Remates/Mis compras;
+  rematador: Mis remates/Ventas adjudicadas/Historial; admin: Panel de administrador,
+  reemplazando el link condicional que vivía en el header desde la Épica 8.0;
+  persistente desde `lg:`, drawer con overlay por debajo) + `Header` delgado (ya sin
+  logo, que pasó al sidebar). Las 12 páginas que renderizaban su propio
+  `<Breadcrumb>` ahora usan `useBreadcrumb(items)` (hook nuevo sobre un store Zustand
+  mínimo, `breadcrumbStore.ts`) -- el `Header` es el único que efectivamente lo dibuja,
+  una vez por pantalla. Ver [44-navegacion.md](44-navegacion.md).
+- **Épica 9, Etapa 3** (2026-07-24): Rediseño Integral de UI/UX — Dashboards.
+  `shared/components/StatCard.tsx` (nuevo) unifica `KpiCard` (Analítica/Monitoreo/
+  Historial) y el `StatChip` local del dashboard del rematador -- mismo componente,
+  `showTrend`/`accentClassName` opt-in. `features/notifications/` (nuevo): primer
+  consumidor de frontend del Notification Service (existe en el backend desde la
+  Épica 7.5, sin uso hasta ahora) -- `NotificationBell` en el `Header` (badge de no
+  leídas + dropdown) y `RecentActivityCard` embebida en ambos dashboards, que cubre a
+  la vez "Notificaciones" y "Actividad reciente" del enunciado (no hay una fuente de
+  auditoría agregada por usuario en el backend -- solo por remate puntual o global-
+  admin -- así que las notificaciones ya generadas ante cada evento relevante hacen de
+  feed de actividad). Dashboard comprador: KPIs "Próximos remates"/"Remates en vivo"
+  (client-side sobre `useRemates`) y "Lotes ganados" (`useMisCompras`, solo lee
+  `total`); "Historial" no es una sección aparte -- el backend prohíbe `/historial`
+  para compradores (403), así que "Mis compras" ya es su único historial posible.
+  Dashboard rematador: "Lotes abiertos"/"Compradores conectados" agregados con un
+  nuevo hook, `useLiveOperationalSummary` (`GET .../snapshot` en paralelo por remate
+  en vivo, mismo endpoint que ya usaba cada tarjeta individual) -- deliberadamente sin
+  WebSocket (eso queda para la Consola Operativa de cada remate puntual, no este
+  resumen). Migración de íconos a `lucide-react` (`features/remates/components/
+  icons.tsx` completo + `PlusIcon` de `rematador`) vía wrappers finos con el mismo
+  nombre/props -- se nota en todas las pantallas que ya los usaban, no solo en los
+  dashboards. Ver [45-dashboards.md](45-dashboards.md).
+- **Épica 9, Etapa 4** (2026-07-24): Rediseño Integral de UI/UX — Sala del Remate (la
+  pantalla más importante del sistema según el enunciado). `useWideLayout` (nuevo,
+  mismo patrón que `useBreadcrumb`) le permite a una página pedirle a `AppLayout` un
+  `<main>` más ancho (`max-w-[90rem]` en vez de `max-w-5xl`) -- necesario para el
+  layout de dos columnas nuevo. `SalaPage` pasa de una única columna apilada (chat al
+  final de todo, con scroll de página) a un grid `xl:grid-cols-[1fr_380px]`: lote
+  activo a la izquierda, sidebar `sticky` de alto de viewport a la derecha (ofertas
+  recientes + chat, apiladas, cada una con su propio scroll interno -- no en tabs, que
+  esconderían una mientras se ve la otra). Por debajo de `xl:`, se apila igual que
+  antes. `ChatPanel` ganó un `className` opcional para altura flexible (default
+  `h-[32rem]` sin cambios para la Consola Operativa); `OfferHistoryPanel` ganó scroll
+  interno acotado en su lista. `ActiveLotePanel`: precio/cuenta regresiva/botón de
+  ofertar -- antes dispersos en el panel -- ahora viven juntos en una única "zona de
+  acción" destacada, ubicada antes de la descripción/ficha técnica. Ver
+  [46-sala-del-remate-rediseno.md](46-sala-del-remate-rediseno.md).
+- **Épica 9, Etapa 5** (2026-07-24): Rediseño Integral de UI/UX — Consola Operativa del
+  Rematador. Mismo problema que tenía la Sala antes de la Etapa 4 (apilado de 5-6
+  cards a lo ancho completo -- chat y moderación entre el panel de control y la
+  analítica) resuelto con el mismo mecanismo (`useWideLayout` + grid
+  `xl:grid-cols-[1fr_380px]`). `shared/components/Tabs.tsx` (nuevo, extraído del
+  patrón que `AdminAuditLogPage.tsx` ya usaba a mano) + `ConsolaSidebar.tsx` (nuevo):
+  a diferencia del sidebar de la Sala (Chat+Ofertas apiladas, sin pestañas, son solo
+  dos), acá son cuatro secciones (Chat/Ofertas/Conectados/Moderación) y la mayoría de
+  uso ocasional, así que van en pestañas. "Conectados" reusa `ConnectedBuyersList`
+  (Moderación -- nombre, búsqueda, silenciar/expulsar) en vez del `ConnectedUsersList`
+  genérico y anonimizado que existía antes -- eliminado junto con `ModerationPanel.tsx`
+  (sin consumidor tras el cambio); el `reloadToken`/la suscripción a eventos de
+  moderación se movieron a `ConsolaSidebar`, que ahora alimenta dos pestañas en vez de
+  un solo panel. `ConsolaLotePanel`/`ConsolaControlPanel`: mismo tratamiento que
+  `ActiveLotePanel` (precio + cuenta regresiva destacados) y agrupación de los seis
+  botones de control en dos filas ("Lote"/"Remate") en vez de una fila suelta, sin
+  cambios de lógica. Ver
+  [47-consola-operativa-rediseno.md](47-consola-operativa-rediseno.md).
+- **Épica 9, Etapa 6** (2026-07-24): Rediseño Integral de UI/UX — Gestión Post-Remate.
+  El precio final tenía el mismo peso visual que "Adjudicado el" u "Observaciones" en
+  una grilla de cuatro celdas, sin la jerarquía que Sala/Consola ya le dan a su dato más
+  importante. `MiCompraDetailPage`/`VentaAdjudicadaDetailPage`: el `Card` con
+  `ProgressStepper` y esa grilla se reemplazan por una única "zona de estado" (mismo
+  tratamiento que `ActiveLotePanel`/`ConsolaLotePanel`) que combina el indicador de
+  progreso con el precio final destacado; las observaciones, cuando existen, pasan a su
+  propia tarjeta liviana. `ProgressStepper`: el paso completado usa el ícono `Check` de
+  `lucide-react` en vez del carácter `✓`. `Timeline`: la acción de cada entrada ahora se
+  muestra en un `Badge` de color, mismo criterio que `AuditLogEntryCard` (su par
+  declarado). `AdminAuditLogPage` migra su `role="tablist"` a mano al `Tabs` compartido
+  que la Etapa 5 ya había extraído de ese mismo patrón (deuda documentada
+  explícitamente en el módulo 47). Sin cambios en `CaseCard`, `SearchFilterBar`,
+  `StatusChangeForm`, `NoteForm` ni `StatusBadge` -- ya seguían los primitivos del
+  sistema de diseño desde su implementación original (Épica 7.5). Ver
+  [48-gestion-post-remate-rediseno.md](48-gestion-post-remate-rediseno.md).
+- **Épica 9, Etapa 7** (2026-07-24): Rediseño Integral de UI/UX — Accesibilidad Final,
+  última de las 7 etapas planeadas. `shared/hooks/useFocusTrap.ts` (nuevo): atrapa Tab/
+  Shift+Tab y restaura el foco al disparador, compartido por `Modal` (cerraba el límite
+  conocido documentado desde la Épica 5.3, sin trap completo) y el drawer mobile de
+  `Sidebar` (ahora `role="dialog"` + `aria-modal`, foco inicial en el primer link).
+  `DropdownMenu`/`NotificationBell`: ↑/↓/Home/End recorren los ítems con wraparound,
+  Escape devuelve el foco al disparador (antes solo cerraba). `Tabs`: tabindex "roving"
+  + ←/→/Home/End, patrón ARIA completo de pestañas. `AppLayout`: link de "saltar al
+  contenido principal" + foco movido a `<main>` en cada cambio de ruta (una SPA nunca
+  recarga, sin esto un lector de pantalla no se entera de que navegó).
+  `styles/index.css`: `@media (prefers-reduced-motion: reduce)` global. Corrección de un
+  antipatrón real preexistente en `LoteCountdown`: el número grande llevaba
+  `aria-live="polite"` actualizándose cada segundo (el ejemplo que las WAI-ARIA
+  Authoring Practices citan explícitamente como qué NO hacer con `role="timer"`) --
+  ahora una región `sr-only` separada anuncia solo al cruzar el umbral urgente (una vez)
+  y al llegar a cero. Sin cambios de lógica de negocio, API ni arquitectura en ninguna
+  etapa del rediseño (Etapas 1-7). Ver [49-accesibilidad-final.md](49-accesibilidad-final.md).

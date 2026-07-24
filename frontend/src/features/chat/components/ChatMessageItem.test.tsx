@@ -69,4 +69,57 @@ describe('ChatMessageItem', () => {
     expect(screen.queryByText('Hola a todos')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Eliminar mensaje' })).not.toBeInTheDocument();
   });
+
+  // --- Destacar (Épica 7, Módulo 7.6) ---------------------------------------------------
+
+  it('sin onTogglePin, no muestra el botón de destacar', () => {
+    render(<ChatMessageItem message={makeMessage()} canModerate onRequestDelete={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Destacar mensaje' })).not.toBeInTheDocument();
+  });
+
+  it('con onTogglePin, el botón de destacar llama a onTogglePin con el mensaje', async () => {
+    const onTogglePin = vi.fn();
+    const message = makeMessage();
+    render(
+      <ChatMessageItem
+        message={message}
+        canModerate
+        onRequestDelete={vi.fn()}
+        onTogglePin={onTogglePin}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Destacar mensaje' }));
+    expect(onTogglePin).toHaveBeenCalledWith(message);
+  });
+
+  it('isPinned muestra el ícono de destacado y el botón para quitarlo', async () => {
+    const onTogglePin = vi.fn();
+    const message = makeMessage();
+    render(
+      <ChatMessageItem
+        message={message}
+        canModerate
+        onRequestDelete={vi.fn()}
+        isPinned
+        onTogglePin={onTogglePin}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Quitar destacado' });
+    await userEvent.click(button);
+    expect(onTogglePin).toHaveBeenCalledWith(message);
+  });
+
+  it('un mensaje eliminado nunca muestra el botón de destacar, aunque haya onTogglePin', () => {
+    render(
+      <ChatMessageItem
+        message={makeMessage({ is_deleted: true, content: null })}
+        canModerate
+        onRequestDelete={vi.fn()}
+        onTogglePin={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Destacar mensaje' })).not.toBeInTheDocument();
+  });
 });

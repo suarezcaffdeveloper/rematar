@@ -24,8 +24,15 @@ const SELECT_CLASSES =
 
 /**
  * Barra de búsqueda + filtros + orden del dashboard. Controlado por el padre
- * (`CompradorDashboardPage`), que es quien conoce la lista completa a filtrar -- este
- * componente no sabe nada de remates cargados, solo edita el objeto `RemateFilters`.
+ * (`CompradorDashboardPage`/`RematadorDashboardPage`), que es quien conoce la lista
+ * completa a filtrar -- este componente no sabe nada de remates cargados, solo edita el
+ * objeto `RemateFilters`.
+ *
+ * Layout de dos filas (refinamiento visual, pedido explícito): buscador solo, a ancho
+ * completo, arriba -- es el control que más se usa y el que antes competía por espacio
+ * con los tres `<select>` en una sola fila `lg:flex-row`, quedando angosto en pantallas
+ * medianas. Categoría/Estado/Orden abajo, en ese orden, en grilla de 3 columnas desde
+ * `sm:` (una debajo de la otra en mobile).
  */
 export function DashboardToolbar({
   filters,
@@ -33,8 +40,8 @@ export function DashboardToolbar({
   statusOptions = VISIBLE_STATUS_OPTIONS,
 }: DashboardToolbarProps) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center">
-      <div className="relative flex-1">
+    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="relative">
         <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <input
           type="search"
@@ -46,23 +53,7 @@ export function DashboardToolbar({
         />
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <select
-          aria-label="Filtrar por estado"
-          value={filters.status}
-          onChange={(event) =>
-            onChange({ ...filters, status: event.target.value as RemateStatus | 'all' })
-          }
-          className={SELECT_CLASSES}
-        >
-          <option value="all">Todos los estados</option>
-          {statusOptions.map((status) => (
-            <option key={status} value={status}>
-              {STATUS_LABELS[status]}
-            </option>
-          ))}
-        </select>
-
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <select
           aria-label="Filtrar por categoría"
           value={filters.category}
@@ -75,6 +66,22 @@ export function DashboardToolbar({
           {CATEGORY_OPTIONS.map((category) => (
             <option key={category} value={category}>
               {CATEGORY_LABELS[category]}
+            </option>
+          ))}
+        </select>
+
+        <select
+          aria-label="Filtrar por estado"
+          value={filters.status}
+          onChange={(event) =>
+            onChange({ ...filters, status: event.target.value as RemateStatus | 'all' })
+          }
+          className={SELECT_CLASSES}
+        >
+          <option value="all">Todos los estados</option>
+          {statusOptions.map((status) => (
+            <option key={status} value={status}>
+              {STATUS_LABELS[status]}
             </option>
           ))}
         </select>

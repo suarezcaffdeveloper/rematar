@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 
 export interface BreadcrumbItem {
   label: string;
@@ -19,17 +20,7 @@ export function Breadcrumb({ items }: BreadcrumbProps) {
         const isLast = index === items.length - 1;
         return (
           <span key={`${item.label}-${index}`} className="flex items-center gap-1.5">
-            {index > 0 && (
-              <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5 text-slate-300">
-                <path
-                  d="m7.5 4.5 5.5 5.5-5.5 5.5"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            )}
+            {index > 0 && <ChevronRight aria-hidden="true" className="h-3.5 w-3.5 text-slate-300" />}
             {item.to && !isLast ? (
               <Link to={item.to} className="transition-colors hover:text-brand-600">
                 {item.label}

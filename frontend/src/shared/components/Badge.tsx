@@ -11,11 +11,11 @@ export interface BadgeProps {
 
 const VARIANT_CLASSES: Record<BadgeVariant, string> = {
   brand: 'bg-brand-50 text-brand-700',
-  success: 'bg-success-50 text-success-600',
-  danger: 'bg-danger-50 text-danger-600',
-  // No hay token `warning` en el theme (styles/index.css) -- ámbar de la paleta
-  // estándar de Tailwind alcanza para el único uso de esta variante (estado "en vivo").
-  warning: 'bg-amber-50 text-amber-700',
+  success: 'bg-success-50 text-success-700',
+  danger: 'bg-danger-50 text-danger-700',
+  // Token `warning` real desde el rediseño (Épica 9, Etapa 1) -- antes se simulaba con
+  // `amber` crudo de Tailwind porque no existía en el theme (`styles/index.css`).
+  warning: 'bg-warning-50 text-warning-700',
   neutral: 'bg-slate-100 text-slate-600',
 };
 

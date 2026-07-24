@@ -22,9 +22,9 @@ describe('ProgressStepper', () => {
     expect(current).toBeInTheDocument();
   });
 
-  it('marca los estados anteriores como completados (✓)', () => {
-    render(<ProgressStepper status="pago_recibido" />);
-    const checks = screen.getAllByText('✓');
+  it('marca los estados anteriores como completados (ícono de check)', () => {
+    const { container } = render(<ProgressStepper status="pago_recibido" />);
+    const checks = container.querySelectorAll('svg');
     // adjudicado, pendiente_contacto, pago_pendiente -- los tres anteriores a pago_recibido
     expect(checks).toHaveLength(3);
   });

@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from app.events.base import DomainEvent
-from app.modules.remates.lotes.events import LoteWinnerDetermined
+from app.modules.remates.lotes.events import LoteClosed, LoteWinnerDetermined
 from app.notifications.models import Notification
 from app.postauction.models import PostAuctionCase, PostAuctionStatus
 from app.postauction.realtime import PostAuctionEventDispatcher
@@ -80,6 +80,65 @@ async def _setup_remate_and_lote(client: AsyncClient) -> tuple[uuid.UUID, uuid.U
     return remate_id, lote_id, buyer_id
 
 
+async def _setup_remate_lote_with_accepted_offer(
+    client: AsyncClient, *, bid_amount: str = "1500"
+) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
+    """Igual que `_setup_remate_and_lote`, pero además programa/arranca el remate, abre
+    el lote y hace que el comprador oferte de verdad -- deja una `Oferta` `ACCEPTED` real
+    en la base, que es lo que el cierre manual (`lote.closed`) tiene que poder resolver.
+    Devuelve (remate_id, lote_id, buyer_id)."""
+    rematador_token, _ = await _register(
+        client, email=f"remat{uuid.uuid4()}@example.com", role="rematador"
+    )
+    buyer_token, buyer_id = await _register(
+        client, email=f"buyer{uuid.uuid4()}@example.com", role="comprador"
+    )
+
+    remate_response = await client.post(
+        REMATES_URL,
+        json={
+            "title": "Remate de campo",
+            "category": "hacienda",
+            "starts_at": "2027-06-01T10:00:00Z",
+        },
+        headers=_auth(rematador_token),
+    )
+    assert remate_response.status_code == 201, remate_response.text
+    remate_id = uuid.UUID(remate_response.json()["id"])
+
+    lote_response = await client.post(
+        f"{REMATES_URL}/{remate_id}/lotes",
+        json={
+            "lot_number": "1",
+            "title": "Toro Angus",
+            "category": "hacienda",
+            "base_price": "1000",
+            "min_increment": "100",
+        },
+        headers=_auth(rematador_token),
+    )
+    assert lote_response.status_code == 201, lote_response.text
+    lote_id = uuid.UUID(lote_response.json()["id"])
+
+    schedule = await client.post(f"{REMATES_URL}/{remate_id}/schedule", headers=_auth(rematador_token))
+    assert schedule.status_code == 200, schedule.text
+    start = await client.post(f"{REMATES_URL}/{remate_id}/start", headers=_auth(rematador_token))
+    assert start.status_code == 200, start.text
+    open_response = await client.post(
+        f"{REMATES_URL}/{remate_id}/lotes/{lote_id}/open", headers=_auth(rematador_token)
+    )
+    assert open_response.status_code == 200, open_response.text
+
+    bid_response = await client.post(
+        f"{REMATES_URL}/{remate_id}/lotes/{lote_id}/ofertas",
+        json={"amount": bid_amount},
+        headers=_auth(buyer_token),
+    )
+    assert bid_response.status_code == 201, bid_response.text
+
+    return remate_id, lote_id, buyer_id
+
+
 def _make_dispatcher(
     db_engine: AsyncEngine, event_bus: _RecordingEventBus
 ) -> PostAuctionEventDispatcher:
@@ -139,14 +198,121 @@ async def test_lote_winner_determined_creates_notifications(
 async def test_ignores_event_types_outside_the_whitelist(
     client: AsyncClient, db_engine: AsyncEngine
 ) -> None:
-    remate_id, lote_id, buyer_id = await _setup_remate_and_lote(client)
+    remate_id, lote_id, _buyer_id = await _setup_remate_and_lote(client)
     event_bus = _RecordingEventBus()
     dispatcher = _make_dispatcher(db_engine, event_bus)
 
     await dispatcher.dispatch(
-        f'{{"event_type": "lote.closed", "remate_id": "{remate_id}", "lote_id": "{lote_id}", '
-        f'"outcome": "sold"}}'
+        f'{{"event_type": "lote.opened", "remate_id": "{remate_id}", "lote_id": "{lote_id}"}}'
     )
+
+    session_factory = async_sessionmaker(bind=db_engine, expire_on_commit=False)
+    async with session_factory() as session:
+        rows = (await session.execute(select(PostAuctionCase))).scalars().all()
+    assert rows == []
+    assert event_bus.published == []
+
+
+# --- Cierre manual (`lote.closed`) -- corrección del bug de adjudicación manual -----
+
+
+async def test_lote_closed_manual_sold_with_real_offer_creates_case(
+    client: AsyncClient, db_engine: AsyncEngine
+) -> None:
+    """El caso del bug reportado: el rematador cierra el lote a mano (no vence ningún
+    timer) mientras el lote sí tiene una oferta `ACCEPTED` real -- antes de la
+    corrección, esto no creaba ningún caso post-remate porque `LoteClosed` no trae
+    `buyer_id` y el dispatcher solo reaccionaba a `lote.winner_determined` (que
+    `LoteService.close()` nunca publica). El `final_price` del evento (lo que el
+    rematador tipeó al cerrar) puede no coincidir centavo a centavo con el monto de la
+    oferta líder -- el caso usa el `final_price` del evento, el comprador se resuelve
+    por la oferta líder real."""
+    remate_id, lote_id, buyer_id = await _setup_remate_lote_with_accepted_offer(
+        client, bid_amount="1500"
+    )
+    event_bus = _RecordingEventBus()
+    dispatcher = _make_dispatcher(db_engine, event_bus)
+    event = LoteClosed(
+        remate_id=remate_id,
+        lote_id=lote_id,
+        outcome="sold",
+        final_price=Decimal("1500"),
+        triggered_by="manual",
+    )
+
+    await dispatcher.dispatch(event.model_dump_json())
+
+    case = await _only_case(db_engine)
+    assert case.status == PostAuctionStatus.ADJUDICADO
+    assert case.buyer_id == buyer_id
+    assert case.final_price == Decimal("1500")
+    assert len(event_bus.published) == 1
+    assert event_bus.published[0].event_type == "postauction.case_created"
+
+
+async def test_lote_closed_manual_sold_without_any_offer_creates_nothing(
+    client: AsyncClient, db_engine: AsyncEngine
+) -> None:
+    """Escenario original de ADR-018 -- el rematador declara una venta sin ninguna
+    oferta real asociada (por fuera del sistema): sin comprador real, sigue sin
+    generar un caso. No es un bug."""
+    remate_id, lote_id, _buyer_id = await _setup_remate_and_lote(client)
+    event_bus = _RecordingEventBus()
+    dispatcher = _make_dispatcher(db_engine, event_bus)
+    event = LoteClosed(
+        remate_id=remate_id,
+        lote_id=lote_id,
+        outcome="sold",
+        final_price=Decimal("1500"),
+        triggered_by="manual",
+    )
+
+    await dispatcher.dispatch(event.model_dump_json())
+
+    session_factory = async_sessionmaker(bind=db_engine, expire_on_commit=False)
+    async with session_factory() as session:
+        rows = (await session.execute(select(PostAuctionCase))).scalars().all()
+    assert rows == []
+    assert event_bus.published == []
+
+
+async def test_lote_closed_manual_unsold_creates_nothing(
+    client: AsyncClient, db_engine: AsyncEngine
+) -> None:
+    remate_id, lote_id, _buyer_id = await _setup_remate_lote_with_accepted_offer(client)
+    event_bus = _RecordingEventBus()
+    dispatcher = _make_dispatcher(db_engine, event_bus)
+    event = LoteClosed(
+        remate_id=remate_id, lote_id=lote_id, outcome="unsold", final_price=None, triggered_by="manual"
+    )
+
+    await dispatcher.dispatch(event.model_dump_json())
+
+    session_factory = async_sessionmaker(bind=db_engine, expire_on_commit=False)
+    async with session_factory() as session:
+        rows = (await session.execute(select(PostAuctionCase))).scalars().all()
+    assert rows == []
+
+
+async def test_lote_closed_auto_sold_is_ignored_here(
+    client: AsyncClient, db_engine: AsyncEngine
+) -> None:
+    """El cierre automático ya adjudica vía su propio `lote.winner_determined`
+    (`test_lote_winner_determined_creates_case`) -- si el dispatcher también procesara
+    el `lote.closed` `auto` correspondiente, sería trabajo redundante (inofensivo por
+    idempotencia, pero innecesario). Se verifica acá que no hace nada por su cuenta."""
+    remate_id, lote_id, _buyer_id = await _setup_remate_lote_with_accepted_offer(client)
+    event_bus = _RecordingEventBus()
+    dispatcher = _make_dispatcher(db_engine, event_bus)
+    event = LoteClosed(
+        remate_id=remate_id,
+        lote_id=lote_id,
+        outcome="sold",
+        final_price=Decimal("1500"),
+        triggered_by="auto",
+    )
+
+    await dispatcher.dispatch(event.model_dump_json())
 
     session_factory = async_sessionmaker(bind=db_engine, expire_on_commit=False)
     async with session_factory() as session:

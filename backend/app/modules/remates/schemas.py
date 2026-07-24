@@ -97,6 +97,16 @@ class RemateCancelRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
+class RemateCoverImageUploadResponse(BaseModel):
+    """Respuesta de `POST /remates/cover-image` (refinamiento visual, item 6) -- solo la
+    URL resultante, mismo criterio que `LoteImageUploadResponse`
+    (`remates/lotes/schemas.py`): este endpoint no toca ninguna fila de `Remate`, quien
+    sube la imagen decide cuándo asignarla a `cover_image_url` en el `POST`/`PATCH`
+    ya existente."""
+
+    url: str
+
+
 class RemateRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

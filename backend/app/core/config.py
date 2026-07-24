@@ -112,6 +112,13 @@ class Settings(BaseSettings):
     # Ver docs/36-sistema-de-auditoria-y-trazabilidad.md y ADR-039.
     AUDIT_LOG_DEFAULT_PAGE_SIZE: int = 50
 
+    # --- Moderación y Administración en Tiempo Real (Épica 7, Módulo 7.6) ---
+    # Ver docs/42-moderacion-en-tiempo-real.md y ADR-045. Umbral de intentos de oferta
+    # inválidos consecutivos (dentro de la ventana) que dispara la notificación al
+    # rematador -- `ModerationRedisGateway.record_invalid_bid_attempt`.
+    MODERATION_INVALID_BID_THRESHOLD: int = 5
+    MODERATION_INVALID_BID_WINDOW_SECONDS: int = 300
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -4,11 +4,13 @@
  * remate) la resuelve el pipeline existente (`app/realtime/`), no esta pantalla; acá
  * alcanza con `reload()` manual después de una mutación (cambiar estado/agregar nota),
  * mismo criterio que `features/history/hooks.ts`.
+ *
+ * El boilerplate de fetch/cancelación/reload vive en `useAsyncResource` (Épica 8, Módulo
+ * 8.0, revisión técnica) -- antes se repetía a mano en cada hook de este archivo.
  */
 
-import { useEffect, useState } from 'react';
-import { normalizeApiError, type NormalizedApiError } from '../../shared/api/errors';
 import type { Page } from '../../shared/api/types';
+import { useAsyncResource, type UseAsyncResourceResult } from '../../shared/hooks/useAsyncResource';
 import {
   fetchMiCompraDetailRequest,
   fetchMisComprasRequest,
@@ -17,152 +19,39 @@ import {
 } from './api';
 import type { PostAuctionCase, PostAuctionCaseDetail, PostAuctionListFilters } from './types';
 
-export interface UseVentasAdjudicadasResult {
-  data: Page<PostAuctionCase> | null;
-  isLoading: boolean;
-  error: NormalizedApiError | null;
-}
+export type UseVentasAdjudicadasResult = UseAsyncResourceResult<Page<PostAuctionCase> | null>;
 
 export function useVentasAdjudicadas(
   filters: PostAuctionListFilters,
   page: number,
   pageSize: number,
 ): UseVentasAdjudicadasResult {
-  const [data, setData] = useState<Page<PostAuctionCase> | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<NormalizedApiError | null>(null);
-
   const { status, remate_id, search } = filters;
-
-  useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    setError(null);
-
-    fetchVentasAdjudicadasRequest({ status, remate_id, search }, page, pageSize)
-      .then((result) => {
-        if (!cancelled) setData(result);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(normalizeApiError(err));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [status, remate_id, search, page, pageSize]);
-
-  return { data, isLoading, error };
+  return useAsyncResource(
+    () => fetchVentasAdjudicadasRequest({ status, remate_id, search }, page, pageSize),
+    [status, remate_id, search, page, pageSize],
+    null,
+  );
 }
 
-export interface UseVentaDetailResult {
-  data: PostAuctionCaseDetail | null;
-  isLoading: boolean;
-  error: NormalizedApiError | null;
-  reload: () => void;
-}
+export type UseVentaDetailResult = UseAsyncResourceResult<PostAuctionCaseDetail | null>;
 
 export function useVentaDetail(caseId: string): UseVentaDetailResult {
-  const [data, setData] = useState<PostAuctionCaseDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<NormalizedApiError | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
-
-  useEffect(() => {
-    if (!caseId) return;
-    let cancelled = false;
-    setIsLoading(true);
-    setError(null);
-
-    fetchVentaDetailRequest(caseId)
-      .then((result) => {
-        if (!cancelled) setData(result);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(normalizeApiError(err));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [caseId, reloadToken]);
-
-  return { data, isLoading, error, reload: () => setReloadToken((token) => token + 1) };
+  return useAsyncResource(() => fetchVentaDetailRequest(caseId), [caseId], null, {
+    enabled: Boolean(caseId),
+  });
 }
 
-export interface UseMisComprasResult {
-  data: Page<PostAuctionCase> | null;
-  isLoading: boolean;
-  error: NormalizedApiError | null;
-}
+export type UseMisComprasResult = UseAsyncResourceResult<Page<PostAuctionCase> | null>;
 
 export function useMisCompras(page: number, pageSize: number): UseMisComprasResult {
-  const [data, setData] = useState<Page<PostAuctionCase> | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<NormalizedApiError | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    setError(null);
-
-    fetchMisComprasRequest(page, pageSize)
-      .then((result) => {
-        if (!cancelled) setData(result);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(normalizeApiError(err));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [page, pageSize]);
-
-  return { data, isLoading, error };
+  return useAsyncResource(() => fetchMisComprasRequest(page, pageSize), [page, pageSize], null);
 }
 
-export interface UseMiCompraDetailResult {
-  data: PostAuctionCaseDetail | null;
-  isLoading: boolean;
-  error: NormalizedApiError | null;
-}
+export type UseMiCompraDetailResult = UseAsyncResourceResult<PostAuctionCaseDetail | null>;
 
 export function useMiCompraDetail(caseId: string): UseMiCompraDetailResult {
-  const [data, setData] = useState<PostAuctionCaseDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<NormalizedApiError | null>(null);
-
-  useEffect(() => {
-    if (!caseId) return;
-    let cancelled = false;
-    setIsLoading(true);
-    setError(null);
-
-    fetchMiCompraDetailRequest(caseId)
-      .then((result) => {
-        if (!cancelled) setData(result);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(normalizeApiError(err));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [caseId]);
-
-  return { data, isLoading, error };
+  return useAsyncResource(() => fetchMiCompraDetailRequest(caseId), [caseId], null, {
+    enabled: Boolean(caseId),
+  });
 }

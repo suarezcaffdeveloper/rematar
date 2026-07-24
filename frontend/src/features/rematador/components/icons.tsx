@@ -1,16 +1,18 @@
 /** Íconos propios de la Gestión de Remates y Lotes (Épica 5, Módulo 5.3) -- acciones de
  * edición/CRUD que ninguna otra pantalla necesitaba hasta ahora (`features/remates/
- * components/icons.tsx` se mantiene con los íconos de solo-visualización). Mismo
- * criterio de siempre: SVG a mano, sin librería de íconos (ADR-027). */
+ * components/icons.tsx` se mantiene con los íconos de solo-visualización). `ChevronDownIcon` se
+ * reusa de `features/audit/components/icons.tsx` (mismo criterio de no duplicar que ya
+ * aplica `features/sala/`: `rematador` ya consume `audit` en `RemateAuditLogPage`, así
+ * que la dirección de dependencia es segura). `PlusIcon` migrado a `lucide-react` en la
+ * Etapa 3 del rediseño (ADR-046, único ícono de este archivo usado en el dashboard); el
+ * resto sigue a mano hasta que la pantalla que los usa se rediseñe. */
+
+import { Plus } from 'lucide-react';
 
 type IconProps = { className?: string };
 
 export function PlusIcon({ className }: IconProps) {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className={className}>
-      <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-    </svg>
-  );
+  return <Plus aria-hidden="true" className={className} />;
 }
 
 export function PencilIcon({ className }: IconProps) {
@@ -71,14 +73,6 @@ export function ChevronUpIcon({ className }: IconProps) {
   return (
     <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className={className}>
       <path d="m5.5 12.5 4.5-5 4.5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-export function ChevronDownIcon({ className }: IconProps) {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className={className}>
-      <path d="m5.5 7.5 4.5 5 4.5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

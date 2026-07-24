@@ -68,10 +68,29 @@ def _lote_closed_text(payload: dict) -> str:
     return "Se cerró un lote (sin vender)."
 
 
+def _moderation_user_kicked_text(payload: dict) -> str:
+    name = payload.get("user_name")
+    return f"{name} fue expulsado del remate." if name else "Un comprador fue expulsado del remate."
+
+
+def _moderation_user_muted_text(payload: dict) -> str:
+    name = payload.get("user_name")
+    who = name or "Un comprador"
+    duration = payload.get("duration_seconds")
+    minutes = f"{int(duration) // 60} min" if isinstance(duration, int | float) else None
+    return f"{who} fue silenciado{f' por {minutes}' if minutes else ''}."
+
+
 # Whitelist explícita -- mismo criterio que `EVENT_REGISTRY` (app/realtime/registry.py):
 # un evento de dominio nuevo no genera un mensaje de sistema hasta que alguien lo agregue
 # acá a propósito. Cada función usa únicamente campos que el evento ya trae en su
 # payload -- ninguna consulta extra a la base.
+#
+# Deliberadamente **no** incluidos (Épica 7, Módulo 7.6): `moderacion.mensaje_destacado`/
+# `mensaje_no_destacado` (destacar es un cambio visual, un anuncio de sistema sería
+# ruido) ni `moderacion.umbral_ofertas_invalidas_superado` (nunca debe anunciarse en un
+# canal público el patrón de ofertas fallidas de un comprador puntual -- ver
+# docstring de `app/moderation/events.py::ModerationInvalidBidThresholdExceeded`).
 SYSTEM_MESSAGE_BUILDERS: dict[str, Callable[[dict], str]] = {
     "remate.started": _remate_started_text,
     "remate.paused": _remate_paused_text,
@@ -79,6 +98,8 @@ SYSTEM_MESSAGE_BUILDERS: dict[str, Callable[[dict], str]] = {
     "remate.finished": _remate_finished_text,
     "lote.opened": _lote_opened_text,
     "lote.closed": _lote_closed_text,
+    "moderacion.usuario_expulsado": _moderation_user_kicked_text,
+    "moderacion.usuario_silenciado": _moderation_user_muted_text,
 }
 
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { UsersIcon } from './icons';
+import { UsersIcon } from '../../remates/components/icons';
 
 export interface PresenceCounterProps {
   count: number;

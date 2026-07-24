@@ -9,6 +9,7 @@ archivo, no cada módulo por separado.
 
 from app.audit.models import AuditLogEntry
 from app.db.base_class import Base
+from app.moderation.models import ModerationPinnedMessage, RemateBan
 from app.modules.auth.models import RefreshToken
 from app.modules.chat.models import ChatMessage
 from app.modules.ofertas.models import Oferta
@@ -30,4 +31,6 @@ __all__ = [
     "PostAuctionCase",
     "PostAuctionTimelineEntry",
     "Notification",
+    "RemateBan",
+    "ModerationPinnedMessage",
 ]

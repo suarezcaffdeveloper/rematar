@@ -5,8 +5,9 @@
  * pantalla que necesita esta data hoy, y no se comparte entre rutas).
  */
 
-import { useCallback, useEffect, useState } from 'react';
-import { normalizeApiError, type NormalizedApiError } from '../../shared/api/errors';
+import { useEffect, useState } from 'react';
+import type { NormalizedApiError } from '../../shared/api/errors';
+import { useAsyncResource } from '../../shared/hooks/useAsyncResource';
 import {
   fetchLoteCountRequest,
   fetchLotesRequest,
@@ -40,45 +41,28 @@ export interface UseRematesParams {
 
 /** Trae TODAS las páginas de `GET /remates` visibles para el usuario actual (hasta el
  * tope), opcionalmente acotadas a un `owner_id` puntual. */
+async function fetchAllRemates(ownerId: string | undefined): Promise<Remate[]> {
+  const collected: Remate[] = [];
+  let page = 1;
+  while (collected.length < MAX_REMATES) {
+    const result = await fetchRematesRequest({ page, page_size: PAGE_SIZE, owner_id: ownerId });
+    collected.push(...result.items);
+    const gotFullPage = result.items.length === PAGE_SIZE;
+    const moreRemain = collected.length < result.total;
+    if (!gotFullPage || !moreRemain) break;
+    page += 1;
+  }
+  return collected;
+}
+
 export function useRemates(params: UseRematesParams = {}): UseRematesResult {
   const { ownerId } = params;
-  const [remates, setRemates] = useState<Remate[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<NormalizedApiError | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const collected: Remate[] = [];
-        let page = 1;
-        while (collected.length < MAX_REMATES) {
-          const result = await fetchRematesRequest({ page, page_size: PAGE_SIZE, owner_id: ownerId });
-          collected.push(...result.items);
-          const gotFullPage = result.items.length === PAGE_SIZE;
-          const moreRemain = collected.length < result.total;
-          if (!gotFullPage || !moreRemain) break;
-          page += 1;
-        }
-        if (!cancelled) setRemates(collected);
-      } catch (err) {
-        if (!cancelled) setError(normalizeApiError(err));
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [reloadToken, ownerId]);
-
-  const reload = useCallback(() => setReloadToken((token) => token + 1), []);
+  const {
+    data: remates,
+    isLoading,
+    error,
+    reload,
+  } = useAsyncResource<Remate[]>(() => fetchAllRemates(ownerId), [ownerId], []);
 
   return { remates, isLoading, error, reload };
 }
@@ -122,31 +106,12 @@ export interface UseRemateDetailResult {
  * como cualquier otro error normalizado -- la página lo muestra con el mismo `Alert`
  * que un error de red, con el mensaje que ya trae el backend ("Remate no encontrado."). */
 export function useRemateDetail(remateId: string): UseRemateDetailResult {
-  const [remate, setRemate] = useState<Remate | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<NormalizedApiError | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    setError(null);
-    fetchRemateByIdRequest(remateId)
-      .then((result) => {
-        if (!cancelled) setRemate(result);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(normalizeApiError(err));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [remateId, reloadToken]);
-
-  const reload = useCallback(() => setReloadToken((token) => token + 1), []);
+  const {
+    data: remate,
+    isLoading,
+    error,
+    reload,
+  } = useAsyncResource<Remate | null>(() => fetchRemateByIdRequest(remateId), [remateId], null);
 
   return { remate, isLoading, error, reload };
 }
@@ -167,50 +132,34 @@ export interface UseLotesResult {
  * que devuelve el backend -- ver `lotes/repository.py`). Mismo patrón de "traer todo
  * hasta un tope" que `useRemates`: la cantidad de lotes de un remate es chica en la
  * práctica, así que no hace falta paginar la UI, solo el pedido al backend. */
+interface LotesPage {
+  lotes: Lote[];
+  total: number;
+}
+
+async function fetchAllLotes(remateId: string): Promise<LotesPage> {
+  const collected: Lote[] = [];
+  let page = 1;
+  let runningTotal = 0;
+  while (collected.length < MAX_LOTES) {
+    const result = await fetchLotesRequest(remateId, { page, page_size: LOTES_PAGE_SIZE });
+    collected.push(...result.items);
+    runningTotal = result.total;
+    const gotFullPage = result.items.length === LOTES_PAGE_SIZE;
+    const moreRemain = collected.length < result.total;
+    if (!gotFullPage || !moreRemain) break;
+    page += 1;
+  }
+  return { lotes: collected, total: runningTotal };
+}
+
 export function useLotes(remateId: string): UseLotesResult {
-  const [lotes, setLotes] = useState<Lote[]>([]);
-  const [total, setTotal] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<NormalizedApiError | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const collected: Lote[] = [];
-        let page = 1;
-        let runningTotal = 0;
-        while (collected.length < MAX_LOTES) {
-          const result = await fetchLotesRequest(remateId, { page, page_size: LOTES_PAGE_SIZE });
-          collected.push(...result.items);
-          runningTotal = result.total;
-          const gotFullPage = result.items.length === LOTES_PAGE_SIZE;
-          const moreRemain = collected.length < result.total;
-          if (!gotFullPage || !moreRemain) break;
-          page += 1;
-        }
-        if (!cancelled) {
-          setLotes(collected);
-          setTotal(runningTotal);
-        }
-      } catch (err) {
-        if (!cancelled) setError(normalizeApiError(err));
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [remateId, reloadToken]);
-
-  const reload = useCallback(() => setReloadToken((token) => token + 1), []);
+  const {
+    data: { lotes, total },
+    isLoading,
+    error,
+    reload,
+  } = useAsyncResource<LotesPage>(() => fetchAllLotes(remateId), [remateId], { lotes: [], total: 0 });
 
   return { lotes, total, isLoading, error, reload };
 }

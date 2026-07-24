@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import { formatDuration } from '../../shared/lib/format';
+import { useAsyncResource, type UseAsyncResourceResult } from '../../shared/hooks/useAsyncResource';
 import { fetchLotesRequest } from '../remates/api';
 import type { Lote, Remate, RemateStatus } from '../remates/types';
 import { fetchRemateSnapshotRequest } from '../sala/api';
@@ -135,4 +136,49 @@ export function useElapsedTime(remate: Remate | null): string | null {
   }
 
   return null;
+}
+
+export interface LiveOperationalSummary {
+  connectedUsers: number;
+  openLotes: number;
+}
+
+async function fetchLiveOperationalSummary(remateIds: string[]): Promise<LiveOperationalSummary> {
+  const snapshots = await Promise.all(
+    remateIds.map((remateId) => fetchRemateSnapshotRequest(remateId).catch(() => null)),
+  );
+  return snapshots.reduce<LiveOperationalSummary>(
+    (acc, snapshot) =>
+      snapshot
+        ? {
+            connectedUsers: acc.connectedUsers + snapshot.connected_users,
+            openLotes: acc.openLotes + (snapshot.active_lote ? 1 : 0),
+          }
+        : acc,
+    { connectedUsers: 0, openLotes: 0 },
+  );
+}
+
+/**
+ * Resumen agregado de "compradores conectados" y "lotes abiertos" a través de todos
+ * los remates EN VIVO del rematador (Épica 9, Etapa 3 -- rediseño del dashboard). Un
+ * `GET .../snapshot` en paralelo por remate en vivo (mismo endpoint que ya usa
+ * `useRemateOperationalInfo` para "conectados" por tarjeta individual) -- en la
+ * práctica un rematador rara vez tiene más de un puñado de remates en vivo
+ * simultáneos, así que N pedidos en paralelo es razonable acá.
+ *
+ * Deliberadamente NO es un feed en vivo por WebSocket: se recalcula al montar/recargar
+ * el dashboard, igual que el resto de sus estadísticas (`RematadorDashboardStats`) --
+ * sostener N conexiones WebSocket simultáneas (una por remate en vivo) solo para esta
+ * fila de resumen sería un cambio de arquitectura mucho mayor que lo que pide esta
+ * etapa, puramente visual. Un rematador que quiera ver ofertas entrando en el momento
+ * ya tiene la Consola Operativa de ese remate puntual para eso.
+ */
+export function useLiveOperationalSummary(liveRemateIds: string[]): UseAsyncResourceResult<LiveOperationalSummary> {
+  return useAsyncResource(
+    () => fetchLiveOperationalSummary(liveRemateIds),
+    [liveRemateIds.join(',')],
+    { connectedUsers: 0, openLotes: 0 },
+    { enabled: liveRemateIds.length > 0 },
+  );
 }

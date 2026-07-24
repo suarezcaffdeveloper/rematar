@@ -1,16 +1,22 @@
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../features/auth/hooks';
 import { CompradorDashboardPage } from '../../features/remates/pages/CompradorDashboardPage';
 import { RematadorDashboardPage } from '../../features/rematador/pages/RematadorDashboardPage';
+import { Button } from '../../shared/components/Button';
 import { Card } from '../../shared/components/Card';
 
 /**
  * Punto de entrada tras el login (ruta `index` de `AppLayout`, ver `app/router.tsx`).
  * Por rol: `comprador` tiene su dashboard real desde la Épica 4.3; `rematador` desde
- * esta Épica 5.1 (Dashboard del Rematador, ver docs/29-dashboard-rematador.md); `admin`
- * sigue viendo el placeholder de la Módulo 4.1 (fuera de alcance de este módulo).
+ * la Épica 5.1 (Dashboard del Rematador, ver docs/29-dashboard-rematador.md); `admin`
+ * no tiene un dashboard propio (fuera de alcance) pero sí un destino real, `/admin`
+ * (Auditoría/Historial/Monitoreo, Épicas 7-8) -- antes esta pantalla no ofrecía ningún
+ * link hacia ahí y remitía a un doc del comprador por error (Épica 8, Módulo 8.0,
+ * revisión funcional).
  */
 export function HomePage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   if (user?.role === 'comprador') {
     return <CompradorDashboardPage />;
@@ -26,10 +32,13 @@ export function HomePage() {
         Bienvenido{user ? `, ${user.full_name}` : ''}
       </h1>
       <p className="mt-2 text-sm text-slate-600">
-        Tu rol es <span className="font-medium">{user?.role}</span>. Esta es una página
-        de inicio temporal -- tu dashboard real es un módulo futuro (ver
-        docs/25-dashboard-comprador.md).
+        Tu rol es <span className="font-medium">{user?.role}</span>. Desde el panel de
+        administrador podés ver la auditoría, el historial de remates y el monitoreo de
+        la plataforma.
       </p>
+      <Button className="mt-4" onClick={() => navigate('/admin')}>
+        Ir al panel de administrador
+      </Button>
     </Card>
   );
 }

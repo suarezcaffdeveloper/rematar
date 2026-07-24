@@ -47,7 +47,7 @@ describe('ActiveLotePanel', () => {
     render(<ActiveLotePanel {...makeProps()} />);
 
     expect(screen.getByText('Toro Angus')).toBeInTheDocument();
-    expect(screen.getByText('Sin ofertas todavía')).toBeInTheDocument();
+    expect(screen.getByText('Precio inicial')).toBeInTheDocument();
     // Precio inicial y "oferta actual" muestran el mismo monto cuando no hay ofertas.
     expect(screen.getAllByText(/1[.,]?000/).length).toBeGreaterThanOrEqual(2);
   });

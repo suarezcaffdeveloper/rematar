@@ -5,10 +5,23 @@ import { MemoryRouter } from 'react-router-dom';
 import { RematadorDashboardPage } from './RematadorDashboardPage';
 import type { Remate } from '../../remates/types';
 
-const { useAuthMock, useRematesMock, useRemateOperationalInfoMock, navigateMock, apiMocks } = vi.hoisted(() => ({
+const {
+  useAuthMock,
+  useRematesMock,
+  useRemateOperationalInfoMock,
+  useLiveOperationalSummaryMock,
+  navigateMock,
+  apiMocks,
+} = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   useRematesMock: vi.fn(),
   useRemateOperationalInfoMock: vi.fn(),
+  useLiveOperationalSummaryMock: vi.fn(() => ({
+    data: { openLotes: 0, connectedUsers: 0 },
+    isLoading: false,
+    error: null,
+    reload: vi.fn(),
+  })),
   navigateMock: vi.fn(),
   apiMocks: {
     createRemateRequest: vi.fn(),
@@ -26,8 +39,14 @@ const { useAuthMock, useRematesMock, useRemateOperationalInfoMock, navigateMock,
 
 vi.mock('../../auth/hooks', () => ({ useAuth: useAuthMock }));
 vi.mock('../../remates/hooks', () => ({ useRemates: useRematesMock }));
-vi.mock('../hooks', () => ({ useRemateOperationalInfo: useRemateOperationalInfoMock }));
+vi.mock('../hooks', () => ({
+  useRemateOperationalInfo: useRemateOperationalInfoMock,
+  useLiveOperationalSummary: useLiveOperationalSummaryMock,
+}));
 vi.mock('../../remates/api', () => apiMocks);
+vi.mock('../../notifications/components/RecentActivityCard', () => ({
+  RecentActivityCard: () => null,
+}));
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
   return { ...actual, useNavigate: () => navigateMock };
@@ -197,5 +216,56 @@ describe('RematadorDashboardPage', () => {
 
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/remates/remate-nuevo/lotes'));
     expect(reload).toHaveBeenCalled();
+  });
+
+  it('sin remates en vivo, no muestra la fila de lotes abiertos/conectados', () => {
+    useAuthMock.mockReturnValue({ user: { id: 'user-42', role: 'rematador' } });
+    useRemateOperationalInfoMock.mockReturnValue({
+      loteCount: 0,
+      activeLote: null,
+      nextLote: null,
+      connectedUsers: null,
+      isLoadingLotes: false,
+    });
+    useRematesMock.mockReturnValue({
+      remates: [makeRemate({ id: 'a', status: 'scheduled' })],
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(screen.queryByText('Lotes abiertos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Compradores conectados')).not.toBeInTheDocument();
+  });
+
+  it('con remates en vivo, muestra lotes abiertos/conectados agregados', () => {
+    useAuthMock.mockReturnValue({ user: { id: 'user-42', role: 'rematador' } });
+    useRemateOperationalInfoMock.mockReturnValue({
+      loteCount: 0,
+      activeLote: null,
+      nextLote: null,
+      connectedUsers: null,
+      isLoadingLotes: false,
+    });
+    useRematesMock.mockReturnValue({
+      remates: [makeRemate({ id: 'a', status: 'live' })],
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+    useLiveOperationalSummaryMock.mockReturnValue({
+      data: { openLotes: 2, connectedUsers: 7 },
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(useLiveOperationalSummaryMock).toHaveBeenCalledWith(['a']);
+    expect(screen.getByText('Lotes abiertos').nextElementSibling?.textContent).toBe('2');
+    expect(screen.getByText('Compradores conectados').nextElementSibling?.textContent).toBe('7');
   });
 });

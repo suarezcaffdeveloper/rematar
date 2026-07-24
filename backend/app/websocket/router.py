@@ -9,13 +9,16 @@ conexión entiende mensajes de gestión de conexión (`pong`) y de gestión de s
 lugar para que un módulo futuro (Event Bus) agregue su propio despacho sin
 reestructurar este bucle (ver ADR-023 y ADR-024).
 
-Excepciones deliberadas (las únicas dos): (1) Épica 3, Módulo 3.6, ver
+Excepciones deliberadas (las únicas tres): (1) Épica 3, Módulo 3.6, ver
 docs/23-snapshot-service.md y ADR-026 — tras un `join_room` exitoso, este archivo llama
 a `SnapshotService.build`. (2) Épica 6, Módulo 6.2, ver docs/33-sistema-de-presencia.md
 y ADR-036 — el join/leave de sala pasa por `PresenceService` (que internamente sigue
 llamando a `RoomManager.join`/`leave`, sin cambios) en vez de a `RoomManager`
-directamente, para que cada unión/salida real publique su evento de presencia. Ninguno
-de los dos servicios sabe que existe un Gateway; acá solo se los invoca.
+directamente, para que cada unión/salida real publique su evento de presencia. (3) Épica
+7, Módulo 7.6, ver docs/42-moderacion-en-tiempo-real.md y ADR-045 — antes de delegar en
+`PresenceService.join_room`, se chequea `ModerationService.is_banned` (un comprador
+expulsado no puede reingresar mientras el remate siga activo). Ninguno de los tres
+servicios sabe que existe un Gateway; acá solo se los invoca.
 """
 
 import asyncio
@@ -29,6 +32,9 @@ from pydantic import ValidationError
 
 from app.core.config import Settings, get_settings
 from app.core.exceptions import NotFoundError
+from app.moderation.dependencies import get_moderation_service
+from app.moderation.schemas import ERROR_BANNED_FROM_ROOM
+from app.moderation.service import ModerationService
 from app.modules.auth.dependencies import get_auth_service
 from app.modules.auth.service import AuthService
 from app.modules.users.models import User
@@ -65,6 +71,7 @@ async def websocket_gateway(
     manager: Annotated[ConnectionManager, Depends(get_connection_manager)],
     presence_service: Annotated[PresenceService, Depends(get_presence_service)],
     snapshot_service: Annotated[SnapshotService, Depends(get_snapshot_service)],
+    moderation_service: Annotated[ModerationService, Depends(get_moderation_service)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
     await websocket.accept()
@@ -82,7 +89,13 @@ async def websocket_gateway(
             ConnectedMessage(connection_id=context.connection_id, user_id=user.id).model_dump_json()
         )
         await _run_connection_loop(
-            websocket, context, settings, presence_service, snapshot_service, user
+            websocket,
+            context,
+            settings,
+            presence_service,
+            snapshot_service,
+            moderation_service,
+            user,
         )
     except WebSocketDisconnect:
         pass
@@ -100,6 +113,7 @@ async def _run_connection_loop(
     settings: Settings,
     presence_service: PresenceService,
     snapshot_service: SnapshotService,
+    moderation_service: ModerationService,
     user: User,
 ) -> None:
     """Alterna entre esperar un mensaje del cliente y, si no llega nada dentro del
@@ -124,7 +138,13 @@ async def _run_connection_loop(
             continue
 
         await _handle_message(
-            raw_message, context, websocket, presence_service, snapshot_service, user
+            raw_message,
+            context,
+            websocket,
+            presence_service,
+            snapshot_service,
+            moderation_service,
+            user,
         )
 
 
@@ -134,6 +154,7 @@ async def _handle_message(
     websocket: WebSocket,
     presence_service: PresenceService,
     snapshot_service: SnapshotService,
+    moderation_service: ModerationService,
     user: User,
 ) -> None:
     """Despacha por `type`: `pong` (heartbeat), `join_room`/`leave_room` (salas,
@@ -149,7 +170,13 @@ async def _handle_message(
         context.last_pong_at = datetime.now(UTC)
     elif message.type == "join_room":
         await _handle_join_room(
-            raw_message, context, websocket, presence_service, snapshot_service, user
+            raw_message,
+            context,
+            websocket,
+            presence_service,
+            snapshot_service,
+            moderation_service,
+            user,
         )
     elif message.type == "leave_room":
         await _handle_leave_room(context, websocket, presence_service)
@@ -161,6 +188,7 @@ async def _handle_join_room(
     websocket: WebSocket,
     presence_service: PresenceService,
     snapshot_service: SnapshotService,
+    moderation_service: ModerationService,
     user: User,
 ) -> None:
     try:
@@ -169,6 +197,15 @@ async def _handle_join_room(
         await websocket.send_text(
             ErrorMessage(
                 code=ERROR_INVALID_ROOM_ID, message="'remate_id' debe ser un UUID válido."
+            ).model_dump_json()
+        )
+        return
+
+    if await moderation_service.is_banned(join_message.remate_id, user.id):
+        await websocket.send_text(
+            ErrorMessage(
+                code=ERROR_BANNED_FROM_ROOM,
+                message="Fuiste expulsado de este remate y no podés volver a ingresar.",
             ).model_dump_json()
         )
         return

@@ -9,9 +9,13 @@ porque `PostAuctionCase.rematador_id` ya es el owner del remate, denormalizado a
 caso -- comparar contra `viewer.id` alcanza, sin resolver el remate para autorizar.
 
 `create_case_from_winner` es el único punto de entrada que no llega por HTTP: lo llama
-`PostAuctionEventDispatcher` (`realtime.py`) al reaccionar a `lote.winner_determined`. Es
-idempotente sobre `lote_id` (única por caso) -- un evento redespachado (o dos instancias
-del dispatcher, no debería ocurrir pero no está descartado) no crea un segundo caso.
+`PostAuctionEventDispatcher` (`realtime.py`) al reaccionar a `lote.winner_determined`
+(adjudicación automática) o a `lote.closed` manual con una oferta `ACCEPTED` real
+(adjudicación manual con motor de ofertas -- ver el docstring de `realtime.py`). Es
+idempotente sobre `lote_id` (única por caso) -- un evento redespachado, dos instancias
+del dispatcher, o que ambos eventos de un mismo lote lleguen a resolverse (no debería
+pasar, `lote.closed` manual y `lote.winner_determined` son mutuamente excluyentes por
+`triggered_by`, pero tampoco está descartado) nunca crean un segundo caso.
 """
 
 import uuid

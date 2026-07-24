@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Button } from '../../../shared/components/Button';
+import { ConfirmModal } from '../../../shared/components/ConfirmModal';
 import { Input } from '../../../shared/components/Input';
 import { useToastStore } from '../../../shared/toast/toastStore';
 import {
@@ -39,6 +40,8 @@ type PendingAction =
   | 'timerAutoClose'
   | null;
 
+type ConfirmableAction = 'pause' | 'finish';
+
 /**
  * Panel de control de la Consola Operativa (Épica 5, Módulo 5.2): las seis acciones
  * pedidas por el enunciado (abrir lote, pausar, reanudar, cerrar lote, pasar al
@@ -48,11 +51,13 @@ type PendingAction =
  * deshabilitan según el estado actual, validando en el cliente las mismas precondiciones
  * que el backend ya exige (para no dejar pasar una acción que va a volver con un 422).
  *
- * "Cerrar lote" es la única acción con un paso intermedio: un formulario en línea
- * (resultado + precio final si se vendió) que sirve, a la vez, de confirmación explícita
- * -- no hace falta un `window.confirm` además de eso. "Finalizar remate" sí usa
- * `window.confirm`: es una acción de un solo clic que termina el remate, sin ningún otro
- * paso intermedio.
+ * "Cerrar lote" tiene su propio paso intermedio: un formulario en línea (resultado +
+ * precio final si se vendió) que sirve, a la vez, de confirmación explícita. "Pausar
+ * remate" y "Finalizar remate" (refinamiento visual, pedido explícito: "confirmación
+ * visual" antes de acciones críticas) usan `ConfirmModal` en vez de `window.confirm` --
+ * consistente con el resto de confirmaciones destructivas de la app (eliminar
+ * remate/lote, expulsar/silenciar en moderación, eliminar mensaje de chat), sin
+ * ejecutar la acción hasta que el usuario confirma en el modal.
  *
  * Deliberadamente sin ningún `reload()`/refresco manual tras una acción exitosa: la
  * propia consola ya está unida a la sala por WebSocket (`useLiveRemateState`, Épica 4.6),
@@ -68,6 +73,7 @@ type PendingAction =
  */
 export function ConsolaControlPanel({ remate, activeLote, selectedLoteId, hasUpcomingLotes }: ConsolaControlPanelProps) {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmableAction | null>(null);
   const [isClosingLote, setIsClosingLote] = useState(false);
   const [closeOutcome, setCloseOutcome] = useState<'sold' | 'unsold'>('sold');
   const [finalPrice, setFinalPrice] = useState('');
@@ -108,10 +114,13 @@ export function ConsolaControlPanel({ remate, activeLote, selectedLoteId, hasUpc
     }
   }
 
-  function handleFinish() {
-    const confirmed = window.confirm(`¿Finalizar "${remate.title}"? Esta acción no se puede deshacer.`);
-    if (!confirmed) return;
-    void runSimpleAction('finish', () => finishRemateRequest(remate.id), 'El remate se finalizó.');
+  async function handleConfirmedAction() {
+    if (confirmAction === 'pause') {
+      await runSimpleAction('pause', () => pauseRemateRequest(remate.id), 'El remate se pausó.');
+    } else if (confirmAction === 'finish') {
+      await runSimpleAction('finish', () => finishRemateRequest(remate.id), 'El remate se finalizó.');
+    }
+    setConfirmAction(null);
   }
 
   function openCloseForm() {
@@ -234,62 +243,72 @@ export function ConsolaControlPanel({ remate, activeLote, selectedLoteId, hasUpc
     <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Panel de control</h2>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          onClick={() =>
-            selectedLoteId &&
-            runSimpleAction('openSelected', () => openLoteRequest(remate.id, selectedLoteId), 'Lote abierto.')
-          }
-          isLoading={pendingAction === 'openSelected'}
-          disabled={!isLive || Boolean(activeLote) || !selectedLoteId || pendingAction !== null}
-          title={!selectedLoteId ? 'Seleccioná un lote en "Próximos lotes" primero.' : undefined}
-        >
-          Abrir lote
-        </Button>
+      <div className="flex flex-col gap-3">
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Lote</h3>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() =>
+                selectedLoteId &&
+                runSimpleAction('openSelected', () => openLoteRequest(remate.id, selectedLoteId), 'Lote abierto.')
+              }
+              isLoading={pendingAction === 'openSelected'}
+              disabled={!isLive || Boolean(activeLote) || !selectedLoteId || pendingAction !== null}
+              title={!selectedLoteId ? 'Seleccioná un lote en "Próximos lotes" primero.' : undefined}
+            >
+              Abrir lote
+            </Button>
 
-        <Button
-          variant="secondary"
-          onClick={() => runSimpleAction('openNext', () => openNextLoteRequest(remate.id), 'Lote abierto.')}
-          isLoading={pendingAction === 'openNext'}
-          disabled={!isLive || Boolean(activeLote) || !hasUpcomingLotes || pendingAction !== null}
-        >
-          Pasar al siguiente lote
-        </Button>
+            <Button
+              variant="secondary"
+              onClick={() => runSimpleAction('openNext', () => openNextLoteRequest(remate.id), 'Lote abierto.')}
+              isLoading={pendingAction === 'openNext'}
+              disabled={!isLive || Boolean(activeLote) || !hasUpcomingLotes || pendingAction !== null}
+            >
+              Pasar al siguiente lote
+            </Button>
 
-        <Button
-          variant="secondary"
-          onClick={openCloseForm}
-          disabled={!(isLive || isPaused) || !activeLote || pendingAction !== null}
-        >
-          Cerrar lote
-        </Button>
+            <Button
+              variant="secondary"
+              onClick={openCloseForm}
+              disabled={!(isLive || isPaused) || !activeLote || pendingAction !== null}
+            >
+              Cerrar lote
+            </Button>
+          </div>
+        </div>
 
-        <Button
-          variant="secondary"
-          onClick={() => runSimpleAction('pause', () => pauseRemateRequest(remate.id), 'El remate se pausó.')}
-          isLoading={pendingAction === 'pause'}
-          disabled={!isLive || pendingAction !== null}
-        >
-          Pausar remate
-        </Button>
+        <div>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Remate</h3>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setConfirmAction('pause')}
+              isLoading={pendingAction === 'pause'}
+              disabled={!isLive || pendingAction !== null}
+            >
+              Pausar remate
+            </Button>
 
-        <Button
-          onClick={() => runSimpleAction('resume', () => resumeRemateRequest(remate.id), 'El remate se reanudó.')}
-          isLoading={pendingAction === 'resume'}
-          disabled={!isPaused || pendingAction !== null}
-        >
-          Reanudar remate
-        </Button>
+            <Button
+              onClick={() => runSimpleAction('resume', () => resumeRemateRequest(remate.id), 'El remate se reanudó.')}
+              isLoading={pendingAction === 'resume'}
+              disabled={!isPaused || pendingAction !== null}
+            >
+              Reanudar remate
+            </Button>
 
-        <Button
-          variant="danger"
-          onClick={handleFinish}
-          isLoading={pendingAction === 'finish'}
-          disabled={!isLive || Boolean(activeLote) || pendingAction !== null}
-          title={activeLote ? 'Cerrá el lote abierto antes de finalizar el remate.' : undefined}
-        >
-          Finalizar remate
-        </Button>
+            <Button
+              variant="danger"
+              onClick={() => setConfirmAction('finish')}
+              isLoading={pendingAction === 'finish'}
+              disabled={!isLive || Boolean(activeLote) || pendingAction !== null}
+              title={activeLote ? 'Cerrá el lote abierto antes de finalizar el remate.' : undefined}
+            >
+              Finalizar remate
+            </Button>
+          </div>
+        </div>
       </div>
 
       {hasTimer && activeLote && (
@@ -383,6 +402,23 @@ export function ConsolaControlPanel({ remate, activeLote, selectedLoteId, hasUpc
           </div>
         </div>
       )}
+
+      {/* Título + descripción + Cancelar/Confirmar (pedido explícito) -- `confirmLabel`/
+       * `cancelLabel` quedan en su default ("Confirmar"/"Cancelar") a propósito: si acá
+       * repitiera el nombre de la acción ("Pausar remate"), colisionaría con el botón
+       * disparador del panel, que sigue visible detrás del modal. */}
+      <ConfirmModal
+        isOpen={confirmAction !== null}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={handleConfirmedAction}
+        variant={confirmAction === 'finish' ? 'danger' : 'primary'}
+        title={confirmAction === 'finish' ? 'Finalizar remate' : 'Pausar remate'}
+        message={
+          confirmAction === 'finish'
+            ? `¿Finalizar "${remate.title}"? Esta acción no se puede deshacer.`
+            : `¿Pausar "${remate.title}"? Los compradores no van a poder ofertar hasta que lo reanudes.`
+        }
+      />
     </div>
   );
 }

@@ -16,15 +16,17 @@ en el método homónimo de `RemateService`.
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 
 from app.common.schemas import Page
+from app.core.config import Settings, get_settings
 from app.modules.auth.dependencies import get_current_user, require_roles
 from app.modules.remates.dependencies import get_remate_service
 from app.modules.remates.lotes.router import router as lotes_router
 from app.modules.remates.models import Remate, RemateCategory, RemateStatus
 from app.modules.remates.schemas import (
     RemateCancelRequest,
+    RemateCoverImageUploadResponse,
     RemateCreate,
     RemateRead,
     RemateUpdate,
@@ -52,6 +54,27 @@ async def create_remate(
     service: Annotated[RemateService, Depends(get_remate_service)],
 ) -> Remate:
     return await service.create(current_user, data)
+
+
+@router.post(
+    "/cover-image",
+    response_model=RemateCoverImageUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(UserRole.REMATADOR))],
+    summary="Subir la imagen de portada de un remate (refinamiento visual, item 6)",
+)
+async def upload_remate_cover_image(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[RemateService, Depends(get_remate_service)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    file: Annotated[UploadFile, File()],
+) -> RemateCoverImageUploadResponse:
+    # Sin `{remate_id}` en el path a propósito: se llama desde el mismo formulario que
+    # crea el remate (`RemateFormModal`), antes de que exista ningún remate al que
+    # asociar la imagen -- ver `RemateService.upload_cover_image`.
+    url = await service.upload_cover_image(current_user, file, settings, str(request.base_url))
+    return RemateCoverImageUploadResponse(url=url)
 
 
 @router.get(

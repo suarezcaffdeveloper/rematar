@@ -8,7 +8,7 @@
 
 import { create } from 'zustand';
 
-export type ToastVariant = 'error' | 'success' | 'info';
+export type ToastVariant = 'error' | 'success' | 'info' | 'warning';
 
 export interface Toast {
   id: string;

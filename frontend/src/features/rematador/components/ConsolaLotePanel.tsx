@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import { Badge } from '../../../shared/components/Badge';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { formatCurrency } from '../../../shared/lib/format';
@@ -21,12 +22,17 @@ function formatAttributeKey(key: string): string {
 }
 
 /**
- * Panel principal de la Consola Operativa (Épica 5, Módulo 5.2): el lote actualmente
- * abierto, con toda su información -- imagen principal, galería, número, nombre,
- * descripción, ficha técnica, precio inicial, oferta líder, incremento mínimo y estado.
- * Reusa `ImageGallery` de `features/sala/` tal cual (componente puro, sin ninguna acción
- * de comprador embebida) -- misma vista que ya tiene la Sala del Remate, para que la
- * imagen que ve el rematador sea exactamente la misma que ven los compradores.
+ * Panel principal de la Consola Operativa (Épica 5, Módulo 5.2; reordenado en la Épica
+ * 9, Etapa 4/5 -- rediseño): el lote actualmente abierto, con toda su información --
+ * imagen principal, galería, número, nombre, descripción, ficha técnica, precio
+ * inicial, oferta líder, incremento mínimo y estado. Reusa `ImageGallery` de
+ * `features/sala/` tal cual (componente puro, sin ninguna acción de comprador
+ * embebida) -- misma vista que ya tiene la Sala del Remate, para que la imagen que ve
+ * el rematador sea exactamente la misma que ven los compradores. Mismo criterio de
+ * jerarquía visual que `ActiveLotePanel` (Sala, Etapa 4): precio + cuenta regresiva en
+ * una zona de acción destacada, antes de la descripción/ficha técnica -- lo que el
+ * rematador necesita ver de un vistazo (cuánto se ofrece, cuánto tiempo queda) antes
+ * que la información de referencia del lote.
  *
  * Deliberadamente sin ningún botón de acción: a diferencia de `ActiveLotePanel` (Sala,
  * comprador, que embebe `PlaceBidButton`), acá las acciones viven en su propio
@@ -52,24 +58,51 @@ export function ConsolaLotePanel({ activeLote, currency, winningOffer, hasUpcomi
 
   const attributeEntries = Object.entries(activeLote.attributes);
   const currentOfferAmount = winningOffer?.amount ?? activeLote.base_price;
+  const hasTimer = activeLote.timer_ends_at !== null || activeLote.timer_paused_remaining_seconds !== null;
 
   return (
     <div className="flex flex-col gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <ImageGallery key={activeLote.id} images={activeLote.images} alt={activeLote.title} />
 
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-              Lote {activeLote.lot_number} · {CATEGORY_LABELS[activeLote.category]}
-            </p>
-            <h2 className="mt-1 text-xl font-bold text-slate-900">{activeLote.title}</h2>
-          </div>
-          <Badge variant={LOTE_STATUS_BADGE_VARIANTS[activeLote.status]}>
-            {LOTE_STATUS_LABELS[activeLote.status]}
-          </Badge>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+            Lote {activeLote.lot_number} · {CATEGORY_LABELS[activeLote.category]}
+          </p>
+          <h2 className="mt-1 text-xl font-bold text-slate-900">{activeLote.title}</h2>
         </div>
+        <Badge variant={LOTE_STATUS_BADGE_VARIANTS[activeLote.status]}>
+          {LOTE_STATUS_LABELS[activeLote.status]}
+        </Badge>
+      </div>
 
+      <div className="flex flex-col gap-4 rounded-xl border border-brand-100 bg-gradient-to-br from-brand-50/70 to-white p-5">
+        <div
+          className={clsx('flex flex-col gap-4', hasTimer && 'sm:flex-row sm:items-center sm:justify-between')}
+        >
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {winningOffer ? 'Oferta líder' : 'Precio inicial'}
+            </p>
+            <p className="text-4xl font-extrabold tabular-nums text-brand-700 sm:text-5xl">
+              {formatCurrency(currentOfferAmount, currency)}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Precio inicial {formatCurrency(activeLote.base_price, currency)} · incremento mínimo{' '}
+              {formatCurrency(activeLote.min_increment, currency)}
+            </p>
+          </div>
+
+          {hasTimer && (
+            <LoteCountdown
+              endsAt={activeLote.timer_ends_at}
+              pausedRemainingSeconds={activeLote.timer_paused_remaining_seconds}
+            />
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3">
         <p className="text-sm leading-relaxed text-slate-600">
           {activeLote.description ?? 'Este lote todavía no tiene una descripción cargada.'}
         </p>
@@ -95,30 +128,6 @@ export function ConsolaLotePanel({ activeLote, currency, winningOffer, hasUpcomi
             </dl>
           </div>
         )}
-      </div>
-
-      <LoteCountdown
-        endsAt={activeLote.timer_ends_at}
-        pausedRemainingSeconds={activeLote.timer_paused_remaining_seconds}
-      />
-
-      <div className="grid grid-cols-2 gap-4 rounded-lg border border-slate-200 p-4 sm:grid-cols-3">
-        <div>
-          <p className="text-xs text-slate-400">Precio inicial</p>
-          <p className="text-base font-semibold text-slate-700">
-            {formatCurrency(activeLote.base_price, currency)}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-slate-400">{winningOffer ? 'Oferta líder' : 'Sin ofertas todavía'}</p>
-          <p className="text-lg font-bold text-brand-700">{formatCurrency(currentOfferAmount, currency)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-slate-400">Incremento mínimo</p>
-          <p className="text-base font-semibold text-slate-700">
-            {formatCurrency(activeLote.min_increment, currency)}
-          </p>
-        </div>
       </div>
     </div>
   );

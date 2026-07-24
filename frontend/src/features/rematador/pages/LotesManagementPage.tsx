@@ -1,8 +1,9 @@
 import { type DragEvent, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Alert } from '../../../shared/components/Alert';
-import { Breadcrumb } from '../../../shared/components/Breadcrumb';
+import type { BreadcrumbItem } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { ConfirmModal } from '../../../shared/components/ConfirmModal';
 import { EmptyState } from '../../../shared/components/EmptyState';
@@ -69,6 +70,13 @@ export function LotesManagementPage() {
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const isStructureEditable = remate?.status === 'draft' || remate?.status === 'scheduled';
+
+  const breadcrumbItems: BreadcrumbItem[] = isRemateLoading
+    ? []
+    : remateError || !remate
+      ? [{ label: 'Mis remates', to: '/' }, { label: 'Remate no encontrado' }]
+      : [{ label: 'Mis remates', to: '/' }, { label: remate.title }];
+  useBreadcrumb(breadcrumbItems);
 
   async function persistReorder(newOrder: Lote[]) {
     const previous = lotes;
@@ -186,7 +194,6 @@ export function LotesManagementPage() {
   if (remateError || !remate) {
     return (
       <div className="flex flex-col gap-6">
-        <Breadcrumb items={[{ label: 'Mis remates', to: '/' }, { label: 'Remate no encontrado' }]} />
         <Alert variant="error">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{remateError?.message ?? 'No se pudo cargar este remate.'}</span>
@@ -206,8 +213,6 @@ export function LotesManagementPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Breadcrumb items={[{ label: 'Mis remates', to: '/' }, { label: remate.title }]} />
-
       <div className="flex flex-col gap-5 lg:flex-row">
         <RemateManagementSidebar
           remate={remate}

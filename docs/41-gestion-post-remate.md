@@ -83,21 +83,45 @@ lote se vende por vencimiento del timer con una oferta ganadora -- este módulo 
 mismo canal `events.*` que ya consumen el pipeline de WebSocket y
 `ChatSystemEventDispatcher`. El dispatcher:
 
-1. Filtra por `event_type == "lote.winner_determined"` (whitelist explícita, mismo
-   criterio que `SYSTEM_MESSAGE_BUILDERS`/`EVENT_REGISTRY`).
-2. Lee `remate_id`/`lote_id`/`buyer_id`/`amount` del JSON crudo -- **no importa** la
-   clase `LoteWinnerDetermined`, igual que `ChatSystemEventDispatcher` no importa
-   `LoteClosed`: el dominio de remates no sabe que este consumidor existe.
-3. Llama `PostAuctionService.create_case_from_winner(...)`, que resuelve `Remate`/
+1. Filtra por `event_type` en `{"lote.winner_determined", "lote.closed"}` (whitelist
+   explícita, mismo criterio que `SYSTEM_MESSAGE_BUILDERS`/`EVENT_REGISTRY`).
+2. Para `lote.winner_determined`: lee `remate_id`/`lote_id`/`buyer_id`/`amount` del JSON
+   crudo -- **no importa** la clase `LoteWinnerDetermined`, igual que
+   `ChatSystemEventDispatcher` no importa `LoteClosed`: el dominio de remates no sabe
+   que este consumidor existe.
+3. Para `lote.closed` con `outcome=sold` y `triggered_by=manual` (cierre manual con una
+   venta real, ver "Corrección" más abajo): resuelve la oferta `ACCEPTED` vigente del
+   lote con `OfertaRepository.get_leading_offer` -- el evento no trae `buyer_id` (nunca
+   lo tuvo, ADR-018). Sin oferta real, no hace nada (ver más abajo). `sold`+`auto` se
+   ignora acá porque ya llega por su propio `lote.winner_determined`; `unsold` no tiene
+   comprador.
+4. Llama `PostAuctionService.create_case_from_winner(...)`, que resuelve `Remate`/
    `Lote`/`User` (buyer), crea el caso en `ADJUDICADO`, deja constancia en auditoría y
    timeline, dispara las dos notificaciones de adjudicación, y publica
-   `PostAuctionCaseCreated`.
+   `PostAuctionCaseCreated`. Idempotente sobre `lote_id`: si por lo que sea llegaran a
+   procesarse dos eventos del mismo lote, el segundo es un no-op.
 
-**Limitación conocida y documentada**: el cierre **manual** de un lote vendido
-(`LoteService.close`, ADR-018) no publica `LoteWinnerDetermined` porque no hay
-comprador asociado en ese flujo (el rematador declara un precio sin motor de ofertas) --
-esos casos no generan un caso post-remate automático. No es un bug: sin un comprador real
-no hay a quién notificar ni con quién hacer seguimiento.
+**Corrección (bug real, reportado en producción)**: hasta esta corrección, el cierre
+**manual** de un lote (`LoteService.close`, ADR-018) nunca disparaba la creación del
+caso post-remate, ni siquiera cuando el lote sí tenía una oferta `ACCEPTED` real -- un
+rematador que usaba "Cerrar lote" en la Consola Operativa para adjudicar (en vez de
+esperar a que venza el timer) dejaba al comprador ganador sin caso post-remate: ni
+"Ventas adjudicadas" (rematador) ni "Mis compras" (comprador) mostraban nada. La causa
+era que `LoteClosed` nunca trajo `buyer_id` (ADR-018 lo diseñó para declarar un
+resultado sin motor de ofertas, antes de que el Auction Engine existiera) y
+`PostAuctionEventDispatcher` solo reaccionaba a `lote.winner_determined`, que
+`LoteService.close()` nunca publica. La corrección vive enteramente en
+`PostAuctionEventDispatcher` (ver arriba): resuelve la oferta líder real por su cuenta
+en vez de depender de que el evento la traiga, sin tocar `LoteService` ni el endpoint de
+cierre (`app/modules/remates/` sigue sin saber que este módulo existe, y la dirección de
+dependencia sigue siendo `postauction -> ofertas`, nunca al revés -- `app/modules/
+ofertas/` tampoco sabe que este módulo existe).
+
+**Limitación restante, documentada, no un bug**: un cierre manual `sold` **sin ninguna**
+oferta `ACCEPTED` para el lote (el escenario original de ADR-018: el rematador declara
+una venta por fuera del sistema, sin que nadie haya ofertado acá) sigue sin generar un
+caso -- correctamente: sin un comprador real en el sistema no hay a quién notificar ni
+con quién hacer seguimiento.
 
 ## El flujo de ocho estados
 
@@ -201,9 +225,12 @@ Entradas de navegación nuevas: botón "Ventas adjudicadas" en `RematadorDashboa
 
 ## Limitaciones conocidas (documentadas, no huecos)
 
-- **El cierre manual de un lote vendido (ADR-018) no genera un caso automático** -- ver
-  sección "Cómo se entera de la adjudicación". El rematador no tiene, en esta fase, una
-  forma de crear un caso post-remate a mano para ese escenario.
+- **Un cierre manual `sold` sin ninguna oferta `ACCEPTED` real para el lote (ADR-018) no
+  genera un caso automático** -- ver sección "Cómo se entera de la adjudicación". El
+  rematador no tiene, en esta fase, una forma de crear un caso post-remate a mano para
+  ese escenario puntual (venta declarada por fuera del sistema). Un cierre manual con
+  una oferta real sí genera el caso (corrección aplicada, ver esa misma sección) -- esta
+  limitación quedó acotada al escenario original de ADR-018, no a todo cierre manual.
 - **Sin campanita global de notificaciones en el header** -- el backend ya expone todo
   lo necesario (`GET /notifications`, conteo de no leídas), agregarla es un cambio
   puramente de frontend, sin tocar la API.

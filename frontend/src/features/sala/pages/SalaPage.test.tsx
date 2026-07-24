@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { useBreadcrumbStore } from '../../../app/layouts/breadcrumbStore';
+import { useLayoutPreferencesStore } from '../../../app/layouts/layoutPreferencesStore';
 import { SalaPage } from './SalaPage';
 import type { Lote, Remate } from '../../remates/types';
 import type { UseLiveRemateStateResult } from '../hooks';
@@ -178,9 +180,22 @@ describe('SalaPage', () => {
 
     renderPage();
 
-    expect(screen.getByRole('link', { name: 'Remate de hacienda' })).toHaveAttribute(
-      'href',
-      '/remates/remate-1',
-    );
+    // El breadcrumb ya no se renderiza dentro de la página (Épica 9, Etapa 2) -- lo
+    // dibuja el `Header` global a partir de `useBreadcrumbStore`, que la página setea.
+    expect(useBreadcrumbStore.getState().items).toEqual([
+      { label: 'Dashboard', to: '/' },
+      { label: 'Remate de hacienda', to: '/remates/remate-1' },
+      { label: 'Sala en vivo' },
+    ]);
+  });
+
+  it('pide el layout ancho (Épica 9, Etapa 4 -- sidebar de ofertas/chat)', () => {
+    mockLiveState();
+
+    const { unmount } = renderPage();
+    expect(useLayoutPreferencesStore.getState().isWide).toBe(true);
+
+    unmount();
+    expect(useLayoutPreferencesStore.getState().isWide).toBe(false);
   });
 });

@@ -109,4 +109,35 @@ describe('RemateFormModal', () => {
     await userEvent.click(screen.getByLabelText('Habilitar anti-sniping'));
     expect(screen.getByLabelText(/Segundos de extensión/)).toBeInTheDocument();
   });
+
+  it('cuenta regresiva deshabilitada por default, no muestra el campo de segundos', () => {
+    render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
+    expect(screen.queryByLabelText(/cuenta regresiva al abrir/)).not.toBeInTheDocument();
+  });
+
+  it('habilitar la cuenta regresiva muestra el campo de segundos y lo manda en el payload', async () => {
+    apiMocks.createRemateRequest.mockResolvedValue(makeRemate());
+    render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    await userEvent.type(screen.getByLabelText('Título'), 'Remate de prueba');
+    await userEvent.selectOptions(screen.getByLabelText('Categoría'), 'hacienda');
+    await userEvent.click(screen.getByLabelText('Habilitar cuenta regresiva por lote'));
+    const secondsInput = screen.getByLabelText(/cuenta regresiva al abrir/);
+    await userEvent.clear(secondsInput);
+    await userEvent.type(secondsInput, '45');
+    await userEvent.click(screen.getByRole('button', { name: 'Crear remate' }));
+
+    await waitFor(() => expect(apiMocks.createRemateRequest).toHaveBeenCalledTimes(1));
+    expect(apiMocks.createRemateRequest.mock.calls[0][0].settings.lote_timer_seconds).toBe(45);
+  });
+
+  it('en modo edición, precarga la cuenta regresiva ya configurada', () => {
+    const remate = makeRemate({
+      settings: { anti_sniping_enabled: false, anti_sniping_extension_seconds: 60, currency: 'ARS', lote_timer_seconds: 45 },
+    });
+    render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} remate={remate} />);
+
+    expect(screen.getByLabelText('Habilitar cuenta regresiva por lote')).toBeChecked();
+    expect(screen.getByLabelText(/cuenta regresiva al abrir/)).toHaveValue(45);
+  });
 });

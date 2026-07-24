@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { MoreVertical } from 'lucide-react';
 import clsx from 'clsx';
 
 export interface DropdownMenuItem {
@@ -20,13 +21,29 @@ export interface DropdownMenuProps {
  * herramientas modernas de gestión (Linear, Notion, GitHub) para no saturar una tarjeta
  * con un botón por acción. Cierra al elegir un ítem, al clickear afuera, o con Escape.
  * Sin ninguna librería nueva: un botón + una lista posicionada absolutamente.
+ *
+ * Navegación por teclado (Épica 9, Etapa 7 -- rediseño, accesibilidad final): al abrir,
+ * el foco se mueve al primer ítem (patrón ARIA de menú, no se queda en el disparador);
+ * ↑/↓/Home/End recorren los ítems habilitados; Escape cierra y devuelve el foco al
+ * disparador -- antes solo cerraba, sin devolver el foco a ningún lado.
  */
 export function DropdownMenu({ items, trigger, triggerLabel = 'Más acciones' }: DropdownMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
+  const triggerButtonRef = useRef<HTMLButtonElement>(null);
+
+  function close(restoreFocus: boolean) {
+    setIsOpen(false);
+    if (restoreFocus) triggerButtonRef.current?.focus();
+  }
 
   useEffect(() => {
     if (!isOpen) return;
+
+    function menuItems(): HTMLElement[] {
+      return Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? []);
+    }
 
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -34,40 +51,56 @@ export function DropdownMenu({ items, trigger, triggerLabel = 'Más acciones' }:
       }
     }
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setIsOpen(false);
+      if (event.key === 'Escape') {
+        close(true);
+        return;
+      }
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const list = menuItems();
+      if (list.length === 0) return;
+      const currentIndex = list.indexOf(document.activeElement as HTMLElement);
+      const nextIndex =
+        event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? list.length - 1
+            : event.key === 'ArrowDown'
+              ? (currentIndex + 1) % list.length
+              : (currentIndex - 1 + list.length) % list.length;
+      list[nextIndex]?.focus();
     }
 
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleKeyDown);
+    menuItems()[0]?.focus();
+
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   return (
     <div ref={containerRef} className="relative inline-block">
       <button
+        ref={triggerButtonRef}
         type="button"
         aria-label={triggerLabel}
         aria-haspopup="true"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((open) => !open)}
-        className="rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+        className="rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
       >
-        {trigger ?? (
-          <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
-            <circle cx="10" cy="4" r="1.5" />
-            <circle cx="10" cy="10" r="1.5" />
-            <circle cx="10" cy="16" r="1.5" />
-          </svg>
-        )}
+        {trigger ?? <MoreVertical aria-hidden="true" className="h-5 w-5" />}
       </button>
 
       {isOpen && (
         <ul
+          ref={menuRef}
           role="menu"
-          className="absolute right-0 z-10 mt-1 w-48 rounded-md border border-slate-200 bg-white py-1 shadow-lg"
+          className="absolute right-0 z-10 mt-1 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
         >
           {items.map((item) => (
             <li key={item.label} role="none">
@@ -76,7 +109,7 @@ export function DropdownMenu({ items, trigger, triggerLabel = 'Más acciones' }:
                 role="menuitem"
                 disabled={item.disabled}
                 onClick={() => {
-                  setIsOpen(false);
+                  close(true);
                   item.onSelect();
                 }}
                 className={clsx(

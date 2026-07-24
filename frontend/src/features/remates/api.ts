@@ -41,6 +41,32 @@ export async function updateRemateRequest(remateId: string, payload: RemateFormP
   return data;
 }
 
+/**
+ * Sube la imagen de portada de un remate (refinamiento visual, item 6 -- reemplaza el
+ * campo de URL manual por selección de archivo real). Sin `remateId` a propósito: se
+ * llama desde `RemateFormModal` en modo creación, antes de que exista ningún remate --
+ * mismo criterio de "dos operaciones separadas" que `uploadLoteImageRequest`/
+ * `updateLoteImagesRequest` (Épica 6, Módulo 6.1): esto solo sube el archivo y devuelve
+ * la URL, quien la usa decide cuándo asignarla a `cover_image_url` y persistirla con
+ * `createRemateRequest`/`updateRemateRequest` (sin cambios en esos dos, ninguno de los
+ * dos sabe que la URL vino de un archivo en vez de haberse tipeado a mano).
+ */
+export async function uploadRemateCoverImageRequest(
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<{ url: string }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await apiClient.post<{ url: string }>('/remates/cover-image', formData, {
+    onUploadProgress: (event) => {
+      if (onProgress && event.total) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    },
+  });
+  return data;
+}
+
 export async function deleteRemateRequest(remateId: string): Promise<void> {
   await apiClient.delete(`/remates/${remateId}`);
 }

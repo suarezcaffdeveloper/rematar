@@ -7,7 +7,8 @@ import { CoverPlaceholder } from '../../remates/components/CoverPlaceholder';
 import { BoxIcon } from '../../remates/components/icons';
 import { CATEGORY_LABELS, LOTE_STATUS_BADGE_VARIANTS, LOTE_STATUS_LABELS } from '../../remates/labels';
 import type { Lote } from '../../remates/types';
-import { ChevronDownIcon, ChevronUpIcon, GripVerticalIcon } from './icons';
+import { ChevronUpIcon, GripVerticalIcon } from './icons';
+import { ChevronDownIcon } from '../../audit/components/icons';
 
 export interface LoteManagementCardProps {
   lote: Lote;

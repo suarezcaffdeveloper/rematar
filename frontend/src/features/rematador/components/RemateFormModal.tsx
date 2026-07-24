@@ -9,6 +9,7 @@ import { Textarea } from '../../../shared/components/Textarea';
 import { createRemateRequest, updateRemateRequest } from '../../remates/api';
 import { CATEGORY_LABELS, CATEGORY_OPTIONS } from '../../remates/labels';
 import type { Remate } from '../../remates/types';
+import { RemateCoverImageField } from './RemateCoverImageField';
 import {
   DEFAULT_REMATE_FORM_VALUES,
   buildRemateFormPayload,
@@ -120,21 +121,18 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
           error={errors.description}
         />
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Input
-            label="Ubicación"
-            value={values.location}
-            onChange={(event) => setField('location', event.target.value)}
-            error={errors.location}
-          />
-          <Input
-            label="URL de imagen de portada"
-            type="url"
-            value={values.cover_image_url}
-            onChange={(event) => setField('cover_image_url', event.target.value)}
-            error={errors.cover_image_url}
-          />
-        </div>
+        <Input
+          label="Ubicación"
+          value={values.location}
+          onChange={(event) => setField('location', event.target.value)}
+          error={errors.location}
+        />
+
+        <RemateCoverImageField
+          value={values.cover_image_url}
+          onChange={(url) => setField('cover_image_url', url)}
+          error={errors.cover_image_url}
+        />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input
@@ -187,6 +185,29 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
                 value={values.anti_sniping_extension_seconds}
                 onChange={(event) => setField('anti_sniping_extension_seconds', event.target.value)}
                 error={errors.anti_sniping_extension_seconds}
+              />
+            </div>
+          )}
+
+          <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={values.lote_timer_enabled}
+              onChange={(event) => setField('lote_timer_enabled', event.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
+            Habilitar cuenta regresiva por lote
+          </label>
+          {values.lote_timer_enabled && (
+            <div className="mt-3">
+              <Input
+                label="Segundos de cuenta regresiva al abrir cada lote"
+                type="number"
+                min={5}
+                max={3600}
+                value={values.lote_timer_seconds}
+                onChange={(event) => setField('lote_timer_seconds', event.target.value)}
+                error={errors.lote_timer_seconds}
               />
             </div>
           )}

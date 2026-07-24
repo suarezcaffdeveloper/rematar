@@ -11,6 +11,9 @@ INVALID_MESSAGE = 4400
 UNAUTHORIZED = 4401
 AUTH_TIMEOUT = 4408
 HEARTBEAT_TIMEOUT = 4000
+# Épica 7, Módulo 7.6 (Moderación) -- expulsión de un comprador de la sala, ver
+# app/moderation/service.py::ModerationService.kick_user.
+KICKED = 4403
 
 # Estándar (RFC 6455).
 SERVER_SHUTTING_DOWN = 1001

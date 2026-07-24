@@ -241,3 +241,10 @@ ya cerró el lote (el bid se rechaza por "no está abierto") -- nunca los dos a 
 - [x] Tests: cuenta regresiva, extensión, adjudicación automática, sincronización entre múltiples compradores (concurrencia bid vs. scheduler).
 - [x] Documentación (este archivo) y ADR (ADR-043) actualizados.
 - [x] Cero cambios en la arquitectura existente más allá de lo aditivo documentado arriba.
+
+**Nota (Épica 8.0, revisión funcional)**: el primer ítem de este checklist estaba
+marcado como hecho por existir a nivel de schema/API (`RemateSettings.lote_timer_seconds`),
+pero `RemateFormModal` (crear/editar remate) nunca tuvo un campo para configurarlo -- un
+rematador no tenía forma real, desde la UI, de habilitar la cuenta regresiva. Corregido:
+el formulario ahora tiene un toggle "Habilitar cuenta regresiva por lote" + segundos
+(mismo patrón que `anti_sniping_enabled`), ver `features/rematador/remateForm.ts`.

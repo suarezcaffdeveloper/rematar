@@ -36,15 +36,17 @@ describe('RematadorDashboardStats', () => {
 
     render(<RematadorDashboardStats remates={remates} />);
 
-    expect(screen.getByText('Total').previousElementSibling?.textContent).toBe('4');
-    expect(screen.getByText('En vivo').previousElementSibling?.textContent).toBe('2');
-    expect(screen.getByText('Programado').previousElementSibling?.textContent).toBe('1');
-    expect(screen.getByText('Borrador').previousElementSibling?.textContent).toBe('1');
-    expect(screen.getByText('Finalizado').previousElementSibling?.textContent).toBe('0');
+    // Épica 9, Etapa 3: `StatCard` (reemplaza al `StatChip` local) dibuja el label
+    // primero y el valor después -- orden inverso al que tenía `StatChip`.
+    expect(screen.getByText('Total').nextElementSibling?.textContent).toBe('4');
+    expect(screen.getByText('En vivo').nextElementSibling?.textContent).toBe('2');
+    expect(screen.getByText('Programado').nextElementSibling?.textContent).toBe('1');
+    expect(screen.getByText('Borrador').nextElementSibling?.textContent).toBe('1');
+    expect(screen.getByText('Finalizado').nextElementSibling?.textContent).toBe('0');
   });
 
   it('sin remates, todos los contadores quedan en 0', () => {
     render(<RematadorDashboardStats remates={[]} />);
-    expect(screen.getByText('Total').previousElementSibling?.textContent).toBe('0');
+    expect(screen.getByText('Total').nextElementSibling?.textContent).toBe('0');
   });
 });

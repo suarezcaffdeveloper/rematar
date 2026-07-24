@@ -43,11 +43,12 @@ def _find_forbidden_imports(
 
 
 def test_gateway_websocket_never_imports_domain() -> None:
-    # `app.snapshot` y `app.presence` están deliberadamente afuera de esta lista: el
-    # Módulo 3.6 pidió explícitamente que el Gateway use `SnapshotService` al entrar a
-    # una sala, y el Módulo 6.2 agregó `PresenceService` para el join/leave (ver
-    # docstring de app/websocket/router.py) — son los únicos paquetes "de negocio" que
-    # el Gateway tiene permitido conocer, además de `app.modules.auth` (ADR-023).
+    # `app.snapshot`, `app.presence` y `app.moderation` están deliberadamente afuera de
+    # esta lista: el Módulo 3.6 pidió explícitamente que el Gateway use `SnapshotService`
+    # al entrar a una sala, el Módulo 6.2 agregó `PresenceService` para el join/leave, y
+    # el Módulo 7.6 agregó `ModerationService` para el chequeo de ban (ver docstring de
+    # app/websocket/router.py) — son los únicos paquetes "de negocio" que el Gateway
+    # tiene permitido conocer, además de `app.modules.auth` (ADR-023).
     forbidden_prefixes = ("app.modules.remates", "app.modules.ofertas")
     websocket_dir = APP_DIR / "websocket"
     offenders = _find_forbidden_imports(
@@ -408,6 +409,66 @@ def test_notifications_never_imports_postauction_or_domain() -> None:
     assert offenders == {}, (
         f"app/notifications/ depende de app.postauction o de un módulo de dominio, "
         f"rompiendo su carácter genérico: {offenders}"
+    )
+
+
+def test_moderation_never_imports_ofertas_or_chat_write_surface() -> None:
+    """`app/moderation/` (Épica 7, Módulo 7.6) nunca debe importar `app.modules.ofertas`
+    en absoluto -- se entera de intentos de oferta inválidos reaccionando a
+    `oferta.rejected` con su propia instancia de `EventConsumer` (cableada en
+    `app/main.py`, leyendo el JSON crudo del evento sin importar la clase
+    `OfertaRejected`), nunca importando el Auction Engine. Tampoco debe importar la
+    superficie de **escritura** de Chat (`app.modules.chat.service`/`router`/
+    `realtime`) -- solo `app.modules.chat.repository`/`models`/`dependencies` (lectura
+    puntual de un mensaje para destacarlo), mismo criterio "repositorio del vecino" que
+    el resto del proyecto. Ni `app.analytics`/`app.history` (bounded contexts ajenos) ni
+    `app.audit.service`/`app.audit.router` (solo la superficie de escritura de
+    Auditoría, como cualquier módulo de dominio)."""
+    forbidden_prefixes = (
+        "app.modules.ofertas",
+        "app.modules.chat.service",
+        "app.modules.chat.router",
+        "app.modules.chat.realtime",
+        "app.analytics",
+        "app.history",
+        "app.audit.service",
+        "app.audit.router",
+    )
+    moderation_dir = APP_DIR / "moderation"
+    offenders = _find_forbidden_imports(
+        list(moderation_dir.glob("*.py")), forbidden_prefixes, relative_to=moderation_dir
+    )
+    assert offenders == {}, (
+        f"app/moderation/ depende del Auction Engine, de la superficie de escritura de "
+        f"Chat, o de un bounded context ajeno: {offenders}"
+    )
+
+
+def test_domain_never_imports_moderation_service_or_router() -> None:
+    """Dirección de dependencia de un solo sentido: `app/moderation/` puede leer de
+    Chat/Remates/Ofertas (ver test de arriba), pero ningún módulo de dominio debe
+    importar `app.moderation.service`/`app.moderation.router` -- `app/modules/chat/
+    router.py` solo puede depender de `app.moderation.redis_state`/
+    `app.moderation.dependencies` (la superficie liviana de solo lectura, ver su propio
+    docstring), nunca del servicio completo (que compone `ConnectionManager`/
+    `RoomManager`/`RemateService`/etc., mucho más de lo que un chequeo de mute/lock
+    necesita)."""
+    forbidden_prefixes = ("app.moderation.service", "app.moderation.router")
+    domain_dirs = [
+        APP_DIR / "modules" / "chat",
+        APP_DIR / "modules" / "ofertas",
+        APP_DIR / "modules" / "remates",
+    ]
+    offenders: dict[str, set[str]] = {}
+    for domain_dir in domain_dirs:
+        offenders.update(
+            _find_forbidden_imports(
+                list(domain_dir.rglob("*.py")), forbidden_prefixes, relative_to=APP_DIR
+            )
+        )
+    assert offenders == {}, (
+        f"Un módulo de dominio depende del servicio/router completo de Moderación en "
+        f"vez de su superficie liviana de lectura: {offenders}"
     )
 
 

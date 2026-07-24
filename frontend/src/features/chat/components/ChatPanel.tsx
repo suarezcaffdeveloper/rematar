@@ -1,6 +1,10 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import clsx from 'clsx';
 import { ConfirmModal } from '../../../shared/components/ConfirmModal';
 import { Spinner } from '../../../shared/components/Spinner';
+import { pinMessageRequest, unpinMessageRequest } from '../../moderation/api';
+import { usePinnedMessages } from '../../moderation/hooks';
+import { isModerationDomainEventMessage } from '../../moderation/realtime/events';
 import { PresenceCounter } from '../../sala/components/PresenceCounter';
 import { useChatMessages } from '../hooks';
 import type { ChatMessage } from '../types';
@@ -20,6 +24,10 @@ export interface ChatPanelProps {
   /** Solo el rematador dueño del remate puede moderar (eliminar mensajes) -- ver
    * `ChatService.delete_message`, backend, sin excepción para admin. */
   canModerate: boolean;
+  /** Altura del panel -- `h-[32rem]` por default (uso apilado a ancho completo, ej.
+   * Consola Operativa). Sala del Remate (Épica 9, Etapa 4) pasa `h-full` para que
+   * ocupe el resto de su columna lateral en vez de una altura fija. */
+  className?: string;
 }
 
 /**
@@ -36,6 +44,7 @@ export function ChatPanel({
   currentUserId,
   connectedUsers,
   canModerate,
+  className,
 }: ChatPanelProps) {
   const {
     messages,
@@ -53,6 +62,38 @@ export function ChatPanel({
   } = useChatMessages(remateId, subscribeToRealtime, currentUserId);
 
   const [messageToDelete, setMessageToDelete] = useState<ChatMessage | null>(null);
+
+  // Mensajes destacados (Épica 7, Módulo 7.6) -- solo se pide/renderiza el botón de
+  // destacar cuando `canModerate` (mismo criterio que eliminar). El feature de chat no
+  // conoce el backend de moderación: solo llama sus endpoints y escucha sus eventos de
+  // dominio ya sincronizados por el pipeline existente, sin abrir una segunda conexión.
+  const { data: pinnedMessages, reload: reloadPinnedMessages } = usePinnedMessages(
+    canModerate ? remateId : '',
+  );
+  const pinnedMessageIds = new Set(pinnedMessages.map((pin) => pin.message_id));
+
+  useEffect(() => {
+    if (!canModerate) return;
+    const unsubscribe = subscribeToRealtime((raw) => {
+      if (!isModerationDomainEventMessage(raw)) return;
+      if (
+        raw.event_type === 'moderacion.mensaje_destacado' ||
+        raw.event_type === 'moderacion.mensaje_no_destacado'
+      ) {
+        reloadPinnedMessages();
+      }
+    });
+    return unsubscribe;
+  }, [canModerate, subscribeToRealtime, reloadPinnedMessages]);
+
+  async function handleTogglePin(message: ChatMessage) {
+    if (pinnedMessageIds.has(message.id)) {
+      await unpinMessageRequest(remateId, message.id);
+    } else {
+      await pinMessageRequest(remateId, message.id);
+    }
+    reloadPinnedMessages();
+  }
 
   const containerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -102,7 +143,7 @@ export function ChatPanel({
   }
 
   return (
-    <div className="flex h-[32rem] flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className={clsx('flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm', className ?? 'h-[32rem]')}>
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
           <ChatBubbleIcon className="h-4 w-4 text-slate-400" />
@@ -135,6 +176,8 @@ export function ChatPanel({
               message={message}
               canModerate={canModerate}
               onRequestDelete={setMessageToDelete}
+              isPinned={pinnedMessageIds.has(message.id)}
+              onTogglePin={canModerate ? handleTogglePin : undefined}
             />
           ))
         )}

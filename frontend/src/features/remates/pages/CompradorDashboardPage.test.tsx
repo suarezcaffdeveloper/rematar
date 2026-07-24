@@ -4,15 +4,27 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { CompradorDashboardPage } from './CompradorDashboardPage';
 import type { Remate } from '../types';
+import type { Page } from '../../../shared/api/types';
+import type { PostAuctionCase } from '../../postauction/types';
 
-const { useRematesMock, useLoteCountMock } = vi.hoisted(() => ({
+const { useRematesMock, useLoteCountMock, useMisComprasMock } = vi.hoisted(() => ({
   useRematesMock: vi.fn(),
   useLoteCountMock: vi.fn(),
+  useMisComprasMock: vi.fn(() => ({
+    data: null as Page<PostAuctionCase> | null,
+    isLoading: false,
+    error: null,
+    reload: vi.fn(),
+  })),
 }));
 
 vi.mock('../hooks', () => ({
   useRemates: useRematesMock,
   useLoteCount: useLoteCountMock,
+}));
+vi.mock('../../postauction/hooks', () => ({ useMisCompras: useMisComprasMock }));
+vi.mock('../../notifications/components/RecentActivityCard', () => ({
+  RecentActivityCard: () => null,
 }));
 
 function makeRemate(overrides: Partial<Remate>): Remate {
@@ -117,5 +129,32 @@ describe('CompradorDashboardPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }));
     expect(screen.getByText('Remate A')).toBeInTheDocument();
+  });
+
+  it('la fila de KPIs cuenta próximos/en vivo sobre la lista, y lotes ganados desde useMisCompras', () => {
+    useLoteCountMock.mockReturnValue(0);
+    useRematesMock.mockReturnValue({
+      remates: [
+        makeRemate({ id: 'a', status: 'scheduled' }),
+        makeRemate({ id: 'b', status: 'scheduled' }),
+        makeRemate({ id: 'c', status: 'live' }),
+        makeRemate({ id: 'd', status: 'finished' }),
+      ],
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+    useMisComprasMock.mockReturnValue({
+      data: { items: [], total: 5, page: 1, page_size: 1 },
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(screen.getByText('Próximos remates').nextElementSibling?.textContent).toBe('2');
+    expect(screen.getByText('Remates en vivo').nextElementSibling?.textContent).toBe('1');
+    expect(screen.getByText('Lotes ganados').nextElementSibling?.textContent).toBe('5');
   });
 });

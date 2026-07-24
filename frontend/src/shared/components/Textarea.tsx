@@ -1,5 +1,6 @@
-import { type TextareaHTMLAttributes, forwardRef, useId } from 'react';
+import { type TextareaHTMLAttributes, forwardRef } from 'react';
 import clsx from 'clsx';
+import { FIELD_CONTROL_CLASSES, FieldWrapper, useFieldIds } from './FieldWrapper';
 
 export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label: string;
@@ -12,34 +13,19 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   { label, error, id, className, rows = 4, ...props },
   ref,
 ) {
-  const generatedId = useId();
-  const inputId = id ?? generatedId;
-  const errorId = `${inputId}-error`;
+  const { inputId, errorId } = useFieldIds(id);
 
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={inputId} className="text-sm font-medium text-slate-700">
-        {label}
-      </label>
+    <FieldWrapper label={label} inputId={inputId} errorId={errorId} error={error}>
       <textarea
         ref={ref}
         id={inputId}
         rows={rows}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? errorId : undefined}
-        className={clsx(
-          'rounded-md border px-3 py-2 text-sm shadow-sm',
-          'focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500',
-          error ? 'border-danger-500' : 'border-slate-300',
-          className,
-        )}
+        className={clsx(FIELD_CONTROL_CLASSES, error ? 'border-danger-500' : 'border-slate-300', className)}
         {...props}
       />
-      {error && (
-        <p id={errorId} className="text-sm text-danger-600">
-          {error}
-        </p>
-      )}
-    </div>
+    </FieldWrapper>
   );
 });

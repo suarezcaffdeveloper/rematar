@@ -2,26 +2,91 @@
 
 /*
  * Tailwind v4: configuración "CSS-first" -- no hace falta tailwind.config.js ni
- * postcss.config.js (ver ADR-027). `@theme` define los únicos tokens de diseño que
- * este módulo necesita hoy; se amplía acá mismo a medida que crecen las pantallas
- * reales, no antes.
+ * postcss.config.js (ver ADR-027).
+ *
+ * Rediseño integral de UI/UX (Épica 9, Etapa 1 -- Sistema de Diseño): escalas
+ * completas 50-900 para `brand`/`danger`/`success` (antes solo 3-5 tonos sueltos) y
+ * `warning` nueva (antes `Badge` la simulaba con `amber` crudo de Tailwind, sin token
+ * propio). `brand-{500,600,700}` mantienen exactamente los mismos hex que ya estaban
+ * en uso (decisión explícita: no romper la identidad de marca ya establecida) -- el
+ * resto de cada escala se completó interpolando alrededor de esos anclajes.
+ * `danger`/`success` fueron pensadas igual, a partir de sus dos anclajes existentes.
+ * `neutral` sigue siendo el `slate` de Tailwind tal cual -- ya es la escala usada en
+ * toda la app, no hace falta una alias nueva.
  */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+
 @theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
   --color-brand-50: #eff6ff;
   --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-300: #93c5fd;
+  --color-brand-400: #5b8def;
   --color-brand-500: #2563eb;
   --color-brand-600: #1d4ed8;
   --color-brand-700: #1e40af;
+  --color-brand-800: #1e3a8a;
+  --color-brand-900: #1e2f66;
 
   --color-danger-50: #fef2f2;
+  --color-danger-100: #fee2e2;
+  --color-danger-200: #fecaca;
+  --color-danger-300: #fca5a5;
+  --color-danger-400: #f87171;
   --color-danger-500: #dc2626;
   --color-danger-600: #b91c1c;
+  --color-danger-700: #991b1b;
+  --color-danger-800: #7f1d1d;
+  --color-danger-900: #641515;
 
   --color-success-50: #f0fdf4;
+  --color-success-100: #dcfce7;
+  --color-success-200: #bbf7d0;
+  --color-success-300: #86efac;
+  --color-success-400: #4ade80;
   --color-success-500: #16a34a;
   --color-success-600: #15803d;
+  --color-success-700: #166534;
+  --color-success-800: #14532d;
+  --color-success-900: #0d3d21;
+
+  --color-warning-50: #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-200: #fde68a;
+  --color-warning-300: #fcd34d;
+  --color-warning-400: #fbbf24;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+  --color-warning-700: #b45309;
+  --color-warning-800: #92400e;
+  --color-warning-900: #78350f;
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-slate-50 font-sans text-slate-900 antialiased;
+}
+
+/*
+ * Accesibilidad (Épica 9, Etapa 7 -- rediseño, accesibilidad final): respeta
+ * `prefers-reduced-motion`, el ajuste de sistema operativo para usuarios sensibles al
+ * movimiento (mareo, migrañas, trastornos vestibulares). Recorta virtualmente a cero la
+ * duración de cualquier animación/transición CSS (el pulso de `StatCard`, la entrada/
+ * salida de `ToastViewport`, hovers con `transition-colors`, etc.) sin tener que
+ * condicionar cada componente individualmente -- un único punto de control, igual que
+ * las escalas de color/tipografía del resto del sistema de diseño.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

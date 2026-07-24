@@ -1,6 +1,8 @@
 import { type ReactNode, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
 import clsx from 'clsx';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -17,9 +19,10 @@ export interface ModalProps {
  * Modal genérico (Épica 5, Módulo 5.3 -- primer uso real en el proyecto; ningún módulo
  * anterior lo había necesitado). Sin ninguna librería nueva: overlay + `<dialog>`-like
  * div posicionado, cierre por Escape/click en el fondo, foco inicial en el modal al
- * abrir. No hace trap de foco completo (ciclar Tab dentro del modal) -- alcanza para los
- * formularios cortos de este módulo (un puñado de campos), y agregarlo sería
- * complejidad sin un caso de uso real todavía.
+ * abrir. Trap de foco completo (ciclar Tab dentro del modal, restaurar el foco al
+ * disparador al cerrar) vía `useFocusTrap` (Épica 9, Etapa 7 -- rediseño, accesibilidad
+ * final) -- antes no lo tenía, aceptado como límite conocido mientras los formularios
+ * eran cortos; se cierra en la etapa dedicada a accesibilidad.
  *
  * `createPortal` al `document.body`: evita que el modal quede recortado por un ancestro
  * con `overflow: hidden` (por ejemplo, una tarjeta con `overflow-hidden`) y asegura que
@@ -28,6 +31,8 @@ export interface ModalProps {
 export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }: ModalProps) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(dialogRef, isOpen);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -60,7 +65,7 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
         aria-labelledby={titleId}
         tabIndex={-1}
         className={clsx(
-          'relative flex max-h-[90vh] w-full flex-col rounded-xl bg-white shadow-xl focus:outline-none',
+          'relative flex max-h-[90vh] w-full flex-col rounded-2xl bg-white shadow-xl focus:outline-none',
           size === 'lg' ? 'max-w-2xl' : 'max-w-md',
         )}
       >
@@ -72,16 +77,9 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
             type="button"
             onClick={onClose}
             aria-label="Cerrar"
-            className="rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+            className="rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
-            <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
-              <path
-                d="m5 5 10 10M15 5 5 15"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            <X aria-hidden="true" className="h-5 w-5" />
           </button>
         </div>
 

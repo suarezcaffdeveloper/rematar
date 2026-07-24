@@ -54,6 +54,11 @@ docs/41-gestion-post-remate.md).
 
 `notifications_router` (Épica 7, Módulo 7.5) expone `/notifications` — paquete genérico
 propio (`app/notifications/`), montado directamente acá igual que cualquier otro.
+
+`moderation_router` (Épica 7, Módulo 7.6) expone `/remates/{remate_id}/moderation/...` —
+mismo criterio que `chat_router`, un paquete top-level propio (`app/moderation/`) que
+cuelga del mismo prefijo efectivo sin vivir dentro de `app/modules/remates/` (ver
+docs/42-moderacion-en-tiempo-real.md).
 """
 
 from fastapi import APIRouter
@@ -61,6 +66,7 @@ from fastapi import APIRouter
 from app.analytics.router import router as analytics_router
 from app.audit.router import router as audit_router
 from app.history.router import router as history_router
+from app.moderation.router import router as moderation_router
 from app.modules.auth.router import router as auth_router
 from app.modules.chat.router import router as chat_router
 from app.modules.remates.router import router as remates_router
@@ -87,4 +93,5 @@ api_router.include_router(history_router, tags=["history"])
 api_router.include_router(monitoring_router, tags=["monitoring"])
 api_router.include_router(postauction_router, tags=["postauction"])
 api_router.include_router(notifications_router, tags=["notifications"])
+api_router.include_router(moderation_router, tags=["moderation"])
 api_router.include_router(websocket_router, tags=["websocket"])

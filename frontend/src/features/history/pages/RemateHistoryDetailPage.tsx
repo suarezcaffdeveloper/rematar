@@ -5,8 +5,9 @@ import { useRemateHistoryDetail } from '../hooks';
 import { ChatActivityCard } from '../components/ChatActivityCard';
 import { LoteHistoryCard } from '../components/LoteHistoryCard';
 import { RemateHistorySummary } from '../components/RemateHistorySummary';
+import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
 import { Alert } from '../../../shared/components/Alert';
-import { Breadcrumb } from '../../../shared/components/Breadcrumb';
+import type { BreadcrumbItem } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { Skeleton } from '../../../shared/components/Skeleton';
 
@@ -36,6 +37,13 @@ export function RemateHistoryDetailPage() {
 
   const isLoading = isRemateLoading || isDetailLoading;
 
+  const items: BreadcrumbItem[] = isLoading
+    ? []
+    : remateError || !remate
+      ? [{ label: 'Mis remates', to: '/' }, { label: 'Remate no encontrado' }]
+      : [{ label: 'Mis remates', to: '/' }, { label: remate.title }];
+  useBreadcrumb(items);
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-6">
@@ -53,7 +61,6 @@ export function RemateHistoryDetailPage() {
   if (remateError || !remate) {
     return (
       <div className="flex flex-col gap-6">
-        <Breadcrumb items={[{ label: 'Mis remates', to: '/' }, { label: 'Remate no encontrado' }]} />
         <Alert variant="error">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{remateError?.message ?? 'No se pudo cargar este remate.'}</span>
@@ -74,7 +81,6 @@ export function RemateHistoryDetailPage() {
   if (detailError || !detail) {
     return (
       <div className="flex flex-col gap-6">
-        <Breadcrumb items={[{ label: 'Mis remates', to: '/' }, { label: remate.title }]} />
         <Alert variant="error">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{detailError?.message ?? 'No se pudo cargar el historial de este remate.'}</span>
@@ -91,8 +97,6 @@ export function RemateHistoryDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Breadcrumb items={[{ label: 'Mis remates', to: '/' }, { label: remate.title }]} />
-
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Historial de {remate.title}</h1>
         {detail.cancellation_reason && (

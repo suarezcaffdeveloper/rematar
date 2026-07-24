@@ -7,9 +7,12 @@ validaciones — el mismo comportamiento que se verificó manualmente contra el 
 durante el desarrollo.
 """
 
+from pathlib import Path
+
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.security import hash_password
 from app.modules.users.models import User, UserRole
 
@@ -305,3 +308,107 @@ async def test_cannot_delete_scheduled_remate(client: AsyncClient) -> None:
 
     response = await client.delete(f"{REMATES_URL}/{remate['id']}", headers=_auth(token))
     assert response.status_code == 422
+
+
+# --- Subida de imagen de portada (refinamiento visual, item 6) ---------------------
+# Sin `{remate_id}` en el path: se sube ANTES de crear el remate, desde el mismo modal
+# de creación -- ver `RemateService.upload_cover_image`.
+
+
+async def test_rematador_can_upload_cover_image_before_the_remate_exists(
+    client: AsyncClient,
+) -> None:
+    token = await _register_and_login(client, email="rematador20@example.com", role="rematador")
+
+    response = await client.post(
+        f"{REMATES_URL}/cover-image",
+        files={"file": ("portada.jpg", b"contenido-de-prueba", "image/jpeg")},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 201, response.text
+    url = response.json()["url"]
+    assert "/static/remates/covers/" in url
+    assert url.endswith(".jpg")
+
+    relative_path = url.split("/static/", 1)[1]
+    saved_file = Path(get_settings().MEDIA_ROOT) / relative_path
+    assert saved_file.read_bytes() == b"contenido-de-prueba"
+
+
+async def test_uploaded_cover_image_url_can_be_used_to_create_the_remate(
+    client: AsyncClient,
+) -> None:
+    token = await _register_and_login(client, email="rematador21@example.com", role="rematador")
+
+    upload = await client.post(
+        f"{REMATES_URL}/cover-image",
+        files={"file": ("portada.jpg", b"contenido", "image/jpeg")},
+        headers=_auth(token),
+    )
+    assert upload.status_code == 201, upload.text
+    cover_image_url = upload.json()["url"]
+
+    remate = await _create_remate(client, token, cover_image_url=cover_image_url)
+
+    assert remate["cover_image_url"] == cover_image_url
+
+
+async def test_comprador_cannot_upload_cover_image(client: AsyncClient) -> None:
+    token = await _register_and_login(client, email="comprador20@example.com", role="comprador")
+
+    response = await client.post(
+        f"{REMATES_URL}/cover-image",
+        files={"file": ("portada.jpg", b"contenido", "image/jpeg")},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 403
+
+
+async def test_cover_image_upload_rejects_unsupported_content_type(client: AsyncClient) -> None:
+    token = await _register_and_login(client, email="rematador22@example.com", role="rematador")
+
+    response = await client.post(
+        f"{REMATES_URL}/cover-image",
+        files={"file": ("archivo.txt", b"no es una imagen", "text/plain")},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "business_rule_violation"
+
+
+async def test_cover_image_upload_rejects_oversized_file(client: AsyncClient) -> None:
+    token = await _register_and_login(client, email="rematador23@example.com", role="rematador")
+
+    oversized = b"0" * (5 * 1024 * 1024 + 1)
+    response = await client.post(
+        f"{REMATES_URL}/cover-image",
+        files={"file": ("grande.jpg", oversized, "image/jpeg")},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "business_rule_violation"
+
+
+async def test_two_rematadores_get_different_cover_image_namespaces(client: AsyncClient) -> None:
+    token_a = await _register_and_login(client, email="rematador24@example.com", role="rematador")
+    token_b = await _register_and_login(client, email="rematador25@example.com", role="rematador")
+
+    response_a = await client.post(
+        f"{REMATES_URL}/cover-image",
+        files={"file": ("a.jpg", b"contenido-a", "image/jpeg")},
+        headers=_auth(token_a),
+    )
+    response_b = await client.post(
+        f"{REMATES_URL}/cover-image",
+        files={"file": ("b.jpg", b"contenido-b", "image/jpeg")},
+        headers=_auth(token_b),
+    )
+
+    assert response_a.json()["url"] != response_b.json()["url"]
+    url_a_owner_segment = response_a.json()["url"].split("/covers/")[1].split("/")[0]
+    url_b_owner_segment = response_b.json()["url"].split("/covers/")[1].split("/")[0]
+    assert url_a_owner_segment != url_b_owner_segment

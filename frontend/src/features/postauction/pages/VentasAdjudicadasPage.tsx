@@ -1,6 +1,6 @@
 import { useState } from 'react';
+import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
 import { Alert } from '../../../shared/components/Alert';
-import { Breadcrumb } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
@@ -31,10 +31,10 @@ export function VentasAdjudicadasPage() {
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
+  useBreadcrumb([{ label: 'Mis remates', to: '/' }, { label: 'Ventas adjudicadas' }]);
+
   return (
     <div className="flex flex-col gap-6">
-      <Breadcrumb items={[{ label: 'Mis remates', to: '/' }, { label: 'Ventas adjudicadas' }]} />
-
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Ventas adjudicadas</h1>
         <p className="mt-1 text-sm text-slate-500">

@@ -73,6 +73,7 @@ class AuditLogRepository:
         limit: int,
         actor_id: uuid.UUID | None = None,
         action: str | None = None,
+        actions: list[str] | None = None,
         resource_type: str | None = None,
         remate_id: uuid.UUID | None = None,
         date_from: datetime | None = None,
@@ -86,6 +87,8 @@ class AuditLogRepository:
             conditions.append(AuditLogEntry.actor_id == actor_id)
         if action is not None:
             conditions.append(AuditLogEntry.action == action)
+        if actions is not None:
+            conditions.append(AuditLogEntry.action.in_(actions))
         if resource_type is not None:
             conditions.append(AuditLogEntry.resource_type == resource_type)
         if remate_id is not None:
@@ -102,7 +105,9 @@ class AuditLogRepository:
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._db.execute(count_stmt)).scalar_one()
 
-        order = AuditLogEntry.occurred_at.asc() if sort == "asc" else AuditLogEntry.occurred_at.desc()
+        order = (
+            AuditLogEntry.occurred_at.asc() if sort == "asc" else AuditLogEntry.occurred_at.desc()
+        )
         id_order = AuditLogEntry.id.asc() if sort == "asc" else AuditLogEntry.id.desc()
         stmt = stmt.order_by(order, id_order).offset(offset).limit(limit)
         items = (await self._db.execute(stmt)).scalars().all()

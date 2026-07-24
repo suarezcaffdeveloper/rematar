@@ -61,4 +61,46 @@ describe('DropdownMenu', () => {
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
+
+  it('al abrir, el foco se mueve al primer ítem', async () => {
+    render(
+      <DropdownMenu
+        items={[
+          { label: 'Editar', onSelect: vi.fn() },
+          { label: 'Eliminar', onSelect: vi.fn() },
+        ]}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Más acciones' }));
+    expect(screen.getByRole('menuitem', { name: 'Editar' })).toHaveFocus();
+  });
+
+  it('ArrowDown/ArrowUp recorren los ítems con wraparound', async () => {
+    render(
+      <DropdownMenu
+        items={[
+          { label: 'Editar', onSelect: vi.fn() },
+          { label: 'Eliminar', onSelect: vi.fn() },
+        ]}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Más acciones' }));
+
+    await userEvent.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitem', { name: 'Eliminar' })).toHaveFocus();
+
+    await userEvent.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitem', { name: 'Editar' })).toHaveFocus();
+
+    await userEvent.keyboard('{ArrowUp}');
+    expect(screen.getByRole('menuitem', { name: 'Eliminar' })).toHaveFocus();
+  });
+
+  it('la tecla Escape devuelve el foco al disparador', async () => {
+    render(<DropdownMenu items={[{ label: 'Editar', onSelect: vi.fn() }]} />);
+    const trigger = screen.getByRole('button', { name: 'Más acciones' });
+    await userEvent.click(trigger);
+    await userEvent.keyboard('{Escape}');
+    expect(trigger).toHaveFocus();
+  });
 });

@@ -75,6 +75,8 @@ contexto, alternativas consideradas y consecuencias aceptadas.
 | [042](adr/ADR-042-pruebas-de-carga-y-rendimiento.md) | Pruebas de carga y rendimiento: herramienta propia en asyncio en vez de Locust/k6, `loadtest/` separado del backend/frontend, reutiliza `GET /monitoring/metrics` en vez de instrumentar de nuevo, seed exclusivamente vía la API pública | Aceptada |
 | [043](adr/ADR-043-cuenta-regresiva-y-cierre-automatico.md) | Cuenta regresiva y cierre automático de lotes: columnas en `Lote` en vez de tabla nueva, extensión anti-sniping síncrona (nunca vía Event Bus), `TimerExpiryScheduler` reusando el lock de fila de ADR-004, `LoteService.close()` refactorizado sin duplicar lógica | Aceptada |
 | [044](adr/ADR-044-gestion-post-remate.md) | Gestión post-remate: `PostAuction Service` desacoplado vía un tercer `EventConsumer` (nunca llamado directo desde `LoteService`), timeline propio insert-only (no reutiliza Historial ni Auditoría), máquina de estados forward-only con saltos permitidos, `Notification Service` mínimo nuevo | Aceptada |
+| [045](adr/ADR-045-moderacion-en-tiempo-real.md) | Moderación en tiempo real: `Moderation Service` desacoplado vía un cuarto `EventConsumer` (nunca llamado directo desde `AuctionEngine`), enganche asimétrico con Chat (superficie liviana en el router) vs. el Gateway (servicio completo, tercera excepción documentada), ban persistido + estado efímero en Redis, historial reutilizando Auditoría | Aceptada |
+| [046](adr/ADR-046-sistema-de-diseno-rediseno-ui.md) | Rediseño integral de UI/UX (Etapa 1), sistema de diseño: escalas de color completas ancladas a los valores ya en producción, Inter self-hosted, adopción puntual de `lucide-react` (revierte ADR-027/028 solo en íconos), consolidación de `Input`/`Select`/`Textarea`, `Tooltip`/`Table` nuevos | Aceptada |
 
 Plantilla para decisiones futuras: [adr/000-template.md](adr/000-template.md).
 
@@ -846,6 +848,42 @@ y [ADR-040](adr/ADR-040-historial-y-resultados-de-remates.md). Resumen:
   `app/snapshot/`, `app/audit/`, ni ninguna validación/regla de negocio existente de
   remates/lotes/ofertas/chat.
 
+## Épica 8, Módulo 8.0 — notas de Pulido y Consolidación del Sistema
+
+Sin ADR propio: no hubo ninguna decisión de arquitectura nueva, solo revisión funcional/
+UX/consistencia sobre lo ya construido, con arreglos puntuales y pequeños refactors --
+exactamente el alcance pedido ("no agregar funcionalidades de negocio, no cambiar la
+arquitectura existente"). Resumen de lo relevante:
+
+- **WebSockets**: se verificó (no se modificó, ya estaba completo desde la Épica 4.6)
+  que la reconexión con backoff exponencial, el re-join automático de sala y el resync
+  vía Snapshot Service ya cubren "reconexión con pérdida de eventos" de punta a punta.
+- **`shared/hooks/useAsyncResource.ts`** (nuevo) -- el boilerplate de "fetch por HTTP
+  disparado por deps + cancelación en cleanup + `reload()`" se repetía casi textual en
+  `features/{moderation,postauction,history,audit,sala,remates}/hooks.ts`. Se extrajo a
+  un hook genérico y se migraron esos 6 archivos manteniendo la interfaz pública de cada
+  hook exportado idéntica -- ningún componente consumidor cambió una sola línea.
+- **Dos bugs funcionales reales, corregidos**:
+  - `RemateSettings.lote_timer_seconds` (cuenta regresiva, ADR-043) existía en el
+    backend y ya se consumía en `ConsolaControlPanel`, pero `RemateFormModal` nunca tuvo
+    un campo para configurarlo -- un rematador no tenía ninguna forma, desde el
+    producto, de habilitarlo. Corregido en `features/rematador/remateForm.ts` +
+    `RemateFormModal.tsx` (mismo patrón que `anti_sniping_enabled`). Ver nota en
+    [docs/40-cuenta-regresiva-y-cierre-automatico.md](40-cuenta-regresiva-y-cierre-automatico.md).
+  - Un usuario `admin` no tenía ningún link de navegación hacia `/admin` (ni en
+    `AppLayout` ni en `HomePage`) -- solo llegaba escribiendo la URL a mano. Corregido:
+    link condicional por rol en el header (`AppLayout.tsx`) y un CTA real en el
+    placeholder de `HomePage.tsx` (que además remitía por error a un doc del comprador).
+- **Consistencia de íconos**: `features/sala/components/icons.tsx` duplicaba
+  `UsersIcon` (ya existente en `features/remates/components/icons.tsx`) violando su
+  propia convención documentada -- se eliminó el archivo entero (quedó vacío tras sacar
+  el duplicado). `features/rematador/components/icons.tsx` duplicaba `ChevronDownIcon`
+  de `features/audit/components/icons.tsx` -- se reusa desde ahí (dirección de
+  dependencia ya segura: `rematador` ya consume `audit` en `RemateAuditLogPage`).
+- Revisión de formularios (auth, chat, ofertas, lotes, remates) y de patrones UX
+  (botón deshabilitado + spinner durante envío vía `Button.tsx`, confirmaciones antes de
+  acciones destructivas): ya consistentes en toda la base, sin cambios necesarios.
+
 ## Épica 8, Módulo 8.1 — notas de arquitectura de Observabilidad y Monitoreo
 
 Detalle completo en
@@ -944,3 +982,65 @@ Detalle completo en [docs/41-gestion-post-remate.md](41-gestion-post-remate.md) 
   `CompradorDashboardPage`.
 - Cero cambios en `AuctionEngine`, `RemateService`, `LoteService`, `app/websocket/`,
   `app/snapshot/`, `app/audit/service.py`.
+
+## Épica 7, Módulo 7.6 — notas de arquitectura de Moderación en Tiempo Real
+
+Detalle completo en [docs/42-moderacion-en-tiempo-real.md](42-moderacion-en-tiempo-real.md)
+y [ADR-045](adr/ADR-045-moderacion-en-tiempo-real.md). Resumen:
+
+- `app/moderation/` -- paquete transversal nuevo, mismo nivel que `app/postauction/`/
+  `app/audit/`, hermano de `app/modules/chat/`/`app/modules/ofertas/`: nunca importado
+  por ninguno de los dos en el sentido inverso, verificado por tests de arquitectura
+  nuevos (`app.moderation` no puede importar la superficie de escritura de Chat ni nada
+  de `app.modules.ofertas`; los módulos de dominio no pueden importar `app.moderation.
+  service`/`router`, solo su superficie liviana `app.moderation.repository`/
+  `redis_state`).
+- Se entera de intentos de oferta inválidos reaccionando a `oferta.rejected` (ya
+  publicado por `AuctionEngine.place_bid`, Épica 2.4/ADR-018) con un **cuarto**
+  `EventConsumer` (`ModerationEventDispatcher`, mismo patrón exacto que
+  `PostAuctionEventDispatcher`/`ChatSystemEventDispatcher`/`TimerExpiryScheduler`) --
+  `app/modules/ofertas/` no gana un solo import nuevo.
+- Dos puntos de enganche síncronos, deliberadamente **asimétricos** en cuánto conocen
+  de `app/moderation/`: `app/modules/chat/router.py` importa únicamente
+  `ModerationRedisGateway` (liviana, solo Redis: silenciar/bloquear-chat) antes de
+  `ChatService.send_message` -- `ChatService` en sí no cambia. `app/websocket/router.py`
+  importa el `ModerationService` **completo**, como una **tercera excepción**
+  documentada a la regla de "cero conocimiento de dominio" del Gateway -- las otras dos
+  ya eran `SnapshotService` (Módulo 3.6) y `PresenceService` (Módulo 6.2); acá se
+  chequea un ban persistido (`RemateBan`) antes de admitir un `join_room`.
+- "Expulsar" es una única acción (`ModerationService.kick_user`): persiste el ban
+  (Postgres, debe sobrevivir un restart) y cierra cualquier conexión activa de ese
+  usuario en esa sala (`ConnectionManager.connections_for_user` +
+  `RoomManager.room_id_for_connection`, código de cierre nuevo `close_codes.KICKED =
+  4403`). Deliberadamente **no** se duplica el cleanup de sala/presencia: cerrar el
+  socket desde afuera dispara `WebSocketDisconnect` en el propio bucle de esa conexión,
+  que ya tiene ese cleanup en su `finally` -- el mismo camino que cualquier
+  desconexión normal.
+- Silenciar (a un comprador puntual) y bloquear-chat (a toda la sala, "modo lento") son
+  estado efímero con TTL en Redis (`ModerationRedisGateway`, mismo espíritu que
+  `RedisRateLimiter`) -- confirmado explícitamente con el usuario que son dos acciones
+  distintas y complementarias, no una redundancia. El ban, en cambio, vive en Postgres
+  porque perderlo violaría la garantía de "no reingreso".
+- Destacar mensajes usa una tabla propia (`ModerationPinnedMessage`, FK de solo lectura
+  a `chat_messages.id`) -- cero columnas nuevas en `ChatMessage`, para no acoplar su
+  modelo a un concepto de moderación.
+- El "historial reciente" del panel de moderación reutiliza el Audit Service (Épica
+  7.2) en vez de una tabla nueva: `AuditLogRepository.list_paginated` gana un filtro
+  nuevo backward-compatible (`actions: list[str] | None`, además del `action: str |
+  None` exacto ya existente) -- la única modificación a un módulo compartido fuera de
+  moderación/chat/websocket.
+- El umbral de ofertas inválidas (`MODERATION_INVALID_BID_THRESHOLD`, configurable)
+  **nunca** se publica en el chat -- solo genera una `Notification` privada al
+  rematador (Notification Service, Épica 7.5) la primera vez que se cruza en una
+  ventana (`MODERATION_INVALID_BID_WINDOW_SECONDS`), evitando exponer el patrón de
+  intentos fallidos de un comprador puntual a todos los conectados.
+- Sin motor de reglas de moderación genérico -- preparado, no construido: cada acción
+  es un método independiente y componible de `ModerationService`, los umbrales/
+  duraciones ya son `Settings`, y el `EventConsumer` sigue el mismo patrón
+  whitelist-extensible que el resto del proyecto.
+- Frontend: `features/moderation/` (`ModerationPanel` con conectados + búsqueda +
+  acciones rápidas, bloqueo de chat, historial reciente), integrado en
+  `ConsolaOperativaPage` junto a `ChatPanel`/`AnalyticsPanel`; `ChatMessageItem`/
+  `ChatPanel` ganan un botón de destacar (solo UI, cero cambios de backend de Chat).
+- Cero cambios en `ChatService`, `ChatMessage`, `AuctionEngine`, `Oferta`,
+  `RoomManager`, `ConnectionManager`, `PresenceService`.

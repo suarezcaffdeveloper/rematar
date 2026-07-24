@@ -65,4 +65,35 @@ describe('LoteCountdown', () => {
     render(<LoteCountdown endsAt={endsAt} pausedRemainingSeconds={null} />);
     expect(screen.getByRole('timer')).toHaveTextContent('0:00');
   });
+
+  it('el número grande no lleva aria-live (evita que un lector de pantalla anuncie el tictac cada segundo)', () => {
+    const endsAt = new Date(NOW.getTime() + 30_000).toISOString();
+    render(<LoteCountdown endsAt={endsAt} pausedRemainingSeconds={null} />);
+    expect(screen.getByRole('timer')).not.toHaveAttribute('aria-live');
+  });
+
+  it('al cruzar el umbral urgente, anuncia una única vez en la región sr-only separada', () => {
+    const endsAt = new Date(NOW.getTime() + 12_000).toISOString();
+    render(<LoteCountdown endsAt={endsAt} pausedRemainingSeconds={null} />);
+
+    act(() => {
+      vi.advanceTimersByTime(3000); // 12s -> 9s, cruza el umbral de 10s
+    });
+    expect(screen.getByText('Quedan 9 segundos.')).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(1000); // 8s, sigue urgente -- no debería repetir el anuncio
+    });
+    expect(screen.getByText('Quedan 9 segundos.')).toBeInTheDocument();
+  });
+
+  it('al llegar a cero, anuncia "Tiempo agotado."', () => {
+    const endsAt = new Date(NOW.getTime() + 2_000).toISOString();
+    render(<LoteCountdown endsAt={endsAt} pausedRemainingSeconds={null} />);
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(screen.getByText('Tiempo agotado.')).toBeInTheDocument();
+  });
 });

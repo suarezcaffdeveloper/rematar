@@ -1,7 +1,14 @@
+import { Badge } from '../../../shared/components/Badge';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { formatDateTime } from '../../../shared/lib/format';
 import { describeTimelineAction, STATUS_LABELS } from '../labels';
 import type { TimelineEntry } from '../types';
+
+const ACTION_BADGE_VARIANTS: Record<string, 'brand' | 'success' | 'neutral'> = {
+  case_created: 'brand',
+  status_changed: 'success',
+  note_added: 'neutral',
+};
 
 export interface TimelineProps {
   entries: TimelineEntry[];
@@ -24,7 +31,9 @@ export function Timeline({ entries }: TimelineProps) {
             {formatDateTime(entry.occurred_at)}
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <p className="text-sm font-medium text-slate-900">{describeTimelineAction(entry.action)}</p>
+            <Badge variant={ACTION_BADGE_VARIANTS[entry.action] ?? 'neutral'}>
+              {describeTimelineAction(entry.action)}
+            </Badge>
             <p className="text-xs text-slate-500">{entry.actor_name ?? 'Sistema'}</p>
             {entry.previous_status && entry.new_status && (
               <p className="text-xs text-slate-600">

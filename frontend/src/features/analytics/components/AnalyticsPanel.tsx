@@ -5,7 +5,7 @@ import { useRemateAnalytics } from '../hooks';
 import { BidsTimelineChart } from './BidsTimelineChart';
 import { EventsTimeline } from './EventsTimeline';
 import { ChartBarIcon } from './icons';
-import { KpiCard } from './KpiCard';
+import { StatCard } from '../../../shared/components/StatCard';
 
 export interface AnalyticsPanelProps {
   remateId: string;
@@ -46,38 +46,38 @@ export function AnalyticsPanel({ remateId, subscribeToRealtime, currency }: Anal
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <KpiCard
+            <StatCard
               label="Compradores conectados"
               value={data.connected_buyers}
               formattedValue={String(data.connected_buyers)}
             />
-            <KpiCard
+            <StatCard
               label="Usuarios activos"
               value={data.connected_users_total}
               formattedValue={String(data.connected_users_total)}
             />
-            <KpiCard
+            <StatCard
               label="Ofertas por minuto"
               value={data.ofertas_per_minute}
               formattedValue={String(data.ofertas_per_minute)}
             />
-            <KpiCard
+            <StatCard
               label="Total de ofertas"
               value={data.total_ofertas}
               formattedValue={String(data.total_ofertas)}
             />
-            <KpiCard
+            <StatCard
               label="Lotes vendidos"
               value={data.lote_status_counts.closed_sold}
               formattedValue={String(data.lote_status_counts.closed_sold)}
             />
-            <KpiCard
+            <StatCard
               label="Lotes restantes"
               value={lotesRestantes}
               formattedValue={String(lotesRestantes)}
               showTrend={false}
             />
-            <KpiCard
+            <StatCard
               label="Tiempo promedio por lote"
               value={data.average_lote_duration_seconds ?? 0}
               formattedValue={
@@ -87,7 +87,7 @@ export function AnalyticsPanel({ remateId, subscribeToRealtime, currency }: Anal
               }
               showTrend={false}
             />
-            <KpiCard
+            <StatCard
               label="Valor total adjudicado"
               value={Number(data.total_awarded_value)}
               formattedValue={formatCurrency(data.total_awarded_value, currency)}

@@ -1,6 +1,7 @@
 import { useNavigate, useParams } from 'react-router-dom';
+import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
 import { Alert } from '../../../shared/components/Alert';
-import { Breadcrumb } from '../../../shared/components/Breadcrumb';
+import type { BreadcrumbItem } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
@@ -50,6 +51,13 @@ export function RemateDetailPage() {
   const { lotes, total: loteTotal, isLoading: isLotesLoading, error: lotesError, reload: reloadLotes } =
     useLotes(remateId ?? '');
 
+  const items: BreadcrumbItem[] = isRemateLoading
+    ? []
+    : remateError || !remate
+      ? [{ label: 'Dashboard', to: '/' }, { label: 'Remate no encontrado' }]
+      : [{ label: 'Dashboard', to: '/' }, { label: remate.title }];
+  useBreadcrumb(items);
+
   if (isRemateLoading) {
     return (
       <div className="flex flex-col gap-6">
@@ -62,7 +70,6 @@ export function RemateDetailPage() {
   if (remateError || !remate) {
     return (
       <div className="flex flex-col gap-6">
-        <Breadcrumb items={[{ label: 'Dashboard', to: '/' }, { label: 'Remate no encontrado' }]} />
         <Alert variant="error">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{remateError?.message ?? 'No se pudo cargar este remate.'}</span>
@@ -82,8 +89,6 @@ export function RemateDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Breadcrumb items={[{ label: 'Dashboard', to: '/' }, { label: remate.title }]} />
-
       <RemateDetailHeader remate={remate} onEnterRoom={() => navigate(`/remates/${remate.id}/sala`)} />
 
       <RemateInfoSection remate={remate} loteTotal={loteTotal} />

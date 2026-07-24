@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import clsx from 'clsx';
 import { AuditLogView } from '../../features/audit/components/AuditLogView';
 import { AdminHistoryPanel } from '../../features/history/components/AdminHistoryPanel';
 import { MonitoringPanel } from '../../features/monitoring/components/MonitoringPanel';
+import { Tabs } from '../../shared/components/Tabs';
 
 type AdminTab = 'auditoria' | 'historial' | 'monitoreo';
 
@@ -22,7 +22,10 @@ const TABS: { id: AdminTab; label: string }[] = [
  * `GET /monitoring/metrics`) exige rol `admin` igual que esta ruta ya lo exigía
  * (`RequireRole allowedRoles={['admin']}`, ver `app/router.tsx`) -- doble
  * verificación, no redundante: esta ruta protege la navegación, el backend protege el
- * dato aunque alguien llame a la API directo. Ver
+ * dato aunque alguien llame a la API directo. Selector de pestañas sobre
+ * `shared/components/Tabs.tsx` (Épica 9, Etapa 6 -- rediseño): esta pantalla usaba su
+ * propio `role="tablist"` a mano, mismo look que ese componente compartido ya extrajo
+ * en la Etapa 5. Ver
  * docs/36-sistema-de-auditoria-y-trazabilidad.md,
  * docs/37-historial-y-resultados-de-remates.md y
  * docs/38-observabilidad-y-monitoreo.md.
@@ -40,25 +43,7 @@ export function AdminAuditLogPage() {
         </p>
       </div>
 
-      <div role="tablist" className="flex gap-1 border-b border-slate-200">
-        {TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            onClick={() => setTab(id)}
-            className={clsx(
-              'px-3 py-2 text-sm font-medium transition-colors',
-              tab === id
-                ? 'border-b-2 border-brand-600 text-brand-700'
-                : 'text-slate-500 hover:text-slate-700',
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs tabs={TABS} activeId={tab} onChange={(id) => setTab(id as AdminTab)} />
 
       {tab === 'auditoria' && <AuditLogView scope={{ type: 'global' }} />}
       {tab === 'historial' && <AdminHistoryPanel />}

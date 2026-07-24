@@ -47,6 +47,12 @@ ADR-044) arranca junto a los anteriores, con `PostAuctionEventDispatcher`: reacc
 adjudicado -- mismo patrón exacto que `ChatSystemEventDispatcher` (un tercer suscriptor
 independiente sobre el mismo canal `events.*`), y por eso `app/modules/remates/lotes/`
 no necesita ningún cambio para que este módulo exista.
+
+Un **cuarto** `EventConsumer` (Épica 7, Módulo 7.6, ver
+docs/42-moderacion-en-tiempo-real.md y ADR-045) arranca junto a los anteriores, con
+`ModerationEventDispatcher`: reacciona a `oferta.rejected` para detectar intentos
+reiterados de ofertas inválidas -- mismo patrón, y por eso `app/modules/ofertas/` no
+necesita ningún cambio para que el Moderation Service exista.
 """
 
 from collections.abc import AsyncIterator
@@ -65,6 +71,7 @@ from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.db.session import AsyncSessionLocal
 from app.events.redis_bus import RedisEventBus
+from app.moderation.realtime import ModerationEventDispatcher
 from app.modules.chat.realtime import ChatSystemEventDispatcher
 from app.postauction.realtime import PostAuctionEventDispatcher
 from app.realtime.consumer import EventConsumer
@@ -138,11 +145,31 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         retry_max_seconds=settings.REALTIME_CONSUMER_RETRY_MAX_SECONDS,
     )
     app.state.postauction_event_consumer.start()
+
+    moderation_session_factory = (
+        getattr(app.state, "db_session_factory", None) or AsyncSessionLocal
+    )
+    moderation_dispatcher = ModerationEventDispatcher(
+        moderation_session_factory,
+        RedisEventBus(RedisPubSub(app.state.redis)),
+        app.state.connection_manager,
+        app.state.room_manager,
+        app.state.redis,
+        settings,
+    )
+    app.state.moderation_event_consumer = EventConsumer(
+        app.state.redis,
+        moderation_dispatcher,
+        retry_base_seconds=settings.REALTIME_CONSUMER_RETRY_BASE_SECONDS,
+        retry_max_seconds=settings.REALTIME_CONSUMER_RETRY_MAX_SECONDS,
+    )
+    app.state.moderation_event_consumer.start()
     logger.info("app_started")
     try:
         yield
     finally:
         logger.info("app_shutting_down")
+        await app.state.moderation_event_consumer.stop()
         await app.state.postauction_event_consumer.stop()
         await app.state.timer_expiry_scheduler.stop()
         await app.state.chat_system_event_consumer.stop()

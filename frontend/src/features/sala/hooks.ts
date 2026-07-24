@@ -6,8 +6,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getSessionAccessToken } from '../../shared/api/client';
-import { normalizeApiError, type NormalizedApiError } from '../../shared/api/errors';
+import type { NormalizedApiError } from '../../shared/api/errors';
 import { env } from '../../shared/config/env';
+import { useAsyncResource } from '../../shared/hooks/useAsyncResource';
 import { WebSocketClient, type ConnectionStatus } from '../../shared/websocket/client';
 import { useLotes } from '../remates/hooks';
 import type { Lote } from '../remates/types';
@@ -39,31 +40,12 @@ export interface UseRemateSnapshotResult {
  * WebSockets".
  */
 export function useRemateSnapshot(remateId: string): UseRemateSnapshotResult {
-  const [snapshot, setSnapshot] = useState<RemateStateSnapshot | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<NormalizedApiError | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
-    setError(null);
-    fetchRemateSnapshotRequest(remateId)
-      .then((result) => {
-        if (!cancelled) setSnapshot(result);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(normalizeApiError(err));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [remateId, reloadToken]);
-
-  const reload = useCallback(() => setReloadToken((token) => token + 1), []);
+  const {
+    data: snapshot,
+    isLoading,
+    error,
+    reload,
+  } = useAsyncResource<RemateStateSnapshot | null>(() => fetchRemateSnapshotRequest(remateId), [remateId], null);
 
   return { snapshot, isLoading, error, reload };
 }

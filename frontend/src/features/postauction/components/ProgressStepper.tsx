@@ -1,3 +1,4 @@
+import { Check } from 'lucide-react';
 import clsx from 'clsx';
 import { STATUS_LABELS, STATUS_ORDER } from '../labels';
 import type { PostAuctionStatus } from '../types';
@@ -32,7 +33,7 @@ export function ProgressStepper({ status }: ProgressStepperProps) {
                 )}
                 aria-current={isCurrent ? 'step' : undefined}
               >
-                {isDone ? '✓' : index + 1}
+                {isDone ? <Check aria-hidden="true" className="h-4 w-4" /> : index + 1}
               </span>
               <span
                 className={clsx(

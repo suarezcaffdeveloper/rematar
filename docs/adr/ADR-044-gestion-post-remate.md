@@ -42,11 +42,20 @@ dispatcher lee el JSON crudo del evento sin importar la clase `LoteWinnerDetermi
 igual que `ChatSystemEventDispatcher` no importa `LoteClosed` -- así que el dominio de
 remates literalmente no tiene forma de saber que este consumidor existe.
 
-Consecuencia aceptada: el cierre **manual** de un lote vendido (`LoteService.close`,
-ADR-018) no publica `LoteWinnerDetermined` (no hay comprador asociado en ese flujo) --
-esos casos no generan un caso post-remate automático. Se documenta como alcance
-explícito (docs/41), no como bug: sin comprador real no hay a quién notificar ni con
-quién hacer seguimiento.
+Consecuencia aceptada en su momento: el cierre **manual** de un lote vendido
+(`LoteService.close`, ADR-018) no publica `LoteWinnerDetermined`. La suposición
+original era que un cierre manual nunca tiene comprador real asociado (ADR-018 se
+diseñó antes de que existiera el Auction Engine) -- eso dejó de ser cierto una vez que
+un rematador podía cerrar manualmente un lote que sí tenía una oferta `ACCEPTED` real
+(terminar la puja antes de que venza el timer), y esos casos post-remate no se creaban:
+un bug real, no el alcance documentado. **Corregido** sin tocar esta decisión de
+arquitectura (sigue siendo reacción vía evento, sin llamada directa): el dispatcher
+también reacciona a `lote.closed` manual+vendido y resuelve la oferta líder por su
+cuenta (`OfertaRepository`, dirección `postauction -> ofertas`, nunca al revés) en vez
+de depender de que el evento la traiga -- ver docs/41, sección "Cómo se entera de la
+adjudicación". Sin oferta real asociada (venta declarada por fuera del sistema, el
+escenario que ADR-018 sí contempló) sigue sin generar un caso -- eso continúa siendo
+alcance explícito, no un bug.
 
 ### C. Timeline propio insert-only, no reutilizar Historial ni Auditoría
 
@@ -134,11 +143,12 @@ llamada dentro de un método existente, no rediseñar el flujo.
   garantía **verificada por test estático**, no solo una intención de diseño; el
   Notification Service nuevo, aunque mínimo, es genuinamente reutilizable por cualquier
   módulo futuro sin volver a tocar `app/postauction/`.
-- **Desventajas aceptadas**: el cierre manual de un lote vendido (ADR-018) no genera un
-  caso automático (sin comprador real que asociar); sin campanita global de
-  notificaciones en el header todavía (solo backend + las pantallas de este módulo);
-  sin integraciones reales de pago/logística/facturación/firma digital (esperado,
-  preparado no construido).
+- **Desventajas aceptadas**: un cierre manual `sold` sin ninguna oferta real asociada
+  (el escenario original de ADR-018) no genera un caso automático; sin integraciones
+  reales de pago/logística/facturación/firma digital (esperado, preparado no
+  construido). (Corregido desde entonces: un cierre manual con una oferta `ACCEPTED`
+  real sí genera el caso -- ver sección B, actualizada; y la campanita de
+  notificaciones ya se implementó en el rediseño de UI/UX, Épica 9 Etapa 3.)
 - Integrar un proveedor de pagos/logística a futuro es: agregar la llamada al proveedor
   dentro de `PostAuctionService.change_status` (o antes de invocarlo desde un webhook
   nuevo) -- sin reabrir la máquina de estados ni el modelo de datos.

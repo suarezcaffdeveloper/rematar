@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 
 export interface LoteCountdownProps {
@@ -30,46 +30,78 @@ function formatSeconds(totalSeconds: number): string {
  *
  * Sin `endsAt` ni `pausedRemainingSeconds`: el lote/remate no tiene timer configurado
  * -- no renderiza nada (`ActiveLotePanel` sigue mostrando el resto del panel igual).
+ *
+ * Accesibilidad (Épica 9, Etapa 7 -- rediseño, accesibilidad final): el número grande
+ * ya NO lleva `aria-live` -- lo tenía antes, pero al actualizarse una vez por segundo
+ * un lector de pantalla anunciaría el conteo completo cada segundo (antipatrón
+ * documentado explícitamente en las WAI-ARIA Authoring Practices para temporizadores).
+ * En su lugar, una región `sr-only` separada anuncia solo los dos momentos que
+ * importan: al cruzar el umbral urgente (una vez, no en cada segundo posterior) y al
+ * llegar a cero.
  */
 export function LoteCountdown({ endsAt, pausedRemainingSeconds }: LoteCountdownProps) {
   const [now, setNow] = useState(() => Date.now());
+  const [announcement, setAnnouncement] = useState('');
+  const hasAnnouncedUrgentRef = useRef(false);
 
   useEffect(() => {
     if (endsAt === null) return;
+    hasAnnouncedUrgentRef.current = false;
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, [endsAt]);
+
+  const remainingSeconds =
+    pausedRemainingSeconds !== null
+      ? pausedRemainingSeconds
+      : endsAt !== null
+        ? Math.max(0, Math.round((new Date(endsAt).getTime() - now) / 1000))
+        : 0;
+
+  const isUrgent = pausedRemainingSeconds === null && endsAt !== null && remainingSeconds <= URGENT_THRESHOLD_SECONDS;
+
+  useEffect(() => {
+    if (endsAt === null || pausedRemainingSeconds !== null) return;
+    if (remainingSeconds === 0) {
+      setAnnouncement('Tiempo agotado.');
+    } else if (isUrgent && !hasAnnouncedUrgentRef.current) {
+      hasAnnouncedUrgentRef.current = true;
+      setAnnouncement(`Quedan ${remainingSeconds} segundos.`);
+    } else if (!isUrgent) {
+      hasAnnouncedUrgentRef.current = false;
+    }
+  }, [remainingSeconds, isUrgent, endsAt, pausedRemainingSeconds]);
 
   if (endsAt === null && pausedRemainingSeconds === null) {
     return null;
   }
 
-  const remainingSeconds =
-    pausedRemainingSeconds !== null
-      ? pausedRemainingSeconds
-      : Math.max(0, Math.round((new Date(endsAt as string).getTime() - now) / 1000));
-
-  const isUrgent = pausedRemainingSeconds === null && remainingSeconds <= URGENT_THRESHOLD_SECONDS;
-
   return (
     <div
       className={clsx(
-        'flex items-center justify-between rounded-lg border px-4 py-3',
-        isUrgent ? 'border-danger-300 bg-danger-50' : 'border-slate-200 bg-slate-50',
+        'flex flex-col items-center justify-center gap-1 rounded-xl border-2 px-6 py-3 text-center',
+        isUrgent ? 'border-danger-300 bg-danger-50' : 'border-brand-200 bg-brand-50',
       )}
     >
-      <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <span
+        className={clsx(
+          'text-xs font-semibold uppercase tracking-wide',
+          isUrgent ? 'text-danger-600' : 'text-brand-600',
+        )}
+      >
         {pausedRemainingSeconds !== null ? 'Timer pausado' : 'Tiempo restante'}
       </span>
       <span
         role="timer"
-        aria-live="polite"
         className={clsx(
-          'text-3xl font-bold tabular-nums',
-          isUrgent ? 'animate-pulse text-danger-600' : 'text-slate-900',
+          'text-5xl font-extrabold tabular-nums leading-none',
+          isUrgent ? 'animate-pulse text-danger-600' : 'text-brand-700',
         )}
       >
         {formatSeconds(remainingSeconds)}
+      </span>
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {announcement}
       </span>
     </div>
   );

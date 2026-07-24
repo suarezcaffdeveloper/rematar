@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import { Badge } from '../../../shared/components/Badge';
 import { formatCurrency } from '../../../shared/lib/format';
 import type { UserRole } from '../../auth/types';
@@ -24,7 +25,14 @@ function formatAttributeKey(key: string): string {
 
 /**
  * Sección principal de la sala: el lote actualmente abierto, con toda su información
- * (Épica 4.5). `lote.attributes` es el campo libre del backend (raza/peso/año/m2, ver
+ * (Épica 4.5; reordenado en la Épica 9, Etapa 4 -- rediseño). Precio/cuenta regresiva/
+ * botón de ofertar viven en una única "zona de acción" destacada (fondo con tinte de
+ * marca), ubicada ANTES de la descripción/ficha técnica -- lo que hace falta ver y
+ * hacer ahora mismo (cuánto se ofrece, cuánto tiempo queda, ofertar) tiene prioridad
+ * visual sobre la información de referencia del lote, que sigue disponible más abajo
+ * sin necesidad de un segundo scroll dentro del panel.
+ *
+ * `lote.attributes` es el campo libre del backend (raza/peso/año/m2, ver
  * `backend/.../lotes/models.py`) -- se renderiza como una ficha de clave/valor genérica,
  * sin asumir qué claves va a tener un lote puntual (distinto tipo de remate, distintos
  * atributos).
@@ -39,22 +47,60 @@ export function ActiveLotePanel({
 }: ActiveLotePanelProps) {
   const attributeEntries = Object.entries(lote.attributes);
   const currentOfferAmount = winningOffer?.amount ?? lote.base_price;
+  const hasTimer = lote.timer_ends_at !== null || lote.timer_paused_remaining_seconds !== null;
 
   return (
     <div className="flex flex-col gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <ImageGallery key={lote.id} images={lote.images} alt={lote.title} />
 
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-              Lote {lote.lot_number} · {CATEGORY_LABELS[lote.category]}
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+            Lote {lote.lot_number} · {CATEGORY_LABELS[lote.category]}
+          </p>
+          <h2 className="mt-1 text-xl font-bold text-slate-900">{lote.title}</h2>
+        </div>
+        <Badge variant={LOTE_STATUS_BADGE_VARIANTS[lote.status]}>{LOTE_STATUS_LABELS[lote.status]}</Badge>
+      </div>
+
+      {/* Zona de acción: precio destacado + cuenta regresiva muy visible + ofertar con
+       * protagonismo (pedido explícito del rediseño). */}
+      <div className="flex flex-col gap-4 rounded-xl border border-brand-100 bg-gradient-to-br from-brand-50/70 to-white p-5">
+        <div
+          className={clsx(
+            'flex flex-col gap-4',
+            hasTimer && 'sm:flex-row sm:items-center sm:justify-between',
+          )}
+        >
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {winningOffer ? 'Oferta actual' : 'Precio inicial'}
             </p>
-            <h2 className="mt-1 text-xl font-bold text-slate-900">{lote.title}</h2>
+            <p className="text-4xl font-extrabold tabular-nums text-brand-700 sm:text-5xl">
+              {formatCurrency(currentOfferAmount, currency)}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Precio inicial {formatCurrency(lote.base_price, currency)} · incremento mínimo{' '}
+              {formatCurrency(lote.min_increment, currency)}
+            </p>
           </div>
-          <Badge variant={LOTE_STATUS_BADGE_VARIANTS[lote.status]}>{LOTE_STATUS_LABELS[lote.status]}</Badge>
+
+          {hasTimer && (
+            <LoteCountdown endsAt={lote.timer_ends_at} pausedRemainingSeconds={lote.timer_paused_remaining_seconds} />
+          )}
         </div>
 
+        <PlaceBidButton
+          remateId={remateId}
+          lote={lote}
+          currency={currency}
+          winningOffer={winningOffer}
+          remateStatus={remateStatus}
+          viewerRole={viewerRole}
+        />
+      </div>
+
+      <div className="flex flex-col gap-3">
         <p className="text-sm leading-relaxed text-slate-600">
           {lote.description ?? 'Este lote todavía no tiene una descripción cargada.'}
         </p>
@@ -81,32 +127,6 @@ export function ActiveLotePanel({
           </div>
         )}
       </div>
-
-      <LoteCountdown endsAt={lote.timer_ends_at} pausedRemainingSeconds={lote.timer_paused_remaining_seconds} />
-
-      <div className="grid grid-cols-2 gap-4 rounded-lg border border-slate-200 p-4 sm:grid-cols-3">
-        <div>
-          <p className="text-xs text-slate-400">Precio inicial</p>
-          <p className="text-base font-semibold text-slate-700">{formatCurrency(lote.base_price, currency)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-slate-400">{winningOffer ? 'Oferta actual' : 'Sin ofertas todavía'}</p>
-          <p className="text-lg font-bold text-brand-700">{formatCurrency(currentOfferAmount, currency)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-slate-400">Incremento mínimo</p>
-          <p className="text-base font-semibold text-slate-700">{formatCurrency(lote.min_increment, currency)}</p>
-        </div>
-      </div>
-
-      <PlaceBidButton
-        remateId={remateId}
-        lote={lote}
-        currency={currency}
-        winningOffer={winningOffer}
-        remateStatus={remateStatus}
-        viewerRole={viewerRole}
-      />
     </div>
   );
 }

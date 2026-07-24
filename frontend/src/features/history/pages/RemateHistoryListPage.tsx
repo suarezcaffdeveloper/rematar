@@ -1,4 +1,4 @@
-import { Breadcrumb } from '../../../shared/components/Breadcrumb';
+import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
 import { FinishedRemateList } from '../components/FinishedRemateList';
 
 /**
@@ -11,10 +11,10 @@ import { FinishedRemateList } from '../components/FinishedRemateList';
  * docs/37-historial-y-resultados-de-remates.md.
  */
 export function RemateHistoryListPage() {
+  useBreadcrumb([{ label: 'Mis remates', to: '/' }, { label: 'Historial' }]);
+
   return (
     <div className="flex flex-col gap-6">
-      <Breadcrumb items={[{ label: 'Mis remates', to: '/' }, { label: 'Historial' }]} />
-
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Historial de remates</h1>
         <p className="mt-1 text-sm text-slate-500">

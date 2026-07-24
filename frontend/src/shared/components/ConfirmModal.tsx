@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { Button } from './Button';
 import { Modal } from './Modal';
 
@@ -64,7 +65,14 @@ export function ConfirmModal({
         </>
       }
     >
-      <p className="text-sm text-slate-600">{message}</p>
+      <div className="flex items-start gap-3">
+        {variant === 'danger' && (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-danger-50 text-danger-600">
+            <AlertTriangle aria-hidden="true" className="h-5 w-5" />
+          </span>
+        )}
+        <p className="pt-1.5 text-sm text-slate-600">{message}</p>
+      </div>
     </Modal>
   );
 }

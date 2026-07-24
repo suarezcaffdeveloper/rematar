@@ -43,10 +43,14 @@ transición automática, no disparada por HTTP).
 import uuid
 from datetime import UTC, datetime
 
+from fastapi import UploadFile
+
 from app.audit.actions import AuditAction
 from app.audit.repository import AuditLogRepository
+from app.core.config import Settings
 from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
 from app.events.bus import EventBus
+from app.modules.remates import media_storage
 from app.modules.remates.events import (
     RemateCancelled,
     RemateCreated,
@@ -129,6 +133,21 @@ class RemateService:
             )
         )
         return remate
+
+    async def upload_cover_image(
+        self, owner: User, upload: UploadFile, settings: Settings, request_base_url: str
+    ) -> str:
+        """Sube la imagen de portada de un remate (refinamiento visual: reemplaza el
+        campo de URL manual por selección de archivo, `RemateFormModal`). Sin scope a
+        un `remate_id` -- se llama desde el mismo formulario que crea el remate, antes
+        de que exista ninguna fila (`media_storage.save_remate_cover_image` namespacea
+        por `owner_id`, no por `remate_id`, justamente por esto). No hay ownership de un
+        remate puntual que validar acá; el único control de acceso es el rol
+        `rematador`, ya exigido por `require_roles` en el router. No toca ninguna fila:
+        devuelve solo la URL, igual que `LoteService.upload_image`."""
+        return await media_storage.save_remate_cover_image(
+            owner.id, upload, settings, request_base_url
+        )
 
     @staticmethod
     def _is_visible(remate: Remate, viewer: User) -> bool:
