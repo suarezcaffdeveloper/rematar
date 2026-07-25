@@ -217,16 +217,9 @@ def create_app() -> FastAPI:
     media_root.mkdir(parents=True, exist_ok=True)
     app.mount(settings.MEDIA_URL_PREFIX, StaticFiles(directory=media_root), name="media")
 
-    @app.get("/health", tags=["health"], summary="Liveness/readiness probe")
-    async def health(request: Request) -> dict[str, object]:
-        # Nunca devuelve un status HTTP de error por Redis caído (soft-fail
-        # deliberado, ver ADR-021 sección C): Redis es soporte, nunca fuente de
-        # verdad (ADR-002), y hoy ningún endpoint depende de él para funcionar.
-        try:
-            redis_ok = bool(await request.app.state.redis.ping())
-        except Exception:  # noqa: BLE001 — cualquier falla de Redis es "no disponible"
-            redis_ok = False
-        return {"status": "ok", "checks": {"redis": "ok" if redis_ok else "unavailable"}}
+    @app.get("/health", include_in_schema=False)
+    async def health():
+        return {"ok": True}
 
     @app.get("/")
     async def root():
