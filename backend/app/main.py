@@ -228,12 +228,9 @@ def create_app() -> FastAPI:
             redis_ok = False
         return {"status": "ok", "checks": {"redis": "ok" if redis_ok else "unavailable"}}
 
-    @app.get("/", include_in_schema=False)
-    async def root() -> dict[str, str]:
-        return {
-            "service": "RematAR API",
-            "status": "running",
-        }
+    @app.get("/")
+    async def root():
+        return {"status": "ok"}
 
     return app
 
