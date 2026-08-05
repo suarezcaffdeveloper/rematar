@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-landing
 *.local
 
 # Entorno -- mismo criterio que la raíz del repo (.env real nunca se commitea).
