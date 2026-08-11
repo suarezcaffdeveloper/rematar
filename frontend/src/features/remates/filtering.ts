@@ -66,6 +66,19 @@ function sortRemates(remates: Remate[], sort: RemateSortOption): Remate[] {
   }
 }
 
+// Los remates `finished` siempre van al final, sin importar el orden elegido -- pedido
+// explícito: "en vivo" y "scheduled" se pueden mezclar entre sí, pero un remate ya
+// finalizado nunca debe aparecer antes de uno que sigue abierto. Partición estable: el
+// orden relativo dentro de cada grupo (activos / finalizados) es el que ya dejó `sortRemates`.
+function moveFinishedLast(remates: Remate[]): Remate[] {
+  const active: Remate[] = [];
+  const finished: Remate[] = [];
+  for (const remate of remates) {
+    (remate.status === 'finished' ? finished : active).push(remate);
+  }
+  return [...active, ...finished];
+}
+
 export function filterAndSortRemates(remates: Remate[], filters: RemateFilters): Remate[] {
   const filtered = remates.filter(
     (remate) =>
@@ -73,5 +86,5 @@ export function filterAndSortRemates(remates: Remate[], filters: RemateFilters):
       (filters.status === 'all' || remate.status === filters.status) &&
       (filters.category === 'all' || remate.category === filters.category),
   );
-  return sortRemates(filtered, filters.sort);
+  return moveFinishedLast(sortRemates(filtered, filters.sort));
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Plus } from 'lucide-react';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Button } from '../../../shared/components/Button';
 import { Input } from '../../../shared/components/Input';
@@ -101,6 +102,16 @@ export function PlaceBidButton({
     }
   }
 
+  // Atajo "+incremento mínimo" (rediseño de la zona de ofertar): suma el incremento
+  // sobre lo que la persona ya haya escrito (no siempre `minimumAmount` -- alguien puede
+  // querer ofertar por encima del mínimo y seguir sumando de a un incremento desde ahí).
+  // Si lo que hay escrito no es un número válido todavía, arranca desde `minimumAmount`.
+  function handleQuickIncrement() {
+    const base = isPositiveDecimal(trimmedAmount) ? Number(trimmedAmount) : Number(minimumAmount);
+    setTouched(true);
+    setAmount((base + Number(lote.min_increment)).toFixed(2));
+  }
+
   if (!canBid) {
     const disabledReason = !isComprador
       ? 'Solo los compradores pueden ofertar en la sala.'
@@ -110,7 +121,7 @@ export function PlaceBidButton({
 
     return (
       <div className="flex flex-col gap-2">
-        <Button disabled className="w-full py-3 text-base" title={disabledReason}>
+        <Button disabled className="w-full py-2.5 text-sm" title={disabledReason}>
           Realizar oferta
         </Button>
         <p className="text-center text-xs text-slate-400">{disabledReason}</p>
@@ -119,7 +130,7 @@ export function PlaceBidButton({
   }
 
   return (
-    <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-3">
+    <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-2.5">
       <Input
         label={`Tu oferta (mínimo ${formatCurrency(minimumAmount, currency)})`}
         type="text"
@@ -131,15 +142,33 @@ export function PlaceBidButton({
         }}
         error={validationError ?? undefined}
         disabled={isSubmitting}
+        className="py-1.5"
       />
-      <Button
-        type="submit"
-        isLoading={isSubmitting}
-        disabled={Boolean(validationError)}
-        className="w-full py-3 text-base font-semibold"
-      >
-        Ofertar
-      </Button>
+
+      {/* Fila de acción: atajo "+incremento" para no tener que calcular a mano cuánto
+       * hace falta sumar, al lado del botón de ofertar -- ambos más chicos que antes
+       * (pedido explícito), el atajo queda secundario en tamaño y jerarquía visual. */}
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={handleQuickIncrement}
+          disabled={isSubmitting}
+          className="shrink-0 gap-1 px-3 py-2 text-sm"
+          title={`Sumar el incremento mínimo (${formatCurrency(lote.min_increment, currency)}) a tu oferta`}
+        >
+          <Plus aria-hidden="true" className="h-4 w-4" />
+          {formatCurrency(lote.min_increment, currency)}
+        </Button>
+        <Button
+          type="submit"
+          isLoading={isSubmitting}
+          disabled={Boolean(validationError)}
+          className="flex-1 py-2 text-sm font-semibold"
+        >
+          Ofertar
+        </Button>
+      </div>
     </form>
   );
 }

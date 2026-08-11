@@ -8,8 +8,7 @@ import { Skeleton } from '../../../shared/components/Skeleton';
 import { GavelIcon } from '../components/icons';
 import { LoteCard } from '../components/LoteCard';
 import { LoteCardSkeleton } from '../components/LoteCardSkeleton';
-import { RemateDetailHeader } from '../components/RemateDetailHeader';
-import { RemateInfoSection } from '../components/RemateInfoSection';
+import { RemateDetailOverview } from '../components/RemateDetailOverview';
 import { useLotes, useRemateDetail } from '../hooks';
 
 const LOTE_SKELETON_COUNT = 3;
@@ -17,16 +16,10 @@ const LOTE_SKELETON_COUNT = 3;
 function DetailSkeleton() {
   return (
     <div className="flex flex-col gap-6">
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <Skeleton className="aspect-[16/9] w-full rounded-none sm:aspect-[3/1]" />
-        <div className="flex flex-col gap-3 p-6">
-          <Skeleton className="h-3 w-24" />
-          <Skeleton className="h-8 w-2/3" />
-        </div>
-      </div>
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <Skeleton className="h-40 lg:col-span-2" />
-        <Skeleton className="h-40" />
+      <Skeleton className="aspect-[4/3] w-full rounded-2xl sm:aspect-[21/9]" />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_35%]">
+        <Skeleton className="h-64 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
       </div>
     </div>
   );
@@ -48,8 +41,7 @@ export function RemateDetailPage() {
     error: remateError,
     reload: reloadRemate,
   } = useRemateDetail(remateId ?? '');
-  const { lotes, total: loteTotal, isLoading: isLotesLoading, error: lotesError, reload: reloadLotes } =
-    useLotes(remateId ?? '');
+  const { lotes, isLoading: isLotesLoading, error: lotesError, reload: reloadLotes } = useLotes(remateId ?? '');
 
   const items: BreadcrumbItem[] = isRemateLoading
     ? []
@@ -89,12 +81,13 @@ export function RemateDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <RemateDetailHeader remate={remate} onEnterRoom={() => navigate(`/remates/${remate.id}/sala`)} />
-
-      <RemateInfoSection remate={remate} loteTotal={loteTotal} />
+      <RemateDetailOverview remate={remate} onEnterRoom={() => navigate(`/remates/${remate.id}/sala`)} />
 
       <div className="flex flex-col gap-4">
-        <h2 className="text-lg font-semibold text-slate-900">Lotes de este remate</h2>
+        <div className="flex flex-col gap-1">
+          <h2 className="text-xl font-bold text-slate-900">Lotes de este remate</h2>
+          <p className="text-sm text-slate-500">Explorá y seleccioná tus lotes de interés antes del inicio.</p>
+        </div>
 
         {lotesError && (
           <Alert variant="error">
@@ -126,7 +119,7 @@ export function RemateDetailPage() {
         {!isLotesLoading && !lotesError && lotes.length > 0 && (
           <div className="flex flex-col gap-4">
             {lotes.map((lote) => (
-              <LoteCard key={lote.id} lote={lote} />
+              <LoteCard key={lote.id} lote={lote} currency={remate.settings.currency} />
             ))}
           </div>
         )}

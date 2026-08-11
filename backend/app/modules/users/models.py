@@ -41,6 +41,12 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # historial: un usuario inactivo simplemente no puede autenticarse (ver
     # app/modules/auth/service.py).
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Nullable a nivel de columna solo para no romper usuarios ya existentes al correr la
+    # migración: `UserCreate` (app/modules/users/schemas.py) ya lo exige en todo registro
+    # nuevo. Se usa para contactar al ganador de un lote post-remate (Épica 7) y, más
+    # adelante, para integrarse con una API de WhatsApp -- por eso se normaliza a un
+    # formato tipo E.164 (solo dígitos, `+` opcional al inicio) antes de persistirse.
+    phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     def __repr__(self) -> str:
         return f"<User id={self.id} email={self.email!r} role={self.role.value}>"

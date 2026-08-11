@@ -18,12 +18,22 @@ export interface PostAuctionCase {
   lote_id: string;
   lot_number: string;
   lote_title: string;
+  lote_cover_image_url: string | null;
   remate_id: string;
   remate_title: string;
   buyer_id: string;
   buyer_name: string | null;
+  /** Solo presentes en la respuesta que ve el rematador dueño (`GET /postauction/ventas`,
+   * `PostAuctionCaseRematadorRead` en el backend) -- `GET /postauction/mis-compras`
+   * (vista del comprador, `PostAuctionCaseRead`) no los trae, por eso son opcionales acá
+   * y no campos requeridos. */
+  buyer_email?: string | null;
+  buyer_phone?: string | null;
   rematador_id: string;
   rematador_name: string | null;
+  /** Precio base del lote (`Lote.base_price`) -- agregado junto con el rediseño del
+   * panel de detalle para mostrar "precio inicial" junto al final. */
+  base_price: string;
   final_price: string;
   status: PostAuctionStatus;
   contacted_at: string | null;

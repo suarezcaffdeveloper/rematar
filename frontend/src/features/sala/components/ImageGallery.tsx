@@ -1,13 +1,20 @@
-import { type KeyboardEvent, type TouchEvent, useMemo, useRef, useState } from 'react';
+import { type KeyboardEvent, type TouchEvent, useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import clsx from 'clsx';
 import { CoverPlaceholder } from '../../remates/components/CoverPlaceholder';
 import { BoxIcon } from '../../remates/components/icons';
 import type { LoteImage } from '../../remates/types';
+import { useImageGallery } from './useImageGallery';
 
 export interface ImageGalleryProps {
   images: LoteImage[];
   alt: string;
+  /** Clase de aspect ratio del contenedor principal -- `aspect-video` (16:9) por
+   * default, igual que siempre. La Consola Operativa del rematador pasa una relación más
+   * baja (rediseño "Modo Remate"): a diferencia de la Sala del comprador, donde la imagen
+   * es el elemento protagonista, el rematador prioriza la operación por sobre la media,
+   * así que su columna de lote ocupa menos alto. */
+  aspectClassName?: string;
 }
 
 /** Distancia mínima en px para interpretar un touch como swipe en vez de un tap --
@@ -24,25 +31,17 @@ const SWIPE_THRESHOLD_PX = 40;
  * (optimización de renderizado por colocación de estado, ver docs/27-sala-del-remate.md,
  * "Optimización del renderizado").
  */
-export function ImageGallery({ images, alt }: ImageGalleryProps) {
-  const sorted = useMemo(() => [...images].sort((a, b) => a.order - b.order), [images]);
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const selected = sorted[selectedIndex] ?? sorted[0];
+export function ImageGallery({ images, alt, aspectClassName = 'aspect-video' }: ImageGalleryProps) {
+  const { sorted, selectedIndex, selected, hasMultiple, goTo } = useImageGallery(images);
   const touchStartXRef = useRef<number | null>(null);
 
   if (!selected) {
     return (
       <CoverPlaceholder
-        className="aspect-video w-full rounded-xl"
+        className={clsx(aspectClassName, 'w-full rounded-xl')}
         icon={<BoxIcon className="h-12 w-12 text-brand-300" />}
       />
     );
-  }
-
-  const hasMultiple = sorted.length > 1;
-
-  function goTo(index: number) {
-    setSelectedIndex((index + sorted.length) % sorted.length);
   }
 
   function handleTouchStart(event: TouchEvent<HTMLDivElement>) {
@@ -74,16 +73,31 @@ export function ImageGallery({ images, alt }: ImageGalleryProps) {
         onTouchStart={hasMultiple ? handleTouchStart : undefined}
         onTouchEnd={hasMultiple ? handleTouchEnd : undefined}
         className={clsx(
-          'relative aspect-video w-full touch-pan-y overflow-hidden rounded-xl bg-slate-100',
+          'relative w-full touch-pan-y overflow-hidden rounded-xl bg-slate-100',
+          aspectClassName,
           hasMultiple && 'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
         )}
       >
-        <img
-          key={selected.url}
-          src={selected.url}
-          alt={selected.caption ?? alt}
-          className="h-full w-full object-cover"
-        />
+        {/* Track deslizante (en vez de reemplazar el `<img>` de golpe): todas las
+         * imágenes van una al lado de la otra en fila, `translateX` mueve el track
+         * entero a la posición seleccionada -- transición suave al pasar de foto,
+         * pedido explícito en vez del corte abrupto que había antes. La regla global
+         * de `prefers-reduced-motion` (`styles/index.css`) ya recorta esta transición
+         * a 0 para quien lo prefiere, sin lógica extra acá. */}
+        <div
+          className="flex h-full w-full transition-transform duration-300 ease-out"
+          style={{ transform: `translateX(-${selectedIndex * 100}%)` }}
+        >
+          {sorted.map((image, index) => (
+            <img
+              key={`${image.url}-${index}`}
+              src={image.url}
+              alt={index === selectedIndex ? (image.caption ?? alt) : ''}
+              aria-hidden={index !== selectedIndex}
+              className="h-full w-full shrink-0 object-cover"
+            />
+          ))}
+        </div>
 
         {hasMultiple && (
           <>
@@ -117,7 +131,7 @@ export function ImageGallery({ images, alt }: ImageGalleryProps) {
             <button
               key={`${image.url}-${index}`}
               type="button"
-              onClick={() => setSelectedIndex(index)}
+              onClick={() => goTo(index)}
               aria-label={`Ver imagen ${index + 1} de ${sorted.length}`}
               aria-current={index === selectedIndex}
               className={clsx(

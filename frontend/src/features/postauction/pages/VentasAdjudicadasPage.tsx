@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
+import { useWideLayout } from '../../../app/layouts/useWideLayout';
 import { Alert } from '../../../shared/components/Alert';
 import { Button } from '../../../shared/components/Button';
 import { EmptyState } from '../../../shared/components/EmptyState';
@@ -10,7 +11,7 @@ import { SearchFilterBar } from '../components/SearchFilterBar';
 import { useVentasAdjudicadas } from '../hooks';
 import type { PostAuctionListFilters } from '../types';
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 4;
 
 /**
  * "Ventas adjudicadas" del rematador (Épica 7, Módulo 7.5), en `/ventas-adjudicadas`.
@@ -19,6 +20,7 @@ const PAGE_SIZE = 12;
  * las ventas propias; un `comprador` que llegue por URL directa recibe 403.
  */
 export function VentasAdjudicadasPage() {
+  useWideLayout();
   const [filters, setFilters] = useState<PostAuctionListFilters>({});
   const [page, setPage] = useState(1);
 
@@ -47,8 +49,8 @@ export function VentasAdjudicadasPage() {
       {error ? (
         <Alert variant="error">No se pudieron cargar las ventas adjudicadas.</Alert>
       ) : isLoading && !data ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }, (_, index) => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, index) => (
             <Skeleton key={index} className="h-40 rounded-xl" />
           ))}
         </div>
@@ -60,7 +62,7 @@ export function VentasAdjudicadasPage() {
         />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {data?.items.map((item) => (
               <CaseCard
                 key={item.id}

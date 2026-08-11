@@ -20,6 +20,7 @@ export interface User {
   id: string;
   email: string;
   full_name: string;
+  phone: string | null;
   role: UserRole;
   is_active: boolean;
   created_at: string;
@@ -37,10 +38,18 @@ export interface LoginPayload {
   password: string;
 }
 
-/** `UserCreate` -- `backend/app/modules/users/schemas.py`. */
+/**
+ * `UserCreate` -- `backend/app/modules/users/schemas.py`. Incluye `confirm_password`
+ * porque el backend también revalida la coincidencia como defensa en profundidad (no
+ * confía solo en el chequeo del formulario) -- pero, igual que en el backend, ese campo
+ * nunca se persiste: no existe en `User` (`types.ts`) ni se guarda en ningún lado, solo
+ * viaja en este POST puntual para que el backend pueda validarlo.
+ */
 export interface RegisterPayload {
   email: string;
   password: string;
+  confirm_password: string;
   full_name: string;
+  phone: string;
   role: RegisterableRole;
 }

@@ -94,22 +94,29 @@ describe('filterAndSortRemates', () => {
     expect(result.map((r) => r.id)).toEqual(['b']);
   });
 
-  it('ordena "proximos" por starts_at ascendente, sin fecha al final', () => {
+  it('ordena "proximos" por starts_at ascendente, sin fecha al final, y "finished" siempre al final de todo', () => {
     const filters: RemateFilters = { ...DEFAULT_FILTERS, sort: 'proximos' };
     const result = filterAndSortRemates(REMATES, filters);
-    expect(result.map((r) => r.id)).toEqual(['c', 'b', 'a', 'd']);
+    expect(result.map((r) => r.id)).toEqual(['b', 'a', 'd', 'c']);
   });
 
-  it('ordena "recientes" por created_at descendente', () => {
+  it('ordena "recientes" por created_at descendente, y "finished" siempre al final de todo', () => {
     const filters: RemateFilters = { ...DEFAULT_FILTERS, sort: 'recientes' };
     const result = filterAndSortRemates(REMATES, filters);
-    expect(result.map((r) => r.id)).toEqual(['b', 'a', 'c', 'd']);
+    expect(result.map((r) => r.id)).toEqual(['b', 'a', 'd', 'c']);
   });
 
-  it('ordena "en_vivo" con los remates live primero', () => {
+  it('ordena "en_vivo" con los remates live primero, y "finished" siempre al final de todo', () => {
     const filters: RemateFilters = { ...DEFAULT_FILTERS, sort: 'en_vivo' };
     const result = filterAndSortRemates(REMATES, filters);
     expect(result[0]?.id).toBe('b');
+    expect(result.map((r) => r.id)).toEqual(['b', 'a', 'd', 'c']);
+  });
+
+  it('un remate "finished" nunca queda antes de uno activo, aunque su fecha sea anterior', () => {
+    const filters: RemateFilters = { ...DEFAULT_FILTERS, status: 'all', sort: 'proximos' };
+    const result = filterAndSortRemates(REMATES, filters);
+    expect(result.at(-1)?.id).toBe('c');
   });
 
   it('devuelve una lista vacía si nada coincide', () => {

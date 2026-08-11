@@ -21,12 +21,14 @@ function makeCase(overrides: Partial<PostAuctionCase> = {}): PostAuctionCase {
     lote_id: 'lote-1',
     lot_number: '1',
     lote_title: 'Toro Angus',
+    lote_cover_image_url: null,
     remate_id: 'remate-1',
     remate_title: 'Remate de campo',
     buyer_id: 'buyer-1',
     buyer_name: 'Juan Comprador',
     rematador_id: 'rematador-1',
     rematador_name: 'Ana Rematadora',
+    base_price: '1000.00',
     final_price: '1500.00',
     status: 'adjudicado',
     contacted_at: null,
@@ -114,10 +116,15 @@ describe('useMisCompras', () => {
       page_size: 12,
     });
 
-    const { result } = renderHook(() => useMisCompras(1, 12));
+    const { result } = renderHook(() => useMisCompras({}, 1, 12));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.data?.items[0].id).toBe('case-2');
+    expect(apiMocks.fetchMisComprasRequest).toHaveBeenCalledWith(
+      { status: undefined, search: undefined },
+      1,
+      12,
+    );
   });
 });
 

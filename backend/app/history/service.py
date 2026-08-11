@@ -197,6 +197,8 @@ class HistoryService:
             winner = LoteWinner(
                 buyer_id=winner_oferta.buyer_id,
                 buyer_name=buyer.full_name if buyer else None,
+                buyer_email=buyer.email if buyer else None,
+                buyer_phone=buyer.phone if buyer else None,
                 amount=winner_oferta.amount,
             )
 

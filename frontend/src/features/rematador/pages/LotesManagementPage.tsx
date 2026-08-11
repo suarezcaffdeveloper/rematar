@@ -1,5 +1,6 @@
-import { type DragEvent, useEffect, useState } from 'react';
+import { type DragEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowUpDown, Filter, PackageOpen } from 'lucide-react';
 import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Alert } from '../../../shared/components/Alert';
@@ -7,6 +8,7 @@ import type { BreadcrumbItem } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { ConfirmModal } from '../../../shared/components/ConfirmModal';
 import { EmptyState } from '../../../shared/components/EmptyState';
+import { FIELD_CONTROL_CLASSES } from '../../../shared/components/FieldWrapper';
 import { Skeleton } from '../../../shared/components/Skeleton';
 import { useToastStore } from '../../../shared/toast/toastStore';
 import {
@@ -15,16 +17,19 @@ import {
   reorderLotesRequest,
   scheduleRemateRequest,
 } from '../../remates/api';
-import { GavelIcon } from '../../remates/components/icons';
+import { GavelIcon, SearchIcon } from '../../remates/components/icons';
 import { useLotes, useRemateDetail } from '../../remates/hooks';
 import type { Lote } from '../../remates/types';
+import { AddLoteButton } from '../components/AddLoteButton';
 import { CancelRemateModal } from '../components/CancelRemateModal';
-import { PlusIcon } from '../components/icons';
+import { SendIcon } from '../components/icons';
 import { LoteFormModal } from '../components/LoteFormModal';
 import { LoteManagementCard } from '../components/LoteManagementCard';
 import { LoteManagementCardSkeleton } from '../components/LoteManagementCardSkeleton';
+import { LotesSummaryChips } from '../components/LotesSummaryChips';
 import { RemateFormModal } from '../components/RemateFormModal';
 import { RemateManagementSidebar } from '../components/RemateManagementSidebar';
+import { RematePublicadoOverlay } from '../components/RematePublicadoOverlay';
 import { duplicateLote, duplicateRemate } from '../duplication';
 
 const LOTE_SKELETON_COUNT = 3;
@@ -40,6 +45,14 @@ const LOTE_SKELETON_COUNT = 3;
  * remate está `draft`/`scheduled` (`LoteService._assert_structure_editable`, backend) --
  * una vez `live`, queda congelada; esta pantalla lo refleja deshabilitando esas acciones
  * en vez de dejar que el backend las rechace con un 422.
+ *
+ * Rediseño a "centro de preparación del remate": toda la pantalla gira alrededor de los
+ * lotes. Las acciones de ciclo de vida del remate (editar/duplicar/auditoría/cancelar/
+ * eliminar) se agrupan en `RemateManagementSidebar` bajo "Configuración del remate";
+ * "Agregar lote" y "Publicar remate" son las dos únicas acciones con peso visual propio.
+ * El buscador filtra client-side sobre los `lotes` ya cargados -- "Filtrar"/"Ordenar"
+ * quedan como controles deshabilitados, a propósito (pedido explícito: dejar la interfaz
+ * preparada para esas mejoras sin inventar comportamiento que el backend no soporta).
  */
 export function LotesManagementPage() {
   const { remateId } = useParams<{ remateId: string }>();
@@ -54,10 +67,13 @@ export function LotesManagementPage() {
     setLotes(fetchedLotes);
   }, [fetchedLotes]);
 
+  const [searchQuery, setSearchQuery] = useState('');
+
   const [isRemateModalOpen, setIsRemateModalOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isDeleteRemateModalOpen, setIsDeleteRemateModalOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isPublishedOverlayOpen, setIsPublishedOverlayOpen] = useState(false);
   const [isDuplicatingRemate, setIsDuplicatingRemate] = useState(false);
 
   const [loteModalState, setLoteModalState] = useState<{ mode: 'create' } | { mode: 'edit'; lote: Lote } | null>(
@@ -70,6 +86,21 @@ export function LotesManagementPage() {
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const isStructureEditable = remate?.status === 'draft' || remate?.status === 'scheduled';
+  const isDraft = remate?.status === 'draft';
+  const canPublish = isDraft && Boolean(remate?.starts_at) && lotes.length > 0;
+  const publishBlockedReason = !remate?.starts_at
+    ? 'Definí una fecha de inicio (Configuración del remate → Editar remate) antes de publicar.'
+    : lotes.length === 0
+      ? 'Debés cargar al menos un lote para publicar el remate.'
+      : undefined;
+
+  const filteredLotes = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return lotes;
+    return lotes.filter(
+      (lote) => lote.title.toLowerCase().includes(query) || lote.lot_number.toLowerCase().includes(query),
+    );
+  }, [lotes, searchQuery]);
 
   const breadcrumbItems: BreadcrumbItem[] = isRemateLoading
     ? []
@@ -117,11 +148,14 @@ export function LotesManagementPage() {
     setIsPublishing(true);
     try {
       await scheduleRemateRequest(id);
-      useToastStore.getState().push('success', 'El remate se publicó.');
-      reloadRemate();
+      setIsPublishing(false);
+      // Mismo cartel de redirección que "Iniciar remate" (Épica 5, Módulo 5.1) -- pedido
+      // explícito: que los dos flujos automáticos se sientan iguales. La navegación real
+      // a "Mis remates" la dispara el propio cartel al autodescartarse
+      // (`RematePublicadoOverlay` → `TransitionOverlay`), no acá.
+      setIsPublishedOverlayOpen(true);
     } catch (err) {
       useToastStore.getState().push('error', normalizeApiError(err).message);
-    } finally {
       setIsPublishing(false);
     }
   }
@@ -212,30 +246,35 @@ export function LotesManagementPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8 pb-20">
+      <div className="flex items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-brand-700 text-white shadow-sm">
+          <GavelIcon className="h-5 w-5" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Preparación del Remate</h1>
+          <p className="mt-1 max-w-2xl text-sm text-slate-500">
+            Complete y organice los lotes que formarán parte del remate. Cuando todo esté listo podrá publicarlo y
+            comenzar la subasta.
+          </p>
+        </div>
+      </div>
+
       <div className="flex flex-col gap-5 lg:flex-row">
         <RemateManagementSidebar
           remate={remate}
-          loteCount={lotes.length}
           onEdit={() => setIsRemateModalOpen(true)}
-          onPublish={handlePublish}
           onCancel={() => setIsCancelModalOpen(true)}
           onDelete={() => setIsDeleteRemateModalOpen(true)}
           onDuplicate={handleDuplicateRemate}
           onViewAudit={() => navigate(`/remates/${id}/auditoria`)}
-          isPublishing={isPublishing}
           isDuplicating={isDuplicatingRemate}
         />
 
         <div className="flex flex-1 flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-slate-900">Lotes</h2>
-            {isStructureEditable && (
-              <Button onClick={() => setLoteModalState({ mode: 'create' })}>
-                <PlusIcon className="h-4 w-4" />
-                Agregar lote
-              </Button>
-            )}
+            {isStructureEditable && <AddLoteButton onClick={() => setLoteModalState({ mode: 'create' })} />}
           </div>
 
           {!isStructureEditable && (
@@ -266,48 +305,88 @@ export function LotesManagementPage() {
 
           {!isLotesLoading && !lotesError && lotes.length === 0 && (
             <EmptyState
-              icon={<GavelIcon className="h-10 w-10" />}
-              title="Todavía no cargaste lotes"
-              description="Agregá el primer lote para empezar a preparar este remate."
+              icon={<PackageOpen className="h-10 w-10" aria-hidden="true" />}
+              title="Aún no agregaste ningún lote"
+              description="Los lotes son los productos que participarán del remate. Comenzá creando el primero."
               action={
                 isStructureEditable ? (
-                  <Button onClick={() => setLoteModalState({ mode: 'create' })}>Agregar lote</Button>
+                  <AddLoteButton onClick={() => setLoteModalState({ mode: 'create' })} label="Crear primer lote" />
                 ) : undefined
               }
             />
           )}
 
           {!isLotesLoading && !lotesError && lotes.length > 0 && (
-            <div className="flex flex-col gap-3">
-              {lotes.map((lote, index) => (
-                <LoteManagementCard
-                  key={lote.id}
-                  lote={lote}
-                  currency={remate.settings.currency}
-                  isEditable={isStructureEditable}
-                  canMoveUp={index > 0}
-                  canMoveDown={index < lotes.length - 1}
-                  onEdit={() => setLoteModalState({ mode: 'edit', lote })}
-                  onDuplicate={() => void handleDuplicateLote(lote)}
-                  onDelete={() => setDeletingLote(lote)}
-                  onMoveUp={() => moveLote(lote.id, -1)}
-                  onMoveDown={() => moveLote(lote.id, 1)}
-                  onDragStart={(event) => {
-                    setDraggedId(lote.id);
-                    event.dataTransfer.effectAllowed = 'move';
-                  }}
-                  onDragEnter={() => setDragOverId(lote.id)}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={handleDrop(lote.id)}
-                  onDragEnd={() => {
-                    setDraggedId(null);
-                    setDragOverId(null);
-                  }}
-                  isDragOver={dragOverId === lote.id && draggedId !== lote.id}
-                  isDragging={draggedId === lote.id}
-                />
-              ))}
-            </div>
+            <>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <LotesSummaryChips lotes={lotes} />
+
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <label htmlFor="lote-search" className="sr-only">
+                      Buscar lote
+                    </label>
+                    <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      id="lote-search"
+                      type="search"
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="Buscar lote..."
+                      className={`${FIELD_CONTROL_CLASSES} w-48 border-slate-300 pl-9 sm:w-56`}
+                    />
+                  </div>
+                  <Button variant="secondary" disabled title="Próximamente" className="!px-3">
+                    <Filter className="h-4 w-4" aria-hidden="true" />
+                    Filtrar
+                  </Button>
+                  <Button variant="secondary" disabled title="Próximamente" className="!px-3">
+                    <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+                    Ordenar
+                  </Button>
+                </div>
+              </div>
+
+              {filteredLotes.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-300 bg-white py-8 text-center text-sm text-slate-500">
+                  No encontramos lotes que coincidan con &quot;{searchQuery}&quot;.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {filteredLotes.map((lote) => {
+                    const index = lotes.findIndex((l) => l.id === lote.id);
+                    return (
+                      <LoteManagementCard
+                        key={lote.id}
+                        lote={lote}
+                        currency={remate.settings.currency}
+                        isEditable={isStructureEditable}
+                        canMoveUp={index > 0}
+                        canMoveDown={index < lotes.length - 1}
+                        onEdit={() => setLoteModalState({ mode: 'edit', lote })}
+                        onDuplicate={() => void handleDuplicateLote(lote)}
+                        onDelete={() => setDeletingLote(lote)}
+                        onMoveUp={() => moveLote(lote.id, -1)}
+                        onMoveDown={() => moveLote(lote.id, 1)}
+                        onDragStart={(event) => {
+                          setDraggedId(lote.id);
+                          event.dataTransfer.effectAllowed = 'move';
+                        }}
+                        onDragEnter={() => setDragOverId(lote.id)}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={handleDrop(lote.id)}
+                        onDragEnd={() => {
+                          setDraggedId(null);
+                          setDragOverId(null);
+                        }}
+                        isDragOver={dragOverId === lote.id && draggedId !== lote.id}
+                        isDragging={draggedId === lote.id}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -361,6 +440,31 @@ export function LotesManagementPage() {
           Duplicando lote…
         </span>
       )}
+
+      {isDraft && (
+        <div className="fixed bottom-6 right-6 z-30">
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 pl-4 shadow-xl backdrop-blur-sm">
+            <span className="hidden text-sm text-slate-500 sm:block">
+              {canPublish ? 'Todo listo para comenzar' : publishBlockedReason}
+            </span>
+            <Button
+              onClick={handlePublish}
+              isLoading={isPublishing}
+              disabled={!canPublish}
+              title={!canPublish ? publishBlockedReason : undefined}
+              className="shadow-lg shadow-brand-600/20"
+            >
+              <SendIcon className="h-4 w-4" />
+              Publicar remate
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <RematePublicadoOverlay
+        isOpen={isPublishedOverlayOpen}
+        onDone={() => navigate('/', { state: { highlightRemateId: id } })}
+      />
     </div>
   );
 }

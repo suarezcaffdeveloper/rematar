@@ -159,17 +159,17 @@ describe('ConsolaOperativaPage', () => {
     renderPage();
 
     expect(screen.getByText('Toro Angus')).toBeInTheDocument(); // ConsolaLotePanel
-    expect(screen.getByText('Panel de control')).toBeInTheDocument(); // ConsolaControlPanel
+    expect(screen.getByText('Panel de control operativo')).toBeInTheDocument(); // ConsolaControlPanel
     expect(screen.getByText('Vaquillona')).toBeInTheDocument(); // ConsolaUpcomingLotesPanel
   });
 
-  it('la pestaña de Ofertas del sidebar muestra el comprador líder', async () => {
+  it('el historial de ofertas del sidebar queda siempre visible, sin pestaña', () => {
     mockLiveState({ snapshot: makeSnapshot() });
 
     renderPage();
-    await userEvent.click(screen.getByRole('tab', { name: 'Ofertas' }));
 
-    expect(screen.getByText('Comprador líder')).toBeInTheDocument();
+    expect(screen.getByText('Historial reciente')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Ofertas' })).not.toBeInTheDocument();
   });
 
   it('el breadcrumb muestra el título del remate', () => {
@@ -203,4 +203,23 @@ describe('ConsolaOperativaPage', () => {
     unmount();
     expect(useLayoutPreferencesStore.getState().isWide).toBe(false);
   });
+
+  it('remate "live": activa Modo Remate (oculta sidebar/header global vía AppLayout)', () => {
+    mockLiveState({ snapshot: makeSnapshot() });
+
+    const { unmount } = renderPage();
+    expect(useLayoutPreferencesStore.getState().isFocusMode).toBe(true);
+
+    unmount();
+    expect(useLayoutPreferencesStore.getState().isFocusMode).toBe(false);
+  });
+
+  it('remate "scheduled": no activa Modo Remate -- no hay nada en vivo que proteger de distracciones', () => {
+    mockLiveState({ snapshot: makeSnapshot({ remate: makeRemate({ status: 'scheduled' }), active_lote: null }) });
+
+    renderPage();
+
+    expect(useLayoutPreferencesStore.getState().isFocusMode).toBe(false);
+  });
+
 });

@@ -1,8 +1,6 @@
-import { LogOut, Menu } from 'lucide-react';
-import { useAuth, useAuthActions } from '../../features/auth/hooks';
+import { Menu } from 'lucide-react';
 import { NotificationBell } from '../../features/notifications/components/NotificationBell';
 import { Breadcrumb } from '../../shared/components/Breadcrumb';
-import { Button } from '../../shared/components/Button';
 import { useBreadcrumbStore } from './breadcrumbStore';
 
 export interface HeaderProps {
@@ -13,13 +11,12 @@ export interface HeaderProps {
  * Header delgado (Épica 9, Etapa 2 -- rediseño): reemplaza el único header que existía
  * antes (logo + link admin + nombre/rol + logout, `AppLayout.tsx` previo a esta etapa).
  * El logo pasó al `Sidebar`; el link a `/admin` que vivía acá (Épica 8.0) ahora es un
- * ítem más de esa navegación por rol. Lo único que este header dibuja es lo que cambia
- * pantalla a pantalla (el breadcrumb, vía `useBreadcrumbStore`) más las acciones de
- * usuario que tienen que estar siempre visibles.
+ * ítem más de esa navegación por rol. Nombre/rol y logout también viven en el pie del
+ * `Sidebar` (rediseño inspirado en el mockup de Stitch, `MisCompras/`), no acá -- lo
+ * único que este header dibuja es lo que cambia pantalla a pantalla (el breadcrumb, vía
+ * `useBreadcrumbStore`) más las notificaciones, que sí tienen que estar siempre visibles.
  */
 export function Header({ onOpenSidebar }: HeaderProps) {
-  const { user } = useAuth();
-  const { logout } = useAuthActions();
   const items = useBreadcrumbStore((state) => state.items);
 
   return (
@@ -37,15 +34,6 @@ export function Header({ onOpenSidebar }: HeaderProps) {
 
       <div className="flex shrink-0 items-center gap-3">
         <NotificationBell />
-        {user && (
-          <span className="hidden text-sm text-slate-600 sm:inline">
-            {user.full_name} · <span className="text-slate-400">{user.role}</span>
-          </span>
-        )}
-        <Button variant="secondary" onClick={logout}>
-          <LogOut aria-hidden="true" className="h-4 w-4" />
-          <span className="hidden sm:inline">Cerrar sesión</span>
-        </Button>
       </div>
     </header>
   );

@@ -20,7 +20,9 @@ database_url = settings.DATABASE_URL.replace(
     "postgresql+asyncpg://",
 ).split("?")[0]
 
-ssl_context = ssl.create_default_context()
+# En entorno local (Docker Compose) Postgres no tiene SSL configurado; en staging y
+# producción sí se exige SSL para cifrar la conexión.
+ssl_context = False if settings.ENVIRONMENT == "local" else ssl.create_default_context()
 
 engine = create_async_engine(
     settings.DATABASE_URL,

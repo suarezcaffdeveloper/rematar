@@ -24,6 +24,7 @@ from app.modules.remates.repository import RemateRepository
 from app.modules.users.models import User, UserRole
 from app.modules.users.repository import UserRepository
 from app.notifications.repository import NotificationRepository
+from app.notify.service import NotificationService
 from app.postauction.models import PostAuctionStatus
 from app.postauction.repository import PostAuctionRepository
 from app.postauction.service import PostAuctionService
@@ -37,7 +38,32 @@ class _RecordingEventBus:
         self.events.append(event)
 
 
-def _make_service(db_session: AsyncSession, event_bus: _RecordingEventBus) -> PostAuctionService:
+class _FakeNotificationChannel:
+    """`NotificationChannel` de test -- registra los contextos recibidos en vez de
+    mandar un email de verdad. `should_fail` simula un proveedor SMTP caído, para
+    probar que `NotificationService`/`create_case_from_winner` lo absorben sin romper
+    la adjudicación."""
+
+    name = "email"
+
+    def __init__(self, *, should_fail: bool = False) -> None:
+        self.should_fail = should_fail
+        self.calls: list = []
+
+    async def notify_lote_adjudicado(self, context) -> None:
+        self.calls.append(context)
+        if self.should_fail:
+            raise RuntimeError("SMTP no disponible (simulado)")
+
+
+
+
+
+def _make_service(
+    db_session: AsyncSession,
+    event_bus: _RecordingEventBus,
+    notification_service: NotificationService | None = None,
+) -> PostAuctionService:
     return PostAuctionService(
         PostAuctionRepository(db_session),
         RemateRepository(db_session),
@@ -46,6 +72,12 @@ def _make_service(db_session: AsyncSession, event_bus: _RecordingEventBus) -> Po
         AuditLogRepository(db_session),
         NotificationRepository(db_session),
         event_bus,
+        # Sin canales por defecto -- no todos los tests de este archivo quieren
+        # trazabilidad de notificación mezclada con las aserciones de timeline que ya
+        # tenían ("case_created", "status_changed"); los tests dedicados a la
+        # notificación (más abajo) pasan su propio `NotificationService` con un canal
+        # falso.
+        notification_service or NotificationService([]),
     )
 
 
@@ -86,7 +118,11 @@ async def _create_lote(db_session: AsyncSession, remate: Remate, *, lot_number: 
     return lote
 
 
-async def _build_case(db_session: AsyncSession, event_bus: _RecordingEventBus):
+async def _build_case(
+    db_session: AsyncSession,
+    event_bus: _RecordingEventBus,
+    notification_service: NotificationService | None = None,
+):
     rematador = await _create_user(
         db_session, role=UserRole.REMATADOR, email=f"r{uuid.uuid4()}@example.com"
     )
@@ -95,7 +131,7 @@ async def _build_case(db_session: AsyncSession, event_bus: _RecordingEventBus):
     )
     remate = await _create_remate(db_session, rematador)
     lote = await _create_lote(db_session, remate)
-    service = _make_service(db_session, event_bus)
+    service = _make_service(db_session, event_bus, notification_service)
     case = await service.create_case_from_winner(
         remate_id=remate.id, lote_id=lote.id, buyer_id=buyer.id, final_price=Decimal("1500")
     )
@@ -152,6 +188,87 @@ async def test_create_case_from_winner_is_idempotent_per_lote(db_session: AsyncS
     assert again is not None
     assert again.id == case.id
     assert again.final_price == Decimal("1500")  # no se pisa con el segundo llamado
+
+
+# --- notificación de adjudicación (email al ganador) --------------------------------------
+
+
+async def test_create_case_from_winner_triggers_email_notification(
+    db_session: AsyncSession,
+) -> None:
+    channel = _FakeNotificationChannel()
+    event_bus = _RecordingEventBus()
+    _, case, rematador, buyer = await _build_case(
+        db_session, event_bus, NotificationService([channel])
+    )
+
+    assert len(channel.calls) == 1
+    context = channel.calls[0]
+    assert context.case_id == case.id
+    assert context.buyer_email == buyer.email
+    assert context.buyer_name == buyer.full_name
+    assert context.rematador_name == rematador.full_name
+    assert context.remate_title == "Remate de prueba"
+    assert context.lote_title == "Lote de prueba"
+    assert context.lot_number == "1"
+    assert context.final_price == Decimal("1500")
+    assert context.currency == "ARS"
+
+
+async def test_create_case_from_winner_records_notification_timeline_entry(
+    db_session: AsyncSession,
+) -> None:
+    channel = _FakeNotificationChannel()
+    event_bus = _RecordingEventBus()
+    _, case, _, _ = await _build_case(db_session, event_bus, NotificationService([channel]))
+
+    timeline = await PostAuctionRepository(db_session).list_timeline(case.id)
+    actions = [entry.action for entry in timeline]
+    assert actions == ["case_created", "notification_sent"]
+    assert timeline[-1].details == {"channel": "email", "notification_type": "lote_adjudicado"}
+
+
+async def test_email_failure_does_not_break_adjudication(db_session: AsyncSession) -> None:
+    channel = _FakeNotificationChannel(should_fail=True)
+    event_bus = _RecordingEventBus()
+    _, case, rematador, buyer = await _build_case(
+        db_session, event_bus, NotificationService([channel])
+    )
+
+    # La venta se creó igual, sin importar que el canal de email haya fallado.
+    assert case is not None
+    assert case.status == PostAuctionStatus.ADJUDICADO
+    assert case.rematador_id == rematador.id
+    assert case.buyer_id == buyer.id
+
+    timeline = await PostAuctionRepository(db_session).list_timeline(case.id)
+    failed_entry = timeline[-1]
+    assert failed_entry.action == "notification_failed"
+    assert failed_entry.details["channel"] == "email"
+    assert "SMTP no disponible" in failed_entry.details["error"]
+
+
+async def test_create_case_from_winner_does_not_resend_email_when_redispatched(
+    db_session: AsyncSession,
+) -> None:
+    channel = _FakeNotificationChannel()
+    event_bus = _RecordingEventBus()
+    service, case, _, buyer = await _build_case(
+        db_session, event_bus, NotificationService([channel])
+    )
+
+    again = await service.create_case_from_winner(
+        remate_id=case.remate_id,
+        lote_id=case.lote_id,
+        buyer_id=buyer.id,
+        final_price=Decimal("9999"),
+    )
+
+    assert again is not None
+    assert again.id == case.id
+    # El segundo llamado es idempotente (mismo `lote_id`) -- nunca vuelve a resolver
+    # comprador/remate/lote ni a notificar.
+    assert len(channel.calls) == 1
 
 
 # --- change_status -----------------------------------------------------------------------
@@ -313,11 +430,15 @@ async def test_list_for_buyer_only_returns_own_cases(db_session: AsyncSession) -
         db_session, role=UserRole.COMPRADOR, email=f"other{uuid.uuid4()}@example.com"
     )
 
-    items, total = await service.list_for_buyer(buyer, page=1, page_size=20)
+    items, total = await service.list_for_buyer(
+        buyer, status=None, search=None, page=1, page_size=20
+    )
     assert total == 1
     assert items[0].id == case.id
 
-    items, total = await service.list_for_buyer(other_buyer, page=1, page_size=20)
+    items, total = await service.list_for_buyer(
+        other_buyer, status=None, search=None, page=1, page_size=20
+    )
     assert total == 0
 
 
@@ -340,3 +461,47 @@ async def test_get_detail_for_buyer_includes_timeline(db_session: AsyncSession) 
     assert detail.id == case.id
     assert len(detail.timeline) == 1
     assert detail.timeline[0].action == "case_created"
+
+
+# --- privacidad de contacto (email/teléfono) ------------------------------------------------
+
+
+async def test_list_for_rematador_exposes_buyer_contact(db_session: AsyncSession) -> None:
+    event_bus = _RecordingEventBus()
+    service, case, rematador, buyer = await _build_case(db_session, event_bus)
+    buyer.phone = "+5491111111111"
+    await db_session.commit()
+
+    items, _ = await service.list_for_rematador(
+        rematador, status=None, remate_id=None, search=None, page=1, page_size=20
+    )
+    assert items[0].buyer_email == buyer.email
+    assert items[0].buyer_phone == "+5491111111111"
+
+
+async def test_get_detail_for_rematador_exposes_buyer_contact(db_session: AsyncSession) -> None:
+    event_bus = _RecordingEventBus()
+    service, case, rematador, buyer = await _build_case(db_session, event_bus)
+    buyer.phone = "+5491111111111"
+    await db_session.commit()
+
+    detail = await service.get_detail_for_rematador(case.id, rematador)
+    assert detail.buyer_email == buyer.email
+    assert detail.buyer_phone == "+5491111111111"
+
+
+async def test_get_detail_for_buyer_does_not_expose_contact_fields(db_session: AsyncSession) -> None:
+    event_bus = _RecordingEventBus()
+    service, case, _, buyer = await _build_case(db_session, event_bus)
+
+    detail = await service.get_detail_for_buyer(case.id, buyer)
+    assert not hasattr(detail, "buyer_email")
+    assert not hasattr(detail, "buyer_phone")
+
+
+async def test_get_detail_for_rematador_exposes_lote_base_price(db_session: AsyncSession) -> None:
+    event_bus = _RecordingEventBus()
+    service, case, rematador, _ = await _build_case(db_session, event_bus)
+
+    detail = await service.get_detail_for_rematador(case.id, rematador)
+    assert detail.base_price == Decimal("1000")

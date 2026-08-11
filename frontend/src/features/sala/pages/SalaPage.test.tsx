@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { useBreadcrumbStore } from '../../../app/layouts/breadcrumbStore';
 import { useLayoutPreferencesStore } from '../../../app/layouts/layoutPreferencesStore';
 import { SalaPage } from './SalaPage';
 import type { Lote, Remate } from '../../remates/types';
@@ -24,6 +23,14 @@ vi.mock('react-router-dom', async () => {
 });
 
 vi.mock('../hooks', () => ({ useLiveRemateState: useLiveRemateStateMock }));
+
+// Misma convención que `AppLayout.test.tsx`: la campana hace fetch de verdad
+// (`useNotifications`/`useUnreadNotificationCount`), no hace falta ejercitarla acá --
+// `SalaPage` ahora la remonta suelta (ver `FloatingNotificationBell`) porque oculta el
+// `Header` global que antes la contenía.
+vi.mock('../../notifications/components/NotificationBell', () => ({
+  NotificationBell: () => null,
+}));
 
 function makeRemate(overrides: Partial<Remate> = {}): Remate {
   return {
@@ -175,18 +182,14 @@ describe('SalaPage', () => {
     expect(screen.getByText('Reconectando...')).toBeInTheDocument();
   });
 
-  it('el breadcrumb va al detalle del remate, no directo a la sala', () => {
+  it('oculta el navbar global (breadcrumb) mientras muestra la sala (rediseño vista comprador)', () => {
     mockLiveState();
 
-    renderPage();
+    const { unmount } = renderPage();
+    expect(useLayoutPreferencesStore.getState().isFocusMode).toBe(true);
 
-    // El breadcrumb ya no se renderiza dentro de la página (Épica 9, Etapa 2) -- lo
-    // dibuja el `Header` global a partir de `useBreadcrumbStore`, que la página setea.
-    expect(useBreadcrumbStore.getState().items).toEqual([
-      { label: 'Dashboard', to: '/' },
-      { label: 'Remate de hacienda', to: '/remates/remate-1' },
-      { label: 'Sala en vivo' },
-    ]);
+    unmount();
+    expect(useLayoutPreferencesStore.getState().isFocusMode).toBe(false);
   });
 
   it('pide el layout ancho (Épica 9, Etapa 4 -- sidebar de ofertas/chat)', () => {

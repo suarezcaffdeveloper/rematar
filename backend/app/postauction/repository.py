@@ -75,9 +75,29 @@ class PostAuctionRepository:
         return list(items), total
 
     async def list_for_buyer(
-        self, *, buyer_id: uuid.UUID, offset: int, limit: int
+        self,
+        *,
+        buyer_id: uuid.UUID,
+        status: PostAuctionStatus | None,
+        search: str | None,
+        offset: int,
+        limit: int,
     ) -> tuple[list[PostAuctionCase], int]:
         stmt = select(PostAuctionCase).where(PostAuctionCase.buyer_id == buyer_id)
+        if status is not None:
+            stmt = stmt.where(PostAuctionCase.status == status)
+        if search:
+            stmt = stmt.join(Lote, Lote.id == PostAuctionCase.lote_id).join(
+                User, User.id == PostAuctionCase.rematador_id
+            )
+            pattern = f"%{search}%"
+            stmt = stmt.where(
+                or_(
+                    Lote.title.ilike(pattern),
+                    Lote.lot_number.ilike(pattern),
+                    User.full_name.ilike(pattern),
+                )
+            )
 
         total = (
             await self._db.execute(select(func.count()).select_from(stmt.subquery()))

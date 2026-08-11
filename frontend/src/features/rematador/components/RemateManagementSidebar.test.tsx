@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { RemateManagementSidebar } from './RemateManagementSidebar';
 import type { Remate } from '../../remates/types';
 
@@ -28,58 +29,80 @@ function makeRemate(overrides: Partial<Remate> = {}): Remate {
 function baseProps(overrides: Partial<Parameters<typeof RemateManagementSidebar>[0]> = {}) {
   return {
     remate: makeRemate(),
-    loteCount: 3,
     onEdit: vi.fn(),
-    onPublish: vi.fn(),
     onCancel: vi.fn(),
     onDelete: vi.fn(),
     onDuplicate: vi.fn(),
     onViewAudit: vi.fn(),
-    isPublishing: false,
     isDuplicating: false,
     ...overrides,
   };
 }
 
+async function openConfigMenu() {
+  await userEvent.click(screen.getByRole('button', { name: 'Configuración del remate' }));
+}
+
 describe('RemateManagementSidebar', () => {
-  it('remate "draft" sin fecha: Publicar deshabilitado, Eliminar disponible', () => {
-    render(<RemateManagementSidebar {...baseProps()} />);
-    expect(screen.getByRole('button', { name: /Publicar remate/ })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /Eliminar remate/ })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /Editar remate/ })).toBeEnabled();
-  });
-
-  it('remate "draft" con fecha: Publicar habilitado', () => {
+  it('muestra estado, categoría, título y fecha de inicio', () => {
     render(<RemateManagementSidebar {...baseProps({ remate: makeRemate({ starts_at: '2026-08-01T14:00:00Z' }) })} />);
-    expect(screen.getByRole('button', { name: /Publicar remate/ })).toBeEnabled();
+    expect(screen.getByText('Remate de hacienda')).toBeInTheDocument();
+    expect(screen.getByText('Borrador')).toBeInTheDocument();
   });
 
-  it('remate "scheduled": sin botón de Publicar ni de Eliminar, Editar y Cancelar disponibles', () => {
+  it('remate "draft": Editar habilitado, Eliminar disponible en el menú de configuración', async () => {
+    render(<RemateManagementSidebar {...baseProps()} />);
+    await openConfigMenu();
+    expect(screen.getByRole('menuitem', { name: 'Editar remate' })).toBeEnabled();
+    expect(screen.getByRole('menuitem', { name: 'Eliminar remate' })).toBeInTheDocument();
+  });
+
+  it('remate "scheduled": sin "Eliminar remate", Editar y Cancelar disponibles', async () => {
     render(<RemateManagementSidebar {...baseProps({ remate: makeRemate({ status: 'scheduled' }) })} />);
-    expect(screen.queryByRole('button', { name: /Publicar remate/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Eliminar remate/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Editar remate/ })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Cancelar remate' })).toBeInTheDocument();
+    await openConfigMenu();
+    expect(screen.queryByRole('menuitem', { name: 'Eliminar remate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Editar remate' })).toBeEnabled();
+    expect(screen.getByRole('menuitem', { name: 'Cancelar remate' })).toBeInTheDocument();
   });
 
-  it('remate "live": Editar deshabilitado, sin Eliminar ni Publicar, Cancelar disponible', () => {
+  it('remate "live": Editar deshabilitado, sin Eliminar, Cancelar disponible', async () => {
     render(<RemateManagementSidebar {...baseProps({ remate: makeRemate({ status: 'live' }) })} />);
-    expect(screen.getByRole('button', { name: /Editar remate/ })).toBeDisabled();
-    expect(screen.queryByRole('button', { name: /Publicar remate/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Eliminar remate/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Cancelar remate' })).toBeInTheDocument();
+    await openConfigMenu();
+    expect(screen.getByRole('menuitem', { name: 'Editar remate' })).toBeDisabled();
+    expect(screen.queryByRole('menuitem', { name: 'Eliminar remate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Cancelar remate' })).toBeInTheDocument();
   });
 
-  it('remate "finished": sin Cancelar, sin Eliminar, sin Publicar -- Duplicar sigue disponible', () => {
+  it('remate "finished": sin Cancelar, sin Eliminar -- Duplicar sigue disponible', async () => {
     render(<RemateManagementSidebar {...baseProps({ remate: makeRemate({ status: 'finished' }) })} />);
-    expect(screen.queryByRole('button', { name: 'Cancelar remate' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Eliminar remate/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Duplicar remate/ })).toBeEnabled();
+    await openConfigMenu();
+    expect(screen.queryByRole('menuitem', { name: 'Cancelar remate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Eliminar remate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Duplicar remate' })).toBeEnabled();
   });
 
-  it('muestra la cantidad de lotes y la ubicación', () => {
-    render(<RemateManagementSidebar {...baseProps({ loteCount: 5 })} />);
-    expect(screen.getByText('5 lotes cargados')).toBeInTheDocument();
-    expect(screen.getByText('Pergamino')).toBeInTheDocument();
+  it('las acciones del menú llaman a sus callbacks', async () => {
+    const props = baseProps();
+    render(<RemateManagementSidebar {...props} />);
+
+    await openConfigMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Editar remate' }));
+    expect(props.onEdit).toHaveBeenCalledTimes(1);
+
+    await openConfigMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Duplicar remate' }));
+    expect(props.onDuplicate).toHaveBeenCalledTimes(1);
+
+    await openConfigMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Ver auditoría' }));
+    expect(props.onViewAudit).toHaveBeenCalledTimes(1);
+
+    await openConfigMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Cancelar remate' }));
+    expect(props.onCancel).toHaveBeenCalledTimes(1);
+
+    await openConfigMenu();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Eliminar remate' }));
+    expect(props.onDelete).toHaveBeenCalledTimes(1);
   });
 });

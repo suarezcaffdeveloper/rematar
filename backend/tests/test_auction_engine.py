@@ -32,7 +32,14 @@ def _ofertas_url(remate_id: str, lote_id: str) -> str:
 async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> str:
     await client.post(
         REGISTER_URL,
-        json={"email": email, "password": "password123", "full_name": "Test", "role": role},
+        json={
+            "email": email,
+            "password": "password123",
+            "confirm_password": "password123",
+            "full_name": "Test",
+            "phone": "+5491122334455",
+            "role": role,
+        },
     )
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
@@ -44,7 +51,14 @@ async def _register_and_get_id_and_token(
 ) -> tuple[str, str]:
     register = await client.post(
         REGISTER_URL,
-        json={"email": email, "password": "password123", "full_name": "Test", "role": role},
+        json={
+            "email": email,
+            "password": "password123",
+            "confirm_password": "password123",
+            "full_name": "Test",
+            "phone": "+5491122334455",
+            "role": role,
+        },
     )
     user_id = register.json()["id"]
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})

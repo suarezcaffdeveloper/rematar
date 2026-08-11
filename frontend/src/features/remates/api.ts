@@ -115,6 +115,14 @@ export async function fetchLoteCountRequest(remateId: string): Promise<number> {
   return data.total;
 }
 
+/** Detalle completo de un lote puntual (`GET /remates/{id}/lotes/{loteId}`, incluye
+ * `images`/`description`) -- a diferencia de `fetchLotesRequest`, no depende de tener ya
+ * la lista completa de lotes en memoria. */
+export async function fetchLoteByIdRequest(remateId: string, loteId: string): Promise<Lote> {
+  const { data } = await apiClient.get<Lote>(`/remates/${remateId}/lotes/${loteId}`);
+  return data;
+}
+
 /**
  * Transiciones del motor de estados de `Remate` (Épica 2, Módulo 2.3,
  * `backend/app/modules/remates/router.py`) -- ninguna lleva body, las cuatro devuelven

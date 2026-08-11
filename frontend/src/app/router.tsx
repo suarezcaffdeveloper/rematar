@@ -30,6 +30,7 @@ import { VentaAdjudicadaDetailPage } from '../features/postauction/pages/VentaAd
 import { VentasAdjudicadasPage } from '../features/postauction/pages/VentasAdjudicadasPage';
 import { SalaPage } from '../features/sala/pages/SalaPage';
 import { HomePage } from './pages/HomePage';
+import { PreviewSalaPage } from './pages/PreviewSalaPage';
 import { AdminAuditLogPage } from './pages/AdminAuditLogPage';
 import { ForbiddenPage } from './pages/ForbiddenPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
         children: [
           { path: '/login', element: <LoginPage /> },
           { path: '/register', element: <RegisterPage /> },
+          { path: '/preview-sala', element: <PreviewSalaPage /> },
         ],
       },
       // Protegidas: todo lo que cuelga de acá exige sesión iniciada.

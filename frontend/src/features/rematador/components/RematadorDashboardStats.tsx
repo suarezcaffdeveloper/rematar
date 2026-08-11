@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { StatCard } from '../../../shared/components/StatCard';
+import { CalendarClock, CheckCircle2, FileEdit, Gavel, PauseCircle, Radio, XCircle, type LucideIcon } from 'lucide-react';
+import { DashboardStatCard } from './DashboardStatCard';
 import { STATUS_LABELS } from '../../remates/labels';
 import type { Remate, RemateStatus } from '../../remates/types';
 
@@ -7,13 +8,22 @@ export interface RematadorDashboardStatsProps {
   remates: Remate[];
 }
 
-const ACCENT_CLASSES: Record<RemateStatus, string> = {
-  draft: 'bg-slate-300',
-  scheduled: 'bg-brand-500',
-  live: 'bg-amber-500',
-  paused: 'bg-slate-400',
-  finished: 'bg-success-500',
-  cancelled: 'bg-danger-500',
+const ICONS: Record<RemateStatus, LucideIcon> = {
+  draft: FileEdit,
+  scheduled: CalendarClock,
+  live: Radio,
+  paused: PauseCircle,
+  finished: CheckCircle2,
+  cancelled: XCircle,
+};
+
+const TONE_CLASSES: Record<RemateStatus, string> = {
+  draft: 'bg-slate-100 text-slate-500',
+  scheduled: 'bg-brand-50 text-brand-600',
+  live: 'bg-warning-50 text-warning-600',
+  paused: 'bg-slate-100 text-slate-500',
+  finished: 'bg-success-50 text-success-600',
+  cancelled: 'bg-danger-50 text-danger-600',
 };
 
 // Orden pensado para lectura operativa: lo que está pasando ahora primero, lo que ya
@@ -25,9 +35,11 @@ const STATS_ORDER: RemateStatus[] = ['live', 'paused', 'scheduled', 'draft', 'fi
  * Fila de indicadores del dashboard -- pedido explícito de este módulo: "apariencia de
  * consola profesional", sin tablas. Se calcula client-side sobre la misma lista ya
  * cargada por `useRemates` (`RematadorDashboardPage`), sin ningún endpoint nuevo.
- * Reusa `StatCard` (`shared/components/`, Épica 9 Etapa 3) en vez de un `StatChip`
- * local -- mismo componente que Analítica/Monitoreo/Historial, `showTrend={false}`
- * porque un conteo por categoría no necesita flecha de tendencia.
+ *
+ * Rediseño visual (Épica 9, Etapa 5): usa `DashboardStatCard` (local a `rematador/`,
+ * no el `StatCard` compartido) para un look tipo Stripe/Vercel/Linear -- ícono por
+ * estado, tarjeta más grande, sin la flecha de tendencia que sí tiene sentido en series
+ * temporales (Analítica) pero no en un conteo puntual por categoría.
  */
 export function RematadorDashboardStats({ remates }: RematadorDashboardStatsProps) {
   const counts = useMemo(() => {
@@ -46,22 +58,21 @@ export function RematadorDashboardStats({ remates }: RematadorDashboardStatsProp
   }, [remates]);
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-      <StatCard
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+      <DashboardStatCard
         label="Total"
-        value={remates.length}
         formattedValue={String(remates.length)}
-        accentClassName="bg-slate-800"
-        showTrend={false}
+        icon={Gavel}
+        toneClassName="bg-slate-900 text-white"
       />
       {STATS_ORDER.map((status) => (
-        <StatCard
+        <DashboardStatCard
           key={status}
           label={STATUS_LABELS[status]}
-          value={counts[status]}
           formattedValue={String(counts[status])}
-          accentClassName={ACCENT_CLASSES[status]}
-          showTrend={false}
+          icon={ICONS[status]}
+          toneClassName={TONE_CLASSES[status]}
+          pulse={status === 'live' && counts[status] > 0}
         />
       ))}
     </div>

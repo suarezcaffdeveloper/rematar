@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 from app.events.base import DomainEvent
 from app.modules.remates.lotes.events import LoteClosed, LoteWinnerDetermined
 from app.notifications.models import Notification
+from app.notify.service import NotificationService
 from app.postauction.models import PostAuctionCase, PostAuctionStatus
 from app.postauction.realtime import PostAuctionEventDispatcher
 
@@ -29,6 +30,20 @@ class _RecordingEventBus:
         self.published.append(event)
 
 
+class _FakeNotificationChannel:
+    """Ver `test_postauction_service.py::_FakeNotificationChannel` -- misma idea, acá a
+    nivel dispatcher (evento crudo -> caso creado -> canal disparado), no a nivel
+    servicio."""
+
+    name = "email"
+
+    def __init__(self) -> None:
+        self.calls: list = []
+
+    async def notify_lote_adjudicado(self, context) -> None:
+        self.calls.append(context)
+
+
 def _auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
@@ -36,7 +51,14 @@ def _auth(token: str) -> dict:
 async def _register(client: AsyncClient, *, email: str, role: str) -> tuple[str, uuid.UUID]:
     await client.post(
         REGISTER_URL,
-        json={"email": email, "password": "password123", "full_name": "Test", "role": role},
+        json={
+            "email": email,
+            "password": "password123",
+            "confirm_password": "password123",
+            "full_name": "Test",
+            "phone": "+5491122334455",
+            "role": role,
+        },
     )
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
@@ -140,10 +162,14 @@ async def _setup_remate_lote_with_accepted_offer(
 
 
 def _make_dispatcher(
-    db_engine: AsyncEngine, event_bus: _RecordingEventBus
+    db_engine: AsyncEngine,
+    event_bus: _RecordingEventBus,
+    notification_service: NotificationService | None = None,
 ) -> PostAuctionEventDispatcher:
     session_factory = async_sessionmaker(bind=db_engine, expire_on_commit=False)
-    return PostAuctionEventDispatcher(session_factory, event_bus)
+    return PostAuctionEventDispatcher(
+        session_factory, event_bus, notification_service or NotificationService([])
+    )
 
 
 async def _only_case(db_engine: AsyncEngine) -> PostAuctionCase:
@@ -173,6 +199,25 @@ async def test_lote_winner_determined_creates_case(
     assert case.final_price == Decimal("1500")
     assert len(event_bus.published) == 1
     assert event_bus.published[0].event_type == "postauction.case_created"
+
+
+async def test_lote_winner_determined_triggers_email_notification(
+    client: AsyncClient, db_engine: AsyncEngine
+) -> None:
+    remate_id, lote_id, buyer_id = await _setup_remate_and_lote(client)
+    channel = _FakeNotificationChannel()
+    dispatcher = _make_dispatcher(db_engine, _RecordingEventBus(), NotificationService([channel]))
+    event = LoteWinnerDetermined(
+        remate_id=remate_id, lote_id=lote_id, oferta_id=uuid.uuid4(), buyer_id=buyer_id,
+        amount=Decimal("1500"),
+    )
+
+    await dispatcher.dispatch(event.model_dump_json())
+
+    assert len(channel.calls) == 1
+    assert channel.calls[0].lote_id == lote_id
+    assert channel.calls[0].buyer_email is not None
+    assert channel.calls[0].final_price == Decimal("1500")
 
 
 async def test_lote_winner_determined_creates_notifications(
@@ -258,7 +303,8 @@ async def test_lote_closed_manual_sold_without_any_offer_creates_nothing(
     generar un caso. No es un bug."""
     remate_id, lote_id, _buyer_id = await _setup_remate_and_lote(client)
     event_bus = _RecordingEventBus()
-    dispatcher = _make_dispatcher(db_engine, event_bus)
+    channel = _FakeNotificationChannel()
+    dispatcher = _make_dispatcher(db_engine, event_bus, NotificationService([channel]))
     event = LoteClosed(
         remate_id=remate_id,
         lote_id=lote_id,
@@ -274,6 +320,7 @@ async def test_lote_closed_manual_sold_without_any_offer_creates_nothing(
         rows = (await session.execute(select(PostAuctionCase))).scalars().all()
     assert rows == []
     assert event_bus.published == []
+    assert channel.calls == []  # sin comprador real, no hay ganador a quien avisarle
 
 
 async def test_lote_closed_manual_unsold_creates_nothing(
@@ -281,7 +328,8 @@ async def test_lote_closed_manual_unsold_creates_nothing(
 ) -> None:
     remate_id, lote_id, _buyer_id = await _setup_remate_lote_with_accepted_offer(client)
     event_bus = _RecordingEventBus()
-    dispatcher = _make_dispatcher(db_engine, event_bus)
+    channel = _FakeNotificationChannel()
+    dispatcher = _make_dispatcher(db_engine, event_bus, NotificationService([channel]))
     event = LoteClosed(
         remate_id=remate_id, lote_id=lote_id, outcome="unsold", final_price=None, triggered_by="manual"
     )
@@ -292,6 +340,7 @@ async def test_lote_closed_manual_unsold_creates_nothing(
     async with session_factory() as session:
         rows = (await session.execute(select(PostAuctionCase))).scalars().all()
     assert rows == []
+    assert channel.calls == []  # lote cerrado sin comprador -- no se envía email
 
 
 async def test_lote_closed_auto_sold_is_ignored_here(
@@ -326,8 +375,10 @@ async def test_idempotent_when_the_same_event_is_dispatched_twice(
 ) -> None:
     remate_id, lote_id, buyer_id = await _setup_remate_and_lote(client)
     event_bus = _RecordingEventBus()
-    dispatcher_a = _make_dispatcher(db_engine, event_bus)
-    dispatcher_b = _make_dispatcher(db_engine, event_bus)
+    channel = _FakeNotificationChannel()
+    notification_service = NotificationService([channel])
+    dispatcher_a = _make_dispatcher(db_engine, event_bus, notification_service)
+    dispatcher_b = _make_dispatcher(db_engine, event_bus, notification_service)
     raw_payload = LoteWinnerDetermined(
         remate_id=remate_id, lote_id=lote_id, oferta_id=uuid.uuid4(), buyer_id=buyer_id,
         amount=Decimal("1500"),
@@ -338,6 +389,9 @@ async def test_idempotent_when_the_same_event_is_dispatched_twice(
 
     case = await _only_case(db_engine)
     assert case.buyer_id == buyer_id
+    # Dos dispatchers procesando el mismo evento -- el email solo se manda una vez,
+    # nunca dos, por la idempotencia de `create_case_from_winner` sobre `lote_id`.
+    assert len(channel.calls) == 1
 
 
 async def test_malformed_payload_does_not_raise(db_engine: AsyncEngine) -> None:

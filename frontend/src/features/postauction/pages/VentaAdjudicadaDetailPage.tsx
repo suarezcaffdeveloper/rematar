@@ -5,18 +5,26 @@ import type { BreadcrumbItem } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { Card } from '../../../shared/components/Card';
 import { Skeleton } from '../../../shared/components/Skeleton';
-import { formatCurrency, formatDateTime } from '../../../shared/lib/format';
+import { BuyerCard } from '../components/BuyerCard';
+import { DocumentationPlaceholder } from '../components/DocumentationPlaceholder';
+import { LastObservationCard } from '../components/LastObservationCard';
+import { LoteInfoCard } from '../components/LoteInfoCard';
 import { NoteForm } from '../components/NoteForm';
+import { OperationInfoCard } from '../components/OperationInfoCard';
 import { ProgressStepper } from '../components/ProgressStepper';
-import { StatusBadge } from '../components/StatusBadge';
+import { SaleHeader } from '../components/SaleHeader';
 import { StatusChangeForm } from '../components/StatusChangeForm';
 import { Timeline } from '../components/Timeline';
 import { useVentaDetail } from '../hooks';
+import { STATUS_LABELS } from '../labels';
 
 /**
  * Detalle de una venta adjudicada (Épica 7, Módulo 7.5), en
- * `/ventas-adjudicadas/:caseId` -- info del lote/comprador, indicador de progreso,
- * acciones del rematador (cambiar estado, agregar observaciones) y línea de tiempo.
+ * `/ventas-adjudicadas/:caseId` -- ficha de gestión post-remate: header con lo esencial
+ * (lote, precio final, estado), comprador + operación, stepper de estado, acciones del
+ * rematador (cambiar estado, agregar observaciones), lote + documentación, y línea de
+ * tiempo. Rediseño visual (sección "20. Forma de trabajo" del pedido); la lógica de datos
+ * -- `useVentaDetail`, loading/error, `reload` tras cada mutación -- no cambió.
  */
 export function VentaAdjudicadaDetailPage() {
   const { caseId } = useParams<{ caseId: string }>();
@@ -39,8 +47,12 @@ export function VentaAdjudicadaDetailPage() {
     return (
       <div className="flex flex-col gap-6">
         <Skeleton className="h-4 w-48" />
-        <Skeleton className="h-8 w-2/3" />
-        <Skeleton className="h-40 rounded-xl" />
+        <Skeleton className="h-24 rounded-xl" />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Skeleton className="h-40 rounded-xl" />
+          <Skeleton className="h-40 rounded-xl" />
+        </div>
+        <Skeleton className="h-32 rounded-xl" />
       </div>
     );
   }
@@ -62,59 +74,51 @@ export function VentaAdjudicadaDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">{data.lote_title}</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Lote {data.lot_number} · {data.remate_title}
-          </p>
-        </div>
-        <StatusBadge status={data.status} />
-      </div>
-
-      <div className="flex flex-col gap-4 rounded-xl border border-brand-100 bg-gradient-to-br from-brand-50/70 to-white p-5">
-        <ProgressStepper status={data.status} />
-
-        <div className="flex flex-wrap items-end justify-between gap-4 border-t border-brand-100 pt-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Precio final</p>
-            <p className="text-3xl font-extrabold tabular-nums text-brand-700 sm:text-4xl">
-              {formatCurrency(data.final_price, 'ARS')}
-            </p>
-          </div>
-          <dl className="flex flex-col gap-1 text-sm text-slate-600">
-            <div className="flex gap-1.5">
-              <dt className="text-slate-400">Comprador:</dt>
-              <dd className="font-medium text-slate-900">{data.buyer_name ?? '—'}</dd>
-            </div>
-            <div className="flex gap-1.5">
-              <dt className="text-slate-400">Adjudicado el:</dt>
-              <dd className="font-medium text-slate-900">{formatDateTime(data.created_at)}</dd>
-            </div>
-          </dl>
-        </div>
-      </div>
-
-      {data.notes && (
-        <Card>
-          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Última observación</h2>
-          <p className="text-sm text-slate-700">{data.notes}</p>
-        </Card>
-      )}
+      <SaleHeader data={data} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">Cambiar estado</h2>
-          <StatusChangeForm caseId={data.id} currentStatus={data.status} onChanged={reload} />
-        </Card>
-        <Card>
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">Observaciones</h2>
-          <NoteForm caseId={data.id} onAdded={reload} />
-        </Card>
+        <BuyerCard data={data} />
+        <OperationInfoCard data={data} />
       </div>
 
-      <div className="flex flex-col gap-2">
-        <h2 className="text-lg font-semibold text-slate-900">Línea de tiempo</h2>
+      <Card>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-900">Estado de la venta</h2>
+          <p className="text-xs text-slate-500">
+            Estado actual: <span className="font-semibold text-slate-900">{STATUS_LABELS[data.status]}</span>
+          </p>
+        </div>
+        <ProgressStepper status={data.status} />
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className={data.notes ? undefined : 'lg:col-span-2'}>
+          <h2 className="mb-4 text-sm font-semibold text-slate-900">Gestión de la venta</h2>
+          <div className="flex flex-col gap-5">
+            <div>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Cambiar estado
+              </h3>
+              <StatusChangeForm caseId={data.id} currentStatus={data.status} onChanged={reload} />
+            </div>
+            <div className="border-t border-slate-100 pt-5">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Nueva observación
+              </h3>
+              <NoteForm caseId={data.id} onAdded={reload} />
+            </div>
+          </div>
+        </Card>
+        <LastObservationCard data={data} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <LoteInfoCard data={data} />
+        <DocumentationPlaceholder />
+      </div>
+
+      <div id="actividad" className="flex flex-col gap-2 scroll-mt-4">
+        <h2 className="text-lg font-semibold text-slate-900">Actividad</h2>
         <Timeline entries={data.timeline} />
       </div>
     </div>

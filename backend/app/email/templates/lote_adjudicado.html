@@ -1,0 +1,102 @@
+{% extends "_layout.html" %}
+{% block title %}¡Ganaste el Lote #{{ lot_number }}! - RematAR{% endblock %}
+{% block content %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:13px; font-weight:600; color:#15803d; text-transform:uppercase; letter-spacing:0.5px; padding-bottom:8px;">
+      Lote adjudicado
+    </td>
+  </tr>
+  <tr>
+    <td style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:24px; font-weight:700; color:#0f172a; padding-bottom:16px;">
+      ¡Felicitaciones, {{ buyer_name }}!
+    </td>
+  </tr>
+  <tr>
+    <td style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:15px; line-height:24px; color:#334155; padding-bottom:24px;">
+      Has ganado el <strong>Lote #{{ lot_number }}</strong> de <strong>{{ remate_title }}</strong>.
+    </td>
+  </tr>
+
+  <!-- Card del lote -->
+  <tr>
+    <td style="padding-bottom:24px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;">
+        {% if lote_image_url %}
+        <tr>
+          <td>
+            <img src="{{ lote_image_url }}" alt="{{ lote_title }}" width="536" style="width:100%; max-width:536px; height:auto; display:block; border-radius:10px 10px 0 0;" />
+          </td>
+        </tr>
+        {% endif %}
+        <tr>
+          <td style="padding:20px 24px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:12px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.4px; padding-bottom:4px;">
+                  Lote #{{ lot_number }}
+                </td>
+              </tr>
+              <tr>
+                <td style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:18px; font-weight:700; color:#0f172a; padding-bottom:16px;">
+                  {{ lote_title }}
+                </td>
+              </tr>
+              <tr>
+                <td style="border-top:1px solid #e2e8f0; padding-top:16px;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:13px; color:#64748b; padding-bottom:2px;">
+                        Precio final
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="rematar-price" style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:32px; font-weight:700; color:#15803d;">
+                        {{ final_price }}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Detalles de la operación -->
+  <tr>
+    <td style="padding-bottom:24px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td width="50%" style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:13px; color:#64748b; padding-bottom:2px;">Remate</td>
+          <td width="50%" style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:13px; color:#64748b; padding-bottom:2px;">Adjudicado el</td>
+        </tr>
+        <tr>
+          <td width="50%" style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; color:#0f172a;">{{ remate_title }}</td>
+          <td width="50%" style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; color:#0f172a;">{{ adjudicated_at }}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Próximos pasos -->
+  <tr>
+    <td style="padding:20px 24px; background-color:#eff6ff; border-left:4px solid #1d4ed8; border-radius:6px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:14px; font-weight:700; color:#1e40af; padding-bottom:6px;">
+            Próximos pasos
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:14px; line-height:22px; color:#334155;">
+            El lote ha sido adjudicado a tu usuario. {{ rematador_name }} se pondrá en contacto con vos para coordinar el pago y la entrega. También podés ver el estado de esta compra desde tu cuenta de RematAR, en la sección "Mis compras".
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+{% endblock %}

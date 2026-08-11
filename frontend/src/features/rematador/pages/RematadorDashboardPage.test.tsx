@@ -9,19 +9,12 @@ const {
   useAuthMock,
   useRematesMock,
   useRemateOperationalInfoMock,
-  useLiveOperationalSummaryMock,
   navigateMock,
   apiMocks,
 } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   useRematesMock: vi.fn(),
   useRemateOperationalInfoMock: vi.fn(),
-  useLiveOperationalSummaryMock: vi.fn(() => ({
-    data: { openLotes: 0, connectedUsers: 0 },
-    isLoading: false,
-    error: null,
-    reload: vi.fn(),
-  })),
   navigateMock: vi.fn(),
   apiMocks: {
     createRemateRequest: vi.fn(),
@@ -41,12 +34,8 @@ vi.mock('../../auth/hooks', () => ({ useAuth: useAuthMock }));
 vi.mock('../../remates/hooks', () => ({ useRemates: useRematesMock }));
 vi.mock('../hooks', () => ({
   useRemateOperationalInfo: useRemateOperationalInfoMock,
-  useLiveOperationalSummary: useLiveOperationalSummaryMock,
 }));
 vi.mock('../../remates/api', () => apiMocks);
-vi.mock('../../notifications/components/RecentActivityCard', () => ({
-  RecentActivityCard: () => null,
-}));
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
   return { ...actual, useNavigate: () => navigateMock };
@@ -74,9 +63,9 @@ function makeRemate(overrides: Partial<Remate>): Remate {
   };
 }
 
-function renderPage() {
+function renderPage(initialEntries: Array<string | { pathname: string; state?: unknown }> = ['/']) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <RematadorDashboardPage />
     </MemoryRouter>,
   );
@@ -196,10 +185,10 @@ describe('RematadorDashboardPage', () => {
     renderPage();
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Crear remate' })[0]);
-    expect(screen.getByRole('heading', { name: 'Crear remate' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Crear nuevo remate' })).toBeInTheDocument();
   });
 
-  it('al crear un remate, navega a su página de lotes', async () => {
+  it('al crear un remate, muestra la transición de éxito y luego navega a su página de lotes', async () => {
     useAuthMock.mockReturnValue({ user: { id: 'user-42', role: 'rematador' } });
     const reload = vi.fn();
     useRematesMock.mockReturnValue({ remates: [], isLoading: false, error: null, reload });
@@ -214,33 +203,78 @@ describe('RematadorDashboardPage', () => {
     await userEvent.selectOptions(screen.getByLabelText('Categoría'), 'hacienda');
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Crear remate' }));
 
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/remates/remate-nuevo/lotes'));
+    expect(await screen.findByText('Remate creado correctamente')).toBeInTheDocument();
     expect(reload).toHaveBeenCalled();
+    expect(navigateMock).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/remates/remate-nuevo/lotes'), { timeout: 2000 });
   });
 
-  it('sin remates en vivo, no muestra la fila de lotes abiertos/conectados', () => {
+  it('al iniciar un remate, el cartel de redirección sobrevive a que la lista quede en isLoading (reload) y termina navegando a la Consola Operativa', async () => {
     useAuthMock.mockReturnValue({ user: { id: 'user-42', role: 'rematador' } });
     useRemateOperationalInfoMock.mockReturnValue({
-      loteCount: 0,
+      loteCount: 2,
       activeLote: null,
       nextLote: null,
       connectedUsers: null,
       isLoadingLotes: false,
     });
-    useRematesMock.mockReturnValue({
-      remates: [makeRemate({ id: 'a', status: 'scheduled' })],
-      isLoading: false,
-      error: null,
-      reload: vi.fn(),
+
+    const remate = makeRemate({ id: 'remate-1', status: 'scheduled' });
+    apiMocks.startRemateRequest.mockResolvedValue({ ...remate, status: 'live' });
+
+    let isLoading = false;
+    const reload = vi.fn(() => {
+      // Simula lo que hacía `useAsyncResource` de verdad: `reload()` pone `isLoading` en
+      // true de inmediato, reemplazando las tarjetas por esqueletos mientras se
+      // refetchea la lista. Antes de este fix, el cartel/timer vivía dentro de la
+      // tarjeta y se desmontaba junto con ella acá -- nunca llegaba a redirigir.
+      isLoading = true;
     });
+    useRematesMock.mockImplementation(() => ({ remates: [remate], isLoading, error: null, reload }));
 
     renderPage();
 
-    expect(screen.queryByText('Lotes abiertos')).not.toBeInTheDocument();
-    expect(screen.queryByText('Compradores conectados')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Iniciar remate' }));
+
+    await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('button', { name: 'Iniciar remate' })).not.toBeInTheDocument();
+    expect(await screen.findByText('¡Remate en vivo!')).toBeInTheDocument();
+    expect(navigateMock).not.toHaveBeenCalledWith('/remates/remate-1/gestionar');
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/remates/remate-1/gestionar'), {
+      timeout: 3000,
+    });
   });
 
-  it('con remates en vivo, muestra lotes abiertos/conectados agregados', () => {
+  it('al volver de publicar un remate, resalta esa tarjeta un momento y no repite el resalte si se vuelve a renderizar', async () => {
+    useAuthMock.mockReturnValue({ user: { id: 'user-42', role: 'rematador' } });
+    useRemateOperationalInfoMock.mockReturnValue({
+      loteCount: 1,
+      activeLote: null,
+      nextLote: null,
+      connectedUsers: null,
+      isLoadingLotes: false,
+    });
+    const remateA = makeRemate({ id: 'remate-a', title: 'Remate A' });
+    const remateB = makeRemate({ id: 'remate-b', title: 'Remate B' });
+    useRematesMock.mockReturnValue({ remates: [remateA, remateB], isLoading: false, error: null, reload: vi.fn() });
+
+    renderPage([{ pathname: '/', state: { highlightRemateId: 'remate-b' } }]);
+
+    const cardB = screen.getByText('Remate B').closest('article');
+    expect(cardB).not.toBeNull();
+    expect(within(cardB as HTMLElement).getByRole('status', { name: 'Remate publicado' })).toBeInTheDocument();
+
+    const cardA = screen.getByText('Remate A').closest('article');
+    expect(within(cardA as HTMLElement).queryByRole('status', { name: 'Remate publicado' })).not.toBeInTheDocument();
+
+    // Se consume una sola vez -- limpia el state de la navegación para que un refresh o
+    // volver con "atrás" no repita el resalte.
+    expect(navigateMock).toHaveBeenCalledWith('/', { replace: true, state: null });
+  });
+
+  it('no muestra la fila de "lotes abiertos"/"conectados" (sacada del rediseño visual)', () => {
     useAuthMock.mockReturnValue({ user: { id: 'user-42', role: 'rematador' } });
     useRemateOperationalInfoMock.mockReturnValue({
       loteCount: 0,
@@ -255,17 +289,10 @@ describe('RematadorDashboardPage', () => {
       error: null,
       reload: vi.fn(),
     });
-    useLiveOperationalSummaryMock.mockReturnValue({
-      data: { openLotes: 2, connectedUsers: 7 },
-      isLoading: false,
-      error: null,
-      reload: vi.fn(),
-    });
 
     renderPage();
 
-    expect(useLiveOperationalSummaryMock).toHaveBeenCalledWith(['a']);
-    expect(screen.getByText('Lotes abiertos').nextElementSibling?.textContent).toBe('2');
-    expect(screen.getByText('Compradores conectados').nextElementSibling?.textContent).toBe('7');
+    expect(screen.queryByText('Lotes abiertos')).not.toBeInTheDocument();
+    expect(screen.queryByText('Compradores conectados')).not.toBeInTheDocument();
   });
 });

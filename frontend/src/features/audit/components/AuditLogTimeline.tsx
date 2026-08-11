@@ -52,7 +52,13 @@ export function AuditLogTimeline({ entries }: AuditLogTimelineProps) {
           <h3 className="sticky top-0 z-10 bg-slate-50 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
             {DAY_HEADER_FORMATTER.format(new Date(`${group.day}T00:00:00Z`))}
           </h3>
-          <div className="flex flex-col gap-2">
+          <div className="relative flex flex-col gap-2">
+            {group.items.length > 1 && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute bottom-4 left-[29px] top-4 w-px bg-slate-200"
+              />
+            )}
             {group.items.map((entry) => (
               <AuditLogEntryCard key={entry.id} entry={entry} />
             ))}

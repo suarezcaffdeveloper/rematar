@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import type { NormalizedApiError } from '../../shared/api/errors';
 import { useAsyncResource } from '../../shared/hooks/useAsyncResource';
 import {
+  fetchLoteByIdRequest,
   fetchLoteCountRequest,
   fetchLotesRequest,
   fetchRemateByIdRequest,
@@ -162,4 +163,27 @@ export function useLotes(remateId: string): UseLotesResult {
   } = useAsyncResource<LotesPage>(() => fetchAllLotes(remateId), [remateId], { lotes: [], total: 0 });
 
   return { lotes, total, isLoading, error, reload };
+}
+
+export interface UseLoteResult {
+  lote: Lote | null;
+  isLoading: boolean;
+  error: NormalizedApiError | null;
+  reload: () => void;
+}
+
+/** Detalle completo de un lote puntual (con `images`/`description`), traído solo cuando
+ * `enabled` -- pensado para overlays que abren bajo demanda (ej. `LoteInfoCard`) y no
+ * deben pedir esto de entrada junto con el resto de la pantalla. */
+export function useLote(remateId: string, loteId: string, enabled: boolean): UseLoteResult {
+  const {
+    data: lote,
+    isLoading,
+    error,
+    reload,
+  } = useAsyncResource<Lote | null>(() => fetchLoteByIdRequest(remateId, loteId), [remateId, loteId], null, {
+    enabled,
+  });
+
+  return { lote, isLoading, error, reload };
 }

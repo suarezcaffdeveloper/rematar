@@ -51,11 +51,13 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_migrations_online() -> None:
+    # En entorno local Postgres no tiene SSL; en staging/producción sí.
+    ssl_context = False if settings.ENVIRONMENT == "local" else ssl.create_default_context()
     connectable = create_async_engine(
         config.get_main_option("sqlalchemy.url"),
         poolclass=pool.NullPool,
         connect_args={
-            "ssl": ssl.create_default_context(),
+            "ssl": ssl_context,
             "prepared_statement_cache_size": 0,
         },
     )

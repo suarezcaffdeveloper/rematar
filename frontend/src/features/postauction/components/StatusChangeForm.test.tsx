@@ -27,7 +27,7 @@ describe('StatusChangeForm', () => {
     expect(screen.getByText(/último estado del flujo/)).toBeInTheDocument();
   });
 
-  it('envía el nuevo estado y la observación, y llama onChanged', async () => {
+  it('envía el nuevo estado y llama onChanged', async () => {
     apiMocks.changeVentaEstadoRequest.mockResolvedValue({});
     const onChanged = vi.fn();
     const user = userEvent.setup();
@@ -35,12 +35,10 @@ describe('StatusChangeForm', () => {
     render(<StatusChangeForm caseId="case-1" currentStatus="adjudicado" onChanged={onChanged} />);
 
     await user.selectOptions(screen.getByLabelText('Nuevo estado'), 'pago_pendiente');
-    await user.type(screen.getByLabelText('Observación (opcional)'), 'Lo contacté por WhatsApp');
     await user.click(screen.getByRole('button', { name: 'Cambiar estado' }));
 
     expect(apiMocks.changeVentaEstadoRequest).toHaveBeenCalledWith('case-1', {
       new_status: 'pago_pendiente',
-      note: 'Lo contacté por WhatsApp',
     });
     expect(onChanged).toHaveBeenCalled();
   });

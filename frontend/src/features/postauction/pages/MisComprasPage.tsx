@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
+import { useWideLayout } from '../../../app/layouts/useWideLayout';
 import { Alert } from '../../../shared/components/Alert';
 import { Button } from '../../../shared/components/Button';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
 import { GavelIcon } from '../../remates/components/icons';
 import { CaseCard } from '../components/CaseCard';
+import { SearchFilterBar } from '../components/SearchFilterBar';
 import { useMisCompras } from '../hooks';
+import type { PostAuctionListFilters } from '../types';
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 4;
 
 /**
  * "Mis compras" del comprador (Épica 7, Módulo 7.5), en `/mis-compras` -- lotes ganados,
@@ -17,8 +20,15 @@ const PAGE_SIZE = 12;
  * restringe a las compras propias.
  */
 export function MisComprasPage() {
+  useWideLayout();
+  const [filters, setFilters] = useState<PostAuctionListFilters>({});
   const [page, setPage] = useState(1);
-  const { data, isLoading, error } = useMisCompras(page, PAGE_SIZE);
+  const { data, isLoading, error } = useMisCompras(filters, page, PAGE_SIZE);
+
+  function handleFiltersChange(next: PostAuctionListFilters) {
+    setFilters(next);
+    setPage(1);
+  }
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
@@ -33,11 +43,13 @@ export function MisComprasPage() {
         </p>
       </div>
 
+      <SearchFilterBar value={filters} onChange={handleFiltersChange} />
+
       {error ? (
         <Alert variant="error">No se pudieron cargar tus compras.</Alert>
       ) : isLoading && !data ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }, (_, index) => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, index) => (
             <Skeleton key={index} className="h-40 rounded-xl" />
           ))}
         </div>
@@ -49,7 +61,7 @@ export function MisComprasPage() {
         />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {data?.items.map((item) => (
               <CaseCard key={item.id} item={item} to={`/mis-compras/${item.id}`} perspective="comprador" />
             ))}

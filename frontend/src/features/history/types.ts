@@ -84,6 +84,8 @@ export interface OfertaHistoryEntry {
 export interface LoteWinner {
   buyer_id: string;
   buyer_name: string | null;
+  buyer_email: string | null;
+  buyer_phone: string | null;
   amount: string;
 }
 

@@ -147,7 +147,7 @@ describe('LotesManagementPage', () => {
   it('sin lotes, muestra el estado vacío con acción de agregar', () => {
     mockDefaults();
     renderPage();
-    expect(screen.getByText('Todavía no cargaste lotes')).toBeInTheDocument();
+    expect(screen.getByText('Aún no agregaste ningún lote')).toBeInTheDocument();
   });
 
   it('con lotes, muestra una tarjeta por cada uno', () => {
@@ -185,7 +185,7 @@ describe('LotesManagementPage', () => {
     await userEvent.selectOptions(screen.getByLabelText('Categoría'), 'hacienda');
     await userEvent.type(screen.getByLabelText('Precio inicial'), '1000');
     await userEvent.type(screen.getByLabelText('Incremento mínimo'), '50');
-    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Crear lote' }));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Guardar lote' }));
 
     await waitFor(() => expect(reloadLotes).toHaveBeenCalled());
   });
@@ -266,31 +266,54 @@ describe('LotesManagementPage', () => {
     await waitFor(() => expect(toastPushMock).toHaveBeenCalledWith('error', 'No se pudo reordenar.'));
   });
 
-  it('"Editar remate" desde la sidebar abre el modal con los datos del remate', async () => {
+  it('"Editar remate" desde "Configuración del remate" abre el modal con los datos del remate', async () => {
     mockDefaults({ title: 'Mi remate' });
     renderPage();
 
-    await userEvent.click(screen.getByRole('button', { name: /Editar remate/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Configuración del remate' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Editar remate' }));
     expect(screen.getByRole('heading', { name: 'Editar remate' })).toBeInTheDocument();
     expect(screen.getByLabelText('Título')).toHaveValue('Mi remate');
   });
 
-  it('"Publicar remate" llama a scheduleRemateRequest', async () => {
-    const reloadRemate = vi.fn();
+  it('"Publicar remate" llama a scheduleRemateRequest, muestra el cartel de redirección y navega a "Mis remates" resaltando el remate publicado', async () => {
     useRemateDetailMock.mockReturnValue({
       remate: makeRemate({ starts_at: '2026-09-01T10:00:00Z' }),
       isLoading: false,
       error: null,
-      reload: reloadRemate,
+      reload: vi.fn(),
     });
-    useLotesMock.mockReturnValue({ lotes: [], total: 0, isLoading: false, error: null, reload: vi.fn() });
+    useLotesMock.mockReturnValue({ lotes: [makeLote()], total: 1, isLoading: false, error: null, reload: vi.fn() });
     apiMocks.scheduleRemateRequest.mockResolvedValue(makeRemate({ status: 'scheduled' }));
 
     renderPage();
     await userEvent.click(screen.getByRole('button', { name: /Publicar remate/ }));
 
     await waitFor(() => expect(apiMocks.scheduleRemateRequest).toHaveBeenCalledWith('remate-1'));
-    expect(reloadRemate).toHaveBeenCalled();
+    // Mismo cartel que "Iniciar remate" -- primero confirma, la navegación la dispara el
+    // cartel solo al autodescartarse (`TransitionOverlay`), no llamarla de inmediato.
+    expect(await screen.findByText('¡Remate publicado!')).toBeInTheDocument();
+    expect(navigateMock).not.toHaveBeenCalledWith('/', expect.anything());
+
+    await waitFor(
+      () => expect(navigateMock).toHaveBeenCalledWith('/', { state: { highlightRemateId: 'remate-1' } }),
+      { timeout: 3000 },
+    );
+  });
+
+  it('"Publicar remate" queda deshabilitado sin lotes cargados, con el motivo visible', () => {
+    useRemateDetailMock.mockReturnValue({
+      remate: makeRemate({ starts_at: '2026-09-01T10:00:00Z' }),
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+    useLotesMock.mockReturnValue({ lotes: [], total: 0, isLoading: false, error: null, reload: vi.fn() });
+
+    renderPage();
+
+    expect(screen.getByRole('button', { name: /Publicar remate/ })).toBeDisabled();
+    expect(screen.getByText('Debés cargar al menos un lote para publicar el remate.')).toBeInTheDocument();
   });
 
   it('"Eliminar remate" pide confirmación y navega al dashboard', async () => {
@@ -298,7 +321,8 @@ describe('LotesManagementPage', () => {
     mockDefaults();
 
     renderPage();
-    await userEvent.click(screen.getByRole('button', { name: /Eliminar remate/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Configuración del remate' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Eliminar remate' }));
     await userEvent.click(screen.getByRole('button', { name: 'Eliminar' }));
 
     await waitFor(() => expect(apiMocks.deleteRemateRequest).toHaveBeenCalledWith('remate-1'));
@@ -310,7 +334,8 @@ describe('LotesManagementPage', () => {
     duplicationMocks.duplicateRemate.mockResolvedValue(makeRemate({ id: 'remate-copia' }));
 
     renderPage();
-    await userEvent.click(screen.getByRole('button', { name: /Duplicar remate/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Configuración del remate' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Duplicar remate' }));
 
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/remates/remate-copia/lotes'));
   });

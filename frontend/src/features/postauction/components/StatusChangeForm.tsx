@@ -2,7 +2,6 @@ import { type FormEvent, useState } from 'react';
 import { Alert } from '../../../shared/components/Alert';
 import { Button } from '../../../shared/components/Button';
 import { Select } from '../../../shared/components/Select';
-import { Textarea } from '../../../shared/components/Textarea';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { changeVentaEstadoRequest } from '../api';
 import { nextStatusOptions, STATUS_LABELS } from '../labels';
@@ -23,7 +22,6 @@ export interface StatusChangeFormProps {
 export function StatusChangeForm({ caseId, currentStatus, onChanged }: StatusChangeFormProps) {
   const options = nextStatusOptions(currentStatus);
   const [newStatus, setNewStatus] = useState<PostAuctionStatus | ''>(options[0] ?? '');
-  const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,8 +35,7 @@ export function StatusChangeForm({ caseId, currentStatus, onChanged }: StatusCha
     setIsSubmitting(true);
     setError(null);
     try {
-      await changeVentaEstadoRequest(caseId, { new_status: newStatus, note: note || undefined });
-      setNote('');
+      await changeVentaEstadoRequest(caseId, { new_status: newStatus });
       onChanged();
     } catch (err) {
       setError(normalizeApiError(err).message);
@@ -61,12 +58,6 @@ export function StatusChangeForm({ caseId, currentStatus, onChanged }: StatusCha
           </option>
         ))}
       </Select>
-      <Textarea
-        label="Observación (opcional)"
-        placeholder="Detalle sobre este cambio de estado"
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-      />
       <Button type="submit" isLoading={isSubmitting} className="self-start">
         Cambiar estado
       </Button>

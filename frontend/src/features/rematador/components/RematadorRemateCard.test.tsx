@@ -10,8 +10,6 @@ const { navigateMock, useRemateOperationalInfoMock, apiMocks, toastPushMock } = 
   useRemateOperationalInfoMock: vi.fn(),
   apiMocks: {
     startRemateRequest: vi.fn(),
-    resumeRemateRequest: vi.fn(),
-    finishRemateRequest: vi.fn(),
     scheduleRemateRequest: vi.fn(),
     deleteRemateRequest: vi.fn(),
     cancelRemateRequest: vi.fn(),
@@ -66,10 +64,10 @@ function defaultOperationalInfo(overrides = {}) {
   };
 }
 
-function renderCard(remate: Remate, onChanged = vi.fn()) {
+function renderCard(remate: Remate, onChanged = vi.fn(), onStarted = vi.fn()) {
   return render(
     <MemoryRouter>
-      <RematadorRemateCard remate={remate} onChanged={onChanged} />
+      <RematadorRemateCard remate={remate} onChanged={onChanged} onStarted={onStarted} />
     </MemoryRouter>,
   );
 }
@@ -88,6 +86,19 @@ describe('RematadorRemateCard', () => {
     expect(screen.getByText('3 lotes')).toBeInTheDocument();
   });
 
+  it('isHighlighted muestra el brillo de "recién publicado"; por default, no', () => {
+    useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
+    const { rerender } = renderCard(makeRemate());
+    expect(screen.queryByRole('status', { name: 'Remate publicado' })).not.toBeInTheDocument();
+
+    rerender(
+      <MemoryRouter>
+        <RematadorRemateCard remate={makeRemate()} onChanged={vi.fn()} onStarted={vi.fn()} isHighlighted />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('status', { name: 'Remate publicado' })).toBeInTheDocument();
+  });
+
   it('muestra "conectados" solo cuando el dato está disponible', () => {
     useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo({ connectedUsers: null }));
     const { rerender } = renderCard(makeRemate({ status: 'scheduled' }));
@@ -96,7 +107,7 @@ describe('RematadorRemateCard', () => {
     useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo({ connectedUsers: 4 }));
     rerender(
       <MemoryRouter>
-        <RematadorRemateCard remate={makeRemate({ status: 'live' })} onChanged={vi.fn()} />
+        <RematadorRemateCard remate={makeRemate({ status: 'live' })} onChanged={vi.fn()} onStarted={vi.fn()} />
       </MemoryRouter>,
     );
     expect(screen.getByText('4 conectados')).toBeInTheDocument();
@@ -110,30 +121,52 @@ describe('RematadorRemateCard', () => {
     expect(screen.getByText('Lote activo: Toro Angus')).toBeInTheDocument();
   });
 
-  it('"Ver remate" navega a la ficha del remate', async () => {
-    useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
-    renderCard(makeRemate({ id: 'remate-9' }));
+  describe('botones según estado -- dos para "preparando"/"en vivo", uno solo para "finalizado"', () => {
+    it('"draft"/"scheduled": "Preparar lotes" (a /lotes) e "Iniciar remate", sin "Administrar"/"Ver detalle"/"Ver historial"', async () => {
+      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
+      for (const status of ['draft', 'scheduled'] as const) {
+        const { unmount } = renderCard(makeRemate({ id: 'remate-9', status }));
 
-    await userEvent.click(screen.getByRole('button', { name: 'Ver remate' }));
-    expect(navigateMock).toHaveBeenCalledWith('/remates/remate-9');
-  });
+        await userEvent.click(screen.getByRole('button', { name: 'Preparar lotes' }));
+        expect(navigateMock).toHaveBeenCalledWith('/remates/remate-9/lotes');
+        expect(screen.getByRole('button', { name: 'Iniciar remate' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Administrar' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Ver detalle' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Ver historial' })).not.toBeInTheDocument();
+        unmount();
+      }
+    });
 
-  it('"draft"/"scheduled": el botón dice "Preparar lotes" y navega a /lotes', async () => {
-    useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
-    renderCard(makeRemate({ id: 'remate-9', status: 'scheduled' }));
+    it('"live"/"paused": "Administrar" (a /gestionar) y "Ver detalle" (a la ficha), sin botón de ciclo de vida', async () => {
+      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
+      for (const status of ['live', 'paused'] as const) {
+        const { unmount } = renderCard(makeRemate({ id: 'remate-9', status }));
 
-    const button = screen.getByRole('button', { name: 'Preparar lotes' });
-    await userEvent.click(button);
-    expect(navigateMock).toHaveBeenCalledWith('/remates/remate-9/lotes');
-  });
+        await userEvent.click(screen.getByRole('button', { name: 'Administrar' }));
+        expect(navigateMock).toHaveBeenCalledWith('/remates/remate-9/gestionar');
 
-  it('"live"/"paused"/"finished"/"cancelled": el botón dice "Administrar" y navega a /gestionar', async () => {
-    useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
-    renderCard(makeRemate({ id: 'remate-9', status: 'live' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Ver detalle' }));
+        expect(navigateMock).toHaveBeenCalledWith('/remates/remate-9');
 
-    const button = screen.getByRole('button', { name: 'Administrar' });
-    await userEvent.click(button);
-    expect(navigateMock).toHaveBeenCalledWith('/remates/remate-9/gestionar');
+        expect(screen.queryByRole('button', { name: /Iniciar|Reanudar|Finalizar/ })).not.toBeInTheDocument();
+        unmount();
+      }
+    });
+
+    it('"finished"/"cancelled": un único botón "Ver resumen" (a /historial)', async () => {
+      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
+      for (const status of ['finished', 'cancelled'] as const) {
+        const { unmount } = renderCard(makeRemate({ id: 'remate-9', status }));
+
+        await userEvent.click(screen.getByRole('button', { name: 'Ver resumen' }));
+        expect(navigateMock).toHaveBeenCalledWith('/remates/remate-9/historial');
+
+        expect(screen.queryByRole('button', { name: 'Ver historial' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Ver resultados' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Administrar' })).not.toBeInTheDocument();
+        unmount();
+      }
+    });
   });
 
   describe('menú de acciones', () => {
@@ -213,8 +246,8 @@ describe('RematadorRemateCard', () => {
     });
   });
 
-  describe('acciones de ciclo de vida', () => {
-    it('"scheduled" muestra "Iniciar remate", deshabilitado sin lotes', () => {
+  describe('"Iniciar remate"', () => {
+    it('"scheduled" sin lotes lo deshabilita', () => {
       useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo({ loteCount: 0 }));
       renderCard(makeRemate({ status: 'scheduled' }));
 
@@ -222,62 +255,31 @@ describe('RematadorRemateCard', () => {
       expect(button).toBeDisabled();
     });
 
-    it('"scheduled" con lotes permite iniciar, y llama al endpoint + toast + onChanged', async () => {
+    it('"draft" lo deshabilita aunque ya tenga lotes -- falta publicarlo primero', () => {
       useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo({ loteCount: 2 }));
-      apiMocks.startRemateRequest.mockResolvedValue(makeRemate({ status: 'live' }));
+      renderCard(makeRemate({ status: 'draft' }));
+
+      expect(screen.getByRole('button', { name: 'Iniciar remate' })).toBeDisabled();
+    });
+
+    it('"scheduled" con lotes permite iniciar, y avisa a onStarted con el remate ya actualizado', async () => {
+      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo({ loteCount: 2 }));
+      const updated = makeRemate({ id: 'remate-1', status: 'live' });
+      apiMocks.startRemateRequest.mockResolvedValue(updated);
       const onChanged = vi.fn();
-      renderCard(makeRemate({ id: 'remate-1', status: 'scheduled' }), onChanged);
+      const onStarted = vi.fn();
+      renderCard(makeRemate({ id: 'remate-1', status: 'scheduled' }), onChanged, onStarted);
 
       await userEvent.click(screen.getByRole('button', { name: 'Iniciar remate' }));
 
       await waitFor(() => expect(apiMocks.startRemateRequest).toHaveBeenCalledWith('remate-1'));
-      expect(toastPushMock).toHaveBeenCalledWith('success', 'El remate está en vivo.');
       expect(onChanged).toHaveBeenCalledTimes(1);
-    });
-
-    it('"paused" muestra "Reanudar remate"', () => {
-      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
-      renderCard(makeRemate({ status: 'paused' }));
-      expect(screen.getByRole('button', { name: 'Reanudar remate' })).toBeEnabled();
-      expect(screen.queryByRole('button', { name: 'Iniciar remate' })).not.toBeInTheDocument();
-    });
-
-    it('"live" sin lote abierto permite finalizar; con lote abierto lo deshabilita', () => {
-      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo({ activeLote: null }));
-      const { rerender } = renderCard(makeRemate({ status: 'live' }));
-      expect(screen.getByRole('button', { name: 'Finalizar remate' })).toBeEnabled();
-
-      useRemateOperationalInfoMock.mockReturnValue(
-        defaultOperationalInfo({ activeLote: { title: 'Lote en curso' } }),
-      );
-      rerender(
-        <MemoryRouter>
-          <RematadorRemateCard remate={makeRemate({ status: 'live' })} onChanged={vi.fn()} />
-        </MemoryRouter>,
-      );
-      expect(screen.getByRole('button', { name: 'Finalizar remate' })).toBeDisabled();
-    });
-
-    it('"Finalizar remate" pide confirmación antes de llamar al endpoint', async () => {
-      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo({ activeLote: null }));
-      apiMocks.finishRemateRequest.mockResolvedValue(makeRemate({ status: 'finished' }));
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
-      renderCard(makeRemate({ status: 'live' }));
-
-      await userEvent.click(screen.getByRole('button', { name: 'Finalizar remate' }));
-
-      expect(confirmSpy).toHaveBeenCalled();
-      expect(apiMocks.finishRemateRequest).not.toHaveBeenCalled();
-      confirmSpy.mockRestore();
-    });
-
-    it('draft/finished/cancelled no muestran ningún botón de ciclo de vida', () => {
-      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
-      for (const status of ['draft', 'finished', 'cancelled'] as const) {
-        const { unmount } = renderCard(makeRemate({ status }));
-        expect(screen.queryByRole('button', { name: /Iniciar|Reanudar|Finalizar/ })).not.toBeInTheDocument();
-        unmount();
-      }
+      // El cartel de redirección y la navegación viven en `RematadorDashboardPage`, no
+      // acá -- esta tarjeta solo avisa que arrancó, con el remate ya actualizado
+      // (ver el test de esa página para el flujo completo, incluida la redirección).
+      expect(onStarted).toHaveBeenCalledWith(updated);
+      expect(toastPushMock).not.toHaveBeenCalled();
+      expect(navigateMock).not.toHaveBeenCalled();
     });
 
     it('ante un error del backend, muestra el mensaje normalizado como toast y no llama a onChanged', async () => {

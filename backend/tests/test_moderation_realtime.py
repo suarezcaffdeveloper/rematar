@@ -53,7 +53,9 @@ async def _setup_remate(client: AsyncClient) -> tuple[uuid.UUID, uuid.UUID]:
         json={
             "email": rematador_email,
             "password": "password123",
+            "confirm_password": "password123",
             "full_name": "Test",
+            "phone": "+5491122334455",
             "role": "rematador",
         },
     )
@@ -68,7 +70,9 @@ async def _setup_remate(client: AsyncClient) -> tuple[uuid.UUID, uuid.UUID]:
         json={
             "email": buyer_email,
             "password": "password123",
+            "confirm_password": "password123",
             "full_name": "Comprador de prueba",
+            "phone": "+5491122334455",
             "role": "comprador",
         },
     )

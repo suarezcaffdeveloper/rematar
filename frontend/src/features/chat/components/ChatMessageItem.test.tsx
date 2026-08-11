@@ -122,4 +122,25 @@ describe('ChatMessageItem', () => {
     );
     expect(screen.queryByRole('button', { name: 'Destacar mensaje' })).not.toBeInTheDocument();
   });
+
+  // --- Agrupado de mensajes consecutivos --------------------------------------------------
+
+  it('showHeader=false oculta nombre/rol/hora pero sigue mostrando el contenido', () => {
+    render(<ChatMessageItem message={makeMessage()} canModerate={false} onRequestDelete={vi.fn()} showHeader={false} />);
+
+    expect(screen.queryByText('Juan Pérez')).not.toBeInTheDocument();
+    expect(screen.queryByText('Comprador')).not.toBeInTheDocument();
+    expect(screen.getByText('Hola a todos')).toBeInTheDocument();
+  });
+
+  it('showHeader=false igual permite eliminar/destacar el mensaje agrupado', async () => {
+    const onRequestDelete = vi.fn();
+    const message = makeMessage();
+    render(
+      <ChatMessageItem message={message} canModerate onRequestDelete={onRequestDelete} showHeader={false} onTogglePin={vi.fn()} />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Eliminar mensaje' }));
+    expect(onRequestDelete).toHaveBeenCalledWith(message);
+  });
 });

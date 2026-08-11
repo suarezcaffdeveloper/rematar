@@ -1,5 +1,7 @@
 import type { DragEvent } from 'react';
 import clsx from 'clsx';
+import { motion, useReducedMotion } from 'framer-motion';
+import { ImageIcon } from 'lucide-react';
 import { Badge } from '../../../shared/components/Badge';
 import { DropdownMenu } from '../../../shared/components/DropdownMenu';
 import { formatCurrency } from '../../../shared/lib/format';
@@ -59,10 +61,15 @@ export function LoteManagementCard({
   isDragOver,
   isDragging,
 }: LoteManagementCardProps) {
+  const prefersReducedMotion = useReducedMotion();
   const mainImage = [...lote.images].sort((a, b) => a.order - b.order)[0];
 
   return (
-    <article
+    <motion.article
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: [0.21, 0.47, 0.32, 0.98] }}
+      whileHover={prefersReducedMotion ? undefined : { y: -2 }}
       draggable={isEditable}
       onDragStart={onDragStart}
       onDragEnter={onDragEnter}
@@ -70,7 +77,8 @@ export function LoteManagementCard({
       onDrop={onDrop}
       onDragEnd={onDragEnd}
       className={clsx(
-        'flex items-center gap-3 rounded-xl border bg-white p-3 shadow-sm transition-all',
+        'flex items-center gap-4 rounded-2xl border bg-white p-4 shadow-sm transition-shadow duration-200',
+        'hover:shadow-lg',
         isDragOver ? 'border-brand-500 ring-2 ring-brand-200' : 'border-slate-200',
         isDragging && 'opacity-40',
       )}
@@ -99,11 +107,17 @@ export function LoteManagementCard({
         </div>
       )}
 
-      <div className="h-16 w-24 shrink-0 overflow-hidden rounded-lg">
+      <div className="relative h-20 w-28 shrink-0 overflow-hidden rounded-xl">
         {mainImage ? (
           <img src={mainImage.url} alt="" className="h-full w-full object-cover" />
         ) : (
           <CoverPlaceholder className="h-full w-full" icon={<BoxIcon className="h-6 w-6 text-brand-300" />} />
+        )}
+        {lote.images.length > 0 && (
+          <span className="absolute bottom-1 right-1 inline-flex items-center gap-1 rounded-full bg-slate-900/70 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+            <ImageIcon aria-hidden="true" className="h-3 w-3" />
+            {lote.images.length}
+          </span>
         )}
       </div>
 
@@ -128,6 +142,6 @@ export function LoteManagementCard({
           { label: 'Eliminar', onSelect: onDelete, disabled: !isEditable, variant: 'danger' },
         ]}
       />
-    </article>
+    </motion.article>
   );
 }

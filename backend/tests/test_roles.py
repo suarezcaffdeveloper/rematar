@@ -35,7 +35,9 @@ async def test_admin_can_list_and_suspend_users(
         json={
             "email": "rematador-test@example.com",
             "password": "password123",
+            "confirm_password": "password123",
             "full_name": "Rematador",
+            "phone": "+5491122334455",
             "role": "rematador",
         },
     )

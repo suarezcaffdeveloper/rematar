@@ -17,18 +17,18 @@ export function ProgressStepper({ status }: ProgressStepperProps) {
   const currentIndex = STATUS_ORDER.indexOf(status);
 
   return (
-    <ol className="flex flex-wrap items-center gap-y-3" aria-label="Progreso del proceso post-remate">
+    <ol className="flex flex-wrap items-start gap-y-4" aria-label="Progreso del proceso post-remate">
       {STATUS_ORDER.map((step, index) => {
         const isDone = index < currentIndex;
         const isCurrent = index === currentIndex;
         return (
-          <li key={step} className="flex items-center">
-            <div className="flex flex-col items-center gap-1">
+          <li key={step} className="flex items-start">
+            <div className="flex flex-col items-center gap-1.5">
               <span
                 className={clsx(
-                  'flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold',
-                  isDone && 'bg-success-50 text-success-600',
-                  isCurrent && 'bg-brand-600 text-white',
+                  'flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold transition-colors duration-200',
+                  isDone && 'bg-success-50 text-success-600 ring-1 ring-inset ring-success-200',
+                  isCurrent && 'bg-brand-600 text-white shadow-sm ring-4 ring-brand-100',
                   !isDone && !isCurrent && 'bg-slate-100 text-slate-400',
                 )}
                 aria-current={isCurrent ? 'step' : undefined}
@@ -47,7 +47,7 @@ export function ProgressStepper({ status }: ProgressStepperProps) {
             {index < STATUS_ORDER.length - 1 && (
               <span
                 className={clsx(
-                  'mx-1 mb-4 h-0.5 w-6 sm:w-10',
+                  'mx-1 mt-4 h-0.5 w-6 shrink-0 rounded-full transition-colors duration-200 sm:w-10',
                   isDone ? 'bg-success-400' : 'bg-slate-200',
                 )}
                 aria-hidden="true"

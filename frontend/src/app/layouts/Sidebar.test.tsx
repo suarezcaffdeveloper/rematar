@@ -1,8 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
+
+const { useAuthMock, useAuthActionsMock } = vi.hoisted(() => ({
+  useAuthMock: vi.fn(() => ({ user: { full_name: 'Ana Rematadora', role: 'comprador' } })),
+  useAuthActionsMock: vi.fn(() => ({ logout: vi.fn() })),
+}));
+vi.mock('../../features/auth/hooks', () => ({
+  useAuth: useAuthMock,
+  useAuthActions: useAuthActionsMock,
+}));
 
 function renderSidebar(role: 'comprador' | 'rematador' | 'admin', isOpen = false, onClose = vi.fn()) {
   return render(
@@ -56,5 +65,49 @@ describe('Sidebar', () => {
     await userEvent.keyboard('{Escape}');
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('muestra el nombre y rol del usuario en el pie', () => {
+    renderSidebar('comprador');
+
+    expect(screen.getAllByText('Ana Rematadora')[0]).toBeInTheDocument();
+    expect(screen.getAllByText('comprador')[0]).toBeInTheDocument();
+  });
+
+  it('el botón de cerrar sesión abre un diálogo de confirmación sin llamar a logout todavía', async () => {
+    const logout = vi.fn();
+    useAuthActionsMock.mockReturnValue({ logout });
+    renderSidebar('comprador');
+
+    await userEvent.click(screen.getAllByRole('button', { name: /Cerrar sesión/ })[0]);
+
+    expect(screen.getByRole('alertdialog', { name: 'Cerrar sesión' })).toBeInTheDocument();
+    expect(logout).not.toHaveBeenCalled();
+  });
+
+  it('confirmar en el diálogo llama a logout y lo cierra', async () => {
+    const logout = vi.fn();
+    useAuthActionsMock.mockReturnValue({ logout });
+    renderSidebar('comprador');
+
+    await userEvent.click(screen.getAllByRole('button', { name: /Cerrar sesión/ })[0]);
+    const dialog = screen.getByRole('alertdialog', { name: 'Cerrar sesión' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar sesión' }));
+
+    expect(logout).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  });
+
+  it('cancelar en el diálogo no llama a logout y lo cierra', async () => {
+    const logout = vi.fn();
+    useAuthActionsMock.mockReturnValue({ logout });
+    renderSidebar('comprador');
+
+    await userEvent.click(screen.getAllByRole('button', { name: /Cerrar sesión/ })[0]);
+    const dialog = screen.getByRole('alertdialog', { name: 'Cerrar sesión' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+
+    expect(logout).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
   });
 });

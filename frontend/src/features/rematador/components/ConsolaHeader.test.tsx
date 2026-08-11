@@ -25,23 +25,36 @@ function makeRemate(overrides: Partial<Remate> = {}): Remate {
   };
 }
 
+function renderHeader(props: Parameters<typeof ConsolaHeader>[0]) {
+  return render(<ConsolaHeader {...props} />);
+}
+
 describe('ConsolaHeader', () => {
-  it('muestra título, estado, conectados y el indicador de conexión', () => {
-    render(<ConsolaHeader remate={makeRemate()} connectedUsers={12} connectionStatus="open" />);
+  it('muestra únicamente título, estado, fecha, tiempo transcurrido y conectados', () => {
+    renderHeader({ remate: makeRemate(), connectedUsers: 12, connectionStatus: 'open' });
 
     expect(screen.getByRole('heading', { name: 'Remate de hacienda en vivo' })).toBeInTheDocument();
     expect(screen.getByText('En vivo')).toBeInTheDocument();
-    expect(screen.getByText('Conectado')).toBeInTheDocument();
     expect(screen.getByText('12 conectados')).toBeInTheDocument();
   });
 
+  it('con la conexión abierta, no muestra ningún indicador de conexión (encabezado limpio)', () => {
+    renderHeader({ remate: makeRemate(), connectedUsers: 0, connectionStatus: 'open' });
+    expect(screen.queryByText('Conectado')).not.toBeInTheDocument();
+  });
+
   it('muestra "Reconectando..." mientras el WebSocket se reestablece', () => {
-    render(<ConsolaHeader remate={makeRemate()} connectedUsers={0} connectionStatus="reconnecting" />);
+    renderHeader({ remate: makeRemate(), connectedUsers: 0, connectionStatus: 'reconnecting' });
     expect(screen.getByText('Reconectando...')).toBeInTheDocument();
   });
 
   it('en "scheduled", no muestra tiempo transcurrido', () => {
-    render(<ConsolaHeader remate={makeRemate({ status: 'scheduled' })} connectedUsers={0} connectionStatus="open" />);
+    renderHeader({ remate: makeRemate({ status: 'scheduled' }), connectedUsers: 0, connectionStatus: 'open' });
     expect(screen.queryByTitle('Tiempo transcurrido desde la fecha programada')).not.toBeInTheDocument();
+  });
+
+  it('ya no ofrece un botón "Salir" -- la navegación de vuelta vive en el Sidebar global, siempre visible', () => {
+    renderHeader({ remate: makeRemate(), connectedUsers: 0, connectionStatus: 'open' });
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });

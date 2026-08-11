@@ -1,0 +1,439 @@
+<!DOCTYPE html><html class="light" lang="es"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>RematAR - Sala de Subasta en Vivo</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline": "#76777d",
+                        "on-error-container": "#93000a",
+                        "on-secondary-container": "#fefcff",
+                        "on-primary-container": "#7c839b",
+                        "secondary-fixed-dim": "#adc6ff",
+                        "on-secondary-fixed": "#001a42",
+                        "secondary": "#0058be",
+                        "secondary-fixed": "#d8e2ff",
+                        "on-tertiary-fixed-variant": "#574425",
+                        "surface-bright": "#fcf8fa",
+                        "surface-container-low": "#f6f3f5",
+                        "on-surface-variant": "#45464d",
+                        "surface-dim": "#dcd9db",
+                        "surface-container": "#f0edef",
+                        "surface-variant": "#e4e2e4",
+                        "primary-container": "#131b2e",
+                        "surface": "#fcf8fa",
+                        "surface-tint": "#565e74",
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed": "#fcdeb5",
+                        "on-surface": "#1b1b1d",
+                        "background": "#fcf8fa",
+                        "surface-container-high": "#eae7e9",
+                        "outline-variant": "#c6c6cd",
+                        "on-tertiary-container": "#98805d",
+                        "tertiary-container": "#271901",
+                        "secondary-container": "#2170e4",
+                        "on-error": "#ffffff",
+                        "on-primary-fixed": "#131b2e",
+                        "tertiary-fixed-dim": "#dec29a",
+                        "on-background": "#1b1b1d",
+                        "primary-fixed-dim": "#bec6e0",
+                        "inverse-on-surface": "#f3f0f2",
+                        "surface-container-lowest": "#ffffff",
+                        "primary": "#000000",
+                        "on-tertiary-fixed": "#271901",
+                        "inverse-surface": "#303032",
+                        "on-secondary-fixed-variant": "#004395",
+                        "error": "#ba1a1a",
+                        "primary-fixed": "#dae2fd",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "surface-container-highest": "#e4e2e4",
+                        "on-primary": "#ffffff",
+                        "tertiary": "#000000",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "inverse-primary": "#bec6e0"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "touch_target_min": "48px",
+                        "gutter": "24px",
+                        "margin_main": "32px",
+                        "sidebar_width": "360px",
+                        "base_unit": "8px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter"],
+                        "timer-md": ["Inter"],
+                        "display-bid": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "timer-md": ["24px", {"lineHeight": "24px", "fontWeight": "700"}],
+                        "display-bid": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 24px;
+        }
+        .active-glow {
+            box-shadow: 0 0 0 2px theme('colors.secondary');
+        }
+        .action-button-pop:active {
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface overflow-hidden h-screen flex">
+<!-- Sidebar Navigation -->
+<aside class="hidden md:flex flex-col h-full w-[280px] bg-surface dark:bg-surface-dim border-r border-outline-variant py-8 px-4 flex-shrink-0">
+<div class="mb-10 px-4">
+<h1 class="text-headline-md font-black text-primary tracking-tighter">RematAR</h1>
+<p class="text-label-caps text-on-surface-variant opacity-60">SISTEMA PROFESIONAL</p>
+</div>
+<nav class="flex-1 space-y-2">
+<a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 hover:bg-surface-container-high rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-caps uppercase tracking-wider text-[11px]">Inicio</span>
+</a>
+<a class="flex items-center gap-4 bg-secondary-container text-on-secondary-container rounded-xl px-4 py-3 shadow-sm transition-all translate-x-1" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">gavel</span>
+<span class="font-label-caps uppercase tracking-wider text-[11px]">Remates</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 hover:bg-surface-container-high rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined">shopping_bag</span>
+<span class="font-label-caps uppercase tracking-wider text-[11px]">Mis compras</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 hover:bg-surface-container-high rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined">favorite</span>
+<span class="font-label-caps uppercase tracking-wider text-[11px]">Favoritos</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 hover:bg-surface-container-high rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined">notifications</span>
+<span class="font-label-caps uppercase tracking-wider text-[11px]">Notificaciones</span>
+</a>
+</nav>
+<div class="mt-auto pt-6 border-t border-outline-variant px-4 flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Close up professional headshot of a smiling male buyer in his 40s, high-end business attire, soft natural office lighting, light gray studio background, minimalist professional aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCPegq9hzF7gYAxc_TwvNhOVbdgXvQg0Nfhac1ZhIq2axjbF3oKiRafdA5m5O8s616HJUW1S7CjZdpFxl8SRYEItQF93SfWaZDDsoeSzPboWreiti0iav-C8ZWCaEQrw2iC2H2rx80xLdImdVloQXQWiuFTwfKseBCCOa4hfR5pa1FD21HI4GlQEdO1HHJXVks9YMzPcI1uJqL5kweFw6RjW3fRkY2xal4AXi9OWoMcyiYOJsFQhzARFw">
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-body-md font-bold truncate">Augusto Flores</p>
+<p class="text-label-caps text-on-surface-variant text-[10px]">COMPRADOR VERIFICADO</p>
+</div>
+<button class="text-on-surface-variant hover:text-error transition-colors">
+<span class="material-symbols-outlined">logout</span>
+</button>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 flex flex-col h-full min-w-0">
+<!-- Top App Bar -->
+<header class="h-16 flex items-center justify-between px-gutter border-b border-outline-variant bg-surface-container-lowest shrink-0">
+<div class="flex items-center gap-2">
+<nav class="flex items-center text-on-surface-variant text-[13px] font-medium">
+<span>Dashboard</span>
+<span class="material-symbols-outlined mx-1 text-sm">chevron_right</span>
+<span>Flota Corporativa</span>
+<span class="material-symbols-outlined mx-1 text-sm">chevron_right</span>
+<span class="text-primary font-bold">Lote #2</span>
+</nav>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2 bg-secondary/10 px-3 py-1.5 rounded-full border border-secondary/20">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span class="text-label-caps text-secondary font-bold">SALA EN VIVO</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-on-surface-variant hover:bg-surface-variant p-2 rounded-full transition-colors">sensors</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:bg-surface-variant p-2 rounded-full transition-colors">account_circle</button>
+</div>
+</div>
+</header>
+<div class="flex-1 overflow-y-auto custom-scrollbar p-gutter bg-surface-container-low">
+<div class="max-w-[1400px] mx-auto">
+<!-- Main Grid Layout -->
+<div class="grid grid-cols-12 gap-8">
+<!-- Left: Lot Visualization -->
+<div class="col-span-12 lg:col-span-8 space-y-6">
+<!-- Lot Hero Card -->
+<div class="bg-surface-container-lowest rounded-2xl overflow-hidden shadow-sm border border-outline-variant group">
+<div class="relative aspect-video bg-surface-container-high overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Modern white Peugeot Partner Confort commercial van parked in a clean, bright, industrial warehouse space. Sharp focus on vehicle profile, high-key commercial photography style, soft shadows, neutral tones, 8k resolution." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAOji2S65uyOvKlAq29_O55MH0iM_px0dKNFQMBzfpNTubwA8y1VmfPQ2MYzzubZKl3kfli4GYHdVu6iHfBXLNPfw4N35uzzKWsn1mimafLBwvHyLdSDxXrPY1CohFWSjNuNdjZHDZ_-Q6NkSVXbXNES82bS7TxKQwOtRVU82AEkOqOQs3DimarEKO2IUGkx8pjZ0gm5CYNKNMGrc6y3gQ5YQmqgRJPJTbIbo436YvVoRzL8QX3_Slhzg">
+<div class="absolute top-4 left-4 flex gap-2">
+<span class="bg-primary text-white text-label-caps px-3 py-1 rounded-full uppercase">LOTE 2</span>
+<span class="bg-surface-container-lowest/90 backdrop-blur text-primary text-label-caps px-3 py-1 rounded-full border border-outline-variant">VEHÍCULOS</span>
+</div>
+<div class="absolute bottom-4 right-4 flex gap-2">
+<button class="w-10 h-10 bg-surface-container-lowest/80 backdrop-blur rounded-full flex items-center justify-center hover:bg-white transition-all">
+<span class="material-symbols-outlined">zoom_in</span>
+</button>
+<div class="bg-black/60 backdrop-blur text-white px-3 py-1.5 rounded-full text-label-caps">1 / 3</div>
+</div>
+</div>
+<div class="p-8">
+<div class="flex justify-between items-start mb-4">
+<h2 class="font-headline-lg text-primary tracking-tight">Peugeot Partner Confort 1.6 HDi (Año 2019)</h2>
+<div class="flex items-center gap-2 text-on-surface-variant bg-surface-container px-3 py-1.5 rounded-lg border border-outline-variant">
+<span class="material-symbols-outlined text-sm">schedule</span>
+<span class="font-body-md font-bold">2d 14h restantes</span>
+</div>
+</div>
+<p class="text-body-md text-on-surface-variant max-w-2xl">
+                                    Furgón de carga diésel con 110.000 km, aire acondicionado, dirección asistida y puerta lateral. Único dueño, mantenimientos al día en talleres oficiales. Ideal para logística urbana.
+                                </p>
+</div>
+</div>
+<!-- Secondary Info Bento -->
+<div class="grid grid-cols-3 gap-6">
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant">
+<span class="material-symbols-outlined text-secondary mb-3">speed</span>
+<p class="text-label-caps text-on-surface-variant opacity-60">KILOMETRAJE</p>
+<p class="font-headline-md text-primary">110.000 KM</p>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant">
+<span class="material-symbols-outlined text-secondary mb-3">local_gas_station</span>
+<p class="text-label-caps text-on-surface-variant opacity-60">COMBUSTIBLE</p>
+<p class="font-headline-md text-primary">Diésel</p>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant">
+<span class="material-symbols-outlined text-secondary mb-3">verified</span>
+<p class="text-label-caps text-on-surface-variant opacity-60">CONDICIÓN</p>
+<p class="font-headline-md text-primary">Excelente</p>
+</div>
+</div>
+</div>
+<!-- Right: High-Stakes Auction Console -->
+<div class="col-span-12 lg:col-span-4 space-y-6">
+<!-- Bidding Console (The Hero Action Zone) -->
+<div class="bg-primary-container text-white rounded-3xl p-8 shadow-2xl relative overflow-hidden ring-4 ring-secondary/20">
+
+<div class="relative z-10">
+<div class="flex justify-between items-center mb-10">
+<div class="bg-secondary px-4 py-1.5 rounded-full flex items-center gap-2">
+<span class="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+<span class="text-label-caps font-black tracking-widest">TIEMPO RESTANTE</span>
+</div>
+<div class="text-right">
+<p class="text-timer-md font-black text-white tracking-widest bg-white/10 px-4 py-2 rounded-xl border border-white/20">01:27</p>
+</div>
+</div>
+<div class="mb-10 text-center">
+<p class="text-label-caps text-on-primary-container mb-2 tracking-[0.2em] opacity-80">OFERTA ACTUAL</p>
+<h3 class="font-display-bid text-white">$ 9.800.000,00</h3>
+<p class="text-body-md text-secondary-fixed opacity-70 mt-2">Mínimo sugerido: $ 9.900.000</p>
+</div>
+<div class="space-y-4">
+<div class="relative">
+<span class="absolute left-6 top-1/2 -translate-y-1/2 text-headline-md font-bold text-white/50">$</span>
+<input class="w-full bg-white/10 border-2 border-white/20 rounded-2xl py-6 pl-12 pr-6 font-headline-md text-white focus:border-secondary focus:ring-4 focus:ring-secondary/30 transition-all outline-none" step="100000" type="number" value="9900000">
+</div>
+<button class="w-full bg-secondary hover:bg-secondary-container text-white py-6 rounded-2xl font-headline-md shadow-lg shadow-secondary/40 transition-all active:scale-[0.97] flex items-center justify-center gap-3">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">gavel</span>
+                                        Realizar Oferta
+                                    </button>
+</div>
+<div class="mt-6 flex items-center justify-center gap-2 text-label-caps text-white/50">
+<span class="material-symbols-outlined text-[14px]">lock</span>
+                                    TRANSACCIÓN PROTEGIDA POR REMATAR
+                                </div>
+</div>
+</div>
+<!-- Activity Feed Bento -->
+<div class="bg-surface-container-lowest rounded-2xl border border-outline-variant overflow-hidden flex flex-col h-[500px]">
+<div class="flex border-b border-outline-variant">
+<button class="flex-1 py-4 font-label-caps text-secondary border-b-2 border-secondary bg-secondary/5">HISTORIAL</button>
+<button class="flex-1 py-4 font-label-caps text-on-surface-variant hover:bg-surface-container-high transition-colors">CHAT</button>
+</div>
+<!-- Bids History -->
+<div class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+<!-- Winner Entry -->
+<div class="p-4 rounded-xl bg-secondary/10 border-l-4 border-secondary flex justify-between items-center group animate-in slide-in-from-right">
+<div>
+<p class="text-label-caps text-secondary">GANANDO ACTUALMENTE</p>
+<p class="font-headline-md text-primary">$ 9.800.000</p>
+<p class="text-[11px] text-on-surface-variant font-medium">Hace 2 min • Comprador #482</p>
+</div>
+<span class="material-symbols-outlined text-secondary text-3xl group-hover:scale-110 transition-transform">star</span>
+</div>
+<!-- Past Entries -->
+<div class="p-4 rounded-xl bg-surface-container-low border border-outline-variant flex justify-between items-center opacity-70">
+<div>
+<p class="font-bold text-primary">$ 9.700.000</p>
+<p class="text-[11px] text-on-surface-variant">Hace 5 min • Comprador #115</p>
+</div>
+<span class="text-label-caps text-error bg-error-container/20 px-2 py-0.5 rounded">SUPERADA</span>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low border border-outline-variant flex justify-between items-center opacity-50">
+<div>
+<p class="font-bold text-primary">$ 9.600.000</p>
+<p class="text-[11px] text-on-surface-variant">Hace 12 min • Comprador #482</p>
+</div>
+<span class="text-label-caps text-error bg-error-container/20 px-2 py-0.5 rounded">SUPERADA</span>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low border border-outline-variant flex justify-between items-center opacity-40">
+<div>
+<p class="font-bold text-primary">$ 9.500.000</p>
+<p class="text-[11px] text-on-surface-variant">Precio Base • RematAR</p>
+</div>
+<span class="text-label-caps text-on-surface-variant bg-outline-variant px-2 py-0.5 rounded">INICIO</span>
+</div>
+</div>
+<!-- Chat Input Overlay (Hidden by default but toggleable) -->
+<div class="p-4 bg-surface border-t border-outline-variant">
+<div class="flex gap-2">
+<input class="flex-1 bg-surface-container-high border-none rounded-full px-4 py-2 text-body-md focus:ring-2 focus:ring-secondary transition-all" placeholder="Consultar con el martillero..." type="text">
+<button class="w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center hover:bg-secondary transition-colors">
+<span class="material-symbols-outlined">send</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer Section: Upcoming Lots -->
+<section class="mt-12">
+<div class="flex items-center justify-between mb-6">
+<h3 class="font-headline-md text-primary">Próximos lotes en esta subasta</h3>
+<a class="text-secondary font-bold text-body-md hover:underline flex items-center gap-1" href="#">
+                            Ver catálogo completo
+                            <span class="material-symbols-outlined">arrow_forward</span>
+</a>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+<!-- Lot Card 3 -->
+<div class="bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant hover:shadow-md transition-all group">
+<div class="relative h-40 bg-surface-container-high">
+<img class="w-full h-full object-cover" data-alt="Rugged metallic gray Toyota Hilux 4x4 pickup truck positioned in a high-contrast lighting environment, desert background, professional automotive photography style, sleek reflections." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBBpm6DgXiXxCONxdqQxNsL7URXEx9-2BJbKTw2OuUeijK6dWEDPcpa8pNM8nYieoK9Ek5xYODQND7rKeVtzcqhHsgZGqxcEBLufQWw8mvv2PNOcbT3WlvKnEQr6Q41DQ76bfPCmZ3KmPyKiW3tUhKmLq0bLPvX7ffO1ZYTCLssnS20_xN8KaG287Q7gRF7VwVhKYd_VrY_w0x7zBh6AeN7CcqxTB7D0ZrtBjBXVbAb2BUsEPfc6PUAOg">
+<div class="absolute top-2 left-2 bg-black/60 backdrop-blur text-white text-[10px] px-2 py-0.5 rounded-full font-bold">LOTE 3</div>
+</div>
+<div class="p-4">
+<p class="font-bold text-primary truncate">Toyota Hilux 4x4 Diesel</p>
+<p class="text-label-caps text-on-surface-variant opacity-60">INICIA EN $ 12.000.000</p>
+</div>
+</div>
+<!-- Lot Card 4 -->
+<div class="bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant hover:shadow-md transition-all group">
+<div class="relative h-40 bg-surface-container-high">
+<img class="w-full h-full object-cover" data-alt="Sleek luxury black Mercedes-Benz Sprinter van for executive transport, parked in a polished concrete showroom with dramatic overhead lighting, professional clean aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD0Lmtp7s4CeUC9JLHZ3UkLZMNtLVhKNNGL6cVTSi-jRqHhUmShZxS9gXZWVLi8O0tVSBmCebdZo8jKGYy9ui9uMYsF1wKqpHA4mcH2s3Hgh75Vtw7rwDnd8yzTT5vE7EyRSPgYoQA0ApGX4gV3ETmKhpr_9YT60vC5c8vnIheeFKAy1Qz2V0XHLC0f_p1rwfovcg9JQSjk70K06avZdIa9gQhxCqZwz7L1Mlcpcd2qHZHH3hDkgGq5gw">
+<div class="absolute top-2 left-2 bg-black/60 backdrop-blur text-white text-[10px] px-2 py-0.5 rounded-full font-bold">LOTE 4</div>
+</div>
+<div class="p-4">
+<p class="font-bold text-primary truncate">Mercedes-Benz Sprinter 515</p>
+<p class="text-label-caps text-on-surface-variant opacity-60">INICIA EN $ 15.500.000</p>
+</div>
+</div>
+<!-- Lot Card 5 -->
+<div class="bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant hover:shadow-md transition-all group">
+<div class="relative h-40 bg-surface-container-high">
+<img class="w-full h-full object-cover" data-alt="High-tech yellow industrial backhoe loader excavator in a construction site during golden hour, long shadows, highly detailed mechanical parts, professional construction photography." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCImzloYEYHgYC6zcGSa5DrPmzFxOUcbvFs3SVMkCU8mMK5Vhko6spiV9aFxlFsaNhmRc3BZbzxaHDDBvZRAXLdXTcxHY9tFRodM8FDBaWfX0LOnuMFmp6DRvhb1nf2BB2IxxiUMHmGkuuNDHqm5s3M2L2merb_RPlKQ2Dum9EFMe3htKbLV_nhkbOp-aKf34r7rXPW1QbQFSGlXcjvVmOK7R9zJw9OT-3KxcI9_z-qgClEIzwA3N9wAg">
+<div class="absolute top-2 left-2 bg-black/60 backdrop-blur text-white text-[10px] px-2 py-0.5 rounded-full font-bold">LOTE 5</div>
+</div>
+<div class="p-4">
+<p class="font-bold text-primary truncate">Retroexcavadora JCB 3CX</p>
+<p class="text-label-caps text-on-surface-variant opacity-60">INICIA EN $ 45.000.000</p>
+</div>
+</div>
+<!-- Lot Card 6 -->
+<div class="bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant hover:shadow-md transition-all group">
+<div class="relative h-40 bg-surface-container-high">
+<img class="w-full h-full object-cover" data-alt="Modern white Fiat Cronos sedan in a bright airy studio, sharp minimalist presentation, commercial lighting, focused on luxury and precision." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwxJnPU7Whq2O8T83FAbRj72rbKX8o9CPEom_FLk7-bstyxUWOA3w4NImk9e8mlBbVh4_2uRKmcONi5LAC49zRsrvV1q09OwW5pqzdTcN9vxojBobhpMB-MMzbkMIL6YE2gBGUxzN3SwxZgugsCPu1FFLZ1GpLhscYfF5RJr_A5pgyLYx8VF_5AODxgrzTjS577qWtt89Jyr2u-qIdnMsIbDXq8qvBIFzaGGBqkSYg52NS2Ctnic3TqA">
+<div class="absolute top-2 left-2 bg-black/60 backdrop-blur text-white text-[10px] px-2 py-0.5 rounded-full font-bold">LOTE 6</div>
+</div>
+<div class="p-4">
+<p class="font-bold text-primary truncate">Fiat Cronos Precision 1.8</p>
+<p class="text-label-caps text-on-surface-variant opacity-60">INICIA EN $ 7.200.000</p>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<!-- Mobile Bid Sticky Bar -->
+<div class="md:hidden fixed bottom-0 left-0 right-0 bg-primary-container text-white p-4 flex items-center justify-between z-50 shadow-2xl border-t border-white/10">
+<div class="flex-1">
+<p class="text-[10px] text-on-primary-container uppercase tracking-widest font-black">Actual</p>
+<p class="text-headline-md font-bold">$ 9.800.000</p>
+</div>
+<button class="bg-secondary text-white h-touch_target_min px-8 rounded-xl font-bold active:scale-95 transition-transform flex items-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">gavel</span>
+            Ofertar
+        </button>
+</div>
+<!-- Micro-interaction Scripts -->
+<script>
+        // Simple Timer Logic
+        let seconds = 87;
+        const timerElement = document.querySelector('.text-timer-md');
+        
+        function updateTimer() {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            timerElement.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            if (seconds > 0) seconds--;
+            
+            // Add urgency color
+            if (seconds < 10) {
+                timerElement.classList.remove('bg-white/10');
+                timerElement.classList.add('bg-error', 'animate-pulse');
+            }
+        }
+        setInterval(updateTimer, 1000);
+
+        // Feedback for Bid Button
+        const bidButton = document.querySelector('button.bg-secondary');
+        bidButton.addEventListener('click', () => {
+            const originalText = bidButton.innerHTML;
+            bidButton.innerHTML = `<span class="material-symbols-outlined animate-spin">sync</span> Procesando...`;
+            bidButton.classList.add('opacity-80');
+            
+            setTimeout(() => {
+                bidButton.innerHTML = `<span class="material-symbols-outlined">check_circle</span> ¡Oferta Enviada!`;
+                bidButton.classList.remove('bg-secondary');
+                bidButton.classList.add('bg-success'); // Assuming success green
+                
+                setTimeout(() => {
+                    bidButton.innerHTML = originalText;
+                    bidButton.classList.remove('bg-success', 'opacity-80');
+                    bidButton.classList.add('bg-secondary');
+                }, 2000);
+            }, 1000);
+        });
+    </script>
+</body></html>

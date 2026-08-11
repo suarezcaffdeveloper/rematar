@@ -1,0 +1,449 @@
+<!DOCTYPE html><html class="light" lang="es"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Elite Auctions - Detalle de Remate</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-dim": "#dcd9db",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "secondary": "#0058be",
+                        "inverse-on-surface": "#f3f0f2",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "on-tertiary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "tertiary-fixed": "#fcdeb5",
+                        "on-background": "#1b1b1d",
+                        "on-error": "#ffffff",
+                        "on-secondary-fixed-variant": "#004395",
+                        "outline-variant": "#c6c6cd",
+                        "secondary-fixed-dim": "#adc6ff",
+                        "primary-fixed-dim": "#bec6e0",
+                        "on-secondary-container": "#fefcff",
+                        "surface-container-highest": "#e4e2e4",
+                        "on-primary-container": "#7c839b",
+                        "on-tertiary-container": "#98805d",
+                        "tertiary-fixed-dim": "#dec29a",
+                        "on-primary": "#ffffff",
+                        "tertiary": "#000000",
+                        "outline": "#76777d",
+                        "surface-bright": "#fcf8fa",
+                        "tertiary-container": "#271901",
+                        "inverse-surface": "#303032",
+                        "secondary-fixed": "#d8e2ff",
+                        "error-container": "#ffdad6",
+                        "surface-variant": "#e4e2e4",
+                        "surface": "#fcf8fa",
+                        "on-surface": "#1b1b1d",
+                        "inverse-primary": "#bec6e0",
+                        "background": "#fcf8fa",
+                        "primary-fixed": "#dae2fd",
+                        "surface-container-low": "#f6f3f5",
+                        "surface-container": "#f0edef",
+                        "primary": "#000000",
+                        "primary-container": "#131b2e",
+                        "on-tertiary-fixed": "#271901",
+                        "on-secondary": "#ffffff",
+                        "surface-container-high": "#eae7e9",
+                        "surface-tint": "#565e74",
+                        "on-secondary-fixed": "#001a42",
+                        "secondary-container": "#2170e4",
+                        "on-surface-variant": "#45464d",
+                        "on-primary-fixed": "#131b2e",
+                        "on-tertiary-fixed-variant": "#574425"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "touch_target_min": "48px",
+                        "margin_main": "32px",
+                        "base_unit": "8px",
+                        "sidebar_width": "360px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "display-bid": ["Inter"],
+                        "timer-md": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "label-caps": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "display-bid": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "timer-md": ["24px", {"lineHeight": "24px", "fontWeight": "700"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}],
+                        "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #fcf8fa;
+            color: #1b1b1d;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .sidebar-fixed {
+            width: 360px;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 50;
+        }
+        .main-canvas {
+            margin-left: 360px;
+            min-height: 100vh;
+        }
+        .bento-card {
+            background: #ffffff;
+            border: 1px solid #E2E8F0;
+            transition: all 0.2s ease-in-out;
+        }
+        .bento-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            border-color: #0058be;
+        }
+        .glass-header {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(8px);
+        }
+        .hero-gradient {
+            background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.7) 100%);
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md">
+<!-- SideNavBar Anchor -->
+<aside class="sidebar-fixed flex flex-col h-screen p-base_unit border-r border-outline-variant bg-surface dark:bg-surface">
+<div class="px-4 py-6 mb-8">
+<h1 class="text-headline-md font-headline-md font-bold text-primary">Elite Auctions</h1>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider mt-1">Sesión de Subastador</p>
+</div>
+<nav class="flex-1 space-y-2 px-2">
+<!-- Inicio -->
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-body-md">Inicio</span>
+</a>
+<!-- Remates (Active) -->
+<a class="flex items-center gap-3 px-4 py-3 bg-secondary-container text-on-secondary-container font-bold rounded-lg transition-all duration-150 opacity-90" href="#">
+<span class="material-symbols-outlined" data-icon="gavel" style="font-variation-settings: 'FILL' 1;">gavel</span>
+<span class="font-body-md">Remates</span>
+</a>
+<!-- Mis compras -->
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined" data-icon="shopping_bag">shopping_bag</span>
+<span class="font-body-md">Mis compras</span>
+</a>
+<!-- Favoritos -->
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200 rounded-lg group" href="#">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+<span class="font-body-md">Favoritos</span>
+</a>
+<!-- Notificaciones -->
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200 rounded-lg group relative" href="#">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="font-body-md">Notificaciones</span>
+<span class="absolute right-4 top-1/2 -translate-y-1/2 bg-error text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">12</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-outline-variant pt-4 px-2 pb-4 space-y-2">
+<button class="w-full mb-4 py-3 px-4 bg-primary text-on-primary font-bold rounded-lg flex items-center justify-center gap-2 hover:opacity-90 transition-all">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                Nueva Subasta
+            </button>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-md">Configuración</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-error hover:bg-error-container/20 transition-colors duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="font-body-md">Cerrar sesión</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="main-canvas relative">
+<!-- TopAppBar Anchor -->
+<header class="sticky top-0 z-40 glass-header flex justify-between items-center h-touch_target_min px-margin_main border-b border-outline-variant">
+<nav class="flex gap-8">
+<a class="text-secondary border-b-2 border-secondary h-touch_target_min flex items-center px-1 font-semibold" href="#">Directo</a>
+<a class="text-on-surface-variant hover:text-secondary flex items-center px-1 transition-all" href="#">Próximos</a>
+<a class="text-on-surface-variant hover:text-secondary flex items-center px-1 transition-all" href="#">Finalizados</a>
+</nav>
+<div class="flex items-center gap-6">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span>
+<input class="pl-10 pr-4 py-2 bg-surface-container rounded-full border-none focus:ring-2 focus:ring-secondary text-body-md w-64" placeholder="Buscar lotes o remates..." type="text">
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-secondary transition-all" data-icon="help_outline">help_outline</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-secondary transition-all" data-icon="account_circle">account_circle</button>
+<button class="bg-secondary text-white px-6 py-2 rounded-full font-bold text-sm hover:shadow-lg transition-all active:scale-95">Pujar Ahora</button>
+</div>
+</div>
+</header>
+<!-- Hero Section -->
+<section class="p-margin_main">
+<div class="relative w-full h-[400px] rounded-xl overflow-hidden shadow-xl mb-gutter">
+<div class="absolute inset-0 bg-cover bg-center" data-alt="A sprawling Argentine estancia at golden hour with thousands of prime Black Angus cattle grazing in a lush green pasture. The lighting is warm and dramatic, highlighting the sleek coats of the livestock and the vastness of the fertile pampas. The overall aesthetic is professional, high-end, and prestigious, perfectly capturing the elite atmosphere of a major annual livestock auction." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAkckSJsx6vL50o-olbazeoDvchSF6i0DWQ4TfbLacTs4qXFAGoG24CygfCUO75rk8GMkpncbpVfOEdsFRRkCGVZ3BGh4O8GRPc7Rixki6TtRfjay__1_UX-sCXsk_6zupbAlUPmihNM2b-kyvKj8F6z8toNm6TG2gUCzHS1EnyBeb3HRU2Abp0M_t_9DMM4R9iH_AsvF-Z80srOnNvH2m25Poq1D-yjW6yWv2TZcac0o3mNzB0mJpJIQ')"></div>
+<div class="absolute inset-0 hero-gradient"></div>
+<div class="absolute bottom-0 left-0 p-12 w-full flex justify-between items-end">
+<div class="max-w-3xl">
+<span class="font-label-caps text-label-caps text-secondary-fixed-dim tracking-widest uppercase mb-4 block">Subasta de Hacienda</span>
+<h2 class="font-headline-lg text-headline-lg text-white font-black leading-tight mb-2">Gran Remate Anual de Hacienda de Invernada y Cría</h2>
+<p class="text-surface-container-highest opacity-90 text-body-lg">Organizado por Sociedad Rural de Olavarría</p>
+</div>
+<button class="bg-secondary-container text-on-secondary-container h-16 px-10 rounded-lg flex items-center gap-3 font-bold hover:brightness-110 transition-all shadow-2xl group">
+<span class="material-symbols-outlined" data-icon="gavel" style="font-variation-settings: 'FILL' 1;">gavel</span>
+                        Entrar al remate
+                        <span class="material-symbols-outlined group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Summary Bento Grid -->
+<div class="grid grid-cols-12 gap-gutter mb-margin_main">
+<!-- Description Card -->
+<div class="col-span-8 bento-card p-margin_main rounded-xl flex flex-col justify-between">
+<div>
+<h3 class="font-headline-md text-headline-md mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary" data-icon="info">info</span>
+                            Descripción
+                        </h3>
+<p class="font-body-lg text-on-surface-variant leading-relaxed">
+                            Subasta especial que incluye más de 1.500 cabezas de ganado Angus y Hereford de la mejor genética regional. Excelente oportunidad para engordadores y criadores con plazos de pago extendidos a 30, 60 y 90 días mediante convenios bancarios exclusivos. Todos los lotes cuentan con certificación sanitaria completa y trazabilidad garantizada.
+                        </p>
+</div>
+<div class="mt-8 flex gap-4">
+<div class="bg-surface-container px-4 py-2 rounded-lg flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-sm" data-icon="verified">verified</span>
+<span class="text-xs font-bold uppercase tracking-tighter">Certificación SRA</span>
+</div>
+<div class="bg-surface-container px-4 py-2 rounded-lg flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-sm" data-icon="shield">shield</span>
+<span class="text-xs font-bold uppercase tracking-tighter">Compra Protegida</span>
+</div>
+</div>
+</div>
+<!-- Key Details Card -->
+<div class="col-span-4 bento-card p-margin_main rounded-xl">
+<h3 class="font-headline-md text-headline-md mb-6">Detalles</h3>
+<ul class="space-y-6">
+<li class="flex items-start gap-4">
+<div class="bg-secondary-fixed p-2 rounded-lg">
+<span class="material-symbols-outlined text-secondary" data-icon="calendar_today">calendar_today</span>
+</div>
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Fecha y hora de inicio</p>
+<p class="font-body-md font-semibold">28 de jul de 2026, 03:59 p. m.</p>
+</div>
+</li>
+<li class="flex items-start gap-4">
+<div class="bg-secondary-fixed p-2 rounded-lg">
+<span class="material-symbols-outlined text-secondary" data-icon="location_on">location_on</span>
+</div>
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Ubicación</p>
+<p class="font-body-md font-semibold">Sociedad Rural de Olavarría, Buenos Aires, AR</p>
+</div>
+</li>
+<li class="flex items-start gap-4">
+<div class="bg-secondary-fixed p-2 rounded-lg">
+<span class="material-symbols-outlined text-secondary" data-icon="person">person</span>
+</div>
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Rematador</p>
+<p class="font-body-md font-semibold flex items-center gap-1">
+                                    Rematador verificado
+                                    <span class="material-symbols-outlined text-secondary text-sm" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</p>
+<span class="text-xs text-outline">ID 942f62b3</span>
+</div>
+</li>
+<li class="flex items-start gap-4">
+<div class="bg-secondary-fixed p-2 rounded-lg">
+<span class="material-symbols-outlined text-secondary" data-icon="package_2">package_2</span>
+</div>
+<div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Lotes totales</p>
+<p class="font-body-md font-semibold">3 lotes catalogados</p>
+</div>
+</li>
+</ul>
+</div>
+</div>
+<!-- Lots Section -->
+<div class="mb-gutter flex justify-between items-end">
+<div>
+<h2 class="font-headline-lg text-headline-lg mb-1">Lotes de este remate</h2>
+<p class="text-on-surface-variant">Explore y seleccione sus lotes de interés previo al inicio.</p>
+</div>
+<div class="flex gap-2">
+<button class="p-2 border border-outline-variant rounded hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined" data-icon="filter_list">filter_list</span>
+</button>
+<button class="p-2 border border-outline-variant rounded hover:bg-surface-container transition-all">
+<span class="material-symbols-outlined" data-icon="grid_view" style="font-variation-settings: 'FILL' 1;">grid_view</span>
+</button>
+</div>
+</div>
+<!-- Lot Cards List -->
+<div class="space-y-6">
+<!-- Lot 1 -->
+<div class="bento-card rounded-xl overflow-hidden flex hover:translate-x-1">
+<div class="w-64 h-48 relative overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A high-resolution, close-up photograph of 30 healthy young Black Angus calves standing in a grassy paddock. The calves have shiny black coats and intelligent eyes, with blue identification tags clearly visible in their ears. The background is a soft-focus green field under bright, clear daylight. The image exudes a sense of agricultural excellence and health, fitting for a premium auction catalog." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDSEmM2swNlrz76uVHyTVexD8OXCFnqyGUyctYv60wMi6tGfWQYIyBWwbggbuNzwnNIrcW_aHJp6AqSPWRVgh6si08wuET2R10g9y_O4fgX3MHMyhWOFprmXUf-YIMNsDPXC5aBxKfaRjozR1XMLBtN1Nts-nQfZ95SVxGX5n2AQwfQ3zePn395Q47Hjdv1DLIJGzA_raeVrReJCqHxompU6hsSmrOuRl8WfIRyW43NT332NaF7x1fTvg">
+<div class="absolute top-3 left-3 bg-white/90 backdrop-blur px-2 py-1 rounded text-[10px] font-bold uppercase shadow-sm">Foto Certificada</div>
+</div>
+<div class="flex-1 p-6 flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<div>
+<span class="font-label-caps text-label-caps text-secondary uppercase tracking-widest mb-1 block">LOTE 1</span>
+<h4 class="font-headline-md text-headline-md">30 Terneros Angus Negros</h4>
+<p class="text-on-surface-variant mt-2 line-clamp-2">Trazados, peso promedio de 170 kg, esquema sanitario completo y listos para recría. Procedencia: Estancia 'La Vanguardia'.</p>
+</div>
+<span class="bg-surface-container px-3 py-1 rounded-full text-xs font-bold text-outline-variant uppercase">Pendiente</span>
+</div>
+<div class="flex items-center gap-6 mt-4">
+<div class="flex items-center gap-1 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-lg" data-icon="weight">weight</span>
+<strong>170 kg</strong> (promedio)
+                            </div>
+<div class="flex items-center gap-1 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-lg" data-icon="medical_services">medical_services</span>
+<strong>Plan Sanitario OK</strong>
+</div>
+<button class="ml-auto text-secondary font-bold flex items-center gap-1 hover:underline transition-all">
+                                Ver catálogo completo
+                                <span class="material-symbols-outlined text-sm" data-icon="open_in_new">open_in_new</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Lot 2 -->
+<div class="bento-card rounded-xl overflow-hidden flex hover:translate-x-1">
+<div class="w-64 h-48 relative overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A wide-angle professional shot of 45 high-quality Hereford steers standing together in a corral. Their distinctive white faces and deep red coats are vibrant against the neutral tones of the wooden fencing and the afternoon sky. The livestock looks well-fed and uniform in size. The composition is clean and organized, conveying a message of reliability and commercial value." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3X_bbPIcJ9CQ3_9eDqiIkkVnPZeRNVdja9EYGMQJm3u43kwM73fmm2LA_V9xS-xo8zy0JC0x2tTtUKaRkmUvyw0ifPQYHWglMzv-5VWL2FWL9knu4hJd7Oya8Y5MklpBqFHKz5JWgNIJtK36ViRdsnA78AVFK4wAA6J4xO2U-q51TWzKUhGTr1lfN-UGfeYJ-eBr-35UIhl0FzWNCfr3k5zV0nHC7K7gHc1TXZadHIq8LRrmEJDsCwA">
+<div class="absolute top-3 left-3 bg-white/90 backdrop-blur px-2 py-1 rounded text-[10px] font-bold uppercase shadow-sm">Foto Certificada</div>
+</div>
+<div class="flex-1 p-6 flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<div>
+<span class="font-label-caps text-label-caps text-secondary uppercase tracking-widest mb-1 block">LOTE 2</span>
+<h4 class="font-headline-md text-headline-md">45 Novillos Hereford</h4>
+<p class="text-on-surface-variant mt-2 line-clamp-2">Novillos de 1 a 2 años, peso promedio 280 kg. Excelente estado corporal y mansedumbre. Marca líquida.</p>
+</div>
+<span class="bg-surface-container px-3 py-1 rounded-full text-xs font-bold text-outline-variant uppercase">Pendiente</span>
+</div>
+<div class="flex items-center gap-6 mt-4">
+<div class="flex items-center gap-1 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-lg" data-icon="weight">weight</span>
+<strong>280 kg</strong> (promedio)
+                            </div>
+<div class="flex items-center gap-1 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-lg" data-icon="calendar_month">calendar_month</span>
+<strong>18-24 Meses</strong>
+</div>
+<button class="ml-auto text-secondary font-bold flex items-center gap-1 hover:underline transition-all">
+                                Ver catálogo completo
+                                <span class="material-symbols-outlined text-sm" data-icon="open_in_new">open_in_new</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Lot 3 -->
+<div class="bento-card rounded-xl overflow-hidden flex hover:translate-x-1">
+<div class="w-64 h-48 relative overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A group of 15 premium Aberdeen Angus heifers in a lush, green pasture. The heifers are uniform in size with shiny black coats, grazing peacefully under a soft, overcast sky which provides even, professional lighting. The image emphasizes the genetic quality and potential of the breeding stock. Modern agricultural setting with a clean, high-end feel." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBYHM7zgS-8eW3szaAgXx9hp_YI0obn_lt55lftwlZrpIJ4jFmReqUu0YM6cXDO3bEbK6LTjzKA8M2Rc6C0uhnhpX_wwmxsgIZ36C2XDHoZqfERQi85xMSUUttQdtodVRzeVIe0zKLWSth4KwNoDxuowzdfwdHC2X_BF5gVOhXlku2nPtnqdq-ptfKeQDkphVZvixqG2QQ9RkapYN9ZNlHXdm8z1nYnyH0R1jWZslXYI-iKaG9zFVJQXQ">
+<div class="absolute top-3 left-3 bg-white/90 backdrop-blur px-2 py-1 rounded text-[10px] font-bold uppercase shadow-sm">Foto Certificada</div>
+</div>
+<div class="flex-1 p-6 flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<div>
+<span class="font-label-caps text-label-caps text-secondary uppercase tracking-widest mb-1 block">LOTE 3</span>
+<h4 class="font-headline-md text-headline-md">15 Vaquillonas Angus Preñadas</h4>
+<p class="text-on-surface-variant mt-2 line-clamp-2">Garantía de preñez por tacto, servicio con toros Pedigree. Sanidad reproductiva completa. Fecha probable de parto: Septiembre.</p>
+</div>
+<span class="bg-surface-container px-3 py-1 rounded-full text-xs font-bold text-outline-variant uppercase">Pendiente</span>
+</div>
+<div class="flex items-center gap-6 mt-4">
+<div class="flex items-center gap-1 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-lg" data-icon="favorite">favorite</span>
+<strong>Preñez Garantizada</strong>
+</div>
+<div class="flex items-center gap-1 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-lg" data-icon="verified_user">verified_user</span>
+<strong>Genética de Elite</strong>
+</div>
+<button class="ml-auto text-secondary font-bold flex items-center gap-1 hover:underline transition-all">
+                                Ver catálogo completo
+                                <span class="material-symbols-outlined text-sm" data-icon="open_in_new">open_in_new</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Contextual FAB Suppression: FAB only on specific screens -->
+<div class="fixed bottom-margin_main right-margin_main group">
+<button class="w-16 h-16 bg-secondary text-on-secondary rounded-full flex items-center justify-center shadow-xl hover:scale-110 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-3xl" data-icon="help">help</span>
+</button>
+<span class="absolute right-full mr-4 top-1/2 -translate-y-1/2 bg-surface text-secondary border border-secondary px-3 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap font-bold text-sm">¿Necesita ayuda?</span>
+</div>
+</main>
+<!-- Micro-interaction Script -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Simple hover effect for lot cards
+            const cards = document.querySelectorAll('.bento-card');
+            cards.forEach(card => {
+                card.addEventListener('mouseenter', () => {
+                    card.classList.add('shadow-md');
+                });
+                card.addEventListener('mouseleave', () => {
+                    card.classList.remove('shadow-md');
+                });
+            });
+
+            // Smooth scroll anchor behavior
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth'
+                        });
+                    }
+                });
+            });
+        });
+    </script>
+</body></html>

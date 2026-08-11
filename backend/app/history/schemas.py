@@ -108,6 +108,12 @@ class OfertaHistoryEntry(BaseModel):
 class LoteWinner(BaseModel):
     buyer_id: uuid.UUID
     buyer_name: str | None
+    # Contacto del ganador -- solo tiene sentido acá porque este endpoint ya está
+    # restringido a dueño-o-admin (`_get_finished_remate_or_raise` en service.py), igual
+    # que `PostAuctionCaseRematadorRead` en `app/postauction/schemas.py` para el mismo
+    # propósito (contactar al ganador post-remate).
+    buyer_email: str | None
+    buyer_phone: str | None
     amount: Decimal
 
 

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>RematAR - Mis Compras</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface": "#fcf8fa",
+                      "outline-variant": "#c6c6cd",
+                      "on-secondary-fixed": "#001a42",
+                      "surface-container-high": "#eae7e9",
+                      "on-primary-container": "#7c839b",
+                      "background": "#fcf8fa",
+                      "surface-variant": "#e4e2e4",
+                      "on-error-container": "#93000a",
+                      "secondary-container": "#2170e4",
+                      "on-primary": "#ffffff",
+                      "on-background": "#1b1b1d",
+                      "tertiary-container": "#271901",
+                      "tertiary-fixed-dim": "#dec29a",
+                      "surface-dim": "#dcd9db",
+                      "outline": "#76777d",
+                      "inverse-surface": "#303032",
+                      "surface-container": "#f0edef",
+                      "on-tertiary": "#ffffff",
+                      "error": "#ba1a1a",
+                      "inverse-primary": "#bec6e0",
+                      "on-tertiary-container": "#98805d",
+                      "on-surface": "#1b1b1d",
+                      "tertiary-fixed": "#fcdeb5",
+                      "on-secondary-container": "#fefcff",
+                      "surface-container-lowest": "#ffffff",
+                      "on-error": "#ffffff",
+                      "on-surface-variant": "#45464d",
+                      "on-secondary-fixed-variant": "#004395",
+                      "on-primary-fixed": "#131b2e",
+                      "surface-container-highest": "#e4e2e4",
+                      "tertiary": "#000000",
+                      "surface-bright": "#fcf8fa",
+                      "on-primary-fixed-variant": "#3f465c",
+                      "secondary-fixed-dim": "#adc6ff",
+                      "primary-container": "#131b2e",
+                      "inverse-on-surface": "#f3f0f2",
+                      "surface-container-low": "#f6f3f5",
+                      "on-tertiary-fixed": "#271901",
+                      "on-secondary": "#ffffff",
+                      "on-tertiary-fixed-variant": "#574425",
+                      "error-container": "#ffdad6",
+                      "primary-fixed": "#dae2fd",
+                      "primary-fixed-dim": "#bec6e0",
+                      "secondary-fixed": "#d8e2ff",
+                      "primary": "#000000",
+                      "surface-tint": "#565e74",
+                      "secondary": "#0058be"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "margin_main": "32px",
+                      "sidebar_width": "360px",
+                      "touch_target_min": "48px",
+                      "base_unit": "8px",
+                      "gutter": "24px"
+              },
+              "fontFamily": {
+                      "headline-md": ["Inter"],
+                      "display-bid": ["Inter"],
+                      "body-md": ["Inter"],
+                      "body-lg": ["Inter"],
+                      "headline-lg-mobile": ["Inter"],
+                      "label-caps": ["Inter"],
+                      "timer-md": ["Inter"],
+                      "headline-lg": ["Inter"]
+              },
+              "fontSize": {
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "display-bid": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                      "timer-md": ["24px", {"lineHeight": "24px", "fontWeight": "700"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "fontWeight": "600"}]
+              }
+            },
+          },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #fcf8fa;
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background">
+<!-- SideNavBar (Persistent) -->
+<aside class="w-sidebar_width h-full fixed left-0 top-0 bg-surface dark:bg-surface-dim border-r border-outline-variant dark:border-outline flex flex-col h-full p-4 z-50">
+<div class="mb-8 px-4">
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-on-primary-fixed">RematAR</h1>
+<p class="text-on-surface-variant font-body-md">Subastas Profesionales</p>
+</div>
+<nav class="flex-1 space-y-2">
+<!-- Inicio -->
+<a class="flex items-center gap-4 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors active:scale-95 duration-100 font-body-md" href="#">
+<span class="material-symbols-outlined">home</span>
+<span>Inicio</span>
+</a>
+<!-- Remates -->
+<a class="flex items-center gap-4 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors active:scale-95 duration-100 font-body-md" href="#">
+<span class="material-symbols-outlined">gavel</span>
+<span>Remates</span>
+</a>
+<!-- Mis compras (ACTIVE) -->
+<a class="flex items-center gap-4 px-4 py-3 bg-secondary-container text-on-secondary-container font-bold rounded-xl active:scale-95 duration-100 font-body-md" href="#">
+<span class="material-symbols-outlined">shopping_bag</span>
+<span>Mis compras</span>
+</a>
+<!-- Favoritos -->
+<a class="flex items-center gap-4 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors active:scale-95 duration-100 font-body-md" href="#">
+<span class="material-symbols-outlined">favorite</span>
+<span>Favoritos</span>
+</a>
+<!-- Notificaciones -->
+<a class="flex items-center gap-4 px-4 py-3 text-on-surface-variant hover:bg-surface-container-high transition-colors active:scale-95 duration-100 font-body-md" href="#">
+<span class="material-symbols-outlined">notifications</span>
+<span>Notificaciones</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-outline-variant pt-4 flex items-center gap-4 px-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional studio portrait of a senior livestock auctioneer in a light blue button-down shirt and a professional demeanor. The lighting is bright and clean, typical of a corporate profile photo. The background is a soft, out-of-focus ranch environment to signify authority in the field. Minimalist and authoritative style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAfZOjN-ycM39r_fDFDtCBs_MdGGyEEyTqkfmoTHWVL-dZrWfCtEEpMImbVukjZ2NzlxPyhhC1Dz7TLdmCexEdTCelUJzdGok2QV6wYYgipqxtDUFYl_Fnpo94rFFq5OiRpNYD5bB9GNByfWPcsG9VL2MirFPoVNdEQdHyrUy2N8GDMv9zMmh-bEt9FtYpcHu2bgZTACX6l9Nb5_C3D7K3Ox79mwPVRz9yY78oJ-5stHJQcnXodQesvbw"/>
+</div>
+<div>
+<p class="font-label-caps text-label-caps">USUARIO</p>
+<p class="font-body-md text-on-surface-variant text-sm">RematAR User</p>
+</div>
+</div>
+</aside>
+<!-- TopNavBar -->
+<header class="bg-surface dark:bg-surface-bright border-b border-outline-variant dark:border-outline fixed top-0 h-touch_target_min flex justify-between items-center px-margin_main ml-sidebar_width w-[calc(100%-360px)] z-40">
+<div class="flex items-center gap-4">
+<div class="bg-surface-container rounded-lg px-3 py-1 flex items-center gap-2 w-64">
+<span class="material-symbols-outlined text-outline text-sm">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm font-body-md w-full" placeholder="Buscar lotes ganados..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="material-symbols-outlined cursor-pointer hover:text-secondary transition-all">notifications</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-secondary transition-all">account_circle</span>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-sidebar_width pt-20 pb-12 px-margin_main min-h-screen">
+<div class="max-w-7xl mx-auto">
+<!-- Page Header -->
+<div class="flex justify-between items-end mb-8">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-primary">Mis compras</h2>
+<p class="font-body-md text-on-surface-variant">Historial de lotes adjudicados y estado de gestión.</p>
+</div>
+<div class="flex gap-2">
+<button class="bg-surface border border-outline-variant px-4 py-2 rounded-xl text-sm font-label-caps flex items-center gap-2 hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-sm">filter_list</span> Filtrar
+                    </button>
+<button class="bg-surface border border-outline-variant px-4 py-2 rounded-xl text-sm font-label-caps flex items-center gap-2 hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-sm">download</span> Informe PDF
+                    </button>
+</div>
+</div>
+<!-- Bento-Style Grid for Purchases -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<!-- Lot Card 1 -->
+<article class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden hover:shadow-md transition-shadow group">
+<div class="h-48 relative overflow-hidden">
+<img alt="Lote Ganado" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBBxesKDH4-kImlXh_saG_IpVmF3Db59kl1Y5hGypAl4UnSXfhkuBP6FA7tHhAzHNbL3YeQEvxI0tAJltMzF9NrpjbPPxK-kv2-xT3kQ3zCBqHXqzd_SyXRtK8y1lratc_DGOsE9wtvgydftEJfqwvz4pi3VHL6neEkR1gjAZm29m_KmzTwT3-JuRRHpbQMPGzLE1dGTsER8uuAG6c7N8WOrHl0hM5l8ODGBbWF1TQZWdfcMLDJehdA9OaYhzOAFAUMKlo"/>
+<div class="absolute top-4 right-4 bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                            Adjudicado
+                        </div>
+</div>
+<div class="p-5 flex flex-col h-full">
+<div class="flex justify-between items-start mb-2">
+<div>
+<h3 class="font-headline-md text-body-lg text-primary mb-1">15 terneros 180kg promedio</h3>
+<p class="text-on-surface-variant text-sm font-body-md">Remate Invernada #452 • Lote 24</p>
+</div>
+</div>
+<div class="my-4 pt-4 border-t border-outline-variant flex justify-between items-center">
+<div>
+<p class="text-xs text-on-surface-variant font-label-caps mb-1 uppercase">Precio Final</p>
+<p class="font-display-bid text-secondary text-2xl">$1,850,000</p>
+</div>
+<div class="text-right">
+<p class="text-xs text-on-surface-variant font-label-caps mb-1 uppercase">Estado</p>
+<span class="inline-flex items-center gap-1 text-xs font-bold text-secondary">
+<span class="material-symbols-outlined text-xs" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                    Preparando entrega
+                                </span>
+</div>
+</div>
+<div class="flex items-center gap-3 mb-6">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-base">person</span>
+</div>
+<div class="flex-1">
+<p class="text-xs font-bold text-primary">Martillero Juan Pérez</p>
+<p class="text-[10px] text-on-surface-variant">14 May 2024 • 15:30hs</p>
+</div>
+</div>
+<div class="mt-auto flex gap-2">
+<button class="flex-1 bg-secondary text-on-secondary font-label-caps py-3 rounded-lg text-xs hover:bg-on-secondary-fixed-variant transition-colors active:scale-95">
+                                VER DETALLES
+                            </button>
+<button class="px-3 border border-outline-variant rounded-lg hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-primary">receipt_long</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Lot Card 2 -->
+<article class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden hover:shadow-md transition-shadow group">
+<div class="h-48 relative overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A high-resolution photograph of a beautiful herd of Hereford cattle grazing in a lush green pasture under a golden sunset. The lighting is warm and cinematic, highlighting the red and white coats of the animals. The atmosphere is professional, clean, and representative of premium agricultural assets in a corporate auction context. Colors are vibrant yet grounded." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDgHKWDZnN9BV2g8gJc0WPPSXwpi1AiiWmpDAkUq-pF8kti1r3gr25BL2N2jnPt-KQu7tLmiY6Kc7duFdeJ1Ar8Eq07pM7E71lfuXH5RThGXBeLOCHDEbU862FS5-LzwgP9798CAur8jMvXejppkVX7Aft_Dng8UROJU1fql-XhHDGk3dpkaXmmblc7dIjZIEbk2N-RuN0KbeLlnQNyrqKCCMb4WtJPWskRBVE4iQpZOfYeZkaw0H0QhQ"/>
+<div class="absolute top-4 right-4 bg-tertiary-fixed text-on-tertiary-fixed px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                            Pendiente
+                        </div>
+</div>
+<div class="p-5">
+<div class="flex justify-between items-start mb-2">
+<div>
+<h3 class="font-headline-md text-body-lg text-primary mb-1">20 Novillos trazados 420kg</h3>
+<p class="text-on-surface-variant text-sm font-body-md">Gordos Especiales #112 • Lote 08</p>
+</div>
+</div>
+<div class="my-4 pt-4 border-t border-outline-variant flex justify-between items-center">
+<div>
+<p class="text-xs text-on-surface-variant font-label-caps mb-1 uppercase">Precio Final</p>
+<p class="font-display-bid text-secondary text-2xl">$4,210,500</p>
+</div>
+<div class="text-right">
+<p class="text-xs text-on-surface-variant font-label-caps mb-1 uppercase">Estado</p>
+<span class="inline-flex items-center gap-1 text-xs font-bold text-tertiary">
+<span class="material-symbols-outlined text-xs">pending_actions</span>
+                                    Pendiente de contacto
+                                </span>
+</div>
+</div>
+<div class="flex items-center gap-3 mb-6">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-base">person</span>
+</div>
+<div class="flex-1">
+<p class="text-xs font-bold text-primary">Martillero Elena Gómez</p>
+<p class="text-[10px] text-on-surface-variant">12 May 2024 • 11:15hs</p>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="flex-1 bg-secondary text-on-secondary font-label-caps py-3 rounded-lg text-xs hover:bg-on-secondary-fixed-variant transition-colors active:scale-95">
+                                VER DETALLES
+                            </button>
+<button class="px-3 border border-outline-variant rounded-lg hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-primary">receipt_long</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Lot Card 3 -->
+<article class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden hover:shadow-md transition-shadow group">
+<div class="h-48 relative overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A modern agricultural machinery facility with several high-tech tractors and equipment parked in an organized row. The setting is a clean, concrete lot under a clear blue sky. Professional high-key lighting creates a sharp, corporate aesthetic. The visual tone is industrial and reliable, matching a high-end auction environment for professional buyers." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBUvkprVlojPl3wgQjN-K45ljSQQzpxJpVWjpvc_jAVhqi2sYYC1fsh3Ew1vOAM2YeVF7MQiEsLElWMaouCqeCUB9YTQYb5T_2GfcgNEpOn9ojQqYfdWhtFuCSw_tXtrxRbxhuxxZr54ecuPPT9GnCsDKtOrlIfkVrNWJJledrgW2vMQWd8zBd1eTvn7SHEdUqHCboD_5MqMNYJIzrvScJFyIsStWGO43g-B_linYTVI-5JulEnIYKDzw"/>
+<div class="absolute top-4 right-4 bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                            Adjudicado
+                        </div>
+</div>
+<div class="p-5">
+<div class="flex justify-between items-start mb-2">
+<div>
+<h3 class="font-headline-md text-body-lg text-primary mb-1">Tractor Massey Ferguson 7720</h3>
+<p class="text-on-surface-variant text-sm font-body-md">Maquinaria Usada #22 • Lote 01</p>
+</div>
+</div>
+<div class="my-4 pt-4 border-t border-outline-variant flex justify-between items-center">
+<div>
+<p class="text-xs text-on-surface-variant font-label-caps mb-1 uppercase">Precio Final</p>
+<p class="font-display-bid text-secondary text-2xl">$12,400,000</p>
+</div>
+<div class="text-right">
+<p class="text-xs text-on-surface-variant font-label-caps mb-1 uppercase">Estado</p>
+<span class="inline-flex items-center gap-1 text-xs font-bold text-secondary">
+<span class="material-symbols-outlined text-xs" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                                    Factura Emitida
+                                </span>
+</div>
+</div>
+<div class="flex items-center gap-3 mb-6">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-base">person</span>
+</div>
+<div class="flex-1">
+<p class="text-xs font-bold text-primary">Casa Consignataria S.A.</p>
+<p class="text-[10px] text-on-surface-variant">08 May 2024 • 09:45hs</p>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="flex-1 bg-secondary text-on-secondary font-label-caps py-3 rounded-lg text-xs hover:bg-on-secondary-fixed-variant transition-colors active:scale-95">
+                                VER DETALLES
+                            </button>
+<button class="px-3 border border-outline-variant rounded-lg hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-primary">receipt_long</span>
+</button>
+</div>
+</div>
+</article>
+</div>
+<!-- Empty State / Pagination Hint -->
+<div class="mt-12 text-center py-8">
+<p class="font-body-md text-on-surface-variant">Mostrando 3 de 48 lotes ganados en el último año.</p>
+<div class="mt-4 flex justify-center gap-2">
+<button class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-secondary text-on-secondary flex items-center justify-center font-bold">1</button>
+<button class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors">2</button>
+<button class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors">3</button>
+<button class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Action Button (FAB) - Suppression Logic applied where not strictly relevant, but added here for 'Contact Support' context which is typical for purchase screens -->
+<button class="fixed bottom-8 right-8 w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300 group">
+<span class="material-symbols-outlined">support_agent</span>
+<span class="absolute right-16 bg-primary text-white text-xs px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Soporte Comercial</span>
+</button>
+<script>
+        // Micro-interactions
+        document.querySelectorAll('article').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.transform = 'translateY(-4px)';
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0)';
+            });
+        });
+
+        // Search highlight simulation
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.classList.add('ring-2', 'ring-secondary');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.classList.remove('ring-2', 'ring-secondary');
+        });
+    </script>
+</body></html>

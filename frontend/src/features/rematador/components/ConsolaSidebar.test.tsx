@@ -26,7 +26,6 @@ function renderSidebar() {
       subscribeToRealtime={() => () => {}}
       currentUserId="user-1"
       connectedUsers={3}
-      winningOffer={null}
       recentOffers={[]}
       currency="ARS"
     />,
@@ -39,11 +38,13 @@ describe('ConsolaSidebar', () => {
     expect(screen.getByText('Chat mock')).toBeInTheDocument();
   });
 
-  it('cambiar a la pestaña Ofertas muestra ConsolaOfferPanel', async () => {
+  it('la oferta líder queda siempre visible, fuera de las pestañas', async () => {
     renderSidebar();
-    await userEvent.click(screen.getByRole('tab', { name: 'Ofertas' }));
     expect(screen.getByText('Ofertas mock')).toBeInTheDocument();
-    expect(screen.queryByText('Chat mock')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Ofertas' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Conectados' }));
+    expect(screen.getByText('Ofertas mock')).toBeInTheDocument();
   });
 
   it('cambiar a la pestaña Conectados muestra ConnectedBuyersList', async () => {

@@ -91,6 +91,22 @@ describe('ChatPanel', () => {
     expect(screen.getByText('3 conectados')).toBeInTheDocument();
   });
 
+  it('agrupa mensajes consecutivos del mismo autor: el nombre solo se repite si cambia el autor', () => {
+    renderPanel({
+      messages: [
+        makeMessage({ id: 'msg-1', author_id: 'user-1', author_name: 'Juan', content: 'Hola', created_at: '2026-07-20T18:30:00Z' }),
+        makeMessage({ id: 'msg-2', author_id: 'user-1', author_name: 'Juan', content: 'Cómo va', created_at: '2026-07-20T18:30:30Z' }),
+        makeMessage({ id: 'msg-3', author_id: 'user-2', author_name: 'Pedro', content: 'Bien', created_at: '2026-07-20T18:31:00Z' }),
+      ],
+    });
+
+    expect(screen.getAllByText('Juan')).toHaveLength(1);
+    expect(screen.getByText('Pedro')).toBeInTheDocument();
+    expect(screen.getByText('Hola')).toBeInTheDocument();
+    expect(screen.getByText('Cómo va')).toBeInTheDocument();
+    expect(screen.getByText('Bien')).toBeInTheDocument();
+  });
+
   it('sin canModerate, no se puede eliminar ningún mensaje', () => {
     renderPanel({ messages: [makeMessage()] }, false);
     expect(screen.queryByRole('button', { name: 'Eliminar mensaje' })).not.toBeInTheDocument();

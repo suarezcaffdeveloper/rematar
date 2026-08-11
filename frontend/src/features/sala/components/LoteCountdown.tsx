@@ -79,14 +79,14 @@ export function LoteCountdown({ endsAt, pausedRemainingSeconds }: LoteCountdownP
   return (
     <div
       className={clsx(
-        'flex flex-col items-center justify-center gap-1 rounded-xl border-2 px-6 py-3 text-center',
-        isUrgent ? 'border-danger-300 bg-danger-50' : 'border-brand-200 bg-brand-50',
+        'flex flex-col items-center justify-center gap-1 rounded-xl border px-6 py-3 text-center',
+        isUrgent ? 'border-danger-300 bg-danger-50' : 'border-warning-200 bg-warning-50',
       )}
     >
       <span
         className={clsx(
           'text-xs font-semibold uppercase tracking-wide',
-          isUrgent ? 'text-danger-600' : 'text-brand-600',
+          isUrgent ? 'text-danger-600' : 'text-warning-700',
         )}
       >
         {pausedRemainingSeconds !== null ? 'Timer pausado' : 'Tiempo restante'}
@@ -95,7 +95,7 @@ export function LoteCountdown({ endsAt, pausedRemainingSeconds }: LoteCountdownP
         role="timer"
         className={clsx(
           'text-5xl font-extrabold tabular-nums leading-none',
-          isUrgent ? 'animate-pulse text-danger-600' : 'text-brand-700',
+          isUrgent ? 'animate-pulse text-danger-600' : 'text-warning-600',
         )}
       >
         {formatSeconds(remainingSeconds)}

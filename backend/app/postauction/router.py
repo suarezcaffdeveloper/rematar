@@ -20,6 +20,8 @@ from app.postauction.schemas import (
     NoteCreateRequest,
     PostAuctionCaseDetail,
     PostAuctionCaseRead,
+    PostAuctionCaseRematadorDetail,
+    PostAuctionCaseRematadorRead,
     StatusChangeRequest,
 )
 from app.postauction.service import PostAuctionService
@@ -31,7 +33,7 @@ DEFAULT_PAGE_SIZE = 20
 
 @router.get(
     "/postauction/ventas",
-    response_model=Page[PostAuctionCaseRead],
+    response_model=Page[PostAuctionCaseRematadorRead],
     summary="Ventas adjudicadas del rematador actual (o todas, si es admin)",
 )
 async def list_ventas_adjudicadas(
@@ -42,7 +44,7 @@ async def list_ventas_adjudicadas(
     search: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=100),
-) -> Page[PostAuctionCaseRead]:
+) -> Page[PostAuctionCaseRematadorRead]:
     items, total = await service.list_for_rematador(
         current_user,
         status=status,
@@ -51,25 +53,27 @@ async def list_ventas_adjudicadas(
         page=page,
         page_size=page_size,
     )
-    return Page[PostAuctionCaseRead](items=items, total=total, page=page, page_size=page_size)
+    return Page[PostAuctionCaseRematadorRead](
+        items=items, total=total, page=page, page_size=page_size
+    )
 
 
 @router.get(
     "/postauction/ventas/{case_id}",
-    response_model=PostAuctionCaseDetail,
+    response_model=PostAuctionCaseRematadorDetail,
     summary="Detalle de una venta adjudicada, con línea de tiempo -- dueño o admin",
 )
 async def get_venta_adjudicada(
     case_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     service: Annotated[PostAuctionService, Depends(get_postauction_service)],
-) -> PostAuctionCaseDetail:
+) -> PostAuctionCaseRematadorDetail:
     return await service.get_detail_for_rematador(case_id, current_user)
 
 
 @router.patch(
     "/postauction/ventas/{case_id}/estado",
-    response_model=PostAuctionCaseDetail,
+    response_model=PostAuctionCaseRematadorDetail,
     summary="Cambiar el estado del proceso post-remate -- dueño o admin",
 )
 async def change_estado_venta(
@@ -77,7 +81,7 @@ async def change_estado_venta(
     data: StatusChangeRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     service: Annotated[PostAuctionService, Depends(get_postauction_service)],
-) -> PostAuctionCaseDetail:
+) -> PostAuctionCaseRematadorDetail:
     await service.change_status(
         case_id,
         current_user,
@@ -90,7 +94,7 @@ async def change_estado_venta(
 
 @router.post(
     "/postauction/ventas/{case_id}/notas",
-    response_model=PostAuctionCaseDetail,
+    response_model=PostAuctionCaseRematadorDetail,
     summary="Agregar una observación sin cambiar el estado -- dueño o admin",
 )
 async def add_nota_venta(
@@ -98,7 +102,7 @@ async def add_nota_venta(
     data: NoteCreateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     service: Annotated[PostAuctionService, Depends(get_postauction_service)],
-) -> PostAuctionCaseDetail:
+) -> PostAuctionCaseRematadorDetail:
     await service.add_note(case_id, current_user, data.note)
     return await service.get_detail_for_rematador(case_id, current_user)
 
@@ -111,10 +115,14 @@ async def add_nota_venta(
 async def list_mis_compras(
     current_user: Annotated[User, Depends(get_current_user)],
     service: Annotated[PostAuctionService, Depends(get_postauction_service)],
+    status: PostAuctionStatus | None = None,
+    search: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=100),
 ) -> Page[PostAuctionCaseRead]:
-    items, total = await service.list_for_buyer(current_user, page=page, page_size=page_size)
+    items, total = await service.list_for_buyer(
+        current_user, status=status, search=search, page=page, page_size=page_size
+    )
     return Page[PostAuctionCaseRead](items=items, total=total, page=page, page_size=page_size)
 
 

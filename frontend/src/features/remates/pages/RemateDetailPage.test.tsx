@@ -132,7 +132,6 @@ describe('RemateDetailPage', () => {
     expect(screen.getByRole('heading', { name: 'Remate de hacienda' })).toBeInTheDocument();
     expect(screen.getByText('Pergamino, Buenos Aires')).toBeInTheDocument();
     expect(screen.getByText('Hacienda de primera calidad.')).toBeInTheDocument();
-    expect(screen.getByText('2 lotes')).toBeInTheDocument();
     expect(screen.getByText('Título del lote 1')).toBeInTheDocument();
     expect(screen.getByText('Título del lote 2')).toBeInTheDocument();
   });

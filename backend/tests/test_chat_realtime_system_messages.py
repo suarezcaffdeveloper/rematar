@@ -55,7 +55,14 @@ def _auth(token: str) -> dict:
 
 
 async def _create_remate(client: AsyncClient, email: str) -> uuid.UUID:
-    payload = {"email": email, "password": "password123", "full_name": "Test", "role": "rematador"}
+    payload = {
+        "email": email,
+        "password": "password123",
+        "confirm_password": "password123",
+        "full_name": "Test",
+        "phone": "+5491122334455",
+        "role": "rematador",
+    }
     await client.post(REGISTER_URL, json=payload)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text

@@ -46,7 +46,11 @@ ADR-044) arranca junto a los anteriores, con `PostAuctionEventDispatcher`: reacc
 `lote.winner_determined` para crear automáticamente el caso post-remate de un lote recién
 adjudicado -- mismo patrón exacto que `ChatSystemEventDispatcher` (un tercer suscriptor
 independiente sobre el mismo canal `events.*`), y por eso `app/modules/remates/lotes/`
-no necesita ningún cambio para que este módulo exista.
+no necesita ningún cambio para que este módulo exista. Este dispatcher recibe además un
+`NotificationService` (`app/notify/`, construido acá con `build_notification_service` --
+mismo criterio que `RedisEventBus`, un consumidor de fondo no pasa por `Depends()`): al
+crear el caso post-remate, dispara el email de "ganaste el lote" al comprador sin
+bloquear nada -- ver el docstring de `PostAuctionService.create_case_from_winner`.
 
 Un **cuarto** `EventConsumer` (Épica 7, Módulo 7.6, ver
 docs/42-moderacion-en-tiempo-real.md y ADR-045) arranca junto a los anteriores, con
@@ -73,6 +77,7 @@ from app.db.session import AsyncSessionLocal
 from app.events.redis_bus import RedisEventBus
 from app.moderation.realtime import ModerationEventDispatcher
 from app.modules.chat.realtime import ChatSystemEventDispatcher
+from app.notify.dependencies import build_notification_service
 from app.postauction.realtime import PostAuctionEventDispatcher
 from app.realtime.consumer import EventConsumer
 from app.realtime.dispatcher import EventDispatcher
@@ -137,6 +142,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     postauction_dispatcher = PostAuctionEventDispatcher(
         postauction_session_factory,
         RedisEventBus(RedisPubSub(app.state.redis)),
+        build_notification_service(settings),
     )
     app.state.postauction_event_consumer = EventConsumer(
         app.state.redis,

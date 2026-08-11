@@ -24,7 +24,14 @@ def _auth(token: str) -> dict:
 
 
 async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> tuple[str, str]:
-    payload = {"email": email, "password": "password123", "full_name": "Test", "role": role}
+    payload = {
+        "email": email,
+        "password": "password123",
+        "confirm_password": "password123",
+        "full_name": "Test",
+        "phone": "+5491122334455",
+        "role": role,
+    }
     register = await client.post(REGISTER_URL, json=payload)
     assert register.status_code == 201, register.text
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
@@ -253,6 +260,8 @@ async def test_get_lote_history_returns_winner_and_offer_history(client: AsyncCl
     assert r.status_code == 200, r.text
     data = r.json()
     assert data["winner"]["buyer_id"] == buyer_id
+    assert data["winner"]["buyer_email"] == "histr9-buyer@example.com"
+    assert data["winner"]["buyer_phone"] == "+5491122334455"
     assert data["offer_count"] == 1
     assert data["offer_history"]["total"] == 1
     assert data["offer_history"]["items"][0]["buyer_id"] == buyer_id

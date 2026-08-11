@@ -7,7 +7,7 @@ export interface CoverPlaceholderProps {
   icon?: ReactNode;
 }
 
-/** Portada por defecto -- reutilizada por `RemateCard`, `RemateDetailHeader` y
+/** Portada por defecto -- reutilizada por `RemateCard`, `RemateDetailOverview` y
  * `LoteCard`: ningún remate ni lote tiene garantizado un `cover_image_url`/`images[0]`
  * (son campos opcionales del backend). En vez de un `<img>` roto o un rectángulo gris
  * vacío, un degradé de marca con un ícono -- por defecto el martillo del remate, pero

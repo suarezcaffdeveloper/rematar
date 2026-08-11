@@ -2,24 +2,36 @@ import { useParams } from 'react-router-dom';
 import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
 import { Alert } from '../../../shared/components/Alert';
 import type { BreadcrumbItem } from '../../../shared/components/Breadcrumb';
+import { Button } from '../../../shared/components/Button';
 import { Card } from '../../../shared/components/Card';
 import { Skeleton } from '../../../shared/components/Skeleton';
-import { formatCurrency, formatDateTime } from '../../../shared/lib/format';
+import { LoteInfoCard } from '../components/LoteInfoCard';
+import { ObservationsFeed } from '../components/ObservationsFeed';
 import { ProgressStepper } from '../components/ProgressStepper';
-import { StatusBadge } from '../components/StatusBadge';
+import { PurchaseHeader } from '../components/PurchaseHeader';
+import { PurchaseNextStepCard } from '../components/PurchaseNextStepCard';
+import { PurchaseSummaryCard } from '../components/PurchaseSummaryCard';
+import { RematadorInfoCard } from '../components/RematadorInfoCard';
 import { Timeline } from '../components/Timeline';
 import { useMiCompraDetail } from '../hooks';
 
 /**
  * Detalle de una compra propia (Épica 7, Módulo 7.5), en `/mis-compras/:caseId` --
- * información del rematador, historial del proceso y observaciones (pedido explícito del
- * enunciado). Solo lectura: cambiar el estado y agregar observaciones son acciones
- * exclusivas del rematador (`VentaAdjudicadaDetailPage`).
+ * "seguimiento de compra post-remate" del comprador: qué ganó, cuánto pagó, en qué
+ * estado está, qué pasó y qué va a pasar. Rediseño completo de jerarquía visual (pedido
+ * explícito): estado + próximo paso arriba, historial técnico abajo con menor peso.
+ * Solo lectura: cambiar el estado y agregar observaciones son acciones exclusivas del
+ * rematador (`VentaAdjudicadaDetailPage`), esta pantalla no las toca.
+ *
+ * `notification_failed` se filtra del timeline acá (no en `Timeline.tsx`, que sigue
+ * compartido con el rematador): es una señal operativa interna (falló un canal de
+ * notificación) sin ninguna acción posible del lado del comprador, no un evento de "qué
+ * pasó con mi compra" -- mostrarla ahí solo genera la impresión de que algo está roto.
  */
 export function MiCompraDetailPage() {
   const { caseId } = useParams<{ caseId: string }>();
   const id = caseId ?? '';
-  const { data, isLoading, error } = useMiCompraDetail(id);
+  const { data, isLoading, error, reload } = useMiCompraDetail(id);
 
   const items: BreadcrumbItem[] =
     isLoading && !data
@@ -33,8 +45,13 @@ export function MiCompraDetailPage() {
     return (
       <div className="flex flex-col gap-6">
         <Skeleton className="h-4 w-48" />
-        <Skeleton className="h-8 w-2/3" />
-        <Skeleton className="h-40 rounded-xl" />
+        <Skeleton className="h-36 rounded-2xl" />
+        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-20 rounded-xl" />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Skeleton className="h-40 rounded-xl" />
+          <Skeleton className="h-40 rounded-xl" />
+        </div>
       </div>
     );
   }
@@ -42,56 +59,43 @@ export function MiCompraDetailPage() {
   if (error || !data) {
     return (
       <div className="flex flex-col gap-6">
-        <Alert variant="error">{error?.message ?? 'No se pudo cargar esta compra.'}</Alert>
+        <Alert variant="error">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span>{error?.message ?? 'No se pudo cargar esta compra.'}</span>
+            <Button variant="secondary" onClick={reload}>
+              Reintentar
+            </Button>
+          </div>
+        </Alert>
       </div>
     );
   }
 
+  const visibleTimeline = data.timeline.filter((entry) => entry.action !== 'notification_failed');
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">{data.lote_title}</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Lote {data.lot_number} · {data.remate_title}
-          </p>
-        </div>
-        <StatusBadge status={data.status} />
-      </div>
+      <PurchaseHeader data={data} />
 
-      <div className="flex flex-col gap-4 rounded-xl border border-brand-100 bg-gradient-to-br from-brand-50/70 to-white p-5">
+      <Card>
+        <h2 className="mb-5 text-sm font-semibold text-slate-900">Progreso de tu compra</h2>
         <ProgressStepper status={data.status} />
+      </Card>
 
-        <div className="flex flex-wrap items-end justify-between gap-4 border-t border-brand-100 pt-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Precio final</p>
-            <p className="text-3xl font-extrabold tabular-nums text-brand-700 sm:text-4xl">
-              {formatCurrency(data.final_price, 'ARS')}
-            </p>
-          </div>
-          <dl className="flex flex-col gap-1 text-sm text-slate-600">
-            <div className="flex gap-1.5">
-              <dt className="text-slate-400">Rematador:</dt>
-              <dd className="font-medium text-slate-900">{data.rematador_name ?? '—'}</dd>
-            </div>
-            <div className="flex gap-1.5">
-              <dt className="text-slate-400">Adjudicado el:</dt>
-              <dd className="font-medium text-slate-900">{formatDateTime(data.created_at)}</dd>
-            </div>
-          </dl>
-        </div>
+      <PurchaseNextStepCard data={data} />
+
+      <PurchaseSummaryCard data={data} />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <LoteInfoCard data={data} />
+        <RematadorInfoCard data={data} />
       </div>
 
-      {data.notes && (
-        <Card>
-          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Observaciones</h2>
-          <p className="text-sm text-slate-700">{data.notes}</p>
-        </Card>
-      )}
+      <ObservationsFeed data={data} />
 
       <div className="flex flex-col gap-2">
-        <h2 className="text-lg font-semibold text-slate-900">Historial del proceso</h2>
-        <Timeline entries={data.timeline} />
+        <h2 className="text-base font-semibold text-slate-700">Historial del proceso</h2>
+        <Timeline entries={visibleTimeline} />
       </div>
     </div>
   );

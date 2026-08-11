@@ -16,6 +16,22 @@ import { TypingIndicator } from './TypingIndicator';
 const NEAR_BOTTOM_THRESHOLD_PX = 80;
 const NEAR_TOP_THRESHOLD_PX = 60;
 
+/** Ventana para agrupar mensajes consecutivos del mismo autor bajo un solo encabezado
+ * (nombre/rol/hora) -- pedido explícito: "que parezca un chat normal de cualquier otra
+ * aplicación". Antes cada mensaje repetía su propio encabezado completo, lo que hacía que
+ * el nombre se sintiera "muy separado" de lo que la persona en realidad escribió --
+ * WhatsApp/Slack/Discord resuelven esto agrupando una tanda de mensajes seguidos del
+ * mismo autor bajo un único encabezado. Cinco minutos es el mismo criterio informal que
+ * usan esas apps para "seguir siendo la misma tanda". */
+const GROUP_WINDOW_MS = 5 * 60 * 1000;
+
+function isGroupedWithPrevious(message: ChatMessage, previous: ChatMessage | undefined): boolean {
+  if (!previous || message.kind !== 'user' || previous.kind !== 'user') return false;
+  if (message.author_id === null || message.author_id !== previous.author_id) return false;
+  const gapMs = new Date(message.created_at).getTime() - new Date(previous.created_at).getTime();
+  return gapMs >= 0 && gapMs <= GROUP_WINDOW_MS;
+}
+
 export interface ChatPanelProps {
   remateId: string;
   subscribeToRealtime: (listener: (message: unknown) => void) => () => void;
@@ -170,16 +186,27 @@ export function ChatPanel({
             Sin mensajes todavía. ¡Sé el primero en escribir!
           </p>
         ) : (
-          messages.map((message) => (
-            <ChatMessageItem
-              key={message.id}
-              message={message}
-              canModerate={canModerate}
-              onRequestDelete={setMessageToDelete}
-              isPinned={pinnedMessageIds.has(message.id)}
-              onTogglePin={canModerate ? handleTogglePin : undefined}
-            />
-          ))
+          messages.map((message, index) => {
+            const previous = messages[index - 1];
+            const isPinned = pinnedMessageIds.has(message.id);
+            const previousIsPinned = previous ? pinnedMessageIds.has(previous.id) : false;
+            // No agrupar si el destacado cambia entre un mensaje y el anterior -- el
+            // fondo distinto de un mensaje destacado ya funciona como su propio
+            // encabezado visual, agruparlo con el de al lado los mezclaría.
+            const showHeader = !isGroupedWithPrevious(message, previous) || isPinned !== previousIsPinned;
+
+            return (
+              <ChatMessageItem
+                key={message.id}
+                message={message}
+                canModerate={canModerate}
+                onRequestDelete={setMessageToDelete}
+                isPinned={isPinned}
+                showHeader={showHeader}
+                onTogglePin={canModerate ? handleTogglePin : undefined}
+              />
+            );
+          })
         )}
       </div>
 

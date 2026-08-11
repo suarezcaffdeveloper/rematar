@@ -59,11 +59,12 @@ export async function addVentaNotaRequest(
 }
 
 export async function fetchMisComprasRequest(
+  filters: PostAuctionListFilters,
   page: number,
   pageSize: number,
 ): Promise<Page<PostAuctionCase>> {
   const { data } = await apiClient.get<Page<PostAuctionCase>>('/postauction/mis-compras', {
-    params: { page, page_size: pageSize },
+    params: toQueryParams(filters, page, pageSize),
   });
   return data;
 }

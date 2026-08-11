@@ -53,6 +53,8 @@ const ACTION_LABELS: Record<string, string> = {
   case_created: 'Caso creado (lote adjudicado)',
   status_changed: 'Cambio de estado',
   note_added: 'Observación agregada',
+  notification_sent: 'Notificación enviada',
+  notification_failed: 'Error al enviar notificación',
 };
 
 export function describeTimelineAction(action: string): string {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
 import { ConfirmModal } from '../../../shared/components/ConfirmModal';
@@ -7,15 +8,10 @@ import { DropdownMenu } from '../../../shared/components/DropdownMenu';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { formatDateTime } from '../../../shared/lib/format';
 import { useToastStore } from '../../../shared/toast/toastStore';
-import {
-  deleteRemateRequest,
-  finishRemateRequest,
-  resumeRemateRequest,
-  scheduleRemateRequest,
-  startRemateRequest,
-} from '../../remates/api';
+import { deleteRemateRequest, scheduleRemateRequest, startRemateRequest } from '../../remates/api';
+import { CoverPlaceholder } from '../../remates/components/CoverPlaceholder';
 import { BoxIcon, CalendarIcon, UsersIcon } from '../../remates/components/icons';
-import { CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_LABELS } from '../../remates/labels';
+import { CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_CARD_ACCENT, STATUS_LABELS } from '../../remates/labels';
 import type { Remate } from '../../remates/types';
 import { CancelRemateModal } from './CancelRemateModal';
 import { RemateFormModal } from './RemateFormModal';
@@ -29,27 +25,17 @@ export interface RematadorRemateCardProps {
    * de la lista que la contiene, solo avisa "algo cambió" (mismo criterio que
    * `reload()` en el resto de los hooks del proyecto). */
   onChanged: () => void;
+  /** Se llama tras iniciar el remate con éxito, con el remate ya actualizado (`live`) --
+   * el cartel de redirección a la Consola Operativa vive en el dashboard, no acá (ver
+   * `RematadorDashboardPage`): `onChanged` dispara `reload()`, que mientras la lista
+   * recarga desmonta brevemente esta tarjeta (pasa a mostrar esqueletos) y con ella se
+   * perdía el timer del cartel -- nunca llegaba a redirigir. */
+  onStarted: (remate: Remate) => void;
+  /** Breve resalte (2s) sobre la tarjeta del remate recién publicado, al volver del
+   * flujo de "Publicar remate" en Gestión de Lotes -- lo decide el dashboard, que sabe
+   * qué remate viene resaltado (ver `RematadorDashboardPage`). */
+  isHighlighted?: boolean;
 }
-
-type LifecycleAction = 'start' | 'resume' | 'finish';
-
-const ACTION_LABELS: Record<LifecycleAction, string> = {
-  start: 'Iniciar remate',
-  resume: 'Reanudar remate',
-  finish: 'Finalizar remate',
-};
-
-const SUCCESS_MESSAGES: Record<LifecycleAction, string> = {
-  start: 'El remate está en vivo.',
-  resume: 'El remate se reanudó.',
-  finish: 'El remate se finalizó.',
-};
-
-const ACTION_REQUESTS: Record<LifecycleAction, (remateId: string) => Promise<Remate>> = {
-  start: startRemateRequest,
-  resume: resumeRemateRequest,
-  finish: finishRemateRequest,
-};
 
 function describeLoteState(
   loteCount: number | null,
@@ -66,28 +52,31 @@ function describeLoteState(
 /**
  * Tarjeta de un remate propio en el Dashboard del Rematador (Épica 5, Módulo 5.1).
  * Distinta de `RemateCard` (Épica 4.3, de solo lectura para un comprador): esta muestra
- * datos operativos (lote activo/próximo, conectados) y acciones de ciclo de vida
- * condicionadas al `status` actual -- "Iniciar" (`scheduled`, exige al menos un lote),
- * "Reanudar" (`paused`) y "Finalizar" (`live`, exige que no haya un lote `open`). No
- * incluye "Pausar": es una acción de control en vivo que corresponde a la Consola
- * Operativa del Rematador (Módulo 5.2, ver docs/29-dashboard-rematador.md), no a este
- * dashboard de repaso -- "Reanudar" sigue teniendo sentido acá para retomar un remate que
- * quedó pausado de una sesión anterior.
+ * datos operativos (lote activo/próximo, conectados) y, en el pie, siempre exactamente
+ * dos botones cuyo par depende del `status` -- pensado así a propósito para que las
+ * tarjetas midan todas lo mismo sin importar el estado (nunca hay una fila condicional
+ * de más o de menos):
+ * - `draft`/`scheduled` ("pendiente"): "Preparar lotes" (a `/lotes`) e "Iniciar remate"
+ *   (deshabilitado si es `draft` -- falta publicar -- o si todavía no tiene lotes).
+ * - `live`/`paused` ("en vivo"): "Administrar" (a la Consola Operativa, `/gestionar`,
+ *   Módulo 5.2, donde vive "Pausar"/"Reanudar"/"Finalizar") y "Ver detalle" (a la ficha
+ *   pública del remate).
+ * - `finished`/`cancelled` ("finalizado"): un único botón "Ver resumen" (a `/historial`,
+ *   ahora el informe ejecutivo del remate) que ocupa las dos columnas del grid -- es el
+ *   único estado con un solo botón, a propósito: no hay una segunda acción que tenga
+ *   sentido acá.
  *
- * Épica 5, Módulo 5.3 agrega el menú "⋯" (editar/publicar/duplicar/cancelar/eliminar,
- * ver `docs/31-gestion-remates-lotes.md`) y hace que "Administrar"/"Preparar lotes"
- * navegue a una ruta distinta según el estado: mientras el remate todavía no arrancó
- * (`draft`/`scheduled`), a la Gestión de Lotes (`/lotes`, este módulo); una vez en curso
- * o terminado, a la Consola Operativa (`/gestionar`, Módulo 5.2, sin cambios) -- el
- * mismo botón de siempre, ahora consciente de en qué fase está el remate.
+ * El menú "⋯" (editar/publicar/duplicar/cancelar/eliminar, Épica 5, Módulo 5.3, ver
+ * `docs/31-gestion-remates-lotes.md`) no depende de este agrupamiento.
  */
-export function RematadorRemateCard({ remate, onChanged }: RematadorRemateCardProps) {
+export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighted }: RematadorRemateCardProps) {
   const navigate = useNavigate();
+  const prefersReducedMotion = useReducedMotion();
   const { loteCount, activeLote, nextLote, connectedUsers, isLoadingLotes } = useRemateOperationalInfo(
     remate.id,
     remate.status,
   );
-  const [pendingAction, setPendingAction] = useState<LifecycleAction | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -98,6 +87,8 @@ export function RematadorRemateCard({ remate, onChanged }: RematadorRemateCardPr
   const isCancellable =
     remate.status === 'draft' || remate.status === 'scheduled' || remate.status === 'live' || remate.status === 'paused';
   const isPreparing = remate.status === 'draft' || remate.status === 'scheduled';
+  const isOperating = remate.status === 'live' || remate.status === 'paused';
+  const isTerminal = remate.status === 'finished' || remate.status === 'cancelled';
 
   async function handlePublish() {
     try {
@@ -129,44 +120,65 @@ export function RematadorRemateCard({ remate, onChanged }: RematadorRemateCardPr
     onChanged();
   }
 
-  async function runAction(action: LifecycleAction) {
-    if (action === 'finish') {
-      const confirmed = window.confirm(
-        `¿Finalizar "${remate.title}"? Esta acción no se puede deshacer.`,
-      );
-      if (!confirmed) return;
-    }
-
-    setPendingAction(action);
+  async function handleStart() {
+    setIsStarting(true);
     try {
-      await ACTION_REQUESTS[action](remate.id);
-      useToastStore.getState().push('success', SUCCESS_MESSAGES[action]);
+      const updated = await startRemateRequest(remate.id);
       onChanged();
+      // En vez de un toast que el rematador podría no llegar a leer, el dashboard
+      // muestra un cartel que anticipa la redirección automática a la Consola Operativa
+      // -- pedido explícito: no que busque el remate y entre solo, sino que lo lleve
+      // directo a gestionarlo.
+      onStarted(updated);
     } catch (err) {
       useToastStore.getState().push('error', normalizeApiError(err).message);
     } finally {
-      setPendingAction(null);
+      setIsStarting(false);
     }
   }
 
-  const canStart = remate.status === 'scheduled';
-  const canResume = remate.status === 'paused';
-  const canFinish = remate.status === 'live';
-
   const startDisabled = isLoadingLotes || loteCount === 0;
-  const finishDisabled = isLoadingLotes || activeLote !== null;
+  const startBlockedReason = isDraft
+    ? 'Publicá el remate antes de iniciarlo.'
+    : startDisabled
+      ? 'Cargá al menos un lote antes de iniciar el remate.'
+      : undefined;
 
   return (
-    <article className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+    <article
+      className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white transition-all duration-300 hover:-translate-y-1 ${STATUS_CARD_ACCENT[remate.status]}`}
+    >
+      <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden bg-slate-100">
+        {remate.cover_image_url ? (
+          <img
+            src={remate.cover_image_url}
+            alt=""
+            className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+          />
+        ) : (
+          <CoverPlaceholder className="h-full w-full" />
+        )}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-900/85 via-slate-900/15 to-transparent" />
+
+        <div className="absolute inset-x-0 bottom-0 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-200">
             {CATEGORY_LABELS[remate.category]}
           </p>
-          <h3 className="mt-1 truncate text-base font-semibold text-slate-900">{remate.title}</h3>
+          <h3 className="mt-1 line-clamp-2 text-lg font-semibold leading-snug text-white">{remate.title}</h3>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <Badge variant={STATUS_BADGE_VARIANTS[remate.status]}>{STATUS_LABELS[remate.status]}</Badge>
+      </div>
+
+      {/* Fuera del contenedor de la imagen (que recorta con `overflow-hidden` a solo
+          ~175px de alto): el panel del menú necesita más espacio del que esa caja tiene
+          para desplegar sus 5 ítems, así que quedaba cortado -- ni se veía completo ni se
+          podía clickear. Acá, anclado al `<article>` completo (mucho más alto), tiene
+          lugar de sobra. `z-10` para pintar por encima de la imagen sin depender del
+          orden en el DOM. */}
+      <div className="absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-2">
+        <Badge variant={STATUS_BADGE_VARIANTS[remate.status]} className="shadow-sm">
+          {STATUS_LABELS[remate.status]}
+        </Badge>
+        <div className="shrink-0 rounded-full bg-white/90 shadow-sm backdrop-blur-sm">
           <DropdownMenu
             triggerLabel={`Más acciones para ${remate.title}`}
             items={[
@@ -188,67 +200,88 @@ export function RematadorRemateCard({ remate, onChanged }: RematadorRemateCardPr
           />
         </div>
       </div>
-      {isDuplicating && <p className="text-xs text-slate-400">Duplicando remate…</p>}
 
-      <dl className="grid grid-cols-1 gap-2 text-sm text-slate-600 sm:grid-cols-2">
-        <div className="flex items-center gap-2">
-          <CalendarIcon className="h-4 w-4 shrink-0 text-slate-400" />
-          <span>{remate.starts_at ? formatDateTime(remate.starts_at) : 'Sin fecha'}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <BoxIcon className="h-4 w-4 shrink-0 text-slate-400" />
-          <span>{loteCount === null ? 'Cargando lotes…' : `${loteCount} ${loteCount === 1 ? 'lote' : 'lotes'}`}</span>
-        </div>
-        {connectedUsers !== null && (
+      <div className="flex flex-1 flex-col gap-4 p-5">
+        {isDuplicating && <p className="text-xs text-slate-400">Duplicando remate…</p>}
+
+        <dl className="grid grid-cols-1 gap-2 text-sm text-slate-600 sm:grid-cols-2">
           <div className="flex items-center gap-2">
-            <UsersIcon className="h-4 w-4 shrink-0 text-slate-400" />
-            <span>
-              {connectedUsers} {connectedUsers === 1 ? 'conectado' : 'conectados'}
-            </span>
+            <CalendarIcon className="h-4 w-4 shrink-0 text-slate-400" />
+            <span>{remate.starts_at ? formatDateTime(remate.starts_at) : 'Sin fecha'}</span>
           </div>
-        )}
-        <div className="col-span-full truncate text-slate-500">
-          {describeLoteState(loteCount, activeLote, nextLote)}
+          <div className="flex items-center gap-2">
+            <BoxIcon className="h-4 w-4 shrink-0 text-slate-400" />
+            <span>{loteCount === null ? 'Cargando lotes…' : `${loteCount} ${loteCount === 1 ? 'lote' : 'lotes'}`}</span>
+          </div>
+          {connectedUsers !== null && (
+            <div className="flex items-center gap-2">
+              <UsersIcon className="h-4 w-4 shrink-0 text-slate-400" />
+              <span>
+                {connectedUsers} {connectedUsers === 1 ? 'conectado' : 'conectados'}
+              </span>
+            </div>
+          )}
+          <div className="col-span-full truncate text-slate-500">
+            {describeLoteState(loteCount, activeLote, nextLote)}
+          </div>
+        </dl>
+
+        <div className="mt-auto grid grid-cols-2 gap-2 border-t border-slate-100 pt-4">
+          {isPreparing && (
+            <>
+              <Button
+                variant="secondary"
+                className="h-10 w-full justify-center px-3"
+                onClick={() => navigate(`/remates/${remate.id}/lotes`)}
+              >
+                Preparar lotes
+              </Button>
+              <Button
+                className="h-10 w-full justify-center px-3"
+                onClick={() => void handleStart()}
+                isLoading={isStarting}
+                disabled={isDraft || startDisabled || isStarting}
+                title={startBlockedReason}
+              >
+                Iniciar remate
+              </Button>
+            </>
+          )}
+          {isOperating && (
+            <>
+              <Button
+                variant="secondary"
+                className="h-10 w-full justify-center px-3"
+                onClick={() => navigate(`/remates/${remate.id}/gestionar`)}
+              >
+                Administrar
+              </Button>
+              <Button
+                variant="secondary"
+                className="h-10 w-full justify-center px-3"
+                onClick={() => navigate(`/remates/${remate.id}`)}
+              >
+                Ver detalle
+              </Button>
+            </>
+          )}
+          {isTerminal && (
+            <div className="col-span-2">
+              <motion.div
+                whileHover={prefersReducedMotion ? undefined : { scale: 1.02, y: -2 }}
+                whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
+              >
+                <Button
+                  variant="secondary"
+                  className="h-10 w-full justify-center px-3"
+                  onClick={() => navigate(`/remates/${remate.id}/historial`)}
+                >
+                  Ver resumen
+                </Button>
+              </motion.div>
+            </div>
+          )}
         </div>
-      </dl>
-
-      <div className="mt-auto flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-        <Button variant="secondary" onClick={() => navigate(`/remates/${remate.id}`)}>
-          Ver remate
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => navigate(`/remates/${remate.id}/${isPreparing ? 'lotes' : 'gestionar'}`)}
-        >
-          {isPreparing ? 'Preparar lotes' : 'Administrar'}
-        </Button>
-
-        {canStart && (
-          <Button
-            onClick={() => runAction('start')}
-            isLoading={pendingAction === 'start'}
-            disabled={startDisabled || pendingAction !== null}
-            title={startDisabled ? 'Cargá al menos un lote antes de iniciar el remate.' : undefined}
-          >
-            {ACTION_LABELS.start}
-          </Button>
-        )}
-        {canResume && (
-          <Button onClick={() => runAction('resume')} isLoading={pendingAction === 'resume'} disabled={pendingAction !== null}>
-            {ACTION_LABELS.resume}
-          </Button>
-        )}
-        {canFinish && (
-          <Button
-            variant="danger"
-            onClick={() => runAction('finish')}
-            isLoading={pendingAction === 'finish'}
-            disabled={finishDisabled || pendingAction !== null}
-            title={finishDisabled ? 'Cerrá el lote abierto antes de finalizar el remate.' : undefined}
-          >
-            {ACTION_LABELS.finish}
-          </Button>
-        )}
       </div>
 
       <RemateFormModal
@@ -274,6 +307,21 @@ export function RematadorRemateCard({ remate, onChanged }: RematadorRemateCardPr
         confirmLabel="Eliminar"
         variant="danger"
       />
+
+      {isHighlighted && (
+        <>
+          <span className="sr-only" role="status" aria-label="Remate publicado">
+            Remate publicado
+          </span>
+          <motion.div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-20 rounded-2xl bg-gradient-to-br from-brand-400/30 via-brand-300/10 to-transparent"
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 0 }}
+            transition={{ duration: 2, ease: 'easeOut' }}
+          />
+        </>
+      )}
     </article>
   );
 }

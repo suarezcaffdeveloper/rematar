@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { BadgeCheck } from 'lucide-react';
 import clsx from 'clsx';
 import { Badge } from '../../../shared/components/Badge';
 import { formatCurrency, formatDateTime } from '../../../shared/lib/format';
@@ -60,9 +61,12 @@ export function OfferHistoryPanel({ winningOffer, recentOffers, currency, classN
       <div className="shrink-0">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Comprador líder</h2>
         {winningOffer ? (
-          <div className="mt-2">
-            <p className="text-base font-semibold text-slate-900">Comprador verificado</p>
-            <p className="text-sm text-slate-500">Lidera con {formatCurrency(winningOffer.amount, currency)}</p>
+          <div className="mt-2 flex items-center gap-2 rounded-lg border-2 border-success-500 bg-success-50 px-3 py-2">
+            <BadgeCheck aria-hidden="true" className="h-5 w-5 shrink-0 text-success-600" />
+            <div className="min-w-0">
+              <p className="text-base font-semibold text-slate-900">Comprador verificado</p>
+              <p className="text-sm text-success-700">Lidera con {formatCurrency(winningOffer.amount, currency)}</p>
+            </div>
           </div>
         ) : (
           <p className="mt-2 text-sm text-slate-500">Todavía no hay ofertas en este lote.</p>

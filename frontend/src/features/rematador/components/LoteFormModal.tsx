@@ -1,17 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { ArrowRight, Lightbulb } from 'lucide-react';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Alert } from '../../../shared/components/Alert';
-import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
 import { Input } from '../../../shared/components/Input';
 import { Modal } from '../../../shared/components/Modal';
 import { Select } from '../../../shared/components/Select';
 import { Textarea } from '../../../shared/components/Textarea';
-import { createLoteRequest, updateLoteRequest } from '../../remates/api';
-import { CATEGORY_LABELS, CATEGORY_OPTIONS, LOTE_STATUS_BADGE_VARIANTS, LOTE_STATUS_LABELS } from '../../remates/labels';
-import type { Lote } from '../../remates/types';
+import { useToastStore } from '../../../shared/toast/toastStore';
+import {
+  createLoteRequest,
+  updateLoteImagesRequest,
+  updateLoteRequest,
+  uploadLoteImageRequest,
+} from '../../remates/api';
+import { BoxIcon } from '../../remates/components/icons';
+import { CATEGORY_LABELS, CATEGORY_OPTIONS } from '../../remates/labels';
+import type { Lote, LoteImage } from '../../remates/types';
+import { FormSection } from './FormSection';
 import { LoteGalleryManager } from './LoteGalleryManager';
-import { PlusIcon, TrashIcon } from './icons';
+import { LoteImageStager, type StagedImage } from './LoteImageStager';
 import {
   DEFAULT_LOTE_FORM_VALUES,
   buildLoteFormPayload,
@@ -29,20 +38,24 @@ export interface LoteFormModalProps {
   onSaved: (lote: Lote) => void;
 }
 
+const HELP_TIPS = [
+  'Podés arrastrar imágenes del lote antes de guardarlo -- se suben automáticamente al crearlo.',
+  'La primera imagen que subas será la principal; podés reordenarlas después.',
+  'El precio de reserva nunca se muestra a los compradores, solo lo ves vos.',
+];
+
 /**
- * Formulario de Lote, crear y editar (Épica 5, Módulo 5.3) -- mismos campos pedidos por
- * el enunciado: número, nombre, descripción, categoría, peso, información técnica,
- * precio inicial, incremento mínimo. "Estado" se muestra como referencia (badge, cuando
- * hay un `lote` en edición) pero no es editable acá: el backend no expone ninguna
- * transición vía `PATCH` (`docs/15-modulo-lote.md`) -- todo lote en un remate
- * `draft`/`scheduled` está siempre en `pending`, así que no hay nada que elegir.
+ * Formulario de Lote, crear y editar (Épica 5, Módulo 5.3; rediseño visual y
+ * simplificación del flujo de creación de lotes -- mismo lenguaje visual que
+ * `RemateFormModal`, ver `FormSection`). Solo campos genéricos (número, nombre, categoría,
+ * descripción, precios): se sacaron "peso"/"cantidad"/"unidad" e "información técnica"
+ * porque eran específicos de remates ganaderos (ver `loteForm.ts`).
  *
- * La galería de imágenes (Épica 6, Módulo 6.1, `LoteGalleryManager`) solo se muestra en
- * modo edición: subir una imagen requiere un `lote_id` real (`POST .../lotes/{id}/
- * images`), que todavía no existe mientras se está creando el lote -- ver
- * docs/32-gestion-multimedia-lotes.md para la decisión completa. `currentLote` guarda la
- * versión más reciente del lote dentro del modal para que la galería refleje sus propios
- * cambios (subir/eliminar/reordenar) sin esperar a que el modal se cierre.
+ * Imágenes: en modo edición sigue usando `LoteGalleryManager` (sube y persiste en vivo,
+ * sin cambios). En modo creación usa `LoteImageStager` -- staging local, sin red -- y
+ * recién sube los archivos elegidos DESPUÉS de crear el lote, como parte del mismo click
+ * en "Crear lote" (ver `handleSubmit`), para que el usuario nunca tenga que "guardar y
+ * después editar" solo para agregar fotos.
  */
 export function LoteFormModal({ isOpen, onClose, remateId, lote, onSaved }: LoteFormModalProps) {
   const isEditMode = Boolean(lote);
@@ -50,7 +63,12 @@ export function LoteFormModal({ isOpen, onClose, remateId, lote, onSaved }: Lote
   const [errors, setErrors] = useState<ReturnType<typeof validateLoteForm>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [currentLote, setCurrentLote] = useState<Lote | undefined>(lote);
+  const [stagedImages, setStagedImages] = useState<StagedImage[]>([]);
+  const [activeAction, setActiveAction] = useState<'save' | 'save-and-new' | null>(null);
+  const prefersReducedMotion = useReducedMotion();
+  const lotNumberInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -58,49 +76,92 @@ export function LoteFormModal({ isOpen, onClose, remateId, lote, onSaved }: Lote
     setErrors({});
     setSubmitError(null);
     setCurrentLote(lote);
+    setStagedImages([]);
   }, [isOpen, lote]);
 
   function setField<K extends keyof LoteFormValues>(field: K, value: LoteFormValues[K]) {
     setValues((prev) => ({ ...prev, [field]: value }));
   }
 
-  function addAttributeRow() {
-    setField('attributeRows', [...values.attributeRows, { key: '', value: '' }]);
-  }
-
-  function updateAttributeRow(index: number, patch: Partial<{ key: string; value: string }>) {
-    setField(
-      'attributeRows',
-      values.attributeRows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+  /** Sube cada imagen elegida antes de guardar (ver docstring del componente) y persiste
+   * el orden final en un único `PATCH`, igual criterio que `LoteGalleryManager.uploadAll`
+   * -- tolera fallos individuales (avisa por toast) sin deshacer la creación del lote, que
+   * ya quedó guardada. */
+  async function uploadStagedImages(loteId: string): Promise<Lote | null> {
+    const results = await Promise.allSettled(
+      stagedImages.map((item) => uploadLoteImageRequest(remateId, loteId, item.file)),
     );
+
+    const urls: string[] = [];
+    results.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        urls.push(result.value.url);
+      } else {
+        useToastStore.getState().push('error', normalizeApiError(result.reason).message);
+      }
+    });
+
+    stagedImages.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+
+    if (urls.length === 0) return null;
+    const images: LoteImage[] = urls.map((url, order) => ({ url, order, caption: null }));
+    return updateLoteImagesRequest(remateId, loteId, images);
   }
 
-  function removeAttributeRow(index: number) {
-    setField(
-      'attributeRows',
-      values.attributeRows.filter((_, i) => i !== index),
-    );
-  }
-
-  async function handleSubmit() {
+  /** Valida, guarda el lote y -- en creación -- sube las imágenes elegidas. Devuelve
+   * `null` si la validación o el guardado fallaron (el error ya queda mostrado en el
+   * propio estado del formulario); tanto "Guardar lote" como "Guardar y crear otro"
+   * comparten esta lógica y solo difieren en qué hacen con el resultado. */
+  async function submitLote(): Promise<Lote | null> {
     const validationErrors = validateLoteForm(values);
     setErrors(validationErrors);
-    if (Object.keys(validationErrors).length > 0) return;
+    if (Object.keys(validationErrors).length > 0) return null;
 
     setIsSubmitting(true);
     setSubmitError(null);
     try {
       const payload = buildLoteFormPayload(values);
-      const saved = lote
-        ? await updateLoteRequest(remateId, lote.id, payload)
-        : await createLoteRequest(remateId, payload);
-      onSaved(saved);
-      onClose();
+      let saved = lote ? await updateLoteRequest(remateId, lote.id, payload) : await createLoteRequest(remateId, payload);
+
+      if (!lote && stagedImages.length > 0) {
+        setIsUploadingImages(true);
+        const withImages = await uploadStagedImages(saved.id);
+        if (withImages) saved = withImages;
+      }
+
+      return saved;
     } catch (err) {
       setSubmitError(normalizeApiError(err).message);
+      return null;
     } finally {
       setIsSubmitting(false);
+      setIsUploadingImages(false);
     }
+  }
+
+  async function handleSubmit() {
+    setActiveAction('save');
+    const saved = await submitLote();
+    setActiveAction(null);
+    if (!saved) return;
+    onSaved(saved);
+    onClose();
+  }
+
+  /** "Guardar y crear otro" (solo en creación): igual que `handleSubmit`, pero deja el
+   * modal abierto con el formulario limpio para cargar el siguiente lote sin reabrir el
+   * modal -- pensado para jornadas donde hay que cargar muchos lotes seguidos. */
+  async function handleSubmitAndCreateAnother() {
+    setActiveAction('save-and-new');
+    const saved = await submitLote();
+    setActiveAction(null);
+    if (!saved) return;
+    onSaved(saved);
+    useToastStore.getState().push('success', 'Lote creado. Podés cargar el siguiente.');
+    setValues(DEFAULT_LOTE_FORM_VALUES);
+    setErrors({});
+    setStagedImages([]);
+    lotNumberInputRef.current?.focus();
   }
 
   return (
@@ -108,186 +169,177 @@ export function LoteFormModal({ isOpen, onClose, remateId, lote, onSaved }: Lote
       isOpen={isOpen}
       onClose={onClose}
       title={isEditMode ? 'Editar lote' : 'Crear lote'}
-      size="lg"
+      size="xl"
+      hideHeader
       footer={
-        <>
-          <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
-            Cancelar
-          </Button>
-          <Button onClick={handleSubmit} isLoading={isSubmitting}>
-            {isEditMode ? 'Guardar cambios' : 'Crear lote'}
-          </Button>
-        </>
+        <div className="flex w-full flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-slate-400">
+            {isUploadingImages ? 'Subiendo imágenes…' : 'Podés seguir editando este lote después.'}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
+              Cancelar
+            </Button>
+            {!isEditMode && (
+              <Button
+                variant="secondary"
+                onClick={handleSubmitAndCreateAnother}
+                isLoading={activeAction === 'save-and-new'}
+                disabled={isSubmitting}
+              >
+                Guardar y crear otro
+              </Button>
+            )}
+            <motion.div
+              whileHover={prefersReducedMotion || isSubmitting ? undefined : { scale: 1.02 }}
+              whileTap={prefersReducedMotion || isSubmitting ? undefined : { scale: 0.98 }}
+            >
+              <Button
+                onClick={handleSubmit}
+                isLoading={activeAction === 'save'}
+                disabled={isSubmitting}
+                className="bg-gradient-to-r from-brand-600 to-brand-700 shadow-lg shadow-brand-600/25 hover:from-brand-700 hover:to-brand-800 hover:shadow-xl hover:shadow-brand-600/30"
+              >
+                {isEditMode ? 'Guardar cambios' : 'Guardar lote'}
+                {activeAction !== 'save' && <ArrowRight aria-hidden="true" className="h-4 w-4" />}
+              </Button>
+            </motion.div>
+          </div>
+        </div>
       }
     >
-      <div className="flex flex-col gap-4">
-        {submitError && <Alert variant="error">{submitError}</Alert>}
-
-        {lote && (
-          <div className="flex items-center gap-2 text-sm text-slate-500">
-            <span>Estado:</span>
-            <Badge variant={LOTE_STATUS_BADGE_VARIANTS[lote.status]}>{LOTE_STATUS_LABELS[lote.status]}</Badge>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_2fr]">
-          <Input
-            label="Número de lote"
-            value={values.lot_number}
-            onChange={(event) => setField('lot_number', event.target.value)}
-            error={errors.lot_number}
-          />
-          <Input
-            label="Nombre"
-            value={values.title}
-            onChange={(event) => setField('title', event.target.value)}
-            error={errors.title}
-          />
-        </div>
-
-        <Select
-          label="Categoría"
-          value={values.category}
-          onChange={(event) => setField('category', event.target.value as LoteFormValues['category'])}
-          error={errors.category}
-        >
-          <option value="">Elegir…</option>
-          {CATEGORY_OPTIONS.map((category) => (
-            <option key={category} value={category}>
-              {CATEGORY_LABELS[category]}
-            </option>
-          ))}
-        </Select>
-
-        <Textarea
-          label="Descripción"
-          value={values.description}
-          onChange={(event) => setField('description', event.target.value)}
-          error={errors.description}
-        />
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Input
-            label="Peso (kg)"
-            type="number"
-            min={0}
-            step="0.01"
-            value={values.peso_kg}
-            onChange={(event) => setField('peso_kg', event.target.value)}
-            error={errors.peso_kg}
-          />
-          <Input
-            label="Cantidad"
-            type="number"
-            min={1}
-            step="1"
-            value={values.quantity}
-            onChange={(event) => setField('quantity', event.target.value)}
-            error={errors.quantity}
-          />
-          <Input
-            label="Unidad (ej. cabezas)"
-            value={values.unit_label}
-            onChange={(event) => setField('unit_label', event.target.value)}
-            error={errors.unit_label}
-          />
-        </div>
-
-        <div className="rounded-lg border border-slate-200 p-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-700">Información técnica</h3>
-            <Button type="button" variant="ghost" onClick={addAttributeRow}>
-              <PlusIcon className="h-4 w-4" />
-              Agregar atributo
-            </Button>
-          </div>
-          {errors.attributes && <p className="mt-1 text-sm text-danger-600">{errors.attributes}</p>}
-          {values.attributeRows.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-400">
-              Sin atributos adicionales -- agregá, por ejemplo, "raza" o "año".
-            </p>
-          ) : (
-            <div className="mt-3 flex flex-col gap-2">
-              {values.attributeRows.map((row, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <input
-                    aria-label={`Clave del atributo ${index + 1}`}
-                    placeholder="Clave (ej. raza)"
-                    value={row.key}
-                    onChange={(event) => updateAttributeRow(index, { key: event.target.value })}
-                    className="w-1/3 rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                  />
-                  <input
-                    aria-label={`Valor del atributo ${index + 1}`}
-                    placeholder="Valor (ej. Angus)"
-                    value={row.value}
-                    onChange={(event) => updateAttributeRow(index, { value: event.target.value })}
-                    className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                  />
-                  <button
-                    type="button"
-                    aria-label={`Quitar atributo ${index + 1}`}
-                    onClick={() => removeAttributeRow(index)}
-                    className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-danger-600"
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
+      <div className="grid grid-cols-1 gap-6 p-1 lg:grid-cols-[1fr_260px]">
+        <div className="flex flex-col gap-6">
+          <div className="flex items-start gap-4 pr-8">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-sm">
+              <BoxIcon className="h-6 w-6" />
             </div>
-          )}
-        </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                {isEditMode ? 'Editar lote' : 'Crear lote'}
+              </h1>
+              <p className="mt-1 text-sm text-slate-500">
+                Cargá la información y las fotos del lote. Vas a poder ajustar todo esto después.
+              </p>
+            </div>
+          </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Input
-            label="Precio inicial"
-            type="number"
-            min={0}
-            step="0.01"
-            value={values.base_price}
-            onChange={(event) => setField('base_price', event.target.value)}
-            error={errors.base_price}
-          />
-          <Input
-            label="Incremento mínimo"
-            type="number"
-            min={0}
-            step="0.01"
-            value={values.min_increment}
-            onChange={(event) => setField('min_increment', event.target.value)}
-            error={errors.min_increment}
-          />
-          <Input
-            label="Precio de reserva (opcional)"
-            type="number"
-            min={0}
-            step="0.01"
-            value={values.reserve_price}
-            onChange={(event) => setField('reserve_price', event.target.value)}
-            error={errors.reserve_price}
-          />
-        </div>
-        <p className="-mt-2 text-xs text-slate-400">
-          El precio de reserva nunca se muestra a los compradores -- solo lo ves vos.
-        </p>
+          {submitError && <Alert variant="error">{submitError}</Alert>}
 
-        <div>
-          <h3 className="mb-2 text-sm font-semibold text-slate-700">Imágenes</h3>
-          {currentLote ? (
-            <LoteGalleryManager
-              remateId={remateId}
-              lote={currentLote}
-              onChanged={(updated) => {
-                setCurrentLote(updated);
-                onSaved(updated);
-              }}
+          <FormSection title="Información general">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_2fr]">
+              <Input
+                ref={lotNumberInputRef}
+                label="Número de lote"
+                value={values.lot_number}
+                onChange={(event) => setField('lot_number', event.target.value)}
+                error={errors.lot_number}
+                required
+              />
+              <Input
+                label="Nombre"
+                value={values.title}
+                onChange={(event) => setField('title', event.target.value)}
+                error={errors.title}
+                required
+              />
+            </div>
+            <Select
+              label="Categoría"
+              value={values.category}
+              onChange={(event) => setField('category', event.target.value as LoteFormValues['category'])}
+              error={errors.category}
+              required
+            >
+              <option value="">Elegir…</option>
+              {CATEGORY_OPTIONS.map((category) => (
+                <option key={category} value={category}>
+                  {CATEGORY_LABELS[category]}
+                </option>
+              ))}
+            </Select>
+          </FormSection>
+
+          <FormSection title="Descripción">
+            <Textarea
+              label="Descripción"
+              value={values.description}
+              onChange={(event) => setField('description', event.target.value)}
+              error={errors.description}
+              rows={4}
+              placeholder="Contá los detalles relevantes de este lote…"
             />
-          ) : (
-            <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-              Guardá el lote para poder agregarle imágenes.
+          </FormSection>
+
+          <FormSection title="Precios">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Input
+                label="Precio inicial"
+                type="number"
+                min={0}
+                step="0.01"
+                value={values.base_price}
+                onChange={(event) => setField('base_price', event.target.value)}
+                error={errors.base_price}
+                required
+              />
+              <Input
+                label="Incremento mínimo"
+                type="number"
+                min={0}
+                step="0.01"
+                value={values.min_increment}
+                onChange={(event) => setField('min_increment', event.target.value)}
+                error={errors.min_increment}
+                required
+              />
+              <Input
+                label="Precio de reserva (opcional)"
+                type="number"
+                min={0}
+                step="0.01"
+                value={values.reserve_price}
+                onChange={(event) => setField('reserve_price', event.target.value)}
+                error={errors.reserve_price}
+              />
+            </div>
+            <p className="-mt-2 text-xs text-slate-400">
+              El precio de reserva nunca se muestra a los compradores -- solo lo ves vos.
             </p>
-          )}
+          </FormSection>
+
+          <FormSection title="Imágenes">
+            {currentLote ? (
+              <LoteGalleryManager
+                remateId={remateId}
+                lote={currentLote}
+                onChanged={(updated) => {
+                  setCurrentLote(updated);
+                  onSaved(updated);
+                }}
+              />
+            ) : (
+              <LoteImageStager value={stagedImages} onChange={setStagedImages} />
+            )}
+          </FormSection>
         </div>
+
+        {!isEditMode && (
+          <aside className="flex h-fit flex-col gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-5">
+            <div className="flex items-center gap-2 text-brand-700">
+              <Lightbulb aria-hidden="true" className="h-4 w-4" />
+              <h3 className="text-sm font-semibold">Consejos</h3>
+            </div>
+            <ul className="flex flex-col gap-2.5">
+              {HELP_TIPS.map((tip) => (
+                <li key={tip} className="flex gap-2 text-xs leading-relaxed text-brand-900/80">
+                  <span aria-hidden="true" className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-brand-500" />
+                  {tip}
+                </li>
+              ))}
+            </ul>
+          </aside>
+        )}
       </div>
     </Modal>
   );

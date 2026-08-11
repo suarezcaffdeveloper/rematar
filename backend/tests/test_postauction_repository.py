@@ -127,8 +127,12 @@ async def test_list_for_buyer_scopes_to_buyer(db_session: AsyncSession) -> None:
     await _create_case(db_session, remate=remate, lote=lote, buyer=buyer_a)
 
     repository = PostAuctionRepository(db_session)
-    items, total = await repository.list_for_buyer(buyer_id=buyer_a.id, offset=0, limit=20)
+    items, total = await repository.list_for_buyer(
+        buyer_id=buyer_a.id, status=None, search=None, offset=0, limit=20
+    )
     assert total == 1
 
-    items, total = await repository.list_for_buyer(buyer_id=buyer_b.id, offset=0, limit=20)
+    items, total = await repository.list_for_buyer(
+        buyer_id=buyer_b.id, status=None, search=None, offset=0, limit=20
+    )
     assert total == 0

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import type { Page } from '../../shared/api/types';
+import type { Lote } from '../remates/types';
 import type {
   FinishedRemateSummary,
   HistoryListFilters,
@@ -16,7 +17,8 @@ const apiMocks = vi.hoisted(() => ({
 
 vi.mock('./api', () => apiMocks);
 
-const { useFinishedRemates, useLoteHistoryDetail, useRemateHistoryDetail } = await import('./hooks');
+const { useFinishedRemates, useLoteHistoryDetail, useRemateHistoryDetail, useLoteResultsForRemate } =
+  await import('./hooks');
 
 function makeSummaryPage(overrides: Partial<Page<FinishedRemateSummary>> = {}): Page<FinishedRemateSummary> {
   return {
@@ -64,6 +66,32 @@ function makeDetail(overrides: Partial<RemateHistoryDetail> = {}): RemateHistory
     chat_activity: { message_count: 4, deleted_count: 0, participant_count: 2 },
     participants_count: 3,
     generated_at: '2026-07-01T12:00:01Z',
+    ...overrides,
+  };
+}
+
+function makeLote(overrides: Partial<Lote> = {}): Lote {
+  return {
+    id: 'lote-1',
+    remate_id: 'remate-1',
+    lot_number: '1',
+    display_order: 1,
+    title: 'Toro Angus',
+    description: null,
+    category: 'hacienda',
+    attributes: {},
+    images: [],
+    quantity: 1,
+    unit_label: null,
+    base_price: '1000.00',
+    min_increment: '50.00',
+    reserve_price: null,
+    final_price: '1200.00',
+    status: 'closed_sold',
+    timer_ends_at: null,
+    timer_paused_remaining_seconds: null,
+    timer_auto_close_enabled: false,
+    created_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
 }
@@ -213,5 +241,51 @@ describe('useLoteHistoryDetail', () => {
     await waitFor(() =>
       expect(apiMocks.fetchLoteHistoryDetailRequest).toHaveBeenCalledWith('remate-1', 'lote-1', 2, 20),
     );
+  });
+});
+
+describe('useLoteResultsForRemate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('pide el detalle de cada lote vendido/desierto, con page_size=1, y arma un Map por lote', async () => {
+    apiMocks.fetchLoteHistoryDetailRequest.mockImplementation((remateId: string, loteId: string) =>
+      Promise.resolve(makeLoteDetail({ id: loteId, remate_id: remateId })),
+    );
+    const lotes = [makeLote({ id: 'lote-1' }), makeLote({ id: 'lote-2', status: 'closed_unsold' })];
+
+    const { result } = renderHook(() => useLoteResultsForRemate('remate-1', lotes));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(apiMocks.fetchLoteHistoryDetailRequest).toHaveBeenCalledWith('remate-1', 'lote-1', 1, 1);
+    expect(apiMocks.fetchLoteHistoryDetailRequest).toHaveBeenCalledWith('remate-1', 'lote-2', 1, 1);
+    expect(result.current.data.get('lote-1')?.id).toBe('lote-1');
+    expect(result.current.data.size).toBe(2);
+  });
+
+  it('no pide detalle de lotes pending/cancelled -- ninguno queda "por resolver", así que ni se dispara el fetch', () => {
+    apiMocks.fetchLoteHistoryDetailRequest.mockResolvedValue(makeLoteDetail());
+    const lotes = [makeLote({ id: 'lote-1', status: 'pending' }), makeLote({ id: 'lote-2', status: 'cancelled' })];
+
+    const { result } = renderHook(() => useLoteResultsForRemate('remate-1', lotes));
+
+    expect(apiMocks.fetchLoteHistoryDetailRequest).not.toHaveBeenCalled();
+    expect(result.current.data.size).toBe(0);
+  });
+
+  it('un lote cuya llamada falla queda en null, sin tirar abajo el resto', async () => {
+    apiMocks.fetchLoteHistoryDetailRequest.mockImplementation((_remateId: string, loteId: string) =>
+      loteId === 'lote-1'
+        ? Promise.reject(new Error('falló'))
+        : Promise.resolve(makeLoteDetail({ id: loteId })),
+    );
+    const lotes = [makeLote({ id: 'lote-1' }), makeLote({ id: 'lote-2' })];
+
+    const { result } = renderHook(() => useLoteResultsForRemate('remate-1', lotes));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.data.get('lote-1')).toBeNull();
+    expect(result.current.data.get('lote-2')?.id).toBe('lote-2');
   });
 });

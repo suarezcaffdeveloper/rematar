@@ -27,6 +27,7 @@ class UserService:
             email=data.email,
             hashed_password=hash_password(data.password),
             full_name=data.full_name,
+            phone=data.phone,
             role=data.role,
         )
         self._repository.add(user)

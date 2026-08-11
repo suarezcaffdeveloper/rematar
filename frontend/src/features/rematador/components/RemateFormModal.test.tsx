@@ -38,9 +38,9 @@ describe('RemateFormModal', () => {
     vi.clearAllMocks();
   });
 
-  it('en modo creación, muestra el título "Crear remate" con campos vacíos', () => {
+  it('en modo creación, muestra el título "Crear nuevo remate" con campos vacíos', () => {
     render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
-    expect(screen.getByRole('heading', { name: 'Crear remate' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Crear nuevo remate' })).toBeInTheDocument();
     expect(screen.getByLabelText('Título')).toHaveValue('');
   });
 

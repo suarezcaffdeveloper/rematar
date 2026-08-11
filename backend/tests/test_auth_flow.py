@@ -21,7 +21,9 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
         json={
             "email": email,
             "password": "password123",
+            "confirm_password": "password123",
             "full_name": "Test User",
+            "phone": "+5491122334455",
             "role": role,
         },
     )
@@ -40,7 +42,9 @@ async def test_register_rejects_admin_role(client: AsyncClient) -> None:
         json={
             "email": "hacker@example.com",
             "password": "password123",
+            "confirm_password": "password123",
             "full_name": "H",
+            "phone": "+5491122334455",
             "role": "admin",
         },
     )
@@ -51,7 +55,9 @@ async def test_register_rejects_duplicate_email(client: AsyncClient) -> None:
     payload = {
         "email": "dup@example.com",
         "password": "password123",
+        "confirm_password": "password123",
         "full_name": "A",
+        "phone": "+5491122334455",
         "role": "comprador",
     }
     first = await client.post(REGISTER_URL, json=payload)
@@ -59,6 +65,62 @@ async def test_register_rejects_duplicate_email(client: AsyncClient) -> None:
 
     second = await client.post(REGISTER_URL, json=payload)
     assert second.status_code == 409
+
+
+async def test_register_rejects_password_mismatch(client: AsyncClient) -> None:
+    response = await client.post(
+        REGISTER_URL,
+        json={
+            "email": "mismatch@example.com",
+            "password": "password123",
+            "confirm_password": "password456",
+            "full_name": "Mismatch User",
+            "phone": "+5491122334455",
+            "role": "comprador",
+        },
+    )
+    assert response.status_code == 422
+
+
+async def test_register_rejects_invalid_phone(client: AsyncClient) -> None:
+    response = await client.post(
+        REGISTER_URL,
+        json={
+            "email": "badphone@example.com",
+            "password": "password123",
+            "confirm_password": "password123",
+            "full_name": "Bad Phone",
+            "phone": "abc123",
+            "role": "comprador",
+        },
+    )
+    assert response.status_code == 422
+
+
+async def test_register_persists_and_normalizes_phone(client: AsyncClient) -> None:
+    register_response = await client.post(
+        REGISTER_URL,
+        json={
+            "email": "phoneuser@example.com",
+            "password": "password123",
+            "confirm_password": "password123",
+            "full_name": "Phone User",
+            "phone": "+54 9 11 2233-4455",
+            "role": "comprador",
+        },
+    )
+    assert register_response.status_code == 201, register_response.text
+    assert register_response.json()["phone"] == "+5491122334455"
+    assert "confirm_password" not in register_response.json()
+
+    login_response = await client.post(
+        LOGIN_URL, data={"username": "phoneuser@example.com", "password": "password123"}
+    )
+    me_response = await client.get(
+        ME_URL,
+        headers={"Authorization": f"Bearer {login_response.json()['access_token']}"},
+    )
+    assert me_response.json()["phone"] == "+5491122334455"
 
 
 async def test_login_and_read_own_profile(client: AsyncClient) -> None:
@@ -71,6 +133,7 @@ async def test_login_and_read_own_profile(client: AsyncClient) -> None:
     body = me_response.json()
     assert body["email"] == "comprador@example.com"
     assert body["role"] == "comprador"
+    assert body["phone"] == "+5491122334455"
 
 
 async def test_login_with_wrong_password_is_unauthorized(client: AsyncClient) -> None:
@@ -79,7 +142,9 @@ async def test_login_with_wrong_password_is_unauthorized(client: AsyncClient) ->
         json={
             "email": "user2@example.com",
             "password": "password123",
+            "confirm_password": "password123",
             "full_name": "U",
+            "phone": "+5491122334455",
             "role": "comprador",
         },
     )

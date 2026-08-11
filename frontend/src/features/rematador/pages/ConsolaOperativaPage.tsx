@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { ListOrdered } from 'lucide-react';
 import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
+import { useFocusMode } from '../../../app/layouts/useFocusMode';
 import { useWideLayout } from '../../../app/layouts/useWideLayout';
 import { Alert } from '../../../shared/components/Alert';
 import type { BreadcrumbItem } from '../../../shared/components/Breadcrumb';
@@ -29,11 +31,9 @@ function ConsolaSkeleton() {
   return (
     <div className="flex flex-col gap-4">
       <Skeleton className="h-24 w-full rounded-xl" />
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_380px]">
-        <div className="flex flex-col gap-4">
-          <Skeleton className="aspect-video w-full rounded-xl" />
-          <Skeleton className="h-40 w-full rounded-xl" />
-        </div>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px_380px]">
+        <Skeleton className="aspect-video w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
         <Skeleton className="h-96 w-full rounded-xl" />
       </div>
       <Skeleton className="h-32 w-full rounded-xl" />
@@ -43,23 +43,54 @@ function ConsolaSkeleton() {
 
 /**
  * Consola Operativa del Rematador (Épica 5, Módulo 5.2; rediseñada en la Épica 9,
- * Etapa 5). Reusa `useLiveRemateState` de `features/sala/hooks.ts` tal cual (Épica 4.6,
+ * Etapa 5; y de nuevo en el rediseño a "Modo Remate"). Reusa `useLiveRemateState` de
+ * `features/sala/hooks.ts` tal cual (Épica 4.6,
  * sin modificarlo): mismo snapshot inicial + reconciliación por WebSocket + eventos
  * incrementales que ya usa la Sala del comprador -- la consola es, en los hechos, una
  * segunda conexión a la misma sala, viendo exactamente los mismos eventos en tiempo
  * real. Ver docs/30-consola-operativa-rematador.md para el flujo completo.
  *
- * Layout nuevo (Épica 9, Etapa 5): mismo patrón que la Sala del comprador (Etapa 4) --
- * `useWideLayout()` + grid `xl:grid-cols-[1fr_380px]`. Antes era un apilado de 5-6
- * cards a lo ancho completo (lote+ofertas en grid, próximos lotes, chat, moderación,
- * analítica); un rematador tenía que hacer scroll más allá del chat y la moderación
- * para llegar a la analítica, y el panel de control quedaba a un scroll de la cabecera.
- * Ahora: columna principal con lote activo + panel de control (lo que hace falta ver/
- * operar todo el tiempo) + analítica más abajo; `ConsolaSidebar` (`sticky`, alto de
- * viewport) con pestañas Chat/Ofertas/Conectados/Moderación -- a diferencia de la Sala
- * (que apila Chat+Ofertas sin pestañas, son solo dos), acá son cuatro secciones y la
- * mayoría de uso ocasional, así que pestañas evitan que cuatro paneles compitan por el
- * mismo espacio angosto sin agregar un scroll de página.
+ * Layout "Modo Remate" (rediseño más reciente, sobre la base de la Épica 9, Etapa 5, y
+ * de nuevo sobre la captura de referencia de Stitch/AuctionPro): mientras el remate está
+ * `live`/`paused`, la página pide `useFocusMode(true)` -- `AppLayout` oculta el `Header`
+ * global por completo (la verdadera "barra superior"), no solo ensancha el `<main>` (eso
+ * ya lo hacía `useWideLayout`, que se mantiene para los estados no operativos). El
+ * `Sidebar` global ya no se oculta en Modo Remate (pasó a ser un riel compacto que se
+ * expande al hover, ver `app/layouts/Sidebar.tsx`) -- la idea del rediseño sigue siendo
+ * que el rematador no tenga ninguna navegación de la app distrayendo, pero un riel
+ * angosto siempre visible no compite con la consola de la forma en que lo hacía el
+ * sidebar ancho de antes. `ConsolaHeader` conserva su propio botón "Salir" como acceso
+ * rápido al dashboard.
+ *
+ * Grid principal de dos columnas reales (`xl:grid-cols-[minmax(0,1fr)_380px]`) con dos
+ * filas explícitas (`xl:row-start-*`/`xl:row-span-*`, sin `grid-template-rows` propio --
+ * el grid las genera solas del tamaño que pide el contenido): fila 1/columna 1 es
+ * `ConsolaHeader` (título/fecha/conectados), fila 2/columna 1 es el grupo izquierdo (lote
+ * activo + `ConsolaControlPanel` en un subgrid de dos columnas, y "Próximos lotes" debajo
+ * ocupando ambas), y columna 2 es `ConsolaSidebar` (oferta líder + chat) ocupando las dos
+ * filas (`xl:row-span-2`) -- pedido explícito: el header queda arriba de todo pero
+ * angosto (del ancho del lote + la "botonera" de `ConsolaControlPanel`, no de la pantalla
+ * completa), chocando a su derecha contra el sidebar, que arranca a la misma altura que el
+ * header en vez de quedar empujado debajo de una franja a todo el ancho. En los estados no
+ * operativos (`!isOperational`) `ConsolaHeader` no entra a este grid -- se muestra a todo
+ * el ancho, arriba del `EmptyState`, como cualquier encabezado de página normal. "Próximos
+ * lotes" sigue pegado contra el borde derecho del chat en vez de estirarse a todo el ancho
+ * de la pantalla (pedido explícito: aprovechar el espacio en blanco que deja el chat, más
+ * alto, en vez de repetir una franja a ancho completo). Solo la columna de
+ * `ConsolaSidebar` queda `sticky` (ver ese componente) -- se mantiene fija en pantalla
+ * mientras se hace scroll hacia "Próximos lotes"/analítica más abajo; el grupo izquierdo
+ * se va con el scroll normalmente, ya que su contenido ya entra completo arriba. Ese
+ * wrapper también lleva `xl:self-stretch` (el grid usa `items-start` por default, así
+ * que sin esto el wrapper del sidebar solo mide lo que pide su propio contenido) --
+ * pedido explícito: oferta+chat tienen que ocupar todo el alto de la celda del grid
+ * (que normalmente es la del grupo izquierdo, más alto), no quedar más bajos y dejar un
+ * hueco en blanco antes de la analítica; el reparto de ese alto entre la oferta (fija) y
+ * el chat (lo que sobra) se resuelve dentro de `ConsolaSidebar`. Por
+ * debajo de `xl:` las clases `col-start`/`row-start`/`row-span` no aplican, así que todo
+ * cae de vuelta al orden natural del DOM en una sola columna (`grid-cols-1`): header,
+ * lote + control, próximos lotes, sidebar. "Analítica en tiempo real" sigue debajo del
+ * grid principal, a todo el ancho -- información secundaria, no necesita competir por el
+ * mismo alto de pantalla.
  *
  * Reemplaza la ruta `/remates/:remateId/gestionar` que hasta ahora mostraba
  * `GestionRematePlaceholderPage` (Épica 5.1) -- mismo patrón que la Sala reemplazó su
@@ -80,6 +111,12 @@ export function ConsolaOperativaPage() {
     connectionStatus,
     subscribeToRealtime,
   } = useLiveRemateState(remateId ?? '');
+
+  // "Modo Remate" se activa apenas el remate está operativo (`live`/`paused`), sin
+  // importar si todavía está cargando o si hubo un error -- se calcula acá, antes de
+  // los `return` tempranos de abajo, porque un Hook no puede llamarse condicionalmente.
+  const isOperational = snapshot?.remate.status === 'live' || snapshot?.remate.status === 'paused';
+  useFocusMode(isOperational);
 
   const [selectedLoteId, setSelectedLoteId] = useState<string | null>(null);
 
@@ -133,63 +170,79 @@ export function ConsolaOperativaPage() {
     connected_users: connectedUsers,
   } = snapshot;
   const currency = remate.settings.currency;
-  const isOperational = remate.status === 'live' || remate.status === 'paused';
 
   return (
     <div className="flex flex-col gap-4">
-      <ConsolaHeader remate={remate} connectedUsers={connectedUsers} connectionStatus={connectionStatus} />
-
       {!isOperational ? (
-        <EmptyState
-          icon={<GavelIcon className="h-10 w-10" />}
-          title="Esta consola es para remates en vivo"
-          description={NOT_OPERATIONAL_MESSAGES[remate.status]}
-          action={
-            <Button variant="secondary" onClick={() => navigate('/')}>
-              Volver al dashboard
-            </Button>
-          }
-        />
+        <>
+          <ConsolaHeader remate={remate} connectedUsers={connectedUsers} connectionStatus={connectionStatus} />
+          <EmptyState
+            icon={<GavelIcon className="h-10 w-10" />}
+            title="Esta consola es para remates en vivo"
+            description={NOT_OPERATIONAL_MESSAGES[remate.status]}
+            action={
+              <Button variant="secondary" onClick={() => navigate('/')}>
+                Volver al dashboard
+              </Button>
+            }
+          />
+        </>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_380px]">
-            <div className="flex min-w-0 flex-col gap-4">
-              <ConsolaLotePanel
-                activeLote={activeLote}
-                currency={currency}
-                winningOffer={winningOffer}
-                hasUpcomingLotes={hasUpcomingLotes}
-              />
-              <ConsolaControlPanel
-                remate={remate}
-                activeLote={activeLote}
-                selectedLoteId={selectedLoteId}
-                hasUpcomingLotes={hasUpcomingLotes}
-              />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start">
+            <div className="xl:col-start-1 xl:row-start-1">
+              <ConsolaHeader remate={remate} connectedUsers={connectedUsers} connectionStatus={connectionStatus} />
             </div>
 
-            <ConsolaSidebar
-              remateId={remate.id}
-              subscribeToRealtime={subscribeToRealtime}
-              currentUserId={user?.id}
-              connectedUsers={connectedUsers}
-              winningOffer={winningOffer}
-              recentOffers={recentOffers}
-              currency={currency}
-            />
+            <div className="flex flex-col gap-4 xl:col-start-1 xl:row-start-2">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+                <div className="min-w-0">
+                  <ConsolaLotePanel activeLote={activeLote} currency={currency} hasUpcomingLotes={hasUpcomingLotes} />
+                </div>
+
+                <ConsolaControlPanel
+                  remate={remate}
+                  activeLote={activeLote}
+                  winningOffer={winningOffer}
+                  recentOffers={recentOffers}
+                  selectedLoteId={selectedLoteId}
+                  hasUpcomingLotes={hasUpcomingLotes}
+                />
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-slate-700">
+                  <ListOrdered aria-hidden="true" className="h-4 w-4 text-slate-400" />
+                  Próximos lotes
+                </h2>
+                <ConsolaUpcomingLotesPanel
+                  lotes={upcomingLotes}
+                  selectedLoteId={selectedLoteId}
+                  onSelect={setSelectedLoteId}
+                  selectionEnabled={remate.status === 'live' && !activeLote}
+                />
+              </div>
+            </div>
+
+            <div className="xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:self-stretch">
+              <ConsolaSidebar
+                remateId={remate.id}
+                subscribeToRealtime={subscribeToRealtime}
+                currentUserId={user?.id}
+                connectedUsers={connectedUsers}
+                recentOffers={recentOffers}
+                currency={currency}
+              />
+            </div>
           </div>
 
-          <div className="flex flex-col gap-3">
-            <h2 className="text-lg font-semibold text-slate-900">Próximos lotes</h2>
-            <ConsolaUpcomingLotesPanel
-              lotes={upcomingLotes}
-              selectedLoteId={selectedLoteId}
-              onSelect={setSelectedLoteId}
-              selectionEnabled={remate.status === 'live' && !activeLote}
-            />
+          {/* Analítica secundaria (pedido explícito: "no debe competir visualmente con
+           * la operación del remate") -- mismo `AnalyticsPanel` de siempre (que ya trae
+           * su propio encabezado "Analítica en tiempo real"), sin tocar su interior,
+           * solo envuelto con menos peso visual que el resto de la consola. */}
+          <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 opacity-90">
+            <AnalyticsPanel remateId={remate.id} subscribeToRealtime={subscribeToRealtime} currency={currency} />
           </div>
-
-          <AnalyticsPanel remateId={remate.id} subscribeToRealtime={subscribeToRealtime} currency={currency} />
         </>
       )}
     </div>

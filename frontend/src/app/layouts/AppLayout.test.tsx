@@ -28,7 +28,7 @@ function renderLayout() {
 
 afterEach(() => {
   act(() => {
-    useLayoutPreferencesStore.setState({ isWide: false });
+    useLayoutPreferencesStore.setState({ isWide: false, isFocusMode: false });
   });
 });
 
@@ -76,5 +76,34 @@ describe('AppLayout', () => {
     renderLayout();
 
     expect(screen.getByText('Ana', { exact: false })).toBeInTheDocument();
+  });
+
+  it('con isFocusMode en true (useFocusMode), el sidebar sigue visible pero el header se oculta', () => {
+    useAuthMock.mockReturnValue({ user: { full_name: 'Ana', role: 'comprador' } });
+    act(() => {
+      useLayoutPreferencesStore.setState({ isFocusMode: true });
+    });
+
+    renderLayout();
+
+    // El sidebar (ahora un riel compacto siempre visible) no se oculta más en Modo
+    // Remate -- solo el `Header` (breadcrumb + notificaciones + hamburguesa mobile) lo
+    // hace, que es la verdadera "barra superior" que la Consola Operativa no quiere.
+    expect(screen.getAllByRole('link', { name: 'Remates' })[0]).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Cerrar sesión/ })[0]).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Abrir menú de navegación' })).not.toBeInTheDocument();
+  });
+
+  it('con isFocusMode en true, el <main> usa el ancho amplio de la consola, no max-w-5xl/90rem', () => {
+    useAuthMock.mockReturnValue({ user: { full_name: 'Ana', role: 'comprador' } });
+    act(() => {
+      useLayoutPreferencesStore.setState({ isFocusMode: true });
+    });
+
+    const { container } = renderLayout();
+
+    expect(container.querySelector('main')).toHaveClass('max-w-[110rem]');
+    expect(container.querySelector('main')).not.toHaveClass('max-w-5xl');
+    expect(container.querySelector('main')).not.toHaveClass('max-w-[90rem]');
   });
 });

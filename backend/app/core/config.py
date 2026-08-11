@@ -129,6 +129,22 @@ class Settings(BaseSettings):
     MODERATION_INVALID_BID_THRESHOLD: int = 5
     MODERATION_INVALID_BID_WINDOW_SECONDS: int = 300
 
+    # --- Notificaciones por email ---
+    # SMTP genérico -- funciona con Gmail (usando una "Contraseña de aplicación", ver
+    # README) o cualquier otro proveedor SMTP estándar. `EMAIL_ENABLED=false` (o sin
+    # `SMTP_HOST`) desactiva el envío real sin condicionar el resto del flujo de
+    # adjudicación: se usa un `NullEmailSender` que solo loguea (ver
+    # `app/notify/dependencies.py`), útil para desarrollo local sin credenciales.
+    EMAIL_ENABLED: bool = True
+    EMAIL_FROM: str = "no-reply@rematar.io"
+    EMAIL_FROM_NAME: str = "RematAR"
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_USE_TLS: bool = True
+    SMTP_TIMEOUT_SECONDS: float = 10.0
+
 
 @lru_cache
 def get_settings() -> Settings:

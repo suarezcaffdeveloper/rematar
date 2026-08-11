@@ -24,12 +24,17 @@ class PostAuctionCaseRead(BaseModel):
     lote_id: uuid.UUID
     lot_number: str
     lote_title: str
+    lote_cover_image_url: str | None
     remate_id: uuid.UUID
     remate_title: str
     buyer_id: uuid.UUID
     buyer_name: str | None
     rematador_id: uuid.UUID
     rematador_name: str | None
+    # Precio base del lote (`Lote.base_price`) -- lo carga `_build_read_and_buyer` de la
+    # misma fila de `Lote` que ya resuelve `lot_number`/`lote_title`, mismo criterio
+    # defensivo (`None` si el lote no resuelve).
+    base_price: Decimal | None
     final_price: Decimal
     status: PostAuctionStatus
     contacted_at: datetime | None
@@ -60,6 +65,25 @@ class PostAuctionCaseDetail(PostAuctionCaseRead):
     timeline: list[TimelineEntryRead]
 
 
+class PostAuctionCaseRematadorRead(PostAuctionCaseRead):
+    """Vista de una venta adjudicada para el rematador dueño (o un admin).
+
+    Agrega el contacto del comprador (email/teléfono) -- solo se usa en los endpoints de
+    `/postauction/ventas/...`, nunca en `/postauction/mis-compras/...` (ese lado usa
+    `PostAuctionCaseRead`/`PostAuctionCaseDetail` sin estos campos): el comprador no debe
+    ver el contacto del rematador, y el control de acceso de `list_for_rematador`/
+    `_get_owned_case_or_raise` (service.py) ya garantiza que solo llegue al rematador
+    dueño de esta venta puntual.
+    """
+
+    buyer_email: str | None
+    buyer_phone: str | None
+
+
+class PostAuctionCaseRematadorDetail(PostAuctionCaseRematadorRead):
+    timeline: list[TimelineEntryRead]
+
+
 class StatusChangeRequest(BaseModel):
     new_status: PostAuctionStatus
     note: str | None = Field(default=None, max_length=2000)
@@ -82,6 +106,8 @@ __all__ = [
     "Page",
     "PostAuctionCaseRead",
     "PostAuctionCaseDetail",
+    "PostAuctionCaseRematadorRead",
+    "PostAuctionCaseRematadorDetail",
     "TimelineEntryRead",
     "StatusChangeRequest",
     "NoteCreateRequest",

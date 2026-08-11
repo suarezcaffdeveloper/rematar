@@ -15,6 +15,8 @@ from app.modules.users.dependencies import get_user_repository
 from app.modules.users.repository import UserRepository
 from app.notifications.dependencies import get_notification_repository
 from app.notifications.repository import NotificationRepository
+from app.notify.dependencies import get_notification_service
+from app.notify.service import NotificationService
 from app.postauction.repository import PostAuctionRepository
 from app.postauction.service import PostAuctionService
 
@@ -34,6 +36,7 @@ def get_postauction_service(
         NotificationRepository, Depends(get_notification_repository)
     ],
     event_bus: Annotated[EventBus, Depends(get_event_bus)],
+    notification_service: Annotated[NotificationService, Depends(get_notification_service)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> PostAuctionService:
     return PostAuctionService(
@@ -44,4 +47,5 @@ def get_postauction_service(
         AuditLogRepository(db),
         notification_repository,
         event_bus,
+        notification_service,
     )

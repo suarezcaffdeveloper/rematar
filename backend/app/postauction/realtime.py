@@ -48,6 +48,7 @@ from app.modules.remates.lotes.repository import LoteRepository
 from app.modules.remates.repository import RemateRepository
 from app.modules.users.repository import UserRepository
 from app.notifications.repository import NotificationRepository
+from app.notify.service import NotificationService
 from app.postauction.repository import PostAuctionRepository
 from app.postauction.service import PostAuctionService
 
@@ -64,9 +65,11 @@ class PostAuctionEventDispatcher:
         self,
         session_factory: async_sessionmaker[AsyncSession],
         event_bus: EventBus,
+        notification_service: NotificationService,
     ) -> None:
         self._session_factory = session_factory
         self._event_bus = event_bus
+        self._notification_service = notification_service
 
     async def dispatch(self, raw_payload: str | bytes) -> None:
         """Nunca lanza -- mismo contrato que `EventDispatcher.dispatch`: un evento roto o
@@ -134,6 +137,7 @@ class PostAuctionEventDispatcher:
                     audit_repository,
                     NotificationRepository(db),
                     self._event_bus,
+                    self._notification_service,
                 )
                 await service.create_case_from_winner(
                     remate_id=remate_id,

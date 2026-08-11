@@ -11,6 +11,7 @@ function renderAt(path: string) {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route element={<RequireAuth />}>
+          <Route path="/" element={<p>Dashboard autenticado</p>} />
           <Route path="/protegida" element={<p>Contenido protegido</p>} />
         </Route>
         <Route path="/login" element={<p>Pantalla de login</p>} />
@@ -43,5 +44,24 @@ describe('RequireAuth', () => {
     renderAt('/protegida');
 
     expect(screen.getByText('Contenido protegido')).toBeInTheDocument();
+  });
+
+  it('muestra la landing pública en "/" si no hay sesión, en vez de redirigir a /login', () => {
+    useAuthMock.mockReturnValue({ isAuthenticated: false, isHydrated: true });
+
+    renderAt('/');
+
+    expect(
+      screen.getByRole('heading', { name: /la nueva generación de remates en tiempo real/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Pantalla de login')).not.toBeInTheDocument();
+  });
+
+  it('sigue mostrando el dashboard autenticado en "/" si hay sesión (no la landing)', () => {
+    useAuthMock.mockReturnValue({ isAuthenticated: true, isHydrated: true });
+
+    renderAt('/');
+
+    expect(screen.getByText('Dashboard autenticado')).toBeInTheDocument();
   });
 });

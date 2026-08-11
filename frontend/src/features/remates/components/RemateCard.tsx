@@ -3,7 +3,7 @@ import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
 import { formatDateTime } from '../../../shared/lib/format';
 import { useLoteCount } from '../hooks';
-import { CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_LABELS } from '../labels';
+import { CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_CARD_ACCENT, STATUS_LABELS } from '../labels';
 import type { Remate } from '../types';
 import { CoverPlaceholder } from './CoverPlaceholder';
 import { BoxIcon, CalendarIcon, PinIcon } from './icons';
@@ -24,13 +24,15 @@ export function RemateCard({ remate }: RemateCardProps) {
   const loteCount = useLoteCount(remate.id);
 
   return (
-    <article className="group flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
-      <div className="relative aspect-video w-full overflow-hidden">
+    <article
+      className={`group flex flex-col overflow-hidden rounded-2xl border bg-white transition-all duration-300 hover:-translate-y-1 ${STATUS_CARD_ACCENT[remate.status]}`}
+    >
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
         {remate.cover_image_url ? (
           <img
             src={remate.cover_image_url}
             alt=""
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <CoverPlaceholder className="h-full w-full" />
@@ -40,15 +42,15 @@ export function RemateCard({ remate }: RemateCardProps) {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-3 p-4">
+      <div className="flex flex-1 flex-col gap-4 p-5">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
             {CATEGORY_LABELS[remate.category]}
           </p>
-          <h3 className="mt-1 line-clamp-2 text-base font-semibold text-slate-900">{remate.title}</h3>
+          <h3 className="mt-1.5 line-clamp-2 text-lg font-semibold leading-snug text-slate-900">{remate.title}</h3>
         </div>
 
-        <dl className="flex flex-col gap-1.5 text-sm text-slate-600">
+        <dl className="flex flex-col gap-2 text-sm text-slate-600">
           {remate.starts_at && (
             <div className="flex items-center gap-2">
               <CalendarIcon className="h-4 w-4 shrink-0 text-slate-400" />

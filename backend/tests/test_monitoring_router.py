@@ -21,7 +21,14 @@ def _auth(token: str) -> dict:
 
 
 async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> str:
-    payload = {"email": email, "password": "password123", "full_name": "Test", "role": role}
+    payload = {
+        "email": email,
+        "password": "password123",
+        "confirm_password": "password123",
+        "full_name": "Test",
+        "phone": "+5491122334455",
+        "role": role,
+    }
     register = await client.post(REGISTER_URL, json=payload)
     assert register.status_code == 201, register.text
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
