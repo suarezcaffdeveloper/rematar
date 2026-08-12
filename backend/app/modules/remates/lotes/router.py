@@ -28,7 +28,7 @@ from app.common.schemas import Page
 from app.modules.auth.dependencies import get_current_user
 from app.modules.ofertas.router import router as ofertas_router
 from app.modules.remates.lotes.dependencies import get_lote_service
-from app.modules.remates.lotes.models import Lote
+from app.modules.remates.lotes.models import Lote, LoteRound
 from app.modules.remates.lotes.schemas import (
     LoteCancelRequest,
     LoteCloseRequest,
@@ -36,6 +36,8 @@ from app.modules.remates.lotes.schemas import (
     LoteImageUploadResponse,
     LoteRead,
     LoteReorderRequest,
+    LoteRequeueRequest,
+    LoteRoundRead,
     LoteUpdate,
 )
 from app.modules.remates.lotes.service import LoteService
@@ -209,3 +211,32 @@ async def cancel_lote(
     service: Annotated[LoteService, Depends(get_lote_service)],
 ) -> Lote:
     return await service.cancel(remate_id, lote_id, current_user, data.reason)
+
+
+@router.post(
+    "/{lote_id}/requeue",
+    response_model=LoteRead,
+    summary="Reincorporar un lote desierto a la cola (CLOSED_UNSOLD -> PENDING, al final)",
+)
+async def requeue_lote(
+    remate_id: uuid.UUID,
+    lote_id: uuid.UUID,
+    data: LoteRequeueRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[LoteService, Depends(get_lote_service)],
+) -> Lote:
+    return await service.requeue(remate_id, lote_id, current_user, data)
+
+
+@router.get(
+    "/{lote_id}/rounds",
+    response_model=list[LoteRoundRead],
+    summary="Historial de rondas desiertas archivadas de un lote (404 si no es visible)",
+)
+async def list_lote_rounds(
+    remate_id: uuid.UUID,
+    lote_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[LoteService, Depends(get_lote_service)],
+) -> list[LoteRound]:
+    return await service.list_rounds(remate_id, lote_id, current_user)

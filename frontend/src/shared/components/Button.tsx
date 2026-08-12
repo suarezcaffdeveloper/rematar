@@ -2,7 +2,15 @@ import { type ButtonHTMLAttributes, forwardRef } from 'react';
 import clsx from 'clsx';
 import { Spinner } from './Spinner';
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
+type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'danger'
+  | 'ghost'
+  | 'inverse'
+  | 'success-soft'
+  | 'warning-soft'
+  | 'brand-soft';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -17,6 +25,18 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   danger:
     'bg-danger-600 text-white shadow-sm hover:bg-danger-700 active:bg-danger-800 focus-visible:ring-danger-500',
   ghost: 'bg-transparent text-slate-600 hover:bg-slate-100 active:bg-slate-200 focus-visible:ring-brand-500',
+  /** Botón claro sobre fondo de color intenso (ej. la card "azul fuerte" del panel de
+   * control operativo de la Consola) -- mismo lenguaje que `secondary` pero sin borde,
+   * pensado para contrastar con un fondo ya saturado en vez del fondo blanco de la app. */
+  inverse: 'bg-white text-brand-700 shadow-sm hover:bg-brand-50 active:bg-brand-100 focus-visible:ring-white',
+  /** Variantes "soft" (fondo pastel + texto en el mismo tono, sin borde): usadas para
+   * acciones agrupadas donde el color comunica la naturaleza de la acción (positiva/
+   * neutra/preventiva) sin la fuerza visual de `primary`/`danger`. */
+  'success-soft':
+    'bg-success-100 text-success-800 hover:bg-success-200 active:bg-success-300 focus-visible:ring-success-500',
+  'warning-soft':
+    'bg-warning-100 text-warning-800 hover:bg-warning-200 active:bg-warning-300 focus-visible:ring-warning-500',
+  'brand-soft': 'bg-brand-50 text-brand-700 hover:bg-brand-100 active:bg-brand-200 focus-visible:ring-brand-500',
 };
 
 /**

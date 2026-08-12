@@ -11,10 +11,12 @@ import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
 import { AnalyticsPanel } from '../../analytics/components/AnalyticsPanel';
 import { useAuth } from '../../auth/hooks';
+import { ConsolaBotsPanel } from '../../bots/components/ConsolaBotsPanel';
 import { useLiveRemateState } from '../../sala/hooks';
 import { GavelIcon } from '../../remates/components/icons';
 import type { RemateStatus } from '../../remates/types';
 import { ConsolaControlPanel } from '../components/ConsolaControlPanel';
+import { ConsolaDesiertoLotesPanel } from '../components/ConsolaDesiertoLotesPanel';
 import { ConsolaHeader } from '../components/ConsolaHeader';
 import { ConsolaLotePanel } from '../components/ConsolaLotePanel';
 import { ConsolaSidebar } from '../components/ConsolaSidebar';
@@ -23,7 +25,7 @@ import { ConsolaUpcomingLotesPanel } from '../components/ConsolaUpcomingLotesPan
 const NOT_OPERATIONAL_MESSAGES: Partial<Record<RemateStatus, string>> = {
   draft: 'El remate todavía está en borrador. Programalo desde el dashboard antes de operarlo acá.',
   scheduled: 'El remate todavía no empezó. Iniciálo desde el dashboard para acceder a la consola operativa.',
-  finished: 'Este remate ya finalizó. No queda ninguna operación pendiente.',
+  finished: 'No queda ninguna operación pendiente. Podés revisar el resumen completo con los resultados de cada lote.',
   cancelled: 'Este remate fue cancelado.',
 };
 
@@ -108,6 +110,7 @@ export function ConsolaOperativaPage() {
     error,
     reload,
     upcomingLotes,
+    desiertoLotes,
     connectionStatus,
     subscribeToRealtime,
   } = useLiveRemateState(remateId ?? '');
@@ -178,12 +181,19 @@ export function ConsolaOperativaPage() {
           <ConsolaHeader remate={remate} connectedUsers={connectedUsers} connectionStatus={connectionStatus} />
           <EmptyState
             icon={<GavelIcon className="h-10 w-10" />}
-            title="Esta consola es para remates en vivo"
+            title={remate.status === 'finished' ? 'El remate finalizó correctamente' : 'Esta consola es para remates en vivo'}
             description={NOT_OPERATIONAL_MESSAGES[remate.status]}
             action={
-              <Button variant="secondary" onClick={() => navigate('/')}>
-                Volver al dashboard
-              </Button>
+              <div className="flex flex-wrap justify-center gap-2">
+                {remate.status === 'finished' && (
+                  <Button variant="primary" onClick={() => navigate(`/remates/${remate.id}/historial`)}>
+                    Ver resumen
+                  </Button>
+                )}
+                <Button variant="secondary" onClick={() => navigate('/')}>
+                  Volver al dashboard
+                </Button>
+              </div>
             }
           />
         </>
@@ -222,6 +232,10 @@ export function ConsolaOperativaPage() {
                   selectionEnabled={remate.status === 'live' && !activeLote}
                 />
               </div>
+
+              <ConsolaDesiertoLotesPanel remateId={remate.id} lotes={desiertoLotes} />
+
+              <ConsolaBotsPanel remateId={remate.id} />
             </div>
 
             <div className="xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:self-stretch">
@@ -230,6 +244,7 @@ export function ConsolaOperativaPage() {
                 subscribeToRealtime={subscribeToRealtime}
                 currentUserId={user?.id}
                 connectedUsers={connectedUsers}
+                winningOffer={winningOffer}
                 recentOffers={recentOffers}
                 currency={currency}
               />

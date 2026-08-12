@@ -20,7 +20,11 @@ ALLOWED_TRANSITIONS: dict[LoteStatus, frozenset[LoteStatus]] = {
         {LoteStatus.CLOSED_SOLD, LoteStatus.CLOSED_UNSOLD, LoteStatus.CANCELLED}
     ),
     LoteStatus.CLOSED_SOLD: frozenset(),
-    LoteStatus.CLOSED_UNSOLD: frozenset(),
+    # Único estado terminal con una salida: un lote desierto puede volver a la cola de
+    # pendientes si el rematador decide reincorporarlo (`LoteService.requeue`) -- la
+    # decisión siempre es manual, nunca disparada por esta máquina de estados ni por
+    # ningún otro mecanismo automático. Ver docs/16-motor-de-estados.md.
+    LoteStatus.CLOSED_UNSOLD: frozenset({LoteStatus.PENDING}),
     LoteStatus.CANCELLED: frozenset(),
 }
 

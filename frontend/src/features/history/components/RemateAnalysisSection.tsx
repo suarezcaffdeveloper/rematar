@@ -9,11 +9,9 @@ export interface RemateAnalysisSectionProps {
 
 function AnalysisCard({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-      <span className="block text-xs font-medium uppercase tracking-wide text-slate-500">{label}</span>
-      <div className="mt-1 truncate text-sm font-semibold text-slate-900" title={typeof children === 'string' ? children : undefined}>
-        {children}
-      </div>
+    <div className="flex flex-col items-center gap-1 rounded-xl border border-slate-200 bg-white p-4 text-center shadow-sm">
+      <span className="break-words text-xs font-medium uppercase tracking-wide text-slate-500">{label}</span>
+      <div className="break-words text-sm font-semibold text-slate-900">{children}</div>
     </div>
   );
 }
@@ -40,7 +38,7 @@ export function RemateAnalysisSection({ analysis, currency }: RemateAnalysisSect
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold text-slate-900">Análisis del remate</h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <AnalysisCard label="Lotes vendidos">
           {analysis.soldPercentage != null ? `${analysis.soldPercentage.toFixed(0)}%` : '—'}
         </AnalysisCard>

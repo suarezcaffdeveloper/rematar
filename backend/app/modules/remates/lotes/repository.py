@@ -11,7 +11,7 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.remates.lotes.models import Lote, LoteStatus
+from app.modules.remates.lotes.models import Lote, LoteRound, LoteStatus
 
 
 class LoteRepository:
@@ -82,16 +82,6 @@ class LoteRepository:
         )
         return (await self._db.execute(stmt)).scalar_one() > 0
 
-    async def has_unresolved_lote(self, remate_id: uuid.UUID) -> bool:
-        """RF-10: usado por `RemateService.try_auto_finish` — si no queda ningún lote
-        PENDING ni OPEN, el remate puede finalizarse solo."""
-        stmt = select(func.count()).select_from(Lote).where(
-            Lote.remate_id == remate_id,
-            Lote.status.in_((LoteStatus.PENDING, LoteStatus.OPEN)),
-            Lote.deleted_at.is_(None),
-        )
-        return (await self._db.execute(stmt)).scalar_one() > 0
-
     async def get_next_pending_lote(self, remate_id: uuid.UUID) -> Lote | None:
         """RF-13: el `PENDING` de menor `display_order`, para `LoteService.open_next`."""
         stmt = (
@@ -122,6 +112,19 @@ class LoteRepository:
 
     def add(self, lote: Lote) -> None:
         self._db.add(lote)
+
+    def add_round(self, round_: LoteRound) -> None:
+        self._db.add(round_)
+
+    async def list_rounds_by_lote(self, lote_id: uuid.UUID) -> list[LoteRound]:
+        """Historial de rondas desiertas archivadas de un lote (Módulo de lotes
+        desiertos), más reciente primero -- usado por `LoteService.list_rounds`."""
+        stmt = (
+            select(LoteRound)
+            .where(LoteRound.lote_id == lote_id)
+            .order_by(LoteRound.round_number.desc())
+        )
+        return list((await self._db.execute(stmt)).scalars().all())
 
     async def commit(self) -> None:
         await self._db.commit()

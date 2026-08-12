@@ -190,8 +190,59 @@ class Lote(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     timer_paused_remaining_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     timer_auto_close_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+    # Rondas de adjudicación (lotes desiertos reincorporados a la cola, ver
+    # docs/16-motor-de-estados.md y `LoteService.requeue`). `round_number` es la ronda
+    # EN CURSO, la misma que ya describen los campos de arriba (`base_price`,
+    # `opened_at`, etc.) -- arranca en 1 y no tiene su propia fila en `lote_rounds`
+    # todavía. Cada vez que el rematador reincorpora un lote `closed_unsold`, la ronda
+    # que acaba de terminar se archiva en `LoteRound` (snapshot de las condiciones
+    # comerciales vigentes en esa ronda) y este contador avanza -- así el lote nunca
+    # pierde su historial completo sin necesitar una tabla nueva para el caso común
+    # (un lote que se vende o se cancela en su única ronda no genera ninguna fila en
+    # `lote_rounds`).
+    round_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
     def __repr__(self) -> str:
         return (
             f"<Lote id={self.id} remate_id={self.remate_id} "
             f"lot_number={self.lot_number!r} status={self.status.value}>"
         )
+
+
+class LoteRound(UUIDPrimaryKeyMixin, Base):
+    """Ronda desierta archivada de un `Lote` (ver docstring de `Lote.round_number`).
+
+    Insert-only, mismo criterio estructural que `PostAuctionTimelineEntry`
+    (`app/postauction/models.py`): hijo de un `Lote` sin valor propio fuera de él, por
+    eso `ondelete="CASCADE"` sobre `lote_id` en vez de `RESTRICT`/`SET NULL`. Todas las
+    filas de esta tabla representan, por construcción, una ronda que terminó
+    `closed_unsold` y fue reincorporada -- no hace falta una columna `status` propia.
+    """
+
+    __tablename__ = "lote_rounds"
+    __table_args__ = (Index("ix_lote_rounds_lote_id_round_number", "lote_id", "round_number"),)
+
+    lote_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("lotes.id", ondelete="CASCADE"), nullable=False
+    )
+    round_number: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Condiciones comerciales vigentes durante esta ronda -- snapshot al momento de
+    # archivarla, independiente de que el lote las cambie en la ronda siguiente.
+    base_price: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    min_increment: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    reserve_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    requeued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Denormalizado, mismo criterio que `AuditLogEntry.actor_*` -- sobrevive a que el
+    # rematador cambie de nombre. Sin `actor_role` acá: siempre es el rematador dueño
+    # del remate (única identidad posible, a diferencia de auditoría general).
+    requeued_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    requeued_by_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<LoteRound id={self.id} lote_id={self.lote_id} round_number={self.round_number}>"

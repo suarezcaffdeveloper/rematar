@@ -167,6 +167,18 @@ class LoteCancelRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
+class LoteRequeueRequest(BaseModel, _LotePriceValidationMixin):
+    """Body de `POST .../lotes/{lote_id}/requeue`. Los tres campos son opcionales: si no
+    vienen, la nueva ronda arranca con las mismas condiciones comerciales que tenía la
+    ronda anterior (`LoteService.requeue` copia lo que falte desde el lote actual antes
+    de validar) -- el rematador decide reincorporar sin tener que repetir valores que no
+    quiere cambiar."""
+
+    base_price: Decimal | None = Field(default=None, gt=0, max_digits=14, decimal_places=2)
+    min_increment: Decimal | None = Field(default=None, gt=0, max_digits=14, decimal_places=2)
+    reserve_price: Decimal | None = Field(default=None, gt=0, max_digits=14, decimal_places=2)
+
+
 class LoteRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -197,5 +209,27 @@ class LoteRead(BaseModel):
     timer_ends_at: datetime | None
     timer_paused_remaining_seconds: int | None
     timer_auto_close_enabled: bool
+    # Ronda de adjudicación en curso (Módulo de lotes desiertos) -- 1 en un lote que
+    # nunca fue reincorporado. Ver `Lote.round_number` y `LoteRoundRead` (historial de
+    # rondas anteriores, `GET .../lotes/{lote_id}/rounds`).
+    round_number: int
     created_at: datetime
     updated_at: datetime
+
+
+class LoteRoundRead(BaseModel):
+    """Ronda desierta archivada -- `GET .../lotes/{lote_id}/rounds` (Módulo de lotes
+    desiertos). `reserve_price` sigue el mismo enmascarado que `LoteRead.reserve_price`
+    para un viewer que no es dueño ni admin (ver `LoteService._mask_reserve_price`)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    round_number: int
+    base_price: Decimal
+    min_increment: Decimal
+    reserve_price: Decimal | None
+    opened_at: datetime | None
+    closed_at: datetime
+    requeued_at: datetime
+    requeued_by_name: str | None

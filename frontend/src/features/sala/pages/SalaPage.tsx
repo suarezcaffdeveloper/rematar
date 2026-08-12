@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useFocusMode } from '../../../app/layouts/useFocusMode';
 import { useWideLayout } from '../../../app/layouts/useWideLayout';
@@ -115,6 +115,26 @@ export function SalaPage() {
         );
     });
   }, [subscribeToRealtime]);
+
+  // Fin del remate (Módulo de lotes desiertos): el comprador no debe quedar
+  // indefinidamente en una sala que ya terminó -- toast informativo y, tras una
+  // pequeña transición, redirección suave al listado de remates. `remate.finished` ya
+  // actualiza el badge de estado en `SalaHeader` vía `reducer.ts`; acá solo se agrega
+  // el aviso + la salida de la sala.
+  const finishRedirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const unsubscribe = subscribeToRealtime((message) => {
+      if (!isDomainEventMessage(message) || message.payload.event_type !== 'remate.finished') return;
+      useToastStore
+        .getState()
+        .push('info', 'El remate finalizó. Te llevamos de vuelta al inicio en unos segundos.');
+      finishRedirectTimeoutRef.current = setTimeout(() => navigate('/'), 4000);
+    });
+    return () => {
+      unsubscribe();
+      if (finishRedirectTimeoutRef.current) clearTimeout(finishRedirectTimeoutRef.current);
+    };
+  }, [subscribeToRealtime, navigate]);
 
   if (isSnapshotLoading) {
     return <SalaSkeleton />;

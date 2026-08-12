@@ -68,6 +68,7 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
     timer_ends_at: null,
     timer_paused_remaining_seconds: null,
     timer_auto_close_enabled: true,
+    round_number: 1,
     created_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
@@ -99,6 +100,7 @@ function defaultLiveState(): UseLiveRemateStateResult {
     reload: vi.fn(),
     upcomingLotes: [],
     isUpcomingLotesLoading: false,
+    desiertoLotes: [],
     connectionStatus: 'open',
     subscribeToRealtime: () => () => {},
   };
@@ -144,10 +146,11 @@ describe('ConsolaOperativaPage', () => {
     expect(screen.queryByText('Panel de control')).not.toBeInTheDocument();
   });
 
-  it('remate "finished": mensaje específico, sin paneles', () => {
+  it('remate "finished": mensaje específico, con acceso al resumen, sin paneles', () => {
     mockLiveState({ snapshot: makeSnapshot({ remate: makeRemate({ status: 'finished' }), active_lote: null }) });
     renderPage();
-    expect(screen.getByText(/ya finalizó/)).toBeInTheDocument();
+    expect(screen.getByText('El remate finalizó correctamente')).toBeInTheDocument();
+    expect(screen.getByText('Ver resumen')).toBeInTheDocument();
   });
 
   it('remate "live", con lote activo: muestra el lote, el control y los próximos lotes', () => {
@@ -168,7 +171,7 @@ describe('ConsolaOperativaPage', () => {
 
     renderPage();
 
-    expect(screen.getByText('Historial reciente')).toBeInTheDocument();
+    expect(screen.getByText('Ofertas recientes')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Ofertas' })).not.toBeInTheDocument();
   });
 

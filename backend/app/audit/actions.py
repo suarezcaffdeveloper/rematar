@@ -27,6 +27,7 @@ class AuditAction:
     LOTE_CLOSED = "lote.closed"
     LOTE_AWARDED = "lote.awarded"
     LOTE_CANCELLED = "lote.cancelled"
+    LOTE_REQUEUED = "lote.requeued"
 
     LOTE_TIMER_PAUSED = "lote.timer_paused"
     LOTE_TIMER_RESUMED = "lote.timer_resumed"

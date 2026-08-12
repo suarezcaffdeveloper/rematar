@@ -50,6 +50,19 @@ export function applyDomainEventToLotes(lotes: Lote[], event: SalaDomainEvent): 
     }
     case 'lote.cancelled':
       return patchLote(lotes, event.lote_id, { status: 'cancelled' });
+    // Módulo de lotes desiertos: un lote `closed_unsold` reincorporado a la cola --
+    // vuelve a `pending`, al final (`display_order` ya viene calculado por el
+    // backend), con la ronda/condiciones vigentes en la nueva ronda.
+    case 'lote.requeued':
+      return patchLote(lotes, event.lote_id, {
+        status: 'pending',
+        display_order: event.display_order,
+        round_number: event.round_number,
+        base_price: event.base_price,
+        min_increment: event.min_increment,
+        reserve_price: event.reserve_price,
+        final_price: null,
+      });
     // Cuenta regresiva (Épica 8, "cuenta regresiva y cierre automático", ADR-043) --
     // cada evento de timer parchea únicamente los tres campos de timer del lote
     // afectado, mismo criterio "solo lo que cambió" que ya aplica el resto de este
@@ -157,6 +170,14 @@ export function applyDomainEventToSnapshot(
     case 'lote.cancelled':
       if (snapshot.active_lote?.id !== event.lote_id) return snapshot;
       return { ...snapshot, active_lote: null };
+
+    // Módulo de lotes desiertos: un lote reincorporado nunca es el `active_lote` (solo
+    // se reincorpora un lote `closed_unsold`, y `active_lote` es siempre el `open`) --
+    // el cambio real (status/orden/condiciones) ya lo aplica `applyDomainEventToLotes`
+    // sobre la lista completa de lotes, de donde sale "Próximos lotes"/"Lotes
+    // desiertos". Nada que tocar acá.
+    case 'lote.requeued':
+      return snapshot;
 
     // Cuenta regresiva (Épica 8, "cuenta regresiva y cierre automático", ADR-043) --
     // mismo criterio "solo lo que cambió" que el resto de este reducer: cada evento

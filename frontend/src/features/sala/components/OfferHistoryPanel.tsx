@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { BadgeCheck } from 'lucide-react';
 import clsx from 'clsx';
 import { Badge } from '../../../shared/components/Badge';
-import { formatCurrency, formatDateTime } from '../../../shared/lib/format';
+import { formatCurrency, formatTime } from '../../../shared/lib/format';
 import { OFERTA_STATUS_BADGE_VARIANTS, OFERTA_STATUS_LABELS } from '../labels';
 import type { OfertaSnapshotEntry } from '../types';
 
@@ -36,9 +36,11 @@ const OfferHistoryEntry = memo(function OfferHistoryEntry({
     <li className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
       <div className="min-w-0">
         <p className="text-sm font-semibold text-slate-800">{formatCurrency(offer.amount, currency)}</p>
-        <p className="text-xs text-slate-400">{formatDateTime(offer.created_at)}</p>
+        <p className="text-xs text-slate-400">{formatTime(offer.created_at)}</p>
       </div>
-      <Badge variant={OFERTA_STATUS_BADGE_VARIANTS[offer.status]}>{OFERTA_STATUS_LABELS[offer.status]}</Badge>
+      <Badge variant={OFERTA_STATUS_BADGE_VARIANTS[offer.status]} className="shrink-0">
+        {OFERTA_STATUS_LABELS[offer.status]}
+      </Badge>
     </li>
   );
 });

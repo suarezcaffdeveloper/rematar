@@ -10,8 +10,11 @@ docs/16-motor-de-estados.md. `state_machine.py` no cambió: ya modelaba las seis
 transiciones completas desde el Módulo 2.1, este módulo solo agregó los métodos de
 servicio que faltaban, tal como esa fase anticipaba.
 
-`try_auto_finish` no es una transición expuesta por HTTP: la llama `LoteService` después
-de cerrar/cancelar un lote, para la finalización automática de RF-10 (ver ADR-019).
+`finish` es, desde el Módulo de lotes desiertos, la ÚNICA vía de finalización: ya no
+existe ninguna finalización automática al resolverse el último lote (RF-10/ADR-019
+quedan sin efecto, ver `app/modules/remates/lotes/service.py`) -- el rematador decide
+siempre explícitamente cuándo terminar, incluso con lotes desiertos pendientes de
+reincorporar.
 
 ## Eventos de dominio (Épica 3, Módulo 3.2)
 
@@ -26,8 +29,7 @@ esta fase: ninguna validación ni regla de negocio de las descriptas arriba se m
 cambió), `soft_delete` y las seis transiciones de estado (`remate.status_changed`)
 dejan constancia vía `AuditLogRepository.record` (ver docs/36 y ADR-039), **antes** del
 `commit()` que ya existe en cada método -- misma transacción, nunca vía el Event Bus
-(best-effort, podría perderse). `try_auto_finish` también audita, sin actor (es una
-transición automática, no disparada por HTTP).
+(best-effort, podría perderse).
 
 ## Permisos (ver docs/14-modulo-remate.md para el detalle completo)
 
@@ -356,24 +358,3 @@ class RemateService:
         await self._repository.refresh(remate)
         await self._event_bus.publish(RemateFinished(remate_id=remate.id, triggered_by="manual"))
         return remate
-
-    async def try_auto_finish(self, remate: Remate) -> None:
-        """Finalización automática (RF-10): la llama `LoteService` después de cerrar o
-        cancelar un lote. A diferencia de `finish` (acción manual expuesta por HTTP), es
-        "best effort" — si el remate no está en condiciones de finalizar (no está LIVE, o
-        todavía queda algún lote PENDING/OPEN), no hace nada; no es un error, todavía no
-        corresponde. Ver ADR-019 para el razonamiento completo.
-        """
-        if remate.status != RemateStatus.LIVE:
-            return
-        if await self._lote_repository.has_unresolved_lote(remate.id):
-            return
-
-        previous_status = remate.status
-        remate.status = RemateStatus.FINISHED
-        remate.finished_at = datetime.now(UTC)
-        # Sin actor: transición disparada por el sistema, no por un caller HTTP.
-        self._record_status_change(remate, None, previous_status, trigger="auto")
-        await self._repository.commit()
-        await self._repository.refresh(remate)
-        await self._event_bus.publish(RemateFinished(remate_id=remate.id, triggered_by="auto"))

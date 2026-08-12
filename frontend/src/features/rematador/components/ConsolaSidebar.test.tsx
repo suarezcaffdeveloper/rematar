@@ -6,8 +6,8 @@ import { ConsolaSidebar } from './ConsolaSidebar';
 vi.mock('../../chat/components/ChatPanel', () => ({
   ChatPanel: () => <div>Chat mock</div>,
 }));
-vi.mock('./ConsolaOfferPanel', () => ({
-  ConsolaOfferPanel: () => <div>Ofertas mock</div>,
+vi.mock('../../sala/components/OfferHistoryPanel', () => ({
+  OfferHistoryPanel: () => <div>Ofertas mock</div>,
 }));
 vi.mock('../../moderation/components/ConnectedBuyersList', () => ({
   ConnectedBuyersList: () => <div>Conectados mock</div>,
@@ -26,6 +26,7 @@ function renderSidebar() {
       subscribeToRealtime={() => () => {}}
       currentUserId="user-1"
       connectedUsers={3}
+      winningOffer={null}
       recentOffers={[]}
       currency="ARS"
     />,

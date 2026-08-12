@@ -14,8 +14,13 @@ export interface StatCardProps {
    * (Épica 7.1): la mayoría de los usos actuales sí quieren la flecha. */
   showTrend?: boolean;
   /** Barra de acento a la izquierda -- clase de color Tailwind (ej. `bg-brand-500`).
-   * Sin esto, la tarjeta es el estilo "KPI" simple (sin barra). */
+   * Sin esto, la tarjeta es el estilo "KPI" simple (sin barra). Ignorado si `centered`. */
   accentClassName?: string;
+  /** Layout alternativo: label y valor centrados en columna, sin barra de acento, y el
+   * label puede pasar a un segundo renglón en vez de truncarse con "...". Pensado para
+   * grillas densas de KPIs (informe ejecutivo de historial) donde se prioriza que se lea
+   * la etiqueta completa por sobre una única línea prolija. */
+  centered?: boolean;
   className?: string;
 }
 
@@ -33,6 +38,7 @@ export function StatCard({
   formattedValue,
   showTrend = true,
   accentClassName,
+  centered = false,
   className,
 }: StatCardProps) {
   const [isPulsing, setIsPulsing] = useState(false);
@@ -51,18 +57,24 @@ export function StatCard({
   return (
     <div
       className={clsx(
-        'flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm',
+        'flex rounded-xl border border-slate-200 bg-white shadow-sm',
+        centered ? 'flex-col items-center gap-1 p-4 text-center' : 'items-center gap-3 p-3',
         className,
       )}
     >
-      {accentClassName && (
+      {!centered && accentClassName && (
         <div className={clsx('h-8 w-1.5 shrink-0 rounded-full', accentClassName)} aria-hidden="true" />
       )}
-      <div className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-medium uppercase tracking-wide text-slate-500">
+      <div className={clsx(centered ? 'flex flex-col items-center gap-1' : 'min-w-0 flex-1')}>
+        <span
+          className={clsx(
+            'text-xs font-medium uppercase tracking-wide text-slate-500',
+            centered ? 'break-words' : 'block truncate',
+          )}
+        >
           {label}
         </span>
-        <span className="flex items-center gap-1.5">
+        <span className={clsx('flex items-center gap-1.5', centered && 'justify-center')}>
           <span
             className={clsx(
               'text-lg font-semibold text-slate-900 transition-colors duration-300 sm:text-xl',

@@ -34,12 +34,58 @@ describe('ChatMessageItem', () => {
     expect(screen.queryByRole('button', { name: 'Eliminar mensaje' })).not.toBeInTheDocument();
   });
 
-  it('mensaje de usuario: muestra nombre, rol y contenido', () => {
+  it('mensaje de usuario: muestra nombre y contenido, sin ninguna chip de texto de rol', () => {
     render(<ChatMessageItem message={makeMessage()} canModerate={false} onRequestDelete={vi.fn()} />);
 
     expect(screen.getByText('Juan Pérez')).toBeInTheDocument();
-    expect(screen.getByText('Comprador')).toBeInTheDocument();
     expect(screen.getByText('Hola a todos')).toBeInTheDocument();
+    expect(screen.queryByText('Comprador')).not.toBeInTheDocument();
+    expect(screen.queryByText('Rematador')).not.toBeInTheDocument();
+  });
+
+  it('un mensaje de un bot no muestra el globito "Simulador" (pedido explícito de sacarlo)', () => {
+    render(
+      <ChatMessageItem message={makeMessage({ is_bot: true })} canModerate={false} onRequestDelete={vi.fn()} />,
+    );
+    expect(screen.queryByText('Simulador')).not.toBeInTheDocument();
+  });
+
+  // --- Color de la nubecita según el rol (reemplaza la chip de texto de rol) -----------
+
+  it('un mensaje de un comprador usa el mismo gris de siempre', () => {
+    render(
+      <ChatMessageItem
+        message={makeMessage({ author_role: 'comprador' })}
+        canModerate={false}
+        onRequestDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Hola a todos').closest('div')).toHaveClass('bg-slate-100');
+  });
+
+  it('un mensaje del rematador se destaca en celeste, no en gris', () => {
+    render(
+      <ChatMessageItem
+        message={makeMessage({ author_role: 'rematador' })}
+        canModerate={false}
+        onRequestDelete={vi.fn()}
+      />,
+    );
+    const bubble = screen.getByText('Hola a todos').closest('div');
+    expect(bubble).toHaveClass('bg-sky-100');
+    expect(bubble).not.toHaveClass('bg-slate-100');
+  });
+
+  it('un mensaje propio siempre usa el color de marca, sin importar el rol', () => {
+    render(
+      <ChatMessageItem
+        message={makeMessage({ author_role: 'rematador' })}
+        canModerate={false}
+        onRequestDelete={vi.fn()}
+        isOwnMessage
+      />,
+    );
+    expect(screen.getByText('Hola a todos').closest('div')).toHaveClass('bg-brand-600');
   });
 
   it('sin permiso de moderación, no muestra el botón de eliminar', () => {
@@ -125,12 +171,27 @@ describe('ChatMessageItem', () => {
 
   // --- Agrupado de mensajes consecutivos --------------------------------------------------
 
-  it('showHeader=false oculta nombre/rol/hora pero sigue mostrando el contenido', () => {
+  it('showHeader=false oculta el nombre pero sigue mostrando el contenido', () => {
     render(<ChatMessageItem message={makeMessage()} canModerate={false} onRequestDelete={vi.fn()} showHeader={false} />);
 
     expect(screen.queryByText('Juan Pérez')).not.toBeInTheDocument();
     expect(screen.queryByText('Comprador')).not.toBeInTheDocument();
     expect(screen.getByText('Hola a todos')).toBeInTheDocument();
+  });
+
+  // --- Nubecita: mensaje propio vs. de otra persona -------------------------------------
+
+  it('isOwnMessage oculta el nombre/rol (es obvio que sos vos)', () => {
+    render(<ChatMessageItem message={makeMessage()} canModerate={false} onRequestDelete={vi.fn()} isOwnMessage />);
+
+    expect(screen.queryByText('Juan Pérez')).not.toBeInTheDocument();
+    expect(screen.queryByText('Comprador')).not.toBeInTheDocument();
+    expect(screen.getByText('Hola a todos')).toBeInTheDocument();
+  });
+
+  it('sin isOwnMessage (default), muestra el nombre de quien escribió', () => {
+    render(<ChatMessageItem message={makeMessage()} canModerate={false} onRequestDelete={vi.fn()} />);
+    expect(screen.getByText('Juan Pérez')).toBeInTheDocument();
   });
 
   it('showHeader=false igual permite eliminar/destacar el mensaje agrupado', async () => {

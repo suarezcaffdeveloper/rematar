@@ -188,7 +188,7 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
           <FormSection title="Descripción">
             <div className="flex flex-col gap-1.5">
               <Textarea
-                label="Descripción"
+                label=""
                 value={values.description}
                 onChange={(event) => setField('description', event.target.value)}
                 error={errors.description}
@@ -212,7 +212,7 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
 
           <FormSection title="Fecha del remate">
             <Input
-              label="Fecha y hora de inicio"
+              label=""
               type="datetime-local"
               value={values.starts_at}
               onChange={(event) => setField('starts_at', event.target.value)}
@@ -305,7 +305,7 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
         </div>
 
         {!isEditMode && (
-          <aside className="flex h-fit flex-col gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-5">
+          <aside className="flex h-fit flex-col gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-5 lg:sticky lg:top-1/2 lg:self-start lg:-translate-y-1/2">
             <div className="flex items-center gap-2 text-brand-700">
               <Lightbulb aria-hidden="true" className="h-4 w-4" />
               <h3 className="text-sm font-semibold">Consejos</h3>

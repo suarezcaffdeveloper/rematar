@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { OfferHistoryPanel } from './OfferHistoryPanel';
+import { formatDateTime, formatTime } from '../../../shared/lib/format';
 import type { OfertaSnapshotEntry } from '../types';
 
 function makeOffer(overrides: Partial<OfertaSnapshotEntry>): OfertaSnapshotEntry {
@@ -42,5 +43,20 @@ describe('OfferHistoryPanel', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('Aceptada')).toBeInTheDocument();
     expect(screen.getByText('Superada')).toBeInTheDocument();
+  });
+
+  it('una oferta de un bot no muestra el globito "Simulador" (pedido explícito de sacarlo)', () => {
+    const offer = makeOffer({ is_bot: true });
+    render(<OfferHistoryPanel winningOffer={offer} recentOffers={[offer]} currency="ARS" />);
+
+    expect(screen.queryByText('Simulador')).not.toBeInTheDocument();
+  });
+
+  it('cada oferta muestra solo el horario, no la fecha completa', () => {
+    const offer = makeOffer({ created_at: '2026-07-01T18:30:00Z' });
+    render(<OfferHistoryPanel winningOffer={offer} recentOffers={[offer]} currency="ARS" />);
+
+    expect(screen.getByText(formatTime(offer.created_at))).toBeInTheDocument();
+    expect(screen.queryByText(formatDateTime(offer.created_at))).not.toBeInTheDocument();
   });
 });

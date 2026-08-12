@@ -25,6 +25,7 @@ from app.core.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.core.security import hash_password
 from app.events.base import DomainEvent
+from app.modules.bots.models import BotPersonality, BotProfile
 from app.modules.ofertas.repository import OfertaRepository
 from app.modules.remates.lotes.repository import LoteRepository
 from app.modules.remates.repository import RemateRepository
@@ -331,6 +332,60 @@ async def test_snapshot_does_not_mask_for_admin_viewer(
 
     assert snapshot.active_lote.reserve_price == Decimal("9999.00")
     assert str(snapshot.winning_offer.buyer_id) == buyer_id
+
+
+# --- Identidad de simuladores (módulo de Bots) --------------------------------------------
+
+
+async def test_snapshot_marks_bot_offers_as_is_bot(
+    client: AsyncClient, db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    owner_id, owner_token = await _owner(client, "snap-bot1@example.com")
+    _, human_token = await _buyer(client, "snap-bot1-human@example.com")
+    remate = await _create_remate(client, owner_token)
+    lote = await _create_lote(client, owner_token, remate["id"])
+    await _start_remate(client, owner_token, remate["id"])
+    await _open_lote(client, owner_token, remate["id"], lote["id"])
+
+    bot_user = User(
+        email="bot+snap-bot1@bots.rematar.internal",
+        hashed_password=hash_password("botpass123"),
+        full_name="Bot de prueba",
+        role=UserRole.COMPRADOR,
+    )
+    db_session.add(bot_user)
+    await db_session.commit()
+    await db_session.refresh(bot_user)
+    db_session.add(
+        BotProfile(
+            created_by_id=uuid.UUID(owner_id),
+            user_id=bot_user.id,
+            display_name="Bot de prueba",
+            personality=BotPersonality.COMPETITIVE,
+            max_budget=Decimal("5000.00"),
+            reaction_delay_min_seconds=1,
+            reaction_delay_max_seconds=2,
+            continue_probability=Decimal("0.5"),
+        )
+    )
+    await db_session.commit()
+
+    login = await client.post(
+        LOGIN_URL, data={"username": bot_user.email, "password": "botpass123"}
+    )
+    assert login.status_code == 200, login.text
+    bot_token = login.json()["access_token"]
+
+    await _bid(client, bot_token, remate["id"], lote["id"], "1000.00")
+    await _bid(client, human_token, remate["id"], lote["id"], "1200.00")
+
+    owner = await _fetch_user(db_engine, owner_id)
+    service = _make_service(db_session)
+    snapshot = await service.build(remate["id"], owner)
+
+    assert snapshot.recent_offers[0].is_bot is False  # la oferta humana, más reciente
+    assert snapshot.recent_offers[1].is_bot is True  # la oferta del bot
+    assert snapshot.winning_offer.is_bot is False
 
 
 # --- Detalle de presencia (Épica 6, Módulo 6.2) -------------------------------------------

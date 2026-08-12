@@ -1,5 +1,13 @@
 import { type ReactNode, useState } from 'react';
-import { AlertTriangle, Gauge, PackageCheck, PauseCircle, PlayCircle, SkipForward, XOctagon, type LucideIcon } from 'lucide-react';
+import {
+  AlertTriangle,
+  PackageCheck,
+  PauseCircle,
+  PlayCircle,
+  SkipForward,
+  XOctagon,
+  type LucideIcon,
+} from 'lucide-react';
 import clsx from 'clsx';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Button, type ButtonProps } from '../../../shared/components/Button';
@@ -17,6 +25,7 @@ import {
 } from '../../remates/api';
 import type { Lote, Remate } from '../../remates/types';
 import type { OfertaSnapshotEntry } from '../../sala/types';
+import { DesiertoLoteNotice } from './DesiertoLoteNotice';
 
 export interface ConsolaControlPanelProps {
   remate: Remate;
@@ -51,25 +60,19 @@ type PendingAction = 'pause' | 'resume' | 'finish' | 'openSelected' | 'openNext'
 type ConfirmableAction = 'pause' | 'finish';
 
 /** Botón de acción del panel -- mismo `Button` compartido (conserva `isLoading`/
- * `disabled`/estilos de variante que el resto de la app, incluidos sus colores
- * `brand`/`danger` por default -- ya coinciden con la paleta del mockup de referencia,
- * no hace falta pintar encima). `SIZE_CLASSES` solo ajusta densidad/tamaño (`!` para no
- * depender del orden en que Tailwind emite las reglas de padding/tamaño de texto, que
- * `Button` también fija) -- dos tamaños para reflejar la jerarquía por uso del panel:
- * `lg` para la única acción hero ("Pasar al siguiente lote"), `md` para "Finalizar
- * remate" en la zona crítica, `sm` para el resto de los controles agrupados en grilla --
- * pero "sm" ya no es chico de verdad: al sacar el timer, el panel quedó con espacio de
- * sobra ("agrandar el panel de control", pedido explícito del rediseño "Modo Remate"
- * sobre la captura de Stitch) y estos botones lo aprovechan con más padding/ícono que
- * antes, para que la consola completa se sienta "una consola profesional de operación",
- * no una lista de acciones chicas.
+ * `disabled`/estados de variante que el resto de la app). `SIZE_CLASSES` solo ajusta
+ * densidad/tamaño (`!` para no depender del orden en que Tailwind emite las reglas de
+ * padding/tamaño de texto, que `Button` también fija) -- dos tamaños para reflejar la
+ * jerarquía por uso del panel: `lg` para la única acción hero ("Pasar al siguiente
+ * lote"), `md` para el resto (abrir/cerrar lote, pausar/reanudar remate, finalizar
+ * remate en la zona crítica), todos a todo el ancho de su card (pedido explícito del
+ * rediseño sobre la referencia visual: botones grandes, uno por fila).
  *
- * Microinteracción compartida por los tres tamaños (`hover:-translate-y-0.5
+ * Microinteracción compartida por ambos tamaños (`hover:-translate-y-0.5
  * hover:shadow-md`, con `active:` volviendo a su lugar): mismo lenguaje "SaaS premium"
  * (Linear/Stripe/Vercel) pedido para toda la pantalla -- un botón que se levanta
  * levemente al pasar el mouse y vuelve al hacer click, sin animaciones exageradas. */
-const SIZE_CLASSES: Record<'sm' | 'md' | 'lg', string> = {
-  sm: '!gap-2.5 !rounded-xl !px-4 !py-3.5 !text-sm !font-semibold',
+const SIZE_CLASSES: Record<'md' | 'lg', string> = {
   md: '!gap-2.5 !rounded-xl !px-5 !py-3.5 !text-base !font-semibold',
   lg: '!gap-3 !rounded-xl !px-6 !py-5 !text-lg !font-bold',
 };
@@ -84,10 +87,10 @@ function ActionButton({
   size = 'md',
   variant = 'primary',
   ...props
-}: ButtonProps & { icon: LucideIcon; size?: 'sm' | 'md' | 'lg' }) {
+}: ButtonProps & { icon: LucideIcon; size?: 'md' | 'lg' }) {
   return (
     <Button variant={variant} className={clsx(SIZE_CLASSES[size], HOVER_LIFT_CLASSES, className)} {...props}>
-      <Icon aria-hidden="true" className={clsx('shrink-0', size === 'sm' ? 'h-5 w-5' : 'h-5 w-5')} />
+      <Icon aria-hidden="true" className="h-5 w-5 shrink-0" />
       {children}
     </Button>
   );
@@ -115,33 +118,53 @@ function ControlSection({ title, children }: { title: string; children: ReactNod
  * endpoints del motor de estados (`docs/16-motor-de-estados.md`) y las mismas
  * precondiciones cliente-side que ya validaba este panel -- el rediseño es puramente de
  * presentación: "Pasar al siguiente lote" (la acción que más se usa durante un remate en
- * vivo) queda arriba de todo, sola, como botón hero a todo el ancho; el resto de los
- * controles de lote/remate se consolidan en una única grilla compacta de dos columnas
- * ("Control del lote y remate"); "Finalizar remate" sigue en su propia "Zona crítica"
- * con acento rojo. Los botones siguen siempre visibles, habilitándose/deshabilitando
- * según el estado actual, sin ningún cambio de lógica.
+ * vivo) queda arriba de todo, sola, como botón hero a todo el ancho sobre una card
+ * "azul fuerte" ("Panel de control operativo"); el resto de los controles se agrupan en
+ * dos cards propias ("Gestión de lote": abrir/cerrar; "Controles de remate": pausar/
+ * reanudar), cada botón a todo el ancho y con un color "soft" que comunica la naturaleza
+ * de la acción (verde para abrir, azul claro para cerrar/reanudar, naranja para pausar --
+ * paleta alineada con el mockup de referencia "Modo Remate"/Stitch); "Finalizar remate"
+ * sigue en su propia "Zona crítica" con acento rojo. Los botones siguen siempre visibles,
+ * habilitándose/deshabilitando según el estado actual, sin ningún cambio de lógica.
  *
- * "Cerrar lote" (manual, formulario en línea con resultado + precio final) sigue
- * disponible para casos puntuales, pero "Pasar al siguiente lote" ya no requiere pasar
- * por ahí: si hay un lote activo, primero lo adjudica solo -- `outcome: 'sold'` con
- * `final_price` igual al monto de `winningOffer` (la oferta líder que ya trae el
- * snapshot en vivo) si alguien ofertó, o `outcome: 'unsold'` ("desierto") si no hubo
- * ninguna oferta -- y recién después abre el siguiente lote, todo con un solo click.
- * Reusa el mismo endpoint de cierre manual (`closeLoteRequest`) sin ningún cambio de
- * backend: `PostAuctionEventDispatcher` (`app/postauction/realtime.py`) ya resuelve el
- * comprador real a partir de la oferta `ACCEPTED` vigente del lote cuando un cierre
- * manual declara `sold` (corrección de ADR-018 documentada ahí mismo), así que el caso
- * post-remate se crea igual que si hubiera cerrado por vencimiento del timer. Si el
- * cierre falla, no se intenta abrir el siguiente lote. "Pausar remate" y "Finalizar
- * remate" usan `ConfirmModal` en vez de `window.confirm` -- consistente con el resto de
+ * "Cerrar lote" y "Pasar al siguiente lote" comparten la decisión de qué hacer con el
+ * lote activo, en base a `winningOffer` (Módulo de lotes desiertos, pedido explícito:
+ * "ambos botones deberían hacer lo mismo si el lote está desierto"): sin ninguna oferta,
+ * los dos cierran el lote directo como `outcome: 'unsold'` (`closeActiveLoteAsUnsold`) y
+ * disparan el aviso flotante `DesiertoLoteNotice` (ver más abajo) -- no tiene sentido
+ * preguntar Vendido/Desierto ni pedir un precio cuando no hay ninguna oferta que pudiera
+ * haberlo vendido. Con oferta ganadora, "Pasar al siguiente lote" adjudica solo
+ * (`outcome: 'sold'`, `final_price` igual al monto de `winningOffer`) y "Cerrar lote"
+ * sigue abriendo el formulario manual de siempre (para ajustar el precio final, o
+ * declarar el lote desierto igual pese a la oferta) -- en ambos casos "Pasar al
+ * siguiente lote" recién después abre el siguiente lote, con un solo click. Reusa el
+ * mismo endpoint de cierre manual (`closeLoteRequest`) sin ningún cambio de backend:
+ * `PostAuctionEventDispatcher` (`app/postauction/realtime.py`) ya resuelve el comprador
+ * real a partir de la oferta `ACCEPTED` vigente del lote cuando un cierre manual declara
+ * `sold` (corrección de ADR-018 documentada ahí mismo), así que el caso post-remate se
+ * crea igual que si hubiera cerrado por vencimiento del timer. Si el cierre falla, no se
+ * intenta abrir el siguiente lote. "Pausar remate" y "Finalizar remate" usan
+ * `ConfirmModal` en vez de `window.confirm` -- consistente con el resto de
  * confirmaciones destructivas de la app, sin ejecutar la acción hasta que el usuario
  * confirma en el modal.
  *
- * "Cerrar lote" manual, además, chequea `recentOffers` antes de abrir el formulario
- * (pedido explícito del rediseño "Modo Remate"): si la oferta más nueva entró hace menos
- * de `RECENT_OFFER_WARNING_SECONDS`, primero muestra un `ConfirmModal` de advertencia
- * ("Continuar cierre"/"Cancelar") -- el rematador puede seguir igual, esto no bloquea
- * nada, solo evita que cierre un lote sin haber visto la última oferta.
+ * "Cerrar lote" manual (con oferta ganadora), además, chequea `recentOffers` antes de
+ * abrir el formulario (pedido explícito del rediseño "Modo Remate"): si la oferta más
+ * nueva entró hace menos de `RECENT_OFFER_WARNING_SECONDS`, primero muestra un
+ * `ConfirmModal` de advertencia ("Continuar cierre"/"Cancelar") -- el rematador puede
+ * seguir igual, esto no bloquea nada, solo evita que cierre un lote sin haber visto la
+ * última oferta. Sin ninguna oferta, esta advertencia no aplica (no hay nada reciente
+ * que se pudiera haber pasado por alto).
+ *
+ * Aviso "Lote desierto" (`desiertoBanner` + `DesiertoLoteNotice`, Módulo de lotes
+ * desiertos): pedido explícito -- NO una tarjeta embebida en este panel, sino una nube
+ * flotante centrada en la pantalla, por encima de todo el contenido de la página (reusa
+ * `Modal`, portal a `document.body`). Puramente informativo, un único botón
+ * ("Continuar") que solo la cierra -- decidir si reincorporar el lote se hace aparte,
+ * desde el panel persistente "Lotes desiertos" de `ConsolaOperativaPage`, no desde acá.
+ * Se queda abierta hasta que el rematador la cierra a mano (Escape/click afuera/
+ * "Continuar", los tres ya los resuelve `Modal`) -- ni siquiera se descarta sola si
+ * mientras tanto se abre otro lote.
  *
  * Deliberadamente sin ningún `reload()`/refresco manual tras una acción exitosa: la
  * propia consola ya está unida a la sala por WebSocket (`useLiveRemateState`, Épica 4.6),
@@ -170,6 +193,12 @@ export function ConsolaControlPanel({
   const [finalPrice, setFinalPrice] = useState('');
   const [closeError, setCloseError] = useState<string | null>(null);
   const [closeWarningSeconds, setCloseWarningSeconds] = useState<number | null>(null);
+  // Módulo de lotes desiertos: lote que acaba de cerrarse sin adjudicación -- dispara
+  // el aviso flotante `DesiertoLoteNotice` (ver docstring más abajo). `null` cuando no
+  // hay ninguno para mostrar. Se queda abierto hasta que el rematador lo cierra a mano
+  // ("Continuar"/Escape/click afuera) -- no se descarta solo, ni siquiera si mientras
+  // tanto se abre otro lote.
+  const [desiertoBanner, setDesiertoBanner] = useState<Lote | null>(null);
 
   const isLive = remate.status === 'live';
   const isPaused = remate.status === 'paused';
@@ -199,28 +228,49 @@ export function ConsolaControlPanel({
     setConfirmAction(null);
   }
 
+  /** Cierra el lote activo como desierto (sin ofertas) y muestra el cartel de lote
+   * desierto -- compartido por "Pasar al siguiente lote" y "Cerrar lote" cuando no hay
+   * ninguna oferta: sin nada que elegir (no hay precio ni "vendido" posible), ambos
+   * botones hacen exactamente lo mismo en ese caso (pedido explícito) en vez de abrir
+   * el formulario manual de Vendido/Desierto. Devuelve `true` si el cierre tuvo éxito. */
+  async function closeActiveLoteAsUnsold(lote: Lote): Promise<boolean> {
+    setPendingAction('close');
+    try {
+      await closeLoteRequest(remate.id, lote.id, { outcome: 'unsold', final_price: undefined });
+      useToastStore.getState().push('success', 'Lote cerrado como desierto (sin ofertas).');
+      setDesiertoBanner(lote);
+      return true;
+    } catch (err) {
+      useToastStore.getState().push('error', normalizeApiError(err).message);
+      return false;
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
   /** "Pasar al siguiente lote": si hay un lote activo, primero lo adjudica solo (ver
    * docstring del componente) y recién si eso funciona abre el siguiente -- si no hay
    * lote activo, se comporta como siempre (solo abre el siguiente). */
   async function handleAdvance() {
     if (activeLote) {
-      setPendingAction('close');
-      try {
-        await closeLoteRequest(remate.id, activeLote.id, {
-          outcome: winningOffer ? 'sold' : 'unsold',
-          final_price: winningOffer ? winningOffer.amount : undefined,
-        });
-        useToastStore.getState().push(
-          'success',
-          winningOffer
-            ? `Lote adjudicado por ${formatCurrency(winningOffer.amount, remate.settings.currency)}.`
-            : 'Lote cerrado como desierto (sin ofertas).',
-        );
-      } catch (err) {
-        useToastStore.getState().push('error', normalizeApiError(err).message);
+      if (winningOffer) {
+        setPendingAction('close');
+        try {
+          await closeLoteRequest(remate.id, activeLote.id, {
+            outcome: 'sold',
+            final_price: winningOffer.amount,
+          });
+          useToastStore
+            .getState()
+            .push('success', `Lote adjudicado por ${formatCurrency(winningOffer.amount, remate.settings.currency)}.`);
+        } catch (err) {
+          useToastStore.getState().push('error', normalizeApiError(err).message);
+          return;
+        } finally {
+          setPendingAction(null);
+        }
+      } else if (!(await closeActiveLoteAsUnsold(activeLote))) {
         return;
-      } finally {
-        setPendingAction(null);
       }
       if (!hasUpcomingLotes) return;
     }
@@ -234,11 +284,20 @@ export function ConsolaControlPanel({
     setIsClosingLote(true);
   }
 
-  /** "Cerrar lote": si la última oferta entró hace menos de
-   * `RECENT_OFFER_WARNING_SECONDS`, primero pide confirmación extra (pedido explícito --
-   * evitar cerrar justo cuando acaba de entrar una oferta que el rematador todavía no
-   * vio) en vez de abrir el formulario de cierre directo. */
-  function handleCloseLoteClick() {
+  /** "Cerrar lote": sin ninguna oferta no hay nada que decidir -- se cierra directo
+   * como desierto (mismo camino que "Pasar al siguiente lote" en ese caso, ver
+   * `closeActiveLoteAsUnsold`), sin pasar por el formulario manual de Vendido/Desierto.
+   * Con una oferta ganadora, sigue disponible el formulario de siempre (para ajustar el
+   * precio final o declarar el lote desierto igual pese a la oferta) -- y, si esa
+   * oferta entró hace menos de `RECENT_OFFER_WARNING_SECONDS`, primero pide
+   * confirmación extra (pedido explícito -- evitar cerrar justo cuando acaba de entrar
+   * una oferta que el rematador todavía no vio) en vez de abrir el formulario directo. */
+  async function handleCloseLoteClick() {
+    if (!activeLote) return;
+    if (!winningOffer) {
+      await closeActiveLoteAsUnsold(activeLote);
+      return;
+    }
     const seconds = secondsSinceLastOffer(recentOffers);
     if (seconds !== null && seconds < RECENT_OFFER_WARNING_SECONDS) {
       setCloseWarningSeconds(seconds);
@@ -271,6 +330,7 @@ export function ConsolaControlPanel({
         final_price: closeOutcome === 'sold' ? finalPrice : undefined,
       });
       useToastStore.getState().push('success', 'El lote se cerró.');
+      if (closeOutcome === 'unsold') setDesiertoBanner(activeLote);
       setIsClosingLote(false);
     } catch (err) {
       setCloseError(normalizeApiError(err).message);
@@ -348,23 +408,19 @@ export function ConsolaControlPanel({
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-1">
       {/* Hero: la acción que más se usa durante un remate en vivo, sola, a todo el
        * ancho -- jerarquía por uso. Label + acción viven en la misma card (look
        * "AuctionPro"), sin el header separado que tenía antes ni el chip de estado
        * ("Remate activo"), que el rediseño "Modo Remate" saca por completo del panel --
        * ese estado ya se infiere de qué botones quedan habilitados. */}
-      <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            <Gauge aria-hidden="true" className="h-3.5 w-3.5 text-slate-400" />
-            Panel de control operativo
-          </h2>
-          {activeLote && <span className="text-sm font-bold text-slate-800">Lote {activeLote.lot_number}</span>}
-        </div>
+      <div className="flex flex-col gap-2 rounded-xl bg-brand-700 p-5 shadow-sm">
+        <h2 className="text-xs font-bold uppercase tracking-wide text-brand-100">
+          Panel de control operativo
+        </h2>
         <ActionButton
           icon={SkipForward}
-          size="lg"
+          variant="inverse"
           className="w-full"
           onClick={() => handleAdvance()}
           isLoading={pendingAction === 'close' || pendingAction === 'openNext'}
@@ -374,12 +430,17 @@ export function ConsolaControlPanel({
         </ActionButton>
       </div>
 
-      <ControlSection title="Control del lote y remate">
-        <div className="grid grid-cols-2 gap-3">
+      {/* Módulo de lotes desiertos: aviso flotante (no una tarjeta embebida acá) --
+       * ver `DesiertoLoteNotice`. Se renderiza siempre (portal a `document.body`,
+       * controlado por `isOpen`/`lote`), así que su posición en este JSX no importa. */}
+      <DesiertoLoteNotice lote={desiertoBanner} onClose={() => setDesiertoBanner(null)} />
+
+      <ControlSection title="Gestión de lote">
+        <div className="flex flex-col gap-1.5">
           <ActionButton
-            size="sm"
             icon={PlayCircle}
-            variant="secondary"
+            variant="success-soft"
+            className="w-full"
             onClick={() =>
               selectedLoteId &&
               runSimpleAction('openSelected', () => openLoteRequest(remate.id, selectedLoteId), 'Lote abierto.')
@@ -392,19 +453,24 @@ export function ConsolaControlPanel({
           </ActionButton>
 
           <ActionButton
-            size="sm"
             icon={PackageCheck}
-            variant="secondary"
+            variant="brand-soft"
+            className="w-full"
             onClick={handleCloseLoteClick}
+            isLoading={pendingAction === 'close'}
             disabled={!(isLive || isPaused) || !activeLote || pendingAction !== null}
           >
             Cerrar lote
           </ActionButton>
+        </div>
+      </ControlSection>
 
+      <ControlSection title="Controles de remate">
+        <div className="flex flex-col gap-1.5">
           <ActionButton
-            size="sm"
             icon={PauseCircle}
-            variant="secondary"
+            variant="warning-soft"
+            className="w-full"
             onClick={() => setConfirmAction('pause')}
             isLoading={pendingAction === 'pause'}
             disabled={!isLive || pendingAction !== null}
@@ -413,8 +479,9 @@ export function ConsolaControlPanel({
           </ActionButton>
 
           <ActionButton
-            size="sm"
             icon={PlayCircle}
+            variant="brand-soft"
+            className="w-full"
             onClick={() => runSimpleAction('resume', () => resumeRemateRequest(remate.id), 'El remate se reanudó.')}
             isLoading={pendingAction === 'resume'}
             disabled={!isPaused || pendingAction !== null}
@@ -424,14 +491,11 @@ export function ConsolaControlPanel({
         </div>
       </ControlSection>
 
-      <div className="flex flex-col gap-3 rounded-xl border border-danger-200 bg-danger-50 p-5 shadow-sm">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-danger-600 text-white">
-            <AlertTriangle aria-hidden="true" className="h-5 w-5" />
-          </div>
+      <div className="flex flex-col gap-1.5 rounded-xl border border-danger-200 bg-danger-50 p-5 shadow-sm">
+        <div className="flex items-center gap-2">
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wide text-danger-700">Zona crítica</h3>
-            <p className="text-xs text-slate-500">Esta acción no se puede deshacer.</p>
+            
           </div>
         </div>
         <ActionButton
@@ -441,7 +505,7 @@ export function ConsolaControlPanel({
           isLoading={pendingAction === 'finish'}
           disabled={!isLive || Boolean(activeLote) || pendingAction !== null}
           title={activeLote ? 'Cerrá el lote abierto antes de finalizar el remate.' : undefined}
-          className="w-full sm:w-auto"
+          className="w-full"
         >
           Finalizar remate
         </ActionButton>

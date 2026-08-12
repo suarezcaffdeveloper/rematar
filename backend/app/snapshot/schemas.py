@@ -8,7 +8,16 @@ necesita `buyer_id` opcional para poder ocultar la identidad del ofertante a
 compradores que no son dueños del remate ni administradores — mismo criterio de
 privacidad que ya aplica `LeadingOfferRead` (`app/modules/ofertas/schemas.py`) a la
 oferta líder; acá se generaliza también al historial reciente.
-"""
+
+`is_bot` (módulo de Bots Simuladores) es el único lugar de todo el backend donde se
+expone si un ofertante es un simulador -- ver el docstring de
+`app/modules/bots/lookup.py::BotIdentityResolver` para por qué acá y en ningún otro
+schema: es el único punto donde `buyer_id` se enmascara (`SnapshotService._mask_oferta`)
+para un comprador anónimo, así que es el único lugar donde ese comprador no tendría
+ninguna otra forma de saber que quien lidera es un simulador. Se resuelve **antes** de
+`_mask_oferta` (nunca se enmascara: es información de "qué tipo de participante es",
+no de identidad) y **antes** del cache (viaja cacheado igual que el resto del recorte
+crudo, con el mismo TTL corto que ya tolera otros datos ligeramente stale)."""
 
 import uuid
 from datetime import datetime
@@ -31,6 +40,7 @@ class OfertaSnapshotEntry(BaseModel):
     amount: Decimal
     status: OfertaStatus
     created_at: datetime
+    is_bot: bool = False
 
 
 class RawRemateState(BaseModel):

@@ -42,6 +42,14 @@ class ChatMessageRead(BaseModel):
     system_event_type: str | None
     is_deleted: bool
     created_at: datetime
+    # Módulo de Bots Simuladores: `author_id` nunca se enmascara en el chat (a
+    # diferencia de `OfertaSnapshotEntry.buyer_id`), así que sin este campo un
+    # comprador cualquiera no tendría forma de saber que un mensaje lo mandó un
+    # simulador -- mismo criterio y misma fuente (`BotIdentityResolver`) que
+    # `app/snapshot/schemas.py::OfertaSnapshotEntry.is_bot`. Se resuelve en el router
+    # (`list_chat_messages`), nunca en `ChatService`, para no darle a ese servicio
+    # ningún conocimiento de que los bots existen.
+    is_bot: bool = False
 
     @model_validator(mode="after")
     def _hide_content_when_deleted(self) -> "ChatMessageRead":

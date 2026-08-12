@@ -84,8 +84,6 @@ export function RemateCoverImageField({ value, onChange, error }: RemateCoverIma
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-sm font-medium text-slate-700">Imagen de portada</span>
-
       {displayUrl ? (
         <div className="relative aspect-video w-full max-w-xs overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
           <img src={displayUrl} alt="Vista previa de la portada" className="h-full w-full object-cover" />

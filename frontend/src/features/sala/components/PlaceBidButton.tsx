@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Plus } from 'lucide-react';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Button } from '../../../shared/components/Button';
 import { Input } from '../../../shared/components/Input';
@@ -9,7 +8,7 @@ import { useToastStore } from '../../../shared/toast/toastStore';
 import type { UserRole } from '../../auth/types';
 import type { Lote, RemateStatus } from '../../remates/types';
 import { placeBidRequest } from '../api';
-import { computeMinimumAmount } from '../bidding';
+import { computeMinimumAmount, computeQuickBidSuggestions } from '../bidding';
 import type { OfertaSnapshotEntry } from '../types';
 
 export interface PlaceBidButtonProps {
@@ -102,14 +101,14 @@ export function PlaceBidButton({
     }
   }
 
-  // Atajo "+incremento mínimo" (rediseño de la zona de ofertar): suma el incremento
-  // sobre lo que la persona ya haya escrito (no siempre `minimumAmount` -- alguien puede
-  // querer ofertar por encima del mínimo y seguir sumando de a un incremento desde ahí).
-  // Si lo que hay escrito no es un número válido todavía, arranca desde `minimumAmount`.
-  function handleQuickIncrement() {
-    const base = isPositiveDecimal(trimmedAmount) ? Number(trimmedAmount) : Number(minimumAmount);
+  const quickBidSuggestions = computeQuickBidSuggestions(lote, winningOffer);
+
+  // Elegir una sugerencia sólo completa el input -- no manda la oferta, eso sigue
+  // requiriendo el botón "Ofertar" (pedido explícito, reemplaza al atajo único
+  // "+incremento mínimo").
+  function handleSelectSuggestion(suggestedAmount: string) {
     setTouched(true);
-    setAmount((base + Number(lote.min_increment)).toFixed(2));
+    setAmount(suggestedAmount);
   }
 
   if (!canBid) {
@@ -145,30 +144,34 @@ export function PlaceBidButton({
         className="py-1.5"
       />
 
-      {/* Fila de acción: atajo "+incremento" para no tener que calcular a mano cuánto
-       * hace falta sumar, al lado del botón de ofertar -- ambos más chicos que antes
-       * (pedido explícito), el atajo queda secundario en tamaño y jerarquía visual. */}
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={handleQuickIncrement}
-          disabled={isSubmitting}
-          className="shrink-0 gap-1 px-3 py-2 text-sm"
-          title={`Sumar el incremento mínimo (${formatCurrency(lote.min_increment, currency)}) a tu oferta`}
-        >
-          <Plus aria-hidden="true" className="h-4 w-4" />
-          {formatCurrency(lote.min_increment, currency)}
-        </Button>
-        <Button
-          type="submit"
-          isLoading={isSubmitting}
-          disabled={Boolean(validationError)}
-          className="flex-1 py-2 text-sm font-semibold"
-        >
-          Ofertar
-        </Button>
+      {/* Ofertas inteligentes: tres montos sugeridos (mínimo válido + dos escalones de
+       * un incremento cada uno, ver `computeQuickBidSuggestions`) para completar el
+       * input con un click en vez de calcularlo a mano -- elegir uno no manda la oferta,
+       * eso sigue siendo el botón "Ofertar" de más abajo (pedido explícito, reemplaza al
+       * atajo único "+incremento mínimo" que había antes). */}
+      <div className="grid grid-cols-3 gap-2">
+        {quickBidSuggestions.map((suggestedAmount) => (
+          <Button
+            key={suggestedAmount}
+            type="button"
+            variant="secondary"
+            onClick={() => handleSelectSuggestion(suggestedAmount)}
+            disabled={isSubmitting}
+            className="min-w-0 whitespace-normal break-words px-1.5 py-2 text-center text-xs font-semibold leading-tight"
+          >
+            {formatCurrency(suggestedAmount, currency)}
+          </Button>
+        ))}
       </div>
+
+      <Button
+        type="submit"
+        isLoading={isSubmitting}
+        disabled={Boolean(validationError)}
+        className="w-full py-2 text-sm font-semibold"
+      >
+        Ofertar
+      </Button>
     </form>
   );
 }

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PlaceBidButton, type PlaceBidButtonProps } from './PlaceBidButton';
+import { formatCurrency } from '../../../shared/lib/format';
 import type { Lote } from '../../remates/types';
 
 const { placeBidRequestMock, toastPushMock } = vi.hoisted(() => ({
@@ -35,6 +36,7 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
     timer_ends_at: null,
     timer_paused_remaining_seconds: null,
     timer_auto_close_enabled: true,
+    round_number: 1,
     created_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
@@ -147,6 +149,19 @@ describe('PlaceBidButton', () => {
     const firstToken = placeBidRequestMock.mock.calls[0][3];
     const secondToken = placeBidRequestMock.mock.calls[1][3];
     expect(secondToken).toBe(firstToken);
+  });
+
+  it('elegir una oferta sugerida completa el input, pero no manda la oferta', async () => {
+    render(
+      <PlaceBidButton
+        {...makeProps({ lote: makeLote({ base_price: '20000.00', min_increment: '2000.00' }) })}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: formatCurrency('24000.00', 'ARS') }));
+
+    expect(screen.getByLabelText(/Tu oferta/)).toHaveValue('24000.00');
+    expect(placeBidRequestMock).not.toHaveBeenCalled();
   });
 
   it('no es comprador -- el formulario no se muestra, solo un botón deshabilitado', () => {

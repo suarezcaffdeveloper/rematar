@@ -18,11 +18,14 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ForbiddenError
+from app.db.session import get_db
 from app.moderation.dependencies import get_moderation_redis_gateway
 from app.moderation.redis_state import ModerationRedisGateway
 from app.modules.auth.dependencies import get_current_user
+from app.modules.bots.lookup import BotIdentityResolver
 from app.modules.chat.dependencies import get_chat_service
 from app.modules.chat.models import ChatMessage
 from app.modules.chat.schemas import ChatMessageCreate, ChatMessageRead
@@ -69,16 +72,29 @@ async def list_chat_messages(
     remate_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     service: Annotated[ChatService, Depends(get_chat_service)],
+    db: Annotated[AsyncSession, Depends(get_db)],
     before_created_at: datetime | None = Query(  # noqa: B008
         default=None, description="Junto con before_id, pide mensajes anteriores a este."
     ),
     before_id: uuid.UUID | None = Query(default=None),  # noqa: B008
-) -> list[ChatMessage]:
+) -> list[ChatMessageRead]:
     if before_created_at is not None and before_id is not None:
-        return await service.list_before(
+        messages = await service.list_before(
             remate_id, current_user, before_created_at=before_created_at, before_id=before_id
         )
-    return await service.list_recent(remate_id, current_user)
+    else:
+        messages = await service.list_recent(remate_id, current_user)
+
+    # `author_id` nunca se enmascara en el chat -- ver docstring de
+    # `ChatMessageRead.is_bot`. Una única consulta para todo el historial devuelto.
+    author_ids = [m.author_id for m in messages if m.author_id is not None]
+    bot_author_ids = await BotIdentityResolver(db).resolve(author_ids)
+    return [
+        ChatMessageRead.model_validate(m).model_copy(
+            update={"is_bot": m.author_id in bot_author_ids}
+        )
+        for m in messages
+    ]
 
 
 @router.delete(

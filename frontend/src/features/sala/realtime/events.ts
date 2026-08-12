@@ -63,6 +63,21 @@ export interface LoteCancelledEvent extends DomainEventBase {
   reason: string;
 }
 
+/** Un lote desierto volvió a `pending` al final de la cola (Módulo de lotes desiertos)
+ * -- siempre disparado manualmente por el rematador, nunca automático. Trae las
+ * condiciones comerciales vigentes en la nueva ronda (iguales o editadas) para que el
+ * reducer parchee el lote sin pedirlo de nuevo por HTTP. */
+export interface LoteRequeuedEvent extends DomainEventBase {
+  event_type: 'lote.requeued';
+  lote_id: string;
+  lot_number: string;
+  display_order: number;
+  round_number: number;
+  base_price: string;
+  min_increment: string;
+  reserve_price: string | null;
+}
+
 /**
  * Adjudicación automática (Épica 8, "cuenta regresiva y cierre automático") -- solo se
  * publica cuando `TimerExpiryScheduler` cierra un lote como `sold` (nunca en un cierre
@@ -205,6 +220,7 @@ export type SalaDomainEvent =
   | LoteOpenedEvent
   | LoteClosedEvent
   | LoteCancelledEvent
+  | LoteRequeuedEvent
   | LoteWinnerDeterminedEvent
   | LoteTimerStartedEvent
   | LoteTimerPausedEvent

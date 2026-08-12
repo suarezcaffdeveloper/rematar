@@ -6,7 +6,7 @@ import { useVentasAdjudicadasForRemate } from '../../postauction/hooks';
 import type { PostAuctionCase } from '../../postauction/types';
 import { computeRemateAnalysis } from '../analysis';
 import { exportRemateHistoryToExcel, exportRemateHistoryToPdf } from '../export';
-import { LoteResultCard } from '../components/LoteResultCard';
+import { LoteResultCarousel } from '../components/LoteResultCarousel';
 import { RemateAnalysisSection } from '../components/RemateAnalysisSection';
 import { RemateHistoryHeader } from '../components/RemateHistoryHeader';
 import { RemateHistoryPrimaryStats } from '../components/RemateHistoryPrimaryStats';
@@ -134,7 +134,7 @@ export function RemateHistoryDetailPage() {
         <Alert variant="warning">Cancelado: {detail.cancellation_reason}</Alert>
       )}
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-6">
         <RemateHistoryPrimaryStats detail={detail} currency={currency} />
         <RemateHistorySecondaryStats detail={detail} currency={currency} />
       </div>
@@ -142,27 +142,29 @@ export function RemateHistoryDetailPage() {
       <RemateAnalysisSection analysis={analysis} currency={currency} />
 
       <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-slate-900">Resultado de cada lote</h2>
-        {lotesError && <Alert variant="error">{lotesError.message}</Alert>}
+        {lotesError && (
+          <>
+            <h2 className="text-lg font-semibold text-slate-900">Resultado de cada lote</h2>
+            <Alert variant="error">{lotesError.message}</Alert>
+          </>
+        )}
         {isLotesLoading && !lotesError && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 3 }, (_, index) => (
-              <Skeleton key={index} className="h-64 rounded-2xl" />
-            ))}
-          </div>
+          <>
+            <h2 className="text-lg font-semibold text-slate-900">Resultado de cada lote</h2>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 3 }, (_, index) => (
+                <Skeleton key={index} className="h-64 rounded-2xl" />
+              ))}
+            </div>
+          </>
         )}
         {!isLotesLoading && !lotesError && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {lotes.map((lote) => (
-              <LoteResultCard
-                key={lote.id}
-                lote={lote}
-                currency={currency}
-                offerDetail={offerResults.get(lote.id)}
-                postAuctionCase={casesByLoteId.get(lote.id)}
-              />
-            ))}
-          </div>
+          <LoteResultCarousel
+            lotes={lotes}
+            currency={currency}
+            offerResults={offerResults}
+            casesByLoteId={casesByLoteId}
+          />
         )}
       </div>
 

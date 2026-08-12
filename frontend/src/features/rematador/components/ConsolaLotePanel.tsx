@@ -41,8 +41,8 @@ function formatAttributeKey(key: string): string {
  * espacio que se libera lo gana `ConsolaControlPanel`, en la columna del medio.
  *
  * Ya no muestra ningún precio destacado ni "Oferta líder": ese dato ya vive, grande y
- * arriba de todo, en `ConsolaOfferPanel` (columna derecha) -- repetirlo acá era
- * información duplicada (pedido explícito de sacarla). Lo único que queda de precio es
+ * arriba de todo, en `OfferHistoryPanel` (`ConsolaSidebar`, columna derecha) -- repetirlo
+ * acá era información duplicada (pedido explícito de sacarla). Lo único que queda de precio es
  * una referencia chica (precio inicial + incremento mínimo), útil como dato de fondo
  * pero sin competir visualmente con la oferta líder real. Tampoco muestra ningún
  * countdown -- el rediseño "Modo Remate" elimina por completo el concepto de timer (ver
@@ -60,11 +60,11 @@ export function ConsolaLotePanel({ activeLote, currency, hasUpcomingLotes }: Con
     return (
       <EmptyState
         icon={<GavelIcon className="h-10 w-10" />}
-        title="Sin lote activo en este momento"
+        title={hasUpcomingLotes ? 'Sin lote activo en este momento' : 'Todos los lotes fueron procesados'}
         description={
           hasUpcomingLotes
             ? 'Abrí un lote desde el panel de control para empezar a recibir ofertas.'
-            : 'No quedan lotes pendientes en este remate.'
+            : 'No quedan lotes pendientes para rematar. Revisá los lotes desiertos si querés volver a ofrecer alguno, o finalizá el remate cuando corresponda -- el remate sigue abierto hasta que lo decidas.'
         }
       />
     );

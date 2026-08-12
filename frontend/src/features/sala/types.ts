@@ -30,6 +30,10 @@ export interface OfertaSnapshotEntry {
   amount: string;
   status: OfertaStatus;
   created_at: string;
+  /** Módulo de Bots Simuladores -- `true` si esta oferta la generó un simulador, nunca
+   * enmascarado (a diferencia de `buyer_id`): es la única señal que tiene un comprador
+   * anónimo para no confundir a un bot con un comprador real (pedido explícito). */
+  is_bot?: boolean;
 }
 
 /**

@@ -60,6 +60,17 @@ compartida) sin cambiar su firma ni comportamiento externo; `auto_close()` es el
 método que llama `TimerExpiryScheduler` (`app/timer/scheduler.py`) para adjudicar
 automáticamente al vencer el timer, reusando `_apply_close` en vez de duplicar la
 lógica de cierre.
+
+## Lotes desiertos (Módulo de reincorporación a la cola)
+
+`close()`/`auto_close()`/`cancel()` ya NO llaman a `RemateService.try_auto_finish`
+(RF-10/ADR-019 quedan sin efecto): cerrar el último lote deja el remate `LIVE`, nunca lo
+finaliza solo -- la única vía de finalización es `POST .../finish`, decidida siempre por
+el rematador. `requeue()` es la única forma de salir de `CLOSED_UNSOLD`
+(`state_machine.py`): archiva la ronda que termina en `LoteRound` y reincorpora el lote
+como `PENDING` al final de la cola actual (`next_display_order`), conservando su
+`lot_number`/título/imágenes -- nunca automático, siempre una decisión explícita del
+rematador vía `POST .../requeue`.
 """
 
 import uuid
@@ -79,11 +90,17 @@ from app.modules.remates.lotes.events import (
     LoteCancelled,
     LoteClosed,
     LoteOpened,
+    LoteRequeued,
     LoteWinnerDetermined,
 )
-from app.modules.remates.lotes.models import Lote, LoteStatus
+from app.modules.remates.lotes.models import Lote, LoteRound, LoteStatus
 from app.modules.remates.lotes.repository import LoteRepository
-from app.modules.remates.lotes.schemas import LoteCloseOutcome, LoteCreate, LoteUpdate
+from app.modules.remates.lotes.schemas import (
+    LoteCloseOutcome,
+    LoteCreate,
+    LoteRequeueRequest,
+    LoteUpdate,
+)
 from app.modules.remates.lotes.state_machine import assert_transition_allowed
 from app.modules.remates.models import Remate, RemateStatus
 from app.modules.remates.service import RemateService
@@ -398,8 +415,6 @@ class LoteService:
                 triggered_by="manual",
             )
         )
-
-        await self._remate_service.try_auto_finish(remate)
         return lote
 
     def _apply_close(
@@ -469,9 +484,8 @@ class LoteService:
 
         `SOLD` con el monto de la oferta líder si existe, `UNSOLD` si el lote no tuvo
         ninguna oferta aceptada -- misma validación `final_price >= base_price` que ya
-        aplica `close()`, ninguna regla nueva. Sin actor (`actor_id=None`): mismo
-        patrón exacto que `RemateService.try_auto_finish`/`_record_status_change` para
-        transiciones disparadas por el sistema, no por un caller HTTP."""
+        aplica `close()`, ninguna regla nueva. Sin actor (`actor_id=None`): la
+        transición la dispara el sistema (`TimerExpiryScheduler`), no un caller HTTP."""
         outcome = LoteCloseOutcome.SOLD if leading_oferta_id is not None else LoteCloseOutcome.UNSOLD
         final_price = leading_amount if outcome == LoteCloseOutcome.SOLD else None
 
@@ -509,8 +523,6 @@ class LoteService:
                     amount=leading_amount,
                 )
             )
-
-        await self._remate_service.try_auto_finish(remate)
         return lote
 
     async def cancel(
@@ -543,9 +555,113 @@ class LoteService:
         await self._event_bus.publish(
             LoteCancelled(remate_id=remate.id, lote_id=lote.id, reason=reason)
         )
-
-        await self._remate_service.try_auto_finish(remate)
         return lote
+
+    # --- Lotes desiertos: reincorporación a la cola (ver docs/16-motor-de-estados.md) --
+
+    async def requeue(
+        self,
+        remate_id: uuid.UUID,
+        lote_id: uuid.UUID,
+        owner: User,
+        data: LoteRequeueRequest,
+    ) -> Lote:
+        """Reincorpora un lote `closed_unsold` a la cola de pendientes -- la decisión es
+        siempre del rematador (nunca automática, ver `state_machine.py`). Archiva la
+        ronda que acaba de terminar en `LoteRound` (snapshot de las condiciones
+        comerciales vigentes en ella) antes de resetear el lote, aplica condiciones
+        nuevas si el rematador las edita (o conserva las de la ronda anterior si no) y
+        lo manda al final de la cola reusando `next_display_order` -- el mismo mecanismo
+        que ya usa `create` para asignar posición, así que nunca puede "colarse" antes
+        de un lote todavía no abierto."""
+        remate, lote = await self._get_owned_lote_or_raise(remate_id, lote_id, owner)
+        if remate.status not in (RemateStatus.LIVE, RemateStatus.PAUSED):
+            raise BusinessRuleError(
+                "Solo se puede reincorporar un lote mientras el remate está en curso o "
+                "pausado.",
+                current_status=remate.status.value,
+            )
+        assert_transition_allowed(lote.status, LoteStatus.PENDING)
+        assert lote.closed_at is not None  # invariante: todo CLOSED_UNSOLD tiene closed_at
+
+        self._repository.add_round(
+            LoteRound(
+                lote_id=lote.id,
+                round_number=lote.round_number,
+                base_price=lote.base_price,
+                min_increment=lote.min_increment,
+                reserve_price=lote.reserve_price,
+                opened_at=lote.opened_at,
+                closed_at=lote.closed_at,
+                requeued_at=datetime.now(UTC),
+                requeued_by_id=owner.id,
+                requeued_by_name=owner.full_name,
+            )
+        )
+
+        changes = data.model_dump(exclude_unset=True)
+        new_base_price: Decimal = changes.get("base_price", lote.base_price)
+        new_reserve_price: Decimal | None = changes.get("reserve_price", lote.reserve_price)
+        if new_reserve_price is not None and new_reserve_price < new_base_price:
+            raise BusinessRuleError("El precio de reserva no puede ser menor al precio base.")
+        for field, value in changes.items():
+            setattr(lote, field, value)
+
+        previous_round = lote.round_number
+        lote.status = LoteStatus.PENDING
+        lote.final_price = None
+        lote.opened_at = None
+        lote.closed_at = None
+        lote.display_order = await self._repository.next_display_order(remate_id)
+        lote.round_number += 1
+
+        self._audit_repository.record(
+            actor_id=owner.id,
+            actor_name=owner.full_name,
+            actor_role=owner.role.value,
+            action=AuditAction.LOTE_REQUEUED,
+            resource_type="lote",
+            resource_id=lote.id,
+            remate_id=remate_id,
+            details={
+                "previous_round": previous_round,
+                "new_round": lote.round_number,
+                "new_display_order": lote.display_order,
+                "conditions_changed": bool(changes),
+            },
+        )
+        await self._repository.commit()
+        await self._repository.refresh(lote)
+        await self._event_bus.publish(
+            LoteRequeued(
+                remate_id=remate.id,
+                lote_id=lote.id,
+                lot_number=lote.lot_number,
+                display_order=lote.display_order,
+                round_number=lote.round_number,
+                base_price=lote.base_price,
+                min_increment=lote.min_increment,
+                reserve_price=lote.reserve_price,
+            )
+        )
+        return lote
+
+    async def list_rounds(
+        self, remate_id: uuid.UUID, lote_id: uuid.UUID, viewer: User
+    ) -> list[LoteRound]:
+        """Historial de rondas desiertas archivadas de un lote (`GET .../rounds`) --
+        misma visibilidad que el lote (`get_visible_or_raise`) y mismo enmascarado de
+        `reserve_price` que `LoteRead` para un viewer que no es dueño ni admin."""
+        remate = await self._remate_service.get_visible_or_raise(remate_id, viewer)
+        lote = await self._repository.get_by_id(lote_id)
+        if lote is None or lote.remate_id != remate_id:
+            raise NotFoundError("Lote no encontrado.")
+
+        rounds = await self._repository.list_rounds_by_lote(lote_id)
+        if remate.owner_id != viewer.id and viewer.role != UserRole.ADMIN:
+            for round_ in rounds:
+                round_.reserve_price = None
+        return rounds
 
     def _record_lote_action(self, lote: Lote, owner: User, remate_id: uuid.UUID, action: str) -> None:
         self._audit_repository.record(

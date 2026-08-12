@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { Gavel, History, LayoutDashboard, LogOut, Package, ShoppingBag, type LucideIcon } from 'lucide-react';
+import { Bot, Gavel, History, LayoutDashboard, LogOut, Package, ShoppingBag, type LucideIcon } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth, useAuthActions } from '../../features/auth/hooks';
 import type { UserRole } from '../../features/auth/types';
@@ -44,6 +44,7 @@ const NAV_ITEMS_BY_ROLE: Record<UserRole, NavItem[]> = {
   ],
   rematador: [
     { label: 'Mis remates', to: '/', icon: Gavel },
+    { label: 'Simuladores', to: '/simuladores', icon: Bot },
     { label: 'Ventas adjudicadas', to: '/ventas-adjudicadas', icon: Package },
     { label: 'Historial', to: '/historial', icon: History },
   ],

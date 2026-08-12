@@ -4,38 +4,49 @@ import clsx from 'clsx';
 import { CoverPlaceholder } from '../../remates/components/CoverPlaceholder';
 import { BoxIcon } from '../../remates/components/icons';
 import type { LoteImage } from '../../remates/types';
-import { useImageGallery } from './useImageGallery';
 
-export interface LoteHeroImageProps {
-  images: LoteImage[];
+export interface ImageGalleryMainProps {
+  sorted: LoteImage[];
+  selectedIndex: number;
+  selected: LoteImage | undefined;
+  hasMultiple: boolean;
+  goTo: (index: number) => void;
   alt: string;
-  /** `aspect-video` (16:9) por default -- la Sala del comprador (rediseño "info a la
-   * izquierda, ofertar a la derecha") le pasa además un `max-h` para achicarla un poco,
-   * ver `ActiveLotePanel`. */
   aspectClassName?: string;
+  className?: string;
 }
 
-/** Distancia mínima en px para interpretar un touch como swipe en vez de un tap. */
+/** Distancia mínima en px para interpretar un touch como swipe en vez de un tap --
+ * evita que un toque tembloroso dispare un cambio de imagen no intencional. */
 const SWIPE_THRESHOLD_PX = 40;
 
 /**
- * Solo la imagen principal del lote, con flechas de navegación y swipe táctil -- sin la
- * tira de miniaturas que tenía `ImageGallery` (de la que sale este componente, Sala del
- * comprador, rediseño "info a la izquierda, ofertar a la derecha"). Pedido explícito:
- * las miniaturas quedaban de más -- para ver todas las fotos alcanza con deslizar/usar
- * las flechas de acá, no hace falta un segundo control redundante debajo.
- *
- * `ImageGallery` (Consola Operativa del rematador) sigue con imagen + miniaturas juntas
- * sin cambios -- esto es específico de la Sala.
+ * Solo la imagen principal (con flechas de navegación y swipe táctil), sin la tira de
+ * miniaturas -- extraído de `ImageGallery` para que la Sala del comprador
+ * (`ActiveLotePanel`) pueda ubicar la tira de miniaturas en otro lugar del layout (más
+ * abajo, junto al título/descripción) sin que eso afecte el tamaño de esta imagen: acá
+ * no vive ningún `useImageGallery` propio, el índice seleccionado se recibe por props
+ * (controlado desde afuera) para que ambas piezas -- esta imagen y `ImageGalleryThumbnails`
+ * -- comparta un único estado sin quedar anidadas en el DOM. `ImageGallery` sigue siendo
+ * el combo imagen+miniaturas de siempre (Consola Operativa del rematador): por dentro
+ * llama al hook y compone esta pieza más `ImageGalleryThumbnails`, una al lado de la otra.
  */
-export function LoteHeroImage({ images, alt, aspectClassName = 'aspect-video' }: LoteHeroImageProps) {
-  const { sorted, selectedIndex, selected, hasMultiple, goTo } = useImageGallery(images);
+export function ImageGalleryMain({
+  sorted,
+  selectedIndex,
+  selected,
+  hasMultiple,
+  goTo,
+  alt,
+  aspectClassName = 'aspect-video',
+  className,
+}: ImageGalleryMainProps) {
   const touchStartXRef = useRef<number | null>(null);
 
   if (!selected) {
     return (
       <CoverPlaceholder
-        className={clsx(aspectClassName, 'w-full rounded-xl')}
+        className={clsx(aspectClassName, className, 'w-full rounded-xl')}
         icon={<BoxIcon className="h-12 w-12 text-brand-300" />}
       />
     );
@@ -71,9 +82,16 @@ export function LoteHeroImage({ images, alt, aspectClassName = 'aspect-video' }:
       className={clsx(
         'relative w-full touch-pan-y overflow-hidden rounded-xl bg-slate-100',
         aspectClassName,
+        className,
         hasMultiple && 'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
       )}
     >
+      {/* Track deslizante (en vez de reemplazar el `<img>` de golpe): todas las
+       * imágenes van una al lado de la otra en fila, `translateX` mueve el track
+       * entero a la posición seleccionada -- transición suave al pasar de foto,
+       * pedido explícito en vez del corte abrupto que había antes. La regla global
+       * de `prefers-reduced-motion` (`styles/index.css`) ya recorta esta transición
+       * a 0 para quien lo prefiere, sin lógica extra acá. */}
       <div
         className="flex h-full w-full transition-transform duration-300 ease-out"
         style={{ transform: `translateX(-${selectedIndex * 100}%)` }}

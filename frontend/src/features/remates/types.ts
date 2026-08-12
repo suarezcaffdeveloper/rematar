@@ -142,7 +142,36 @@ export interface Lote {
   timer_ends_at: string | null;
   timer_paused_remaining_seconds: number | null;
   timer_auto_close_enabled: boolean;
+  // Ronda de adjudicación en curso (Módulo de lotes desiertos) -- 1 en un lote que
+  // nunca fue reincorporado a la cola. Ver `LoteRound` (historial de rondas
+  // anteriores, `GET .../lotes/{id}/rounds`).
+  round_number: number;
   created_at: string;
+}
+
+/** `LoteRoundRead` -- `backend/app/modules/remates/lotes/schemas.py`. Ronda desierta
+ * archivada de un lote (Módulo de lotes desiertos): condiciones comerciales vigentes
+ * en esa ronda, más quién y cuándo decidió reincorporarlo. `reserve_price` sigue el
+ * mismo enmascarado que `Lote.reserve_price` para un viewer que no es dueño ni admin. */
+export interface LoteRound {
+  id: string;
+  round_number: number;
+  base_price: string;
+  min_increment: string;
+  reserve_price: string | null;
+  opened_at: string | null;
+  closed_at: string;
+  requeued_at: string;
+  requeued_by_name: string | null;
+}
+
+/** Body de `POST /remates/{id}/lotes/{lote_id}/requeue` -- `LoteRequeueRequest`
+ * (Módulo de lotes desiertos). Los tres campos son opcionales: si no vienen, la nueva
+ * ronda arranca con las mismas condiciones comerciales de la ronda anterior. */
+export interface LoteRequeuePayload {
+  base_price?: string;
+  min_increment?: string;
+  reserve_price?: string | null;
 }
 
 /** Query params soportados por `GET /remates/{id}/lotes`. */

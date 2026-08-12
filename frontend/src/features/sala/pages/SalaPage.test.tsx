@@ -75,6 +75,7 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
     timer_ends_at: null,
     timer_paused_remaining_seconds: null,
     timer_auto_close_enabled: true,
+    round_number: 1,
     created_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
@@ -106,6 +107,7 @@ function defaultLiveState(): UseLiveRemateStateResult {
     reload: vi.fn(),
     upcomingLotes: [],
     isUpcomingLotesLoading: false,
+    desiertoLotes: [],
     connectionStatus: 'open',
     subscribeToRealtime: () => () => {},
   };
@@ -200,5 +202,60 @@ describe('SalaPage', () => {
 
     unmount();
     expect(useLayoutPreferencesStore.getState().isWide).toBe(false);
+  });
+
+  describe('remate.finished (Módulo de lotes desiertos)', () => {
+    it('avisa y redirige al comprador al inicio tras una breve pausa, sin dejarlo en la sala', () => {
+      navigateMock.mockClear();
+      vi.useFakeTimers();
+      let capturedListener: (message: unknown) => void = () => {};
+      mockLiveState({
+        subscribeToRealtime: (listener: (message: unknown) => void) => {
+          capturedListener = listener;
+          return () => {};
+        },
+      });
+
+      renderPage();
+      capturedListener({
+        type: 'domain_event',
+        payload: {
+          event_type: 'remate.finished',
+          event_id: 'e1',
+          remate_id: 'remate-1',
+          occurred_at: '2026-08-11T00:00:00Z',
+          triggered_by: 'manual',
+        },
+      });
+
+      expect(navigateMock).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(4000);
+      expect(navigateMock).toHaveBeenCalledWith('/');
+
+      vi.useRealTimers();
+    });
+
+    it('no redirige ante otros eventos de dominio', () => {
+      navigateMock.mockClear();
+      vi.useFakeTimers();
+      let capturedListener: (message: unknown) => void = () => {};
+      mockLiveState({
+        subscribeToRealtime: (listener: (message: unknown) => void) => {
+          capturedListener = listener;
+          return () => {};
+        },
+      });
+
+      renderPage();
+      capturedListener({
+        type: 'domain_event',
+        payload: { event_type: 'lote.opened', event_id: 'e1', remate_id: 'remate-1', occurred_at: 't', lote_id: 'lote-1', lot_number: '1', display_order: 0 },
+      });
+
+      vi.advanceTimersByTime(10000);
+      expect(navigateMock).not.toHaveBeenCalled();
+
+      vi.useRealTimers();
+    });
   });
 });

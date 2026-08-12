@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from '../../../shared/components/Alert';
 import { Button } from '../../../shared/components/Button';
 import { EmptyState } from '../../../shared/components/EmptyState';
@@ -18,6 +18,43 @@ const PAGE_SIZE = 12;
 const CARD_GRID_CLASSES = 'grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
 
 /**
+ * Márgenes horizontales para que el banner del header llegue de borde a borde del área
+ * de contenido real -- desde el nav lateral colapsado hasta el borde derecho de la
+ * pantalla -- en vez de quedar encerrado en la columna centrada (`max-w`) que usa
+ * `<main>` (ver `AppLayout`). Se mide contra el padre de `<main>` (el div con
+ * `lg:pl-16` que reserva el espacio del sidebar) porque ese padre nunca está capado por
+ * `max-w`, a diferencia de `<main>`, que sí lo está a partir de cierto ancho de
+ * pantalla -- por eso un simple `-mx-4` no alcanza en monitores anchos.
+ */
+function useEdgeToEdgeMargins() {
+  const ref = useRef<HTMLDivElement>(null);
+  const appliedRef = useRef({ left: 0, right: 0 });
+  const [margins, setMargins] = useState({ left: 0, right: 0 });
+
+  useLayoutEffect(() => {
+    function update() {
+      const el = ref.current;
+      const region = el?.closest('main')?.parentElement;
+      if (!el || !region) return;
+
+      const elRect = el.getBoundingClientRect();
+      const regionRect = region.getBoundingClientRect();
+      const left = appliedRef.current.left + (regionRect.left - elRect.left);
+      const right = appliedRef.current.right + (elRect.right - regionRect.right);
+
+      appliedRef.current = { left, right };
+      setMargins({ left, right });
+    }
+
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  return { ref, marginLeft: margins.left, marginRight: margins.right };
+}
+
+/**
  * Dashboard del comprador (Épica 4, Módulo 4.3; ampliado en la Épica 9, Etapa 3 --
  * rediseño; simplificado en la Épica 9, Etapa 5 -- foco 100% en la grilla de remates
  * disponibles) -- punto de entrada al sistema para cualquier usuario con rol
@@ -35,6 +72,7 @@ export function CompradorDashboardPage() {
   useBreadcrumb([{ label: 'Inicio', to: '/' }, { label: 'Remates disponibles' }]);
   const { remates, isLoading, error, reload } = useRemates();
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const { ref: heroRef, marginLeft, marginRight } = useEdgeToEdgeMargins();
 
   const filteredRemates = useMemo(() => filterAndSortRemates(remates, filters), [remates, filters]);
   const { page, totalPages, pageItems, goToPage, resetPage } = usePagedList(filteredRemates, PAGE_SIZE);
@@ -55,19 +93,41 @@ export function CompradorDashboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex items-center gap-4 border-b border-slate-200 pb-6">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-sm">
-          <GavelIcon className="h-6 w-6" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Remates disponibles</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Explorá los remates en vivo y programados a los que podés sumarte.
-          </p>
+      <div
+        ref={heroRef}
+        style={{ marginLeft, marginRight }}
+        className="relative -mt-8 overflow-hidden bg-slate-900"
+      >
+        <div
+          className="absolute inset-0 bg-cover bg-[55%_45%]"
+          style={{ backgroundImage: 'url(/dashboard/remates-header.png)' }}
+          aria-hidden="true"
+        />
+        <div
+          className="absolute inset-0 bg-gradient-to-b from-slate-900/60 via-slate-900/40 to-slate-900/15"
+          aria-hidden="true"
+        />
+
+        <div className="relative flex flex-col gap-6 px-4 pb-32 pt-14 sm:px-8 sm:pb-44 sm:pt-20 lg:pl-[280px]">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-sm">
+              <GavelIcon className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                Remates disponibles
+              </h1>
+              <p className="mt-1 max-w-xl text-sm font-light text-slate-200 sm:text-base">
+                Explorá los remates en vivo y programados a los que podés sumarte.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
-      <DashboardToolbar filters={filters} onChange={handleFiltersChange} />
+      <div className="relative z-10 -mt-16 sm:-mt-20">
+        <DashboardToolbar filters={filters} onChange={handleFiltersChange} />
+      </div>
 
       {error && (
         <Alert variant="error">

@@ -156,6 +156,11 @@ async def _bid(client: AsyncClient, token: str, remate_id: str, lote_id: str, am
     return r.json()
 
 
+async def _finish_remate(client: AsyncClient, token: str, remate_id: str) -> None:
+    r = await client.post(f"{REMATES_URL}/{remate_id}/finish", headers=_auth(token))
+    assert r.status_code == 200, r.text
+
+
 def _make_service(
     db_session: AsyncSession,
     *,
@@ -203,6 +208,9 @@ async def test_build_for_owner_aggregates_everything_correctly(
     await _close_lote(
         client, owner_token, remate["id"], lote["id"], outcome="sold", final_price="2000.00"
     )
+    # Ya no hay finalización automática al cerrar el último lote (ex RF-10) -- el test
+    # necesita el remate FINISHED para el aserto de `recent_events` de abajo.
+    await _finish_remate(client, owner_token, remate["id"])
     owner = await _fetch_user(db_engine, owner_id)
 
     service = _make_service(db_session)
@@ -220,7 +228,7 @@ async def test_build_for_owner_aggregates_everything_correctly(
     assert snapshot.connected_users_total == 0
     assert snapshot.connected_buyers == 0
     # "abrió el lote" + "cerró el lote (vendido)" (derivados de opened_at/closed_at) +
-    # "remate.finished" -- RF-10 finaliza el remate solo al cerrarse su único lote.
+    # "remate.finished" (finalización manual explícita de arriba).
     assert len(snapshot.recent_events) == 3
     assert snapshot.recent_events[0].event_type == "remate.finished"
 

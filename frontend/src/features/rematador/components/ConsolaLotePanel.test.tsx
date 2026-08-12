@@ -24,6 +24,7 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
     timer_ends_at: null,
     timer_paused_remaining_seconds: null,
     timer_auto_close_enabled: true,
+    round_number: 1,
     created_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
@@ -38,7 +39,8 @@ describe('ConsolaLotePanel', () => {
 
   it('sin lote activo y sin próximos lotes, el mensaje lo aclara', () => {
     render(<ConsolaLotePanel activeLote={null} currency="ARS" hasUpcomingLotes={false} />);
-    expect(screen.getByText('No quedan lotes pendientes en este remate.')).toBeInTheDocument();
+    expect(screen.getByText('Todos los lotes fueron procesados')).toBeInTheDocument();
+    expect(screen.getByText(/No quedan lotes pendientes para rematar/)).toBeInTheDocument();
   });
 
   it('con lote activo, muestra número, nombre, descripción y ficha técnica', () => {
@@ -50,7 +52,7 @@ describe('ConsolaLotePanel', () => {
     expect(screen.getByText('Angus')).toBeInTheDocument();
   });
 
-  it('muestra precio inicial e incremento mínimo como referencia chica -- sin ninguna "Oferta líder" (vive en ConsolaOfferPanel, no duplicada acá)', () => {
+  it('muestra precio inicial e incremento mínimo como referencia chica -- sin ninguna "Oferta líder" (vive en OfferHistoryPanel, no duplicada acá)', () => {
     render(<ConsolaLotePanel activeLote={makeLote()} currency="ARS" hasUpcomingLotes />);
 
     expect(screen.getByText(/Precio inicial/)).toBeInTheDocument();

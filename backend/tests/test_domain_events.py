@@ -273,7 +273,7 @@ async def test_remate_cancelled_publishes_event(client: AsyncClient) -> None:
     assert event["reason"] == "Se retira antes de programarse."
 
 
-# --- Lote y finalización automática -----------------------------------------------
+# --- Lote --------------------------------------------------------------------------
 
 
 async def test_lote_opened_publishes_event(client: AsyncClient) -> None:
@@ -301,19 +301,15 @@ async def test_lote_cancelled_publishes_event(client: AsyncClient) -> None:
             headers=_auth(token),
         )
         assert response.status_code == 200
-        # Es el único lote del remate: cancelarlo también dispara la finalización
-        # automática (RF-10) — dos eventos, en ese orden.
-        lote_event, remate_event = await channel.collect(2)
+        # Es el único lote del remate, pero cancelarlo ya NO finaliza el remate solo
+        # (ex RF-10) -- un único evento.
+        (lote_event,) = await channel.collect(1)
 
     assert lote_event["event_type"] == "lote.cancelled"
     assert lote_event["reason"] == "Problema sanitario."
-    assert remate_event["event_type"] == "remate.finished"
-    assert remate_event["triggered_by"] == "auto"
 
 
-async def test_lote_closed_publishes_event_and_auto_finishes_remate(
-    client: AsyncClient,
-) -> None:
+async def test_lote_closed_publishes_event(client: AsyncClient) -> None:
     token, remate_id, lote_id = await _setup_open_lote(client, "rematador-ev9@example.com")
 
     async with _SubscribedChannel(remate_id) as channel:
@@ -323,13 +319,12 @@ async def test_lote_closed_publishes_event_and_auto_finishes_remate(
             headers=_auth(token),
         )
         assert response.status_code == 200
-        lote_event, remate_event = await channel.collect(2)
+        # Ya NO finaliza el remate solo (ex RF-10) -- un único evento.
+        (lote_event,) = await channel.collect(1)
 
     assert lote_event["event_type"] == "lote.closed"
     assert lote_event["outcome"] == "sold"
     assert Decimal(str(lote_event["final_price"])) == Decimal("1500.00")
-    assert remate_event["event_type"] == "remate.finished"
-    assert remate_event["triggered_by"] == "auto"
 
 
 # --- Ofertas -----------------------------------------------------------------------

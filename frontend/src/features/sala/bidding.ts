@@ -16,3 +16,15 @@ export function computeMinimumAmount(lote: Lote, winningOffer: OfertaSnapshotEnt
   if (winningOffer === null) return lote.base_price;
   return (Number(winningOffer.amount) + Number(lote.min_increment)).toFixed(2);
 }
+
+/** Tres montos sugeridos para ofertar con un click (`PlaceBidButton`, reemplaza al
+ * atajo único "+incremento mínimo") -- el mínimo válido y dos escalones más, cada uno
+ * un incremento mínimo por encima del anterior. Elegir uno solo completa el input, no
+ * manda la oferta -- eso sigue requiriendo el botón "Ofertar" (pedido explícito). Misma
+ * aritmética simple con `Number` que `computeMinimumAmount`, por la misma razón: son
+ * sugerencias de UI, el servidor revalida con precisión exacta (RNF-11). */
+export function computeQuickBidSuggestions(lote: Lote, winningOffer: OfertaSnapshotEntry | null): string[] {
+  const minimum = Number(computeMinimumAmount(lote, winningOffer));
+  const increment = Number(lote.min_increment);
+  return [0, 1, 2].map((steps) => (minimum + increment * steps).toFixed(2));
+}

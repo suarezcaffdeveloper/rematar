@@ -17,6 +17,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.bots.lookup import BotIdentityResolver
 from app.modules.ofertas.repository import OfertaRepository
 from app.modules.remates.lotes.models import Lote, LoteStatus
 from app.modules.remates.lotes.schemas import LoteRead
@@ -44,6 +45,7 @@ class SnapshotService:
         cache: RedisCache | None = None,
         recent_offers_limit: int = DEFAULT_RECENT_OFFERS_LIMIT,
         cache_ttl_seconds: float = DEFAULT_CACHE_TTL_SECONDS,
+        bot_identity_resolver: BotIdentityResolver | None = None,
     ) -> None:
         self._db = db
         self._remate_service = remate_service
@@ -51,6 +53,10 @@ class SnapshotService:
         self._cache = cache
         self._recent_offers_limit = recent_offers_limit
         self._cache_ttl_seconds = cache_ttl_seconds
+        # Opcional (default `None` -> `BotIdentityResolver(db)`) para no romper a
+        # ningún caller existente que todavía no lo pase explícitamente -- mismo
+        # criterio permisivo que `cache: RedisCache | None`.
+        self._bot_identity_resolver = bot_identity_resolver or BotIdentityResolver(db)
 
     async def build(
         self,
@@ -122,10 +128,28 @@ class SnapshotService:
             lote_id=active_lote.id, offset=0, limit=self._recent_offers_limit
         )
 
+        winning_offer = OfertaSnapshotEntry.model_validate(leading) if leading else None
+        recent_entries = [OfertaSnapshotEntry.model_validate(o) for o in recent_offers]
+
+        # `is_bot` se resuelve acá (antes de cachear, ver docstring de
+        # `OfertaSnapshotEntry`) con una única consulta para todos los `buyer_id` del
+        # recorte -- nunca una consulta por oferta.
+        buyer_ids = {entry.buyer_id for entry in recent_entries if entry.buyer_id is not None}
+        if winning_offer is not None and winning_offer.buyer_id is not None:
+            buyer_ids.add(winning_offer.buyer_id)
+        bot_user_ids = await self._bot_identity_resolver.resolve(list(buyer_ids))
+
+        if winning_offer is not None and winning_offer.buyer_id in bot_user_ids:
+            winning_offer = winning_offer.model_copy(update={"is_bot": True})
+        recent_entries = [
+            entry.model_copy(update={"is_bot": True}) if entry.buyer_id in bot_user_ids else entry
+            for entry in recent_entries
+        ]
+
         return RawRemateState(
             active_lote=LoteRead.model_validate(active_lote),
-            winning_offer=OfertaSnapshotEntry.model_validate(leading) if leading else None,
-            recent_offers=[OfertaSnapshotEntry.model_validate(o) for o in recent_offers],
+            winning_offer=winning_offer,
+            recent_offers=recent_entries,
         )
 
     async def _get_open_lote(self, remate_id: uuid.UUID) -> Lote | None:

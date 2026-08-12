@@ -124,6 +124,8 @@ async def _bid(client: AsyncClient, token: str, remate_id: str, lote_id: str, am
 async def _finish_a_full_remate(
     client: AsyncClient, owner_token: str, buyer_token: str, *, title: str
 ) -> dict:
+    """FINISHED a mano (ya no hay finalización automática al cerrarse el último lote,
+    ex RF-10)."""
     remate = await _create_remate(client, owner_token, title=title)
     lote = await _create_lote(client, owner_token, remate["id"])
     await _start_remate(client, owner_token, remate["id"])
@@ -132,6 +134,8 @@ async def _finish_a_full_remate(
     await _close_lote(
         client, owner_token, remate["id"], lote["id"], outcome="sold", final_price="1200.00"
     )
+    r = await client.post(f"{REMATES_URL}/{remate['id']}/finish", headers=_auth(owner_token))
+    assert r.status_code == 200, r.text
     return remate, lote
 
 

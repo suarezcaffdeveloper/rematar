@@ -28,6 +28,7 @@ const lote: Lote = {
   timer_ends_at: new Date(Date.now() + 45_000).toISOString(),
   timer_paused_remaining_seconds: null,
   timer_auto_close_enabled: true,
+  round_number: 1,
   created_at: '2026-07-01T00:00:00Z',
 };
 

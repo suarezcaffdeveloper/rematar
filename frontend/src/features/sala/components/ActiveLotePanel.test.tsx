@@ -25,6 +25,7 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
     timer_ends_at: null,
     timer_paused_remaining_seconds: null,
     timer_auto_close_enabled: true,
+    round_number: 1,
     created_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
@@ -80,6 +81,12 @@ describe('ActiveLotePanel', () => {
     render(<ActiveLotePanel {...makeProps({ lote: makeLote({ description: null }) })} />);
 
     expect(screen.getByText('Este lote todavía no tiene una descripción cargada.')).toBeInTheDocument();
+  });
+
+  it('no muestra el globito de estado del lote (pedido explícito de sacarlo)', () => {
+    render(<ActiveLotePanel {...makeProps()} />);
+
+    expect(screen.queryByText('Abierto')).not.toBeInTheDocument();
   });
 
   it('un comprador con el lote abierto y el remate en vivo ve el formulario de oferta habilitado', () => {

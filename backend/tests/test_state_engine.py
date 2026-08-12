@@ -506,39 +506,74 @@ async def test_non_owner_cannot_cancel_lote(client: AsyncClient) -> None:
     assert response.status_code == 403
 
 
-# --- Finalización automática (RF-10, ADR-019) -----------------------------------------
+# --- Finalización: ya no es automática (ex RF-10/ADR-019) -----------------------------
+#
+# El remate ya NO se finaliza solo al resolverse el último lote -- cerrar/cancelar el
+# último lote pendiente deja el remate `live`, sin importar el resultado (vendido,
+# desierto o cancelado). La única vía de finalización es `POST .../finish`, decidida
+# siempre por el rematador (Módulo de lotes desiertos, ver `LoteService.requeue` y
+# `RemateService.finish`).
 
 
-async def test_auto_finish_when_closing_the_only_lote(client: AsyncClient) -> None:
+async def test_closing_the_only_lote_does_not_auto_finish(client: AsyncClient) -> None:
     token, remate_id, lote_id = await _setup_live_remate_with_lote(
         client, "rematador34@example.com"
     )
     await client.post(f"{_lotes_url(remate_id)}/{lote_id}/open", headers=_auth(token))
 
-    await client.post(
+    close_response = await client.post(
         f"{_lotes_url(remate_id)}/{lote_id}/close",
         json={"outcome": "sold", "final_price": "1200.00"},
         headers=_auth(token),
     )
+    assert close_response.status_code == 200
 
     remate = await _get_remate(client, token, remate_id)
-    assert remate["status"] == "finished"
-    assert remate["finished_at"] is not None
+    assert remate["status"] == "live"
+    assert remate["finished_at"] is None
+
+    finish_response = await client.post(f"{REMATES_URL}/{remate_id}/finish", headers=_auth(token))
+    assert finish_response.status_code == 200
+    assert finish_response.json()["status"] == "finished"
+    assert finish_response.json()["finished_at"] is not None
 
 
-async def test_auto_finish_via_cancel_of_only_lote(client: AsyncClient) -> None:
+async def test_cancel_of_only_lote_does_not_auto_finish(client: AsyncClient) -> None:
     token, remate_id, lote_id = await _setup_live_remate_with_lote(
         client, "rematador35@example.com"
     )
 
-    await client.post(
+    cancel_response = await client.post(
         f"{_lotes_url(remate_id)}/{lote_id}/cancel",
         json={"reason": "Se retira antes de abrirse."},
         headers=_auth(token),
     )
+    assert cancel_response.status_code == 200
 
     remate = await _get_remate(client, token, remate_id)
-    assert remate["status"] == "finished"
+    assert remate["status"] == "live"
+
+
+async def test_manual_finish_allowed_with_desierto_lote_still_pending_requeue(
+    client: AsyncClient,
+) -> None:
+    """RF-10 exigía que no quedara ningún lote PENDING/OPEN para finalizar -- ya no: el
+    rematador puede finalizar el remate con un lote `closed_unsold` sin haber decidido
+    todavía si lo reincorpora o no (sección 8 del pedido: "Todos los lotes fueron
+    procesados" no implica ninguna decisión forzada sobre los desiertos)."""
+    token, remate_id, lote_id = await _setup_live_remate_with_lote(
+        client, "rematador38@example.com"
+    )
+    await client.post(f"{_lotes_url(remate_id)}/{lote_id}/open", headers=_auth(token))
+    await client.post(
+        f"{_lotes_url(remate_id)}/{lote_id}/close",
+        json={"outcome": "unsold"},
+        headers=_auth(token),
+    )
+
+    finish_response = await client.post(f"{REMATES_URL}/{remate_id}/finish", headers=_auth(token))
+    assert finish_response.status_code == 200
+    assert finish_response.json()["status"] == "finished"
 
 
 async def test_no_auto_finish_while_lote_pending(client: AsyncClient) -> None:

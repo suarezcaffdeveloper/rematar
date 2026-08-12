@@ -57,6 +57,12 @@ export interface UseLiveRemateStateResult {
   reload: () => void;
   upcomingLotes: Lote[];
   isUpcomingLotesLoading: boolean;
+  /** Lotes `closed_unsold` (Módulo de lotes desiertos) -- mismo criterio que
+   * `upcomingLotes`: se recalcula solo, reflejando los eventos en vivo (`lote.closed`
+   * los agrega, `lote.requeued` los saca al volver a `pending`). Vacío en la mayoría
+   * de los remates -- quien lo consume (`ConsolaDesiertoLotesPanel`) decide no
+   * mostrar nada en ese caso. */
+  desiertoLotes: Lote[];
   connectionStatus: ConnectionStatus;
   /** Reenvía cualquier mensaje ya parseado del ÚNICO `WebSocketClient` de la página
    * (Épica 6, Módulo 6.4) -- para que un feature hermano (`features/chat/`) pueda
@@ -168,8 +174,22 @@ export function useLiveRemateState(remateId: string): UseLiveRemateStateResult {
     };
   }, [remateId]);
 
+  // `.sort()` -- no alcanza con filtrar: un evento `lote.requeued` (Módulo de lotes
+  // desiertos) parchea el `display_order` del lote reincorporado *en el mismo lugar*
+  // del array (`patchLote`, ver `realtime/reducer.ts`), sin mover su posición -- sin
+  // este sort, el lote reaparecería en su posición vieja dentro de "Próximos lotes" en
+  // vez de al final, aunque el backend ya lo haya guardado con el `display_order`
+  // correcto. `[...]` porque `.sort()` muta el array -- `.filter()` ya devuelve uno
+  // nuevo, pero versionarlo explícito acá deja la intención clara sin depender de eso.
   const upcomingLotes = useMemo(
-    () => liveLotes.filter((lote) => lote.status === 'pending'),
+    () =>
+      [...liveLotes.filter((lote) => lote.status === 'pending')].sort(
+        (a, b) => a.display_order - b.display_order,
+      ),
+    [liveLotes],
+  );
+  const desiertoLotes = useMemo(
+    () => liveLotes.filter((lote) => lote.status === 'closed_unsold'),
     [liveLotes],
   );
 
@@ -180,6 +200,7 @@ export function useLiveRemateState(remateId: string): UseLiveRemateStateResult {
     reload,
     upcomingLotes,
     isUpcomingLotesLoading,
+    desiertoLotes,
     connectionStatus,
     subscribeToRealtime,
   };

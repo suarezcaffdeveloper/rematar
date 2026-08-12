@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeMinimumAmount } from './bidding';
+import { computeMinimumAmount, computeQuickBidSuggestions } from './bidding';
 import type { Lote } from '../remates/types';
 import type { OfertaSnapshotEntry } from './types';
 
@@ -24,6 +24,7 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
     timer_ends_at: null,
     timer_paused_remaining_seconds: null,
     timer_auto_close_enabled: true,
+    round_number: 1,
     created_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
@@ -43,5 +44,24 @@ describe('computeMinimumAmount', () => {
       created_at: '2026-07-01T00:00:00Z',
     };
     expect(computeMinimumAmount(makeLote({ min_increment: '50.00' }), winningOffer)).toBe('1050.00');
+  });
+});
+
+describe('computeQuickBidSuggestions', () => {
+  it('sin ofertas, sugiere el precio base y dos escalones de un incremento cada uno', () => {
+    const lote = makeLote({ base_price: '20000.00', min_increment: '2000.00' });
+    expect(computeQuickBidSuggestions(lote, null)).toEqual(['20000.00', '22000.00', '24000.00']);
+  });
+
+  it('con una oferta vigente, escalona desde el mínimo (oferta + incremento)', () => {
+    const winningOffer: OfertaSnapshotEntry = {
+      id: 'o1',
+      buyer_id: null,
+      amount: '20000.00',
+      status: 'accepted',
+      created_at: '2026-07-01T00:00:00Z',
+    };
+    const lote = makeLote({ min_increment: '2000.00' });
+    expect(computeQuickBidSuggestions(lote, winningOffer)).toEqual(['22000.00', '24000.00', '26000.00']);
   });
 });

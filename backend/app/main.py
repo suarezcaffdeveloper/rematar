@@ -57,6 +57,18 @@ docs/42-moderacion-en-tiempo-real.md y ADR-045) arranca junto a los anteriores, 
 `ModerationEventDispatcher`: reacciona a `oferta.rejected` para detectar intentos
 reiterados de ofertas inválidas -- mismo patrón, y por eso `app/modules/ofertas/` no
 necesita ningún cambio para que el Moderation Service exista.
+
+Un **quinto** `EventConsumer` (módulo de Bots Simuladores) arranca junto a los
+anteriores, con `BotEventDispatcher` (`app/modules/bots/dispatcher.py`): reacciona a
+`lote.opened`/`lote.closed`/`remate.paused`/`remate.resumed`/`oferta.accepted`/
+`remate.finished`/`remate.cancelled` para programar (o cancelar) las reacciones de los
+bots en curso -- mismo patrón exacto, así que ni `app/modules/remates/` ni
+`app/modules/ofertas/` necesitan ningún cambio para que este módulo exista. También se
+crea acá `app.state.bot_runner_registry` (`BotRunnerRegistry`, análogo a `RoomManager`:
+puramente in-process, ver su docstring) y, **antes** de levantar este consumidor, se
+reconcilian las filas de `bot_simulation_runs` que hayan quedado `running`/`paused` de
+una instancia anterior del proceso -- sin tareas `asyncio` reales detrás tras un
+reinicio, se marcan `stopped` para que la UI nunca muestre una simulación fantasma.
 """
 
 from collections.abc import AsyncIterator
@@ -76,6 +88,9 @@ from app.core.middleware import RequestContextMiddleware
 from app.db.session import AsyncSessionLocal
 from app.events.redis_bus import RedisEventBus
 from app.moderation.realtime import ModerationEventDispatcher
+from app.modules.bots.dispatcher import BotEventDispatcher
+from app.modules.bots.repository import BotSimulationRunRepository
+from app.modules.bots.runner import BotRunnerRegistry
 from app.modules.chat.realtime import ChatSystemEventDispatcher
 from app.notify.dependencies import build_notification_service
 from app.postauction.realtime import PostAuctionEventDispatcher
@@ -170,11 +185,33 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         retry_max_seconds=settings.REALTIME_CONSUMER_RETRY_MAX_SECONDS,
     )
     app.state.moderation_event_consumer.start()
+
+    bots_session_factory = getattr(app.state, "db_session_factory", None) or AsyncSessionLocal
+    async with bots_session_factory() as reconciliation_db:
+        reconciled = await BotSimulationRunRepository(reconciliation_db).reconcile_orphaned_runs()
+        if reconciled:
+            logger.warning("bot_simulation_runs_reconciled_on_startup", count=reconciled)
+    app.state.bot_runner_registry = BotRunnerRegistry(
+        bots_session_factory,
+        RedisEventBus(RedisPubSub(app.state.redis)),
+        RedisRateLimiter(app.state.redis),
+        settings,
+    )
+    bot_dispatcher = BotEventDispatcher(bots_session_factory, app.state.bot_runner_registry)
+    app.state.bot_event_consumer = EventConsumer(
+        app.state.redis,
+        bot_dispatcher,
+        retry_base_seconds=settings.REALTIME_CONSUMER_RETRY_BASE_SECONDS,
+        retry_max_seconds=settings.REALTIME_CONSUMER_RETRY_MAX_SECONDS,
+    )
+    app.state.bot_event_consumer.start()
     logger.info("app_started")
     try:
         yield
     finally:
         logger.info("app_shutting_down")
+        await app.state.bot_event_consumer.stop()
+        await app.state.bot_runner_registry.shutdown()
         await app.state.moderation_event_consumer.stop()
         await app.state.postauction_event_consumer.stop()
         await app.state.timer_expiry_scheduler.stop()

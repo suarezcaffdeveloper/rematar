@@ -18,6 +18,7 @@ import { RequireRole } from '../shared/guards/RequireRole';
 import { LoginPage } from '../features/auth/pages/LoginPage';
 import { RegisterPage } from '../features/auth/pages/RegisterPage';
 import { RemateDetailPage } from '../features/remates/pages/RemateDetailPage';
+import { BotProfilesPage } from '../features/bots/pages/BotProfilesPage';
 import { ConsolaOperativaPage } from '../features/rematador/pages/ConsolaOperativaPage';
 import { LotesManagementPage } from '../features/rematador/pages/LotesManagementPage';
 import { RemateAuditLogPage } from '../features/rematador/pages/RemateAuditLogPage';
@@ -103,6 +104,14 @@ export const router = createBrowserRouter([
               {
                 element: <RequireRole allowedRoles={['admin']} />,
                 children: [{ path: '/admin', element: <AdminAuditLogPage /> }],
+              },
+              // Gestión global de bots simuladores (módulo de Bots Simuladores) --
+              // solo el rematador puede crear/administrar sus propios simuladores; la
+              // selección/control por remate vive en ConsolaBotsPanel, dentro de
+              // /remates/:remateId/gestionar, sin ruta propia.
+              {
+                element: <RequireRole allowedRoles={['rematador']} />,
+                children: [{ path: '/simuladores', element: <BotProfilesPage /> }],
               },
             ],
           },

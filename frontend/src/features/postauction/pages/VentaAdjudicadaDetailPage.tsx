@@ -91,17 +91,17 @@ export function VentaAdjudicadaDetailPage() {
         <ProgressStepper status={data.status} />
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card className={data.notes ? undefined : 'lg:col-span-2'}>
+      <div className="flex flex-col gap-4">
+        <Card>
           <h2 className="mb-4 text-sm font-semibold text-slate-900">Gestión de la venta</h2>
-          <div className="flex flex-col gap-5">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-8">
             <div>
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Cambiar estado
               </h3>
               <StatusChangeForm caseId={data.id} currentStatus={data.status} onChanged={reload} />
             </div>
-            <div className="border-t border-slate-100 pt-5">
+            <div className="border-t border-slate-100 pt-5 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Nueva observación
               </h3>

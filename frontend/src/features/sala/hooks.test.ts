@@ -122,6 +122,7 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
     timer_ends_at: null,
     timer_paused_remaining_seconds: null,
     timer_auto_close_enabled: true,
+    round_number: 1,
     created_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
@@ -292,6 +293,53 @@ describe('useLiveRemateState', () => {
 
     expect(result.current.upcomingLotes).toEqual([]);
     expect(result.current.snapshot?.active_lote?.id).toBe('lote-2');
+  });
+
+  it('lote.requeued reordena upcomingLotes por display_order -- el lote reincorporado aparece al final, no en su posición vieja del array (Módulo de lotes desiertos)', async () => {
+    rematesHooksMocks.useLotes.mockReturnValue({
+      lotes: [
+        makeLote({ id: 'lote-1', lot_number: '1', display_order: 0, status: 'closed_unsold' }),
+        makeLote({ id: 'lote-2', lot_number: '2', display_order: 1, status: 'pending' }),
+        makeLote({ id: 'lote-3', lot_number: '3', display_order: 2, status: 'pending' }),
+      ],
+      total: 3,
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+
+    const { result } = renderHook(() => useLiveRemateState('remate-1'));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    // Orden inicial: lote-2 y lote-3, por display_order -- lote-1 está desierto, afuera.
+    expect(result.current.upcomingLotes.map((lote) => lote.id)).toEqual(['lote-2', 'lote-3']);
+
+    // Se reincorpora lote-1 (desierto): vuelve a "pending" con display_order 3 (al
+    // final de la cola actual) -- sigue estando primero en el array `lotes` (nunca se
+    // reordena esa lista en sí), por eso hace falta el sort explícito.
+    act(() => {
+      FakeWebSocketClient.instances[0].emitMessage({
+        schema_version: 1,
+        type: 'domain_event',
+        event_type: 'lote.requeued',
+        remate_id: 'remate-1',
+        occurred_at: 't',
+        payload: {
+          event_type: 'lote.requeued',
+          event_id: 'e1',
+          remate_id: 'remate-1',
+          occurred_at: 't',
+          lote_id: 'lote-1',
+          lot_number: '1',
+          display_order: 3,
+          round_number: 2,
+          base_price: '1000.00',
+          min_increment: '50.00',
+          reserve_price: null,
+        },
+      });
+    });
+
+    expect(result.current.upcomingLotes.map((lote) => lote.id)).toEqual(['lote-2', 'lote-3', 'lote-1']);
   });
 
   it('al desmontar, desconecta el cliente WebSocket', async () => {

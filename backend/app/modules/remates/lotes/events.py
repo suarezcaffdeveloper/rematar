@@ -42,6 +42,24 @@ class LoteCancelled(RemateScopedEvent):
     reason: str
 
 
+class LoteRequeued(RemateScopedEvent):
+    """Un lote `closed_unsold` volvió a `pending` al final de la cola (Módulo de lotes
+    desiertos, `LoteService.requeue`) -- siempre disparado manualmente por el
+    rematador, nunca automático. Trae las condiciones comerciales vigentes en la nueva
+    ronda (iguales o editadas, ver `LoteRequeueRequest`) para que el reducer del
+    frontend pueda parchear el lote sin pedirlo de nuevo por HTTP, mismo criterio que
+    `LoteOpened`."""
+
+    event_type: Literal["lote.requeued"] = "lote.requeued"
+    lote_id: uuid.UUID
+    lot_number: str
+    display_order: int
+    round_number: int
+    base_price: Decimal
+    min_increment: Decimal
+    reserve_price: Decimal | None
+
+
 class LoteWinnerDetermined(RemateScopedEvent):
     """Implementa `lote.ganador_determinado` (reservado desde Fase 0) -- publicado
     únicamente por `LoteService.auto_close` inmediatamente después de `LoteClosed`

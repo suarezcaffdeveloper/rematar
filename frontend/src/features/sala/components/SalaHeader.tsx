@@ -64,10 +64,7 @@ export function SalaHeader({ remate, connectedUsers, connectionStatus, notificat
             {formatDateTime(remate.starts_at)}
           </span>
         )}
-        <span className="flex items-center gap-1.5">
-          <PersonIcon className="h-4 w-4 shrink-0 text-slate-400" />
-          Rematador verificado
-        </span>
+        
         <PresenceCounter count={connectedUsers} />
         {notifications}
       </div>

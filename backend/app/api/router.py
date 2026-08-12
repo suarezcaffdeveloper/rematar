@@ -59,6 +59,11 @@ propio (`app/notifications/`), montado directamente acá igual que cualquier otr
 mismo criterio que `chat_router`, un paquete top-level propio (`app/moderation/`) que
 cuelga del mismo prefijo efectivo sin vivir dentro de `app/modules/remates/` (ver
 docs/42-moderacion-en-tiempo-real.md).
+
+`bots_router` (módulo de Bots Simuladores) expone `/bots` (gestión global de perfiles) y
+`/remates/{remate_id}/bots/...` (selección y control de simulación por remate) — mismo
+criterio que `chat_router`, un módulo top-level propio (`app/modules/bots/`) que no vive
+dentro de `app/modules/remates/` pero cuelga del mismo prefijo efectivo.
 """
 
 from fastapi import APIRouter
@@ -68,6 +73,7 @@ from app.audit.router import router as audit_router
 from app.history.router import router as history_router
 from app.moderation.router import router as moderation_router
 from app.modules.auth.router import router as auth_router
+from app.modules.bots.router import router as bots_router
 from app.modules.chat.router import router as chat_router
 from app.modules.remates.router import router as remates_router
 from app.modules.users.router import router as users_router
@@ -94,4 +100,5 @@ api_router.include_router(monitoring_router, tags=["monitoring"])
 api_router.include_router(postauction_router, tags=["postauction"])
 api_router.include_router(notifications_router, tags=["notifications"])
 api_router.include_router(moderation_router, tags=["moderation"])
+api_router.include_router(bots_router, tags=["bots"])
 api_router.include_router(websocket_router, tags=["websocket"])

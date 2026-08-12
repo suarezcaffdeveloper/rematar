@@ -13,6 +13,8 @@ import type {
   LoteFormPayload,
   LoteImage,
   LoteListParams,
+  LoteRequeuePayload,
+  LoteRound,
   Remate,
   RemateFormPayload,
   RemateListParams,
@@ -176,6 +178,28 @@ export async function closeLoteRequest(
   payload: LoteClosePayload,
 ): Promise<Lote> {
   const { data } = await apiClient.post<Lote>(`/remates/${remateId}/lotes/${loteId}/close`, payload);
+  return data;
+}
+
+/**
+ * Reincorpora un lote desierto (`closed_unsold`) a la cola de pendientes, al final de
+ * la cola actual (Módulo de lotes desiertos, `LoteService.requeue`) -- decisión siempre
+ * del rematador, nunca automática. `payload` es opcional: sin condiciones nuevas, la
+ * nueva ronda conserva el precio inicial/incremento/reserva de la ronda anterior.
+ */
+export async function requeueLoteRequest(
+  remateId: string,
+  loteId: string,
+  payload: LoteRequeuePayload = {},
+): Promise<Lote> {
+  const { data } = await apiClient.post<Lote>(`/remates/${remateId}/lotes/${loteId}/requeue`, payload);
+  return data;
+}
+
+/** Historial de rondas desiertas archivadas de un lote (`GET .../rounds`) -- vacío en
+ * un lote que nunca fue reincorporado. */
+export async function fetchLoteRoundsRequest(remateId: string, loteId: string): Promise<LoteRound[]> {
+  const { data } = await apiClient.get<LoteRound[]>(`/remates/${remateId}/lotes/${loteId}/rounds`);
   return data;
 }
 

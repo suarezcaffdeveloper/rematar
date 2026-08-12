@@ -23,6 +23,7 @@ from app.moderation.events import (
     ModerationUserKicked,
     ModerationUserMuted,
 )
+from app.modules.bots.events import BotSimulationPaused, BotSimulationStarted, BotSimulationStopped
 from app.modules.chat.events import ChatMessageDeleted, ChatMessageSent, ChatUserTyping
 from app.modules.ofertas.events import (
     OfertaAccepted,
@@ -41,6 +42,7 @@ from app.modules.remates.lotes.events import (
     LoteCancelled,
     LoteClosed,
     LoteOpened,
+    LoteRequeued,
     LoteTimerAdjusted,
     LoteTimerAutoCloseToggled,
     LoteTimerExpired,
@@ -56,7 +58,10 @@ from app.presence.events import PresenceUserConnected, PresenceUserDisconnected
 
 # Orden: mismo agrupamiento que los catálogos de origen (Remate, Lote, Oferta,
 # Presencia -- Épica 6, Módulo 6.2 -- Chat -- Épica 6, Módulo 6.4 -- Timer -- Épica 8 --
-# PostAuction -- Épica 7, Módulo 7.5 -- Moderación -- Épica 7, Módulo 7.6).
+# PostAuction -- Épica 7, Módulo 7.5 -- Moderación -- Épica 7, Módulo 7.6 -- Bots
+# Simuladores). Estos últimos tres no cambian ningún dato de negocio (a diferencia de
+# `LoteOpened`/`OfertaAccepted`): solo le avisan al frontend que refresque los botones
+# Iniciar/Pausar/Detener de la consola de simuladores.
 SYNCED_EVENTS: tuple[type[RemateScopedEvent], ...] = (
     RemateStarted,
     RematePaused,
@@ -66,6 +71,7 @@ SYNCED_EVENTS: tuple[type[RemateScopedEvent], ...] = (
     LoteOpened,
     LoteClosed,
     LoteCancelled,
+    LoteRequeued,
     LoteWinnerDetermined,
     LoteTimerStarted,
     LoteTimerPaused,
@@ -92,6 +98,9 @@ SYNCED_EVENTS: tuple[type[RemateScopedEvent], ...] = (
     ModerationMessagePinned,
     ModerationMessageUnpinned,
     ModerationInvalidBidThresholdExceeded,
+    BotSimulationStarted,
+    BotSimulationPaused,
+    BotSimulationStopped,
 )
 
 # `event_type` (el discriminador `Literal` de cada clase) -> la clase concreta, para

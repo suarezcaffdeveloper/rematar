@@ -6,14 +6,15 @@ import { ConnectedBuyersList } from '../../moderation/components/ConnectedBuyers
 import { LockChatButton } from '../../moderation/components/LockChatButton';
 import { RecentModerationActions } from '../../moderation/components/RecentModerationActions';
 import { isModerationDomainEventMessage } from '../../moderation/realtime/events';
+import { OfferHistoryPanel } from '../../sala/components/OfferHistoryPanel';
 import type { OfertaSnapshotEntry } from '../../sala/types';
-import { ConsolaOfferPanel } from './ConsolaOfferPanel';
 
 export interface ConsolaSidebarProps {
   remateId: string;
   subscribeToRealtime: (listener: (message: unknown) => void) => () => void;
   currentUserId: string | undefined;
   connectedUsers: number;
+  winningOffer: OfertaSnapshotEntry | null;
   recentOffers: OfertaSnapshotEntry[];
   currency: string;
 }
@@ -26,15 +27,6 @@ const TABS = [
   { id: 'moderacion', label: 'Moderación' },
 ];
 
-/** Filas del historial visibles sin scroll en la tarjeta siempre-visible de arriba, antes
- * de las pestañas (pedido explícito del rediseño a "Modo Remate": "no quiero una tabla
- * enorme"; bajado de 5 a 3 -- con 5 el panel de ofertas quedaba tan alto que el chat de
- * abajo se quedaba sin alto mínimo para poder leerse y terminaba desbordando la columna
- * sticky, superponiéndose con la analítica de más abajo). El resto de las ofertas no
- * desaparece -- `ConsolaOfferPanel` sigue mostrando la lista completa, solo que el
- * contenedor recorta su alto a estas filas y agrega scroll interno para llegar al resto. */
-const OFFER_HISTORY_LIMIT = 3;
-
 /**
  * Sidebar de la Consola Operativa (Épica 9, Etapa 5 -- rediseño; y de nuevo en el
  * rediseño a "Modo Remate"): reemplaza el antiguo apilado de `ChatPanel`/
@@ -42,13 +34,18 @@ const OFFER_HISTORY_LIMIT = 3;
  * scroll más allá del chat y la moderación para llegar a los controles/analítica).
  *
  * "Modo Remate" pide historial de ofertas + chat "siempre visibles" -- a diferencia de la
- * versión anterior (cuatro pestañas iguales, Ofertas era una más), acá `ConsolaOfferPanel`
- * (con `maxHistory` para no volverse una tabla larga) se saca de las pestañas y queda fijo
- * arriba; solo Chat/Conectados/Moderación siguen en pestañas (Chat por default) porque son
- * de uso más ocasional o necesitan más alto que lo que queda debajo de la oferta.
- * `ConsolaOfferPanel` ya no tiene una tarjeta separada para la oferta líder (pedido
- * explícito: quitarla) -- la fila `winning` del propio historial, resaltada en verde, es
- * la que comunica quién va ganando.
+ * versión anterior (cuatro pestañas iguales, Ofertas era una más), acá el historial de
+ * ofertas se saca de las pestañas y queda fijo arriba; solo Chat/Conectados/Moderación
+ * siguen en pestañas (Chat por default) porque son de uso más ocasional o necesitan más
+ * alto que lo que queda debajo de la oferta.
+ *
+ * El historial de ofertas reusa `OfferHistoryPanel` de `features/sala/` tal cual, la
+ * misma tarjeta que ya ve el comprador en la Sala (pedido explícito: "quiero que el
+ * rematador vea la misma card con todo igual") -- ya no hay una versión propia de la
+ * Consola con su resaltado de fila ganadora/`maxHistory` (existían antes de este pedido).
+ * Mismo alto fijo por default (`h-72 shrink-0`, sin pasar `className`) que ya usa la Sala
+ * para su propio sidebar -- este sidebar tiene la misma estructura (tarjeta de oferta fija
+ * arriba, chat abajo con `flex-1`), así que el mismo alto encaja igual.
  *
  * "Compradores conectados" reusa `ConnectedBuyersList` (Moderación, con búsqueda y
  * acciones de silenciar/expulsar) en vez del `ConnectedUsersList` genérico y
@@ -66,6 +63,7 @@ export function ConsolaSidebar({
   subscribeToRealtime,
   currentUserId,
   connectedUsers,
+  winningOffer,
   recentOffers,
   currency,
 }: ConsolaSidebarProps) {
@@ -94,18 +92,17 @@ export function ConsolaSidebar({
     // arranca la analítica -- si la celda es más baja que el viewport (remate con poco
     // contenido a la izquierda), el `max-h` no fuerza nada de más porque nunca se llega a
     // ese tope. `xl:h-full` + `flex` reparte ese alto entre la oferta (arriba, alto fijo
-    // por `maxHistory`) y las pestañas de abajo (`xl:flex-1`, ver más abajo) -- el chat
-    // ocupa lo que sobra en vez de un `h-[26rem]` fijo, así que no se encoge ni deja hueco
-    // sea cual sea el alto disponible. Por debajo de `xl:` nada de esto aplica (`flex
+    // por `OfferHistoryPanel`) y las pestañas de abajo (`xl:flex-1`, ver más abajo) -- el
+    // chat ocupa lo que sobra en vez de un `h-[26rem]` fijo, así que no se encoge ni deja
+    // hueco sea cual sea el alto disponible. Por debajo de `xl:` nada de esto aplica (`flex
     // flex-col gap-3` a secas): layout de una sola columna, cada card con su alto fijo de
     // siempre. Cada card sigue con su propio scroll interno (pedido explícito: "solo
-    // scroll interno dentro de cada uno") -- el historial de `ConsolaOfferPanel` y los
-    // mensajes de `ChatPanel` scrollean cada uno dentro de su propia caja (ver
-    // `maxHistory` ahí y el `overflow-y-auto` interno de `ChatPanel`), nunca el wrapper
-    // completo.
+    // scroll interno dentro de cada uno") -- el historial de `OfferHistoryPanel` y los
+    // mensajes de `ChatPanel` scrollean cada uno dentro de su propia caja (ver su
+    // `overflow-y-auto` interno), nunca el wrapper completo.
     <div className="flex flex-col gap-3 xl:sticky xl:top-4 xl:h-full xl:max-h-[calc(100vh-2rem)]">
       <div className="shrink-0">
-        <ConsolaOfferPanel recentOffers={recentOffers} currency={currency} maxHistory={OFFER_HISTORY_LIMIT} />
+        <OfferHistoryPanel winningOffer={winningOffer} recentOffers={recentOffers} currency={currency} />
       </div>
 
       <div className="flex flex-col gap-2 xl:min-h-0 xl:flex-1">

@@ -47,6 +47,7 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
     timer_ends_at: null,
     timer_paused_remaining_seconds: null,
     timer_auto_close_enabled: true,
+    round_number: 1,
     created_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
@@ -193,6 +194,28 @@ describe('applyDomainEventToSnapshot', () => {
       [],
     );
     expect(result.active_lote).toBeNull();
+  });
+
+  it('lote.requeued no toca el snapshot -- un lote reincorporado nunca es el activo', () => {
+    const snapshot = makeSnapshot({ active_lote: makeLote({ id: 'lote-2', status: 'open' }) });
+    const result = applyDomainEventToSnapshot(
+      snapshot,
+      {
+        event_type: 'lote.requeued',
+        event_id: 'e1',
+        remate_id: 'remate-1',
+        occurred_at: 't',
+        lote_id: 'lote-1',
+        lot_number: '1',
+        display_order: 3,
+        round_number: 2,
+        base_price: '900.00',
+        min_increment: '40.00',
+        reserve_price: null,
+      },
+      [],
+    );
+    expect(result).toBe(snapshot);
   });
 
   describe('cuenta regresiva (Épica 8)', () => {
@@ -636,6 +659,43 @@ describe('applyDomainEventToLotes', () => {
       reason: 'Retirado por el rematador',
     });
     expect(result[0].status).toBe('cancelled');
+  });
+
+  it('lote.requeued vuelve el lote a "pending", con el nuevo orden/ronda/condiciones y sin final_price', () => {
+    const lotes = [
+      makeLote({
+        id: 'lote-1',
+        status: 'closed_unsold',
+        display_order: 0,
+        round_number: 1,
+        final_price: null,
+        base_price: '1000.00',
+        min_increment: '50.00',
+        reserve_price: null,
+      }),
+    ];
+    const result = applyDomainEventToLotes(lotes, {
+      event_type: 'lote.requeued',
+      event_id: 'e1',
+      remate_id: 'remate-1',
+      occurred_at: 't',
+      lote_id: 'lote-1',
+      lot_number: '1',
+      display_order: 3,
+      round_number: 2,
+      base_price: '900.00',
+      min_increment: '40.00',
+      reserve_price: '950.00',
+    });
+
+    expect(result[0].status).toBe('pending');
+    expect(result[0].display_order).toBe(3);
+    expect(result[0].round_number).toBe(2);
+    expect(result[0].base_price).toBe('900.00');
+    expect(result[0].min_increment).toBe('40.00');
+    expect(result[0].reserve_price).toBe('950.00');
+    expect(result[0].final_price).toBeNull();
+    expect(result).not.toBe(lotes);
   });
 
   it('no toca lotes no afectados -- misma referencia de objeto para preservar React.memo', () => {

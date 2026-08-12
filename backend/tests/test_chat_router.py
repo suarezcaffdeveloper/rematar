@@ -3,7 +3,15 @@
 Ver docs/34-chat-del-remate.md.
 """
 
+import uuid
+from decimal import Decimal
+
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.security import hash_password
+from app.modules.bots.models import BotPersonality, BotProfile
+from app.modules.users.models import User, UserRole
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -218,3 +226,70 @@ async def test_typing_endpoint_returns_204(client: AsyncClient) -> None:
     )
 
     assert r.status_code == 204
+
+
+# --- Identidad de simuladores (módulo de Bots) -------------------------------------------
+
+
+async def test_list_messages_marks_bot_authored_message_as_is_bot(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """`author_id` nunca se enmascara en el chat -- a diferencia de
+    `OfertaSnapshotEntry.buyer_id`, así que `is_bot` es la única señal disponible para
+    que cualquier participante (no solo el rematador) no confunda un mensaje generado
+    por un simulador con uno de un comprador real (ver docstring de
+    `ChatMessageRead.is_bot`)."""
+    owner_register = await client.post(
+        REGISTER_URL,
+        json={
+            "email": "chatrouter-bot1@example.com",
+            "password": "password123",
+            "confirm_password": "password123",
+            "full_name": "Rematador",
+            "phone": "+5491122334455",
+            "role": "rematador",
+        },
+    )
+    owner_id = owner_register.json()["id"]
+    owner_token = await _owner(client, "chatrouter-bot1-owner@example.com")
+    remate = await _create_and_schedule_remate(client, owner_token)
+
+    bot_user = User(
+        email="bot+chatrouter1@bots.rematar.internal",
+        hashed_password=hash_password("unused"),
+        full_name="Bot de prueba",
+        role=UserRole.COMPRADOR,
+    )
+    db_session.add(bot_user)
+    await db_session.commit()
+    await db_session.refresh(bot_user)
+    db_session.add(
+        BotProfile(
+            created_by_id=uuid.UUID(owner_id),
+            user_id=bot_user.id,
+            display_name="Bot de prueba",
+            personality=BotPersonality.COMPETITIVE,
+            max_budget=Decimal("5000.00"),
+            reaction_delay_min_seconds=1,
+            reaction_delay_max_seconds=2,
+            continue_probability=Decimal("0.5"),
+        )
+    )
+    await db_session.commit()
+
+    login = await client.post(
+        LOGIN_URL, data={"username": bot_user.email, "password": "unused"}
+    )
+    assert login.status_code == 200, login.text
+    bot_token = login.json()["access_token"]
+
+    await _send(client, bot_token, remate["id"], "Voy por este lote.")
+    await _send(client, owner_token, remate["id"], "Bienvenidos al remate.")
+
+    r = await client.get(f"{REMATES_URL}/{remate['id']}/chat/messages", headers=_auth(owner_token))
+    assert r.status_code == 200, r.text
+    messages = r.json()
+
+    by_content = {m["content"]: m for m in messages}
+    assert by_content["Voy por este lote."]["is_bot"] is True
+    assert by_content["Bienvenidos al remate."]["is_bot"] is False

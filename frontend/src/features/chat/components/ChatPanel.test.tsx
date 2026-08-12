@@ -92,11 +92,15 @@ describe('ChatPanel', () => {
   });
 
   it('agrupa mensajes consecutivos del mismo autor: el nombre solo se repite si cambia el autor', () => {
+    // `author_id` distinto de `currentUserId` ("user-1", ver `renderPanel`) a propósito:
+    // un mensaje propio nunca muestra su propio nombre (ver `ChatMessageItem`), así que
+    // esta prueba de agrupado necesita autores que sean "otra persona" para poder
+    // observar el nombre en el DOM.
     renderPanel({
       messages: [
-        makeMessage({ id: 'msg-1', author_id: 'user-1', author_name: 'Juan', content: 'Hola', created_at: '2026-07-20T18:30:00Z' }),
-        makeMessage({ id: 'msg-2', author_id: 'user-1', author_name: 'Juan', content: 'Cómo va', created_at: '2026-07-20T18:30:30Z' }),
-        makeMessage({ id: 'msg-3', author_id: 'user-2', author_name: 'Pedro', content: 'Bien', created_at: '2026-07-20T18:31:00Z' }),
+        makeMessage({ id: 'msg-1', author_id: 'user-2', author_name: 'Juan', content: 'Hola', created_at: '2026-07-20T18:30:00Z' }),
+        makeMessage({ id: 'msg-2', author_id: 'user-2', author_name: 'Juan', content: 'Cómo va', created_at: '2026-07-20T18:30:30Z' }),
+        makeMessage({ id: 'msg-3', author_id: 'user-3', author_name: 'Pedro', content: 'Bien', created_at: '2026-07-20T18:31:00Z' }),
       ],
     });
 

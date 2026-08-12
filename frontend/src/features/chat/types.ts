@@ -23,6 +23,11 @@ export interface ChatMessage {
   system_event_type: string | null;
   is_deleted: boolean;
   created_at: string;
+  /** Módulo de Bots Simuladores -- `true` si el mensaje lo generó un simulador,
+   * resuelto por el backend en el historial (`GET .../chat/messages`, ver
+   * `backend/app/modules/chat/router.py`). No llega en los eventos de WebSocket en
+   * tiempo real, solo en la carga inicial del historial. */
+  is_bot?: boolean;
 }
 
 /** Alguien escribiendo, mantenido en memoria por `useChatMessages` -- nunca persiste,

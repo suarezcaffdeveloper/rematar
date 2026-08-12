@@ -33,6 +33,7 @@ from app.core.config import Settings, get_settings
 from app.db.session import get_db
 from app.events.bus import EventBus
 from app.events.redis_bus import RedisEventBus
+from app.modules.bots.lookup import BotIdentityResolver
 from app.modules.ofertas.dependencies import get_oferta_repository
 from app.modules.ofertas.repository import OfertaRepository
 from app.modules.remates.lotes.repository import LoteRepository
@@ -58,12 +59,17 @@ def _get_remate_service(
     return RemateService(RemateRepository(db), LoteRepository(db), event_bus, AuditLogRepository(db))
 
 
+def _get_bot_identity_resolver(db: Annotated[AsyncSession, Depends(get_db)]) -> BotIdentityResolver:
+    return BotIdentityResolver(db)
+
+
 def get_snapshot_service(
     db: Annotated[AsyncSession, Depends(get_db)],
     remate_service: Annotated[RemateService, Depends(_get_remate_service)],
     oferta_repository: Annotated[OfertaRepository, Depends(get_oferta_repository)],
     cache: Annotated[RedisCache, Depends(_get_cache)],
     settings: Annotated[Settings, Depends(get_settings)],
+    bot_identity_resolver: Annotated[BotIdentityResolver, Depends(_get_bot_identity_resolver)],
 ) -> SnapshotService:
     return SnapshotService(
         db,
@@ -72,4 +78,5 @@ def get_snapshot_service(
         cache=cache,
         recent_offers_limit=settings.SNAPSHOT_RECENT_OFFERS_LIMIT,
         cache_ttl_seconds=settings.SNAPSHOT_CACHE_TTL_SECONDS,
+        bot_identity_resolver=bot_identity_resolver,
     )

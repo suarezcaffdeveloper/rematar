@@ -204,6 +204,7 @@ export function ChatPanel({
                 isPinned={isPinned}
                 showHeader={showHeader}
                 onTogglePin={canModerate ? handleTogglePin : undefined}
+                isOwnMessage={message.author_id !== null && message.author_id === currentUserId}
               />
             );
           })

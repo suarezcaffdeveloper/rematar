@@ -1,12 +1,13 @@
-import { Badge } from '../../../shared/components/Badge';
 import { formatCurrency } from '../../../shared/lib/format';
 import type { UserRole } from '../../auth/types';
-import { CATEGORY_LABELS, LOTE_STATUS_BADGE_VARIANTS, LOTE_STATUS_LABELS } from '../../remates/labels';
+import { CATEGORY_LABELS } from '../../remates/labels';
 import type { Lote, RemateStatus } from '../../remates/types';
 import type { OfertaSnapshotEntry } from '../types';
+import { ImageGalleryMain } from './ImageGalleryMain';
+import { ImageGalleryThumbnails } from './ImageGalleryThumbnails';
 import { LoteCountdown } from './LoteCountdown';
-import { LoteHeroImage } from './LoteHeroImage';
 import { PlaceBidButton } from './PlaceBidButton';
+import { useImageGallery } from './useImageGallery';
 
 export interface ActiveLotePanelProps {
   remateId: string;
@@ -25,13 +26,24 @@ function formatAttributeKey(key: string): string {
 /**
  * Sección principal de la sala: el lote actualmente abierto, con toda su información
  * (Épica 4.5; rediseñado varias veces en la Épica 9 -- ver historial de comentarios en
- * git). Última pasada: imagen principal a todo el ancho arriba (`LoteHeroImage`, sin
- * miniaturas -- alcanza con deslizar/las flechas para recorrer las fotos, una tira de
- * miniaturas debajo quedaba redundante); debajo, una fila de dos columnas -- info del
- * lote (título/descripción) a la izquierda ocupando 2/3 del ancho, zona de ofertar
- * (precio/cuenta regresiva/formulario) a la derecha en el otro 1/3. Recién se separan en
- * columnas a partir de `lg:` (~1024px): en mobile/tablet la columna de ofertar quedaría
- * demasiado angosta, así que se apila en una sola columna como el resto del panel.
+ * git). Imagen principal a todo el ancho arriba, con tamaño fijo por relación de
+ * aspecto (`ImageGalleryMain`, sin `flex-1`) -- deliberado: si la imagen creciera para
+ * absorber el alto sobrante de la tarjeta (como antes), cualquier contenido nuevo que se
+ * agregue más abajo (la tira de miniaturas) le restaría ese mismo alto a la imagen,
+ * achicándola cada vez. Con tamaño fijo la imagen queda igual sin importar qué haya
+ * debajo; si sobra alto en la tarjeta, ese sobrante queda en blanco al final en vez de
+ * ir a la imagen (la tarjeta sigue siendo `h-full`, ver `SalaPage`).
+ *
+ * Debajo de la imagen, la tira de miniaturas (`ImageGalleryThumbnails`, mismo estado de
+ * "imagen seleccionada" que la imagen principal, vía `useImageGallery` acá arriba --
+ * pedido explícito de volver a tenerlas, que se habían sacado en un rediseño anterior) va
+ * como primer elemento de la columna de info, para que su borde superior quede alineado
+ * con el borde superior de la tarjeta de ofertar (mismo grid, `items-start`) en vez de
+ * quedar pegada a la imagen. Después sigue lo que ya había -- número/nombre/descripción
+ * del lote a la izquierda ocupando 2/3 del ancho, zona de ofertar (precio/cuenta
+ * regresiva/formulario) a la derecha en el otro 1/3. Recién se separan en columnas a
+ * partir de `lg:` (~1024px): en mobile/tablet la columna de ofertar quedaría demasiado
+ * angosta, así que se apila en una sola columna como el resto del panel.
  *
  * `lote.attributes` es el campo libre del backend (raza/peso/año/m2, ver
  * `backend/.../lotes/models.py`) -- se renderiza como una ficha de clave/valor genérica,
@@ -50,35 +62,38 @@ export function ActiveLotePanel({
   const attributeEntries = Object.entries(lote.attributes);
   const currentOfferAmount = winningOffer?.amount ?? lote.base_price;
   const hasTimer = lote.timer_ends_at !== null || lote.timer_paused_remaining_seconds !== null;
+  const gallery = useImageGallery(lote.images);
 
   return (
     <div className="flex h-full flex-col gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      {/* `flex-1`: única pieza de la tarjeta que crece -- absorbe lo que sobre de alto
-       * (el resto es `h-full` de punta a punta, ver `SalaPage`) para que la tarjeta
-       * termine justo donde termina el chat, y de paso la imagen queda más grande
-       * verticalmente en vez de topearse en una altura fija chica (pedido explícito).
-       * `min-h-*` es el piso para cuando no hay alto extra que repartir (mobile/tablet,
-       * donde esta tarjeta no tiene alto explícito -- ver comentario en `SalaPage`). */}
-      <LoteHeroImage
-        key={lote.id}
-        images={lote.images}
+      <ImageGalleryMain
+        sorted={gallery.sorted}
+        selectedIndex={gallery.selectedIndex}
+        selected={gallery.selected}
+        hasMultiple={gallery.hasMultiple}
+        goTo={gallery.goTo}
         alt={lote.title}
-        aspectClassName="min-h-72 flex-1 sm:min-h-80"
+        aspectClassName="aspect-video min-h-72 sm:min-h-80"
       />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3 lg:items-start">
         <div className="min-w-0 lg:col-span-2">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-                Lote {lote.lot_number} · {CATEGORY_LABELS[lote.category]}
-              </p>
-              <h2 className="mt-1 text-xl font-bold text-slate-900">{lote.title}</h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                {lote.description ?? 'Este lote todavía no tiene una descripción cargada.'}
-              </p>
-            </div>
-            <Badge variant={LOTE_STATUS_BADGE_VARIANTS[lote.status]}>{LOTE_STATUS_LABELS[lote.status]}</Badge>
+          <ImageGalleryThumbnails
+            sorted={gallery.sorted}
+            selectedIndex={gallery.selectedIndex}
+            hasMultiple={gallery.hasMultiple}
+            goTo={gallery.goTo}
+            className="mb-3"
+          />
+
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+              Lote {lote.lot_number} · {CATEGORY_LABELS[lote.category]}
+            </p>
+            <h2 className="mt-1 text-xl font-bold text-slate-900">{lote.title}</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              {lote.description ?? 'Este lote todavía no tiene una descripción cargada.'}
+            </p>
           </div>
         </div>
 

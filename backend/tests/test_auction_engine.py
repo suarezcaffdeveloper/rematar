@@ -385,10 +385,9 @@ async def test_bid_when_remate_finished_rejected(client: AsyncClient) -> None:
     """El sentido más literal de "remate cerrado": a diferencia de
     `test_bid_when_remate_not_started_rejected` (nunca estuvo LIVE) y
     `test_bid_when_remate_paused_rejected` (LIVE pero pausado), acá el remate
-    efectivamente estuvo LIVE y terminó en FINISHED de verdad -- vía la finalización
-    automática (RF-10, `RemateService.try_auto_finish`) que ya dispara
-    `LoteService.close` al cerrar el único lote del remate, sin necesidad de llamar
-    `POST .../finish` a mano."""
+    efectivamente estuvo LIVE y terminó en FINISHED de verdad -- cerrando el único lote
+    y finalizando el remate a mano (`POST .../finish`): ya no hay finalización
+    automática al cerrarse el último lote (ex RF-10, ver `test_state_engine.py`)."""
     owner_token, remate_id, lote_id = await _setup_open_lote(client, "rematador11b@example.com")
     close = await client.post(
         f"{_lotes_url(remate_id)}/{lote_id}/close",
@@ -396,6 +395,9 @@ async def test_bid_when_remate_finished_rejected(client: AsyncClient) -> None:
         headers=_auth(owner_token),
     )
     assert close.status_code == 200
+
+    finish = await client.post(f"{REMATES_URL}/{remate_id}/finish", headers=_auth(owner_token))
+    assert finish.status_code == 200
 
     remate = await client.get(f"{REMATES_URL}/{remate_id}", headers=_auth(owner_token))
     assert remate.status_code == 200
