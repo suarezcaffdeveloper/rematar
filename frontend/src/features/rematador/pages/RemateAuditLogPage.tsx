@@ -65,7 +65,7 @@ export function RemateAuditLogPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Auditoría del remate</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Auditoría del remate</h1>
         <p className="mt-1 text-sm text-slate-600">
           Historial de acciones sobre este remate: creación y cambios, apertura/cierre y
           adjudicación de lotes, ofertas y moderación de chat.

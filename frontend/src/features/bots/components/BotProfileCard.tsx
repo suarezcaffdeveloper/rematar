@@ -1,5 +1,6 @@
 import { Bot, MessageCircle, Pencil, Timer, Trash2, Wallet } from 'lucide-react';
 import { Badge } from '../../../shared/components/Badge';
+import { Card } from '../../../shared/components/Card';
 import { DropdownMenu } from '../../../shared/components/DropdownMenu';
 import { formatCurrency } from '../../../shared/lib/format';
 import { PERSONALITY_BADGE_VARIANTS, PERSONALITY_LABELS } from '../labels';
@@ -16,10 +17,10 @@ export interface BotProfileCardProps {
  * explícito: minimalista, no una herramienta técnica). */
 export function BotProfileCard({ bot, onEdit, onDelete }: BotProfileCardProps) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <Card className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-800 text-white">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
             <Bot aria-hidden="true" className="h-5 w-5" />
           </span>
           <div className="min-w-0">
@@ -65,7 +66,7 @@ export function BotProfileCard({ bot, onEdit, onDelete }: BotProfileCardProps) {
         <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
         Editar configuración
       </button>
-    </div>
+    </Card>
   );
 }
 

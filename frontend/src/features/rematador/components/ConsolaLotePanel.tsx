@@ -54,6 +54,15 @@ function formatAttributeKey(key: string): string {
  * principal" de "panel de control", y mezclarlos complicaría reusar este panel el día
  * que la Consola necesite mostrar el lote activo en un contexto sin controles (por
  * ejemplo, una vista de solo lectura para un segundo operador).
+ *
+ * Retexturizado sobre el prototipo aprobado (captura puntual de la Consola Operativa):
+ * pierde la card propia (`rounded-xl border bg-white shadow-sm p-3`) -- mismo criterio
+ * "no más cards" que `ActiveLotePanel` ya aplicó en la Sala, el fondo de la página
+ * alcanza para separar este bloque de `ConsolaControlPanel`. El estado del lote
+ * (`Badge`) pasa a vivir en la misma línea que "Lote N · Categoría" en vez de flotar
+ * aparte a la derecha -- se lee como un solo dato, no dos alineados por separado. "Ficha
+ * técnica" pierde su fondo gris propio (`bg-surface-subtle`) -- composición abierta,
+ * mismo criterio que el resto del panel.
  */
 export function ConsolaLotePanel({ activeLote, currency, hasUpcomingLotes }: ConsolaLotePanelProps) {
   if (!activeLote) {
@@ -73,7 +82,7 @@ export function ConsolaLotePanel({ activeLote, currency, hasUpcomingLotes }: Con
   const attributeEntries = Object.entries(activeLote.attributes);
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-3.5">
+    <div className="flex flex-col gap-4">
       <ImageGallery
         key={activeLote.id}
         images={activeLote.images}
@@ -81,44 +90,44 @@ export function ConsolaLotePanel({ activeLote, currency, hasUpcomingLotes }: Con
         aspectClassName="aspect-[2/1]"
       />
 
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-600">
             <PackageSearch aria-hidden="true" className="h-3.5 w-3.5" />
             Lote {activeLote.lot_number} · {CATEGORY_LABELS[activeLote.category]}
           </p>
-          <h2 className="mt-1 text-xl font-semibold text-slate-900">{activeLote.title}</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Precio inicial {formatCurrency(activeLote.base_price, currency)} · incremento mínimo{' '}
-            {formatCurrency(activeLote.min_increment, currency)}
-          </p>
+          <Badge variant={LOTE_STATUS_BADGE_VARIANTS[activeLote.status]}>
+            {LOTE_STATUS_LABELS[activeLote.status]}
+          </Badge>
         </div>
-        <Badge variant={LOTE_STATUS_BADGE_VARIANTS[activeLote.status]}>
-          {LOTE_STATUS_LABELS[activeLote.status]}
-        </Badge>
+        <h2 className="mt-1 text-xl font-semibold tracking-tight text-ink">{activeLote.title}</h2>
+        <p className="mt-1 text-xs text-ink-faint">
+          Precio inicial {formatCurrency(activeLote.base_price, currency)} · incremento mínimo{' '}
+          {formatCurrency(activeLote.min_increment, currency)}
+        </p>
       </div>
 
-      <div className="flex flex-col gap-3">
-        <p className="text-sm leading-relaxed text-slate-600">
+      <div className="flex flex-col gap-4">
+        <p className="text-sm leading-relaxed text-ink-muted">
           {activeLote.description ?? 'Este lote todavía no tiene una descripción cargada.'}
         </p>
 
         {(attributeEntries.length > 0 || activeLote.unit_label) && (
-          <div className="rounded-lg bg-slate-50 p-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ficha técnica</h3>
-            <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+          <div className="border-t border-line pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Ficha técnica</h3>
+            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
               {activeLote.unit_label && (
                 <div>
-                  <dt className="text-xs text-slate-400">Cantidad</dt>
-                  <dd className="text-sm text-slate-700">
+                  <dt className="text-xs text-ink-faint">Cantidad</dt>
+                  <dd className="text-sm font-medium text-ink">
                     {activeLote.quantity} {activeLote.unit_label}
                   </dd>
                 </div>
               )}
               {attributeEntries.map(([key, value]) => (
                 <div key={key}>
-                  <dt className="text-xs text-slate-400">{formatAttributeKey(key)}</dt>
-                  <dd className="text-sm text-slate-700">{String(value)}</dd>
+                  <dt className="text-xs text-ink-faint">{formatAttributeKey(key)}</dt>
+                  <dd className="text-sm font-medium text-ink">{String(value)}</dd>
                 </div>
               ))}
             </dl>

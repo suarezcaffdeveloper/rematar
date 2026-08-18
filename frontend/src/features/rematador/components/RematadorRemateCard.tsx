@@ -146,9 +146,9 @@ export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighte
 
   return (
     <article
-      className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white transition-all duration-300 hover:-translate-y-1 ${STATUS_CARD_ACCENT[remate.status]}`}
+      className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white transition-all duration-300 hover:-translate-y-1 ${STATUS_CARD_ACCENT}`}
     >
-      <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden bg-slate-100">
+      <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden bg-surface-subtle">
         {remate.cover_image_url ? (
           <img
             src={remate.cover_image_url}
@@ -158,14 +158,6 @@ export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighte
         ) : (
           <CoverPlaceholder className="h-full w-full" />
         )}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-900/85 via-slate-900/15 to-transparent" />
-
-        <div className="absolute inset-x-0 bottom-0 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-200">
-            {CATEGORY_LABELS[remate.category]}
-          </p>
-          <h3 className="mt-1 line-clamp-2 text-lg font-semibold leading-snug text-white">{remate.title}</h3>
-        </div>
       </div>
 
       {/* Fuera del contenedor de la imagen (que recorta con `overflow-hidden` a solo
@@ -202,31 +194,38 @@ export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighte
       </div>
 
       <div className="flex flex-1 flex-col gap-4 p-5">
-        {isDuplicating && <p className="text-xs text-slate-400">Duplicando remate…</p>}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
+            {CATEGORY_LABELS[remate.category]}
+          </p>
+          <h3 className="mt-1.5 line-clamp-2 text-lg font-semibold leading-snug text-ink">{remate.title}</h3>
+        </div>
 
-        <dl className="grid grid-cols-1 gap-2 text-sm text-slate-600 sm:grid-cols-2">
+        {isDuplicating && <p className="text-xs text-ink-faint">Duplicando remate…</p>}
+
+        <dl className="grid grid-cols-1 gap-2 text-sm text-ink-muted sm:grid-cols-2">
           <div className="flex items-center gap-2">
-            <CalendarIcon className="h-4 w-4 shrink-0 text-slate-400" />
+            <CalendarIcon className="h-4 w-4 shrink-0 text-ink-faint" />
             <span>{remate.starts_at ? formatDateTime(remate.starts_at) : 'Sin fecha'}</span>
           </div>
           <div className="flex items-center gap-2">
-            <BoxIcon className="h-4 w-4 shrink-0 text-slate-400" />
+            <BoxIcon className="h-4 w-4 shrink-0 text-ink-faint" />
             <span>{loteCount === null ? 'Cargando lotes…' : `${loteCount} ${loteCount === 1 ? 'lote' : 'lotes'}`}</span>
           </div>
           {connectedUsers !== null && (
             <div className="flex items-center gap-2">
-              <UsersIcon className="h-4 w-4 shrink-0 text-slate-400" />
+              <UsersIcon className="h-4 w-4 shrink-0 text-ink-faint" />
               <span>
                 {connectedUsers} {connectedUsers === 1 ? 'conectado' : 'conectados'}
               </span>
             </div>
           )}
-          <div className="col-span-full truncate text-slate-500">
+          <div className="col-span-full truncate text-ink-muted">
             {describeLoteState(loteCount, activeLote, nextLote)}
           </div>
         </dl>
 
-        <div className="mt-auto grid grid-cols-2 gap-2 border-t border-slate-100 pt-4">
+        <div className="mt-auto grid grid-cols-2 gap-2 border-t border-line pt-4">
           {isPreparing && (
             <>
               <Button
@@ -315,7 +314,7 @@ export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighte
           </span>
           <motion.div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-20 rounded-2xl bg-gradient-to-br from-brand-400/30 via-brand-300/10 to-transparent"
+            className="pointer-events-none absolute inset-0 z-20 rounded-xl bg-gradient-to-br from-brand-400/30 via-brand-300/10 to-transparent"
             initial={{ opacity: 1 }}
             animate={{ opacity: 0 }}
             transition={{ duration: 2, ease: 'easeOut' }}

@@ -57,6 +57,15 @@ const TABS = [
  * El `reloadToken`/la suscripción a eventos de moderación vivían dentro del extinto
  * `ModerationPanel` -- se mueven acá porque ahora los alimenta a dos pestañas
  * distintas (Conectados y Moderación), no a una sola.
+ *
+ * Retexturizado en la Épica 9, Etapa 10: `Tabs` ya no vive envuelto en su propia card
+ * (`rounded-xl border bg-white shadow-sm`) -- mismo criterio que `SalaSidePanel`, que la
+ * usa sin ninguna caja propia (el componente `Tabs` ya dibuja su propio `border-b`). El
+ * resto de tokens (`ink`/`line`) se alinean con el resto de la Consola retexturizada.
+ * `ChatPanel` pasa a `chrome="flat"` (antes `"boxed"`, su default) por el mismo motivo
+ * que ya usa `SalaSidePanel`: la pestaña "Chat" ya funciona como encabezado, repetir
+ * "Chat del remate" + el contador de conectados debajo (que además ya se ve en
+ * `ConsolaHeader`) era redundante -- ver prototipo aprobado.
  */
 export function ConsolaSidebar({
   remateId,
@@ -106,14 +115,7 @@ export function ConsolaSidebar({
       </div>
 
       <div className="flex flex-col gap-2 xl:min-h-0 xl:flex-1">
-        <div className="shrink-0 rounded-xl border border-slate-200 bg-white px-2 pt-1 shadow-sm">
-          <Tabs
-            tabs={TABS}
-            activeId={activeTab}
-            onChange={(id) => setActiveTab(id as TabId)}
-            className="border-b-0"
-          />
-        </div>
+        <Tabs tabs={TABS} activeId={activeTab} onChange={(id) => setActiveTab(id as TabId)} className="shrink-0" />
 
         {activeTab === 'chat' && (
           <ChatPanel
@@ -122,6 +124,7 @@ export function ConsolaSidebar({
             currentUserId={currentUserId}
             connectedUsers={connectedUsers}
             canModerate
+            chrome="flat"
             className="h-[26rem] xl:h-auto xl:min-h-0 xl:flex-1"
           />
         )}
@@ -134,9 +137,9 @@ export function ConsolaSidebar({
 
         {activeTab === 'moderacion' && (
           <div className="flex h-[26rem] flex-col gap-3 overflow-y-auto xl:h-auto xl:min-h-0 xl:flex-1">
-            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <ShieldAlert aria-hidden="true" className="h-4 w-4 text-slate-400" />
+            <div className="flex items-center justify-between rounded-xl border border-line bg-white p-3 shadow-sm">
+              <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+                <ShieldAlert aria-hidden="true" className="h-4 w-4 text-ink-faint" />
                 Moderación
               </span>
               <LockChatButton remateId={remateId} onLocked={() => setReloadToken((token) => token + 1)} />

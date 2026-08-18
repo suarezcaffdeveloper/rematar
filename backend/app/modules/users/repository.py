@@ -8,6 +8,7 @@ tocar SQLAlchemy, y es la misma razón por la que se documentó en
 """
 
 import uuid
+from collections.abc import Iterable
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +22,21 @@ class UserRepository:
 
     async def get_by_id(self, user_id: uuid.UUID) -> User | None:
         return await self._db.get(User, user_id)
+
+    async def list_avatars_by_ids(
+        self, user_ids: Iterable[uuid.UUID]
+    ) -> dict[uuid.UUID, str | None]:
+        """`{user_id: avatar_url}` para un lote de ids -- una única consulta indexada
+        (`User.id` es la PK), sin importar cuántos ids se pidan de una vez. Mismo
+        patrón que `BotIdentityResolver.resolve` (`app/modules/bots/lookup.py`): quien
+        llama arma la página de resultados, esto solo resuelve el dato adicional en
+        batch en vez de un `JOIN` fila por fila."""
+        ids = set(user_ids)
+        if not ids:
+            return {}
+        stmt = select(User.id, User.avatar_url).where(User.id.in_(ids))
+        rows = (await self._db.execute(stmt)).all()
+        return {row.id: row.avatar_url for row in rows}
 
     async def get_by_email(self, email: str) -> User | None:
         result = await self._db.execute(select(User).where(User.email == email))

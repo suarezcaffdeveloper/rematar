@@ -48,7 +48,7 @@ export function AuditLogEntryCard({ entry }: AuditLogEntryCardProps) {
   const CategoryIcon = CATEGORY_ICONS[entry.action.split('.')[0]] ?? Activity;
 
   return (
-    <div className="flex gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+    <div className="flex gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
       <span
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${VARIANT_ICON_CLASSES[variant]}`}
       >
@@ -80,7 +80,7 @@ export function AuditLogEntryCard({ entry }: AuditLogEntryCardProps) {
               {expanded ? 'Ocultar detalle' : 'Ver detalle'}
             </button>
             {expanded && (
-              <dl className="mt-2 flex flex-col gap-1 rounded-md bg-slate-50 p-2 text-xs text-slate-600">
+              <dl className="mt-2 flex flex-col gap-1 rounded-lg bg-slate-50 p-2 text-xs text-slate-600">
                 {Object.entries(entry.details ?? {}).map(([key, value]) => (
                   <div key={key} className="flex gap-2">
                     <dt className="shrink-0 font-medium text-slate-500">{key}:</dt>

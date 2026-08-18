@@ -69,7 +69,7 @@ function LoteInfoOverlay({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={OVERLAY_TRANSITION}
-            className="absolute inset-0 bg-slate-900/50"
+            className="absolute inset-0 bg-slate-900/60"
           />
           <motion.div
             ref={dialogRef}

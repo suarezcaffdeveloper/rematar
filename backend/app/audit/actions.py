@@ -13,6 +13,8 @@ código existente".
 class AuditAction:
     AUTH_LOGIN = "auth.login"
     AUTH_LOGOUT = "auth.logout"
+    AUTH_PASSWORD_RESET_REQUESTED = "auth.password_reset_requested"
+    AUTH_PASSWORD_RESET_COMPLETED = "auth.password_reset_completed"
 
     REMATE_CREATED = "remate.created"
     REMATE_UPDATED = "remate.updated"

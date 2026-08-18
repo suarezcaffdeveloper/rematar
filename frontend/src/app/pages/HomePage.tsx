@@ -28,7 +28,7 @@ export function HomePage() {
 
   return (
     <Card>
-      <h1 className="text-xl font-semibold text-slate-900">
+      <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
         Bienvenido{user ? `, ${user.full_name}` : ''}
       </h1>
       <p className="mt-2 text-sm text-slate-600">

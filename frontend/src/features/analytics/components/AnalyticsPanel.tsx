@@ -1,4 +1,5 @@
 import { Alert } from '../../../shared/components/Alert';
+import { Card } from '../../../shared/components/Card';
 import { Skeleton } from '../../../shared/components/Skeleton';
 import { formatCurrency, formatDuration } from '../../../shared/lib/format';
 import { useRemateAnalytics } from '../hooks';
@@ -29,7 +30,7 @@ export function AnalyticsPanel({ remateId, subscribeToRealtime, currency }: Anal
   const lotesRestantes = data ? data.lote_status_counts.pending + data.lote_status_counts.open : 0;
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <Card className="flex flex-col gap-4">
       <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
         <ChartBarIcon className="h-4 w-4 text-slate-400" />
         Analítica en tiempo real
@@ -143,6 +144,6 @@ export function AnalyticsPanel({ remateId, subscribeToRealtime, currency }: Anal
           </div>
         </>
       )}
-    </div>
+    </Card>
   );
 }

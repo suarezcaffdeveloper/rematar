@@ -22,9 +22,9 @@ const OVERLAY_TRANSITION = { duration: 0.25, ease: [0.21, 0.47, 0.32, 0.98] as c
 function PriceRow({ lote, currency }: { lote: Lote; currency: string }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-      <span className="font-semibold text-slate-900">{formatCurrency(lote.base_price, currency)}</span>
-      <span className="text-slate-400">Incremento {formatCurrency(lote.min_increment, currency)}</span>
-      {lote.reserve_price && <span className="text-slate-400">Reserva {formatCurrency(lote.reserve_price, currency)}</span>}
+      <span className="font-semibold text-ink">{formatCurrency(lote.base_price, currency)}</span>
+      <span className="text-ink-faint">Incremento {formatCurrency(lote.min_increment, currency)}</span>
+      {lote.reserve_price && <span className="text-ink-faint">Reserva {formatCurrency(lote.reserve_price, currency)}</span>}
     </div>
   );
 }
@@ -79,7 +79,7 @@ function LoteDetailOverlay({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={OVERLAY_TRANSITION}
-            className="absolute inset-0 bg-slate-900/50"
+            className="absolute inset-0 bg-slate-900/60"
           />
           <motion.div
             ref={dialogRef}
@@ -97,7 +97,7 @@ function LoteDetailOverlay({
               type="button"
               onClick={onClose}
               aria-label="Cerrar"
-              className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-slate-400 shadow-sm ring-1 ring-slate-200 backdrop-blur transition-colors hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-ink-faint shadow-sm ring-1 ring-line backdrop-blur transition-colors hover:bg-surface-subtle hover:text-ink-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <X aria-hidden="true" className="h-4 w-4" />
             </button>
@@ -137,7 +137,7 @@ export function LoteCard({ lote, currency }: LoteCardProps) {
         animate={{ opacity: 1, y: 0 }}
         whileHover={prefersReducedMotion ? undefined : { y: -2 }}
         transition={{ duration: 0.25, ease: [0.21, 0.47, 0.32, 0.98] }}
-        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:border-brand-300 hover:shadow-lg"
+        className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-line-strong hover:shadow-lg"
       >
         <div
           role={canExpand ? 'button' : undefined}
@@ -156,7 +156,7 @@ export function LoteCard({ lote, currency }: LoteCardProps) {
             canExpand && 'cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500',
           )}
         >
-          <div className="group relative aspect-video w-full shrink-0 overflow-hidden sm:aspect-square sm:w-48">
+          <div className="group relative aspect-video w-full shrink-0 overflow-hidden bg-surface-subtle sm:aspect-square sm:w-48">
             {mainImage ? (
               <img
                 src={mainImage.url}
@@ -181,8 +181,8 @@ export function LoteCard({ lote, currency }: LoteCardProps) {
               </span>
               <Badge variant={LOTE_STATUS_BADGE_VARIANTS[lote.status]}>{LOTE_STATUS_LABELS[lote.status]}</Badge>
             </div>
-            <h3 className="text-base font-semibold text-slate-900">{lote.title}</h3>
-            {lote.description && <p className="line-clamp-2 text-sm text-slate-600">{lote.description}</p>}
+            <h3 className="text-base font-semibold text-ink">{lote.title}</h3>
+            {lote.description && <p className="line-clamp-2 text-sm text-ink-muted">{lote.description}</p>}
 
             <div className="mt-1">
               <PriceRow lote={lote} currency={currency} />
@@ -202,12 +202,12 @@ export function LoteCard({ lote, currency }: LoteCardProps) {
               </span>
               <Badge variant={LOTE_STATUS_BADGE_VARIANTS[lote.status]}>{LOTE_STATUS_LABELS[lote.status]}</Badge>
             </div>
-            <h3 className="text-xl font-bold text-slate-900">{lote.title}</h3>
+            <h3 className="text-xl font-bold text-ink">{lote.title}</h3>
             {lote.description && (
-              <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">{lote.description}</p>
+              <p className="whitespace-pre-line text-sm leading-relaxed text-ink-muted">{lote.description}</p>
             )}
 
-            <div className="border-t border-slate-100 pt-4">
+            <div className="border-t border-line pt-4">
               <PriceRow lote={lote} currency={currency} />
             </div>
           </div>

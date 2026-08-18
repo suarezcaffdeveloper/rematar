@@ -40,8 +40,8 @@ export function LoteResultCard({ lote, currency, offerDetail, postAuctionCase }:
   const offerCountLabel = offerDetail ? String(offerDetail.offer_count) : '—';
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
-      <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden bg-slate-100">
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-line-strong hover:shadow-xl">
+      <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden bg-surface-subtle">
         {lote.images[0] ? (
           <img src={lote.images[0].url} alt="" className="h-full w-full object-cover" />
         ) : (
@@ -54,48 +54,48 @@ export function LoteResultCard({ lote, currency, offerDetail, postAuctionCase }:
 
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Lote {lote.lot_number}</p>
-          <h3 className="line-clamp-2 text-sm font-semibold text-slate-900">{lote.title}</h3>
+          <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">Lote {lote.lot_number}</p>
+          <h3 className="line-clamp-2 text-sm font-semibold text-ink">{lote.title}</h3>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-2 text-center text-xs">
+        <div className="grid grid-cols-3 gap-2 rounded-lg bg-surface-subtle p-2 text-center text-xs">
           <div>
-            <p className="text-slate-400">Precio inicial</p>
-            <p className="font-semibold text-slate-900">{formatCurrency(lote.base_price, currency)}</p>
+            <p className="text-ink-faint">Precio inicial</p>
+            <p className="font-semibold text-ink">{formatCurrency(lote.base_price, currency)}</p>
           </div>
           <div>
-            <p className="text-slate-400">Precio final</p>
-            <p className="font-semibold text-slate-900">
+            <p className="text-ink-faint">Precio final</p>
+            <p className="font-semibold text-ink">
               {lote.final_price ? formatCurrency(lote.final_price, currency) : '—'}
             </p>
           </div>
           <div>
-            <p className="text-slate-400">Ofertas</p>
-            <p className="font-semibold text-slate-900">{offerCountLabel}</p>
+            <p className="text-ink-faint">Ofertas</p>
+            <p className="font-semibold text-ink">{offerCountLabel}</p>
           </div>
         </div>
 
         {isSold && (
-          <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 text-xs">
+          <div className="flex flex-col gap-2 border-t border-line pt-3 text-xs">
             <div className="flex items-center justify-between gap-2">
-              <span className="truncate font-medium text-slate-900">{winnerName ?? 'Ganador sin datos'}</span>
+              <span className="truncate font-medium text-ink">{winnerName ?? 'Ganador sin datos'}</span>
               {postAuctionCase && (
                 <Badge variant={CASE_STATUS_BADGE_VARIANTS[postAuctionCase.status]}>
                   {CASE_STATUS_LABELS[postAuctionCase.status]}
                 </Badge>
               )}
             </div>
-            <dl className="flex flex-col gap-1 text-slate-500">
+            <dl className="flex flex-col gap-1 text-ink-muted">
               <div className="flex items-baseline justify-between gap-2">
                 <dt className="shrink-0">Email</dt>
                 <dd className="min-w-0 truncate text-right" title={winnerEmail ?? undefined}>
-                  {winnerEmail ?? <span className="text-slate-400">No registrado</span>}
+                  {winnerEmail ?? <span className="text-ink-faint">No registrado</span>}
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-2">
                 <dt className="shrink-0">Teléfono</dt>
                 <dd className="min-w-0 truncate text-right" title={winnerPhone ?? undefined}>
-                  {winnerPhone ?? <span className="text-slate-400">No registrado</span>}
+                  {winnerPhone ?? <span className="text-ink-faint">No registrado</span>}
                 </dd>
               </div>
             </dl>
@@ -112,7 +112,7 @@ export function LoteResultCard({ lote, currency, offerDetail, postAuctionCase }:
         )}
 
         {isUnsold && (
-          <div className="mt-auto rounded-lg bg-slate-50 p-3 text-center text-xs font-medium text-slate-500">
+          <div className="mt-auto rounded-lg bg-surface-subtle p-3 text-center text-xs font-medium text-ink-muted">
             Sin ofertas válidas
           </div>
         )}

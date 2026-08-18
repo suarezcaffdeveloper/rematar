@@ -58,4 +58,36 @@ describe('StatusChangeForm', () => {
 
     expect(await screen.findByText(/No se puede pasar de/)).toBeInTheDocument();
   });
+
+  it('resincroniza el estado seleccionado tras una transición exitosa, sin requerir tocar otro estado antes', async () => {
+    // Reproduce el bug reportado: adjudicado -> pago_pendiente -> pago_recibido, cada
+    // transición usando como origen el estado REAL devuelto por el padre tras `reload()`
+    // (acá simulado re-renderizando con un `currentStatus` distinto), no un valor viejo
+    // atascado en el `useState` local del formulario.
+    apiMocks.changeVentaEstadoRequest.mockResolvedValue({});
+    const onChanged = vi.fn();
+    const user = userEvent.setup();
+
+    const { rerender } = render(
+      <StatusChangeForm caseId="case-1" currentStatus="adjudicado" onChanged={onChanged} />,
+    );
+
+    await user.selectOptions(screen.getByLabelText('Nuevo estado'), 'pago_pendiente');
+    await user.click(screen.getByRole('button', { name: 'Cambiar estado' }));
+    expect(apiMocks.changeVentaEstadoRequest).toHaveBeenLastCalledWith('case-1', {
+      new_status: 'pago_pendiente',
+    });
+
+    // El padre recibe la venta actualizada y vuelve a renderizar el form con el estado
+    // real nuevo -- el componente NO se desmonta (no hay `key` en el padre).
+    rerender(<StatusChangeForm caseId="case-1" currentStatus="pago_pendiente" onChanged={onChanged} />);
+
+    const select = screen.getByLabelText('Nuevo estado') as HTMLSelectElement;
+    expect(select.value).toBe('pago_recibido');
+
+    await user.click(screen.getByRole('button', { name: 'Cambiar estado' }));
+    expect(apiMocks.changeVentaEstadoRequest).toHaveBeenLastCalledWith('case-1', {
+      new_status: 'pago_recibido',
+    });
+  });
 });

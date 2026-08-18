@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import type { NormalizedApiError } from '../../shared/api/errors';
 import { useAsyncResource } from '../../shared/hooks/useAsyncResource';
 import {
+  fetchConnectedUsersCountRequest,
   fetchLoteByIdRequest,
   fetchLoteCountRequest,
   fetchLotesRequest,
@@ -81,6 +82,38 @@ export function useLoteCount(remateId: string): number | null {
     let cancelled = false;
     setCount(null);
     fetchLoteCountRequest(remateId)
+      .then((total) => {
+        if (!cancelled) setCount(total);
+      })
+      .catch(() => {
+        if (!cancelled) setCount(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [remateId]);
+
+  return count;
+}
+
+/**
+ * Cuántos usuarios están conectados a la sala de un remate puntual en este momento --
+ * mismo patrón que `useLoteCount` (perezoso, `null` mientras carga o si falló, sin
+ * bloquear el resto de la tarjeta por este dato secundario). Un solo snapshot HTTP, no
+ * un WebSocket: se usa para un número de referencia en una tarjeta, no para mantenerlo
+ * en vivo (eso es lo que hace `useLiveRemateState` en `features/sala`).
+ */
+export function useConnectedUsersCount(remateId: string): number | null {
+  const [count, setCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!remateId) {
+      setCount(null);
+      return;
+    }
+    let cancelled = false;
+    setCount(null);
+    fetchConnectedUsersCountRequest(remateId)
       .then((total) => {
         if (!cancelled) setCount(total);
       })

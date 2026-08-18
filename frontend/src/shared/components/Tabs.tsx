@@ -53,7 +53,7 @@ export function Tabs({ tabs, activeId, onChange, className }: TabsProps) {
       ref={containerRef}
       role="tablist"
       onKeyDown={handleKeyDown}
-      className={clsx('flex gap-1 border-b border-slate-200', className)}
+      className={clsx('flex gap-5 border-b border-line', className)}
     >
       {tabs.map((tab) => (
         <button
@@ -64,11 +64,11 @@ export function Tabs({ tabs, activeId, onChange, className }: TabsProps) {
           tabIndex={activeId === tab.id ? 0 : -1}
           onClick={() => onChange(tab.id)}
           className={clsx(
-            'px-3 py-2 text-sm font-medium transition-colors',
+            'border-b-2 pb-2.5 text-xs font-semibold uppercase tracking-wide transition-colors',
             'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset',
             activeId === tab.id
-              ? 'border-b-2 border-brand-600 text-brand-700'
-              : 'text-slate-500 hover:text-slate-700',
+              ? 'border-brand-600 text-ink'
+              : 'border-transparent text-ink-faint hover:text-ink-muted',
           )}
         >
           {tab.label}

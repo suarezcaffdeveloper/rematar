@@ -173,7 +173,7 @@ export function LoteFormModal({ isOpen, onClose, remateId, lote, onSaved }: Lote
       hideHeader
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-ink-faint">
             {isUploadingImages ? 'Subiendo imágenes…' : 'Podés seguir editando este lote después.'}
           </p>
           <div className="flex items-center gap-2">
@@ -194,12 +194,7 @@ export function LoteFormModal({ isOpen, onClose, remateId, lote, onSaved }: Lote
               whileHover={prefersReducedMotion || isSubmitting ? undefined : { scale: 1.02 }}
               whileTap={prefersReducedMotion || isSubmitting ? undefined : { scale: 0.98 }}
             >
-              <Button
-                onClick={handleSubmit}
-                isLoading={activeAction === 'save'}
-                disabled={isSubmitting}
-                className="bg-gradient-to-r from-brand-600 to-brand-700 shadow-lg shadow-brand-600/25 hover:from-brand-700 hover:to-brand-800 hover:shadow-xl hover:shadow-brand-600/30"
-              >
+              <Button variant="hero" onClick={handleSubmit} isLoading={activeAction === 'save'} disabled={isSubmitting}>
                 {isEditMode ? 'Guardar cambios' : 'Guardar lote'}
                 {activeAction !== 'save' && <ArrowRight aria-hidden="true" className="h-4 w-4" />}
               </Button>
@@ -215,10 +210,10 @@ export function LoteFormModal({ isOpen, onClose, remateId, lote, onSaved }: Lote
               <BoxIcon className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              <h1 className="text-2xl font-semibold tracking-tight text-ink">
                 {isEditMode ? 'Editar lote' : 'Crear lote'}
               </h1>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-ink-muted">
                 Cargá la información y las fotos del lote. Vas a poder ajustar todo esto después.
               </p>
             </div>
@@ -303,7 +298,7 @@ export function LoteFormModal({ isOpen, onClose, remateId, lote, onSaved }: Lote
                 error={errors.reserve_price}
               />
             </div>
-            <p className="-mt-2 text-xs text-slate-400">
+            <p className="-mt-2 text-xs text-ink-faint">
               El precio de reserva nunca se muestra a los compradores -- solo lo ves vos.
             </p>
           </FormSection>
@@ -325,7 +320,7 @@ export function LoteFormModal({ isOpen, onClose, remateId, lote, onSaved }: Lote
         </div>
 
         {!isEditMode && (
-          <aside className="flex h-fit flex-col gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-5 lg:sticky lg:top-1/2 lg:self-start lg:-translate-y-1/2">
+          <aside className="flex h-fit flex-col gap-3 rounded-xl border border-brand-100 bg-brand-50/60 p-5 lg:sticky lg:top-1/2 lg:self-start lg:-translate-y-1/2">
             <div className="flex items-center gap-2 text-brand-700">
               <Lightbulb aria-hidden="true" className="h-4 w-4" />
               <h3 className="text-sm font-semibold">Consejos</h3>

@@ -27,7 +27,7 @@ export function SaleHeader({ data, currency = 'ARS' }: SaleHeaderProps) {
           )}
         </div>
         <div className="min-w-0">
-          <h1 className="truncate text-xl font-semibold text-slate-900">{data.lote_title}</h1>
+          <h1 className="truncate text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{data.lote_title}</h1>
           <p className="mt-0.5 truncate text-sm text-slate-500">
             Lote {data.lot_number} · {data.remate_title}
           </p>

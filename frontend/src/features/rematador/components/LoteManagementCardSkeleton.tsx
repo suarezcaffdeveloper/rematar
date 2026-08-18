@@ -3,7 +3,7 @@ import { Skeleton } from '../../../shared/components/Skeleton';
 /** Misma forma que `LoteManagementCard`, en versión "cargando". */
 export function LoteManagementCardSkeleton() {
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="flex items-center gap-4 rounded-2xl border border-line bg-white p-4 shadow-sm">
       <Skeleton className="h-20 w-6" />
       <Skeleton className="h-20 w-28 shrink-0 rounded-xl" />
       <div className="flex-1">

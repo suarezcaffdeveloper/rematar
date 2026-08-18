@@ -7,6 +7,7 @@ import { Button } from '../../../shared/components/Button';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { Pagination } from '../../../shared/components/Pagination';
 import { usePagedList } from '../../../shared/hooks/usePagedList';
+import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
 import { useWideLayout } from '../../../app/layouts/useWideLayout';
 import { DashboardToolbar } from '../../remates/components/DashboardToolbar';
 import { GavelIcon } from '../../remates/components/icons';
@@ -56,9 +57,18 @@ interface DashboardLocationState {
  * remate) y en la Consola Operativa de cada remate puntual. `useWideLayout()` le pide a
  * `AppLayout` un `<main>` más ancho para que la grilla de 4 columnas tenga aire real en
  * pantallas grandes.
+ *
+ * Retexturizado en la Épica 9, Etapa 9 (mismo sistema visual que la Sala del Remate y el
+ * Dashboard del Comprador, sin copiar su layout -- ver prototipo aprobado): cabecera
+ * suelta con separador `border-line` + tipografía `ink`/`ink-muted`, `DashboardToolbar`
+ * en su variante `open` (composición sin caja, ya usada por el Dashboard del Comprador)
+ * y `RematadorDashboardStats` como franja de indicadores abierta en vez de 7 tarjetas
+ * con sombra propia. `useBreadcrumb` nuevo acá (antes solo lo tenían las subpantallas de
+ * gestión) para que el header quede consistente con el resto del panel del rematador.
  */
 export function RematadorDashboardPage() {
   useWideLayout();
+  useBreadcrumb([{ label: 'Inicio', to: '/' }, { label: 'Mis remates' }]);
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -101,90 +111,92 @@ export function RematadorDashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-6">
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-sm">
-            <GavelIcon className="h-6 w-6" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Mis remates</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Administrá tus remates: creá, preparalos, iniciá, reanudá y finalizá desde acá.
-            </p>
-          </div>
+    <div className="flex flex-col gap-8 font-display">
+      <div className="flex flex-col gap-3 border-b border-line pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Mis remates</h1>
+          <p className="mt-1 max-w-xl text-sm text-ink-muted">
+            Administrá tus remates: creá, preparalos, iniciá, reanudá y finalizá desde acá.
+          </p>
         </div>
         <CreateRemateButton onClick={() => setIsCreateModalOpen(true)} />
       </div>
 
       {!isLoading && !error && <RematadorDashboardStats remates={remates} />}
 
-      <DashboardToolbar filters={filters} onChange={handleFiltersChange} statusOptions={ALL_STATUS_OPTIONS} />
-
-      {error && (
-        <Alert variant="error">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span>{error.message}</span>
-            <Button variant="secondary" onClick={reload}>
-              Reintentar
-            </Button>
-          </div>
-        </Alert>
-      )}
-
-      {isLoading && !error && (
-        <div className={CARD_GRID_CLASSES}>
-          {Array.from({ length: SKELETON_COUNT }, (_, index) => (
-            <RematadorRemateCardSkeleton key={index} />
-          ))}
-        </div>
-      )}
-
-      {!isLoading && !error && hasAnyRemates && filteredRemates.length === 0 && (
-        <EmptyState
-          icon={<GavelIcon className="h-10 w-10" />}
-          title="Ningún remate coincide con tu búsqueda"
-          description="Probá con otro título, o quitá alguno de los filtros aplicados."
-          action={
-            <Button variant="secondary" onClick={() => handleFiltersChange(DEFAULT_FILTERS)}>
-              Limpiar filtros
-            </Button>
-          }
+      <div className="flex flex-col gap-4">
+        <DashboardToolbar
+          filters={filters}
+          onChange={handleFiltersChange}
+          statusOptions={ALL_STATUS_OPTIONS}
+          variant="open"
         />
-      )}
 
-      {!isLoading && !error && !hasAnyRemates && (
-        <EmptyState
-          icon={<GavelIcon className="h-10 w-10" />}
-          title="Todavía no tenés remates"
-          description="Creá tu primer remate para empezar a prepararlo."
-          action={<Button onClick={() => setIsCreateModalOpen(true)}>Crear remate</Button>}
-        />
-      )}
+        {error && (
+          <Alert variant="error">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span>{error.message}</span>
+              <Button variant="secondary" onClick={reload}>
+                Reintentar
+              </Button>
+            </div>
+          </Alert>
+        )}
 
-      {!isLoading && !error && filteredRemates.length > 0 && (
-        <>
+        {isLoading && !error && (
           <div className={CARD_GRID_CLASSES}>
-            {pageItems.map((remate, index) => (
-              <motion.div
-                key={remate.id}
-                initial={prefersReducedMotion ? undefined : { opacity: 0, y: 16 }}
-                animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: Math.min(index * 0.04, 0.32), ease: [0.21, 0.47, 0.32, 0.98] }}
-              >
-                <RematadorRemateCard
-                  remate={remate}
-                  onChanged={reload}
-                  onStarted={setStartedRemate}
-                  isHighlighted={remate.id === highlightedRemateId}
-                />
-              </motion.div>
+            {Array.from({ length: SKELETON_COUNT }, (_, index) => (
+              <RematadorRemateCardSkeleton key={index} />
             ))}
           </div>
+        )}
 
-          <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
-        </>
-      )}
+        {!isLoading && !error && hasAnyRemates && filteredRemates.length === 0 && (
+          <EmptyState
+            icon={<GavelIcon className="h-10 w-10" />}
+            title="Ningún remate coincide con tu búsqueda"
+            description="Probá con otro título, o quitá alguno de los filtros aplicados."
+            action={
+              <Button variant="secondary" onClick={() => handleFiltersChange(DEFAULT_FILTERS)}>
+                Limpiar filtros
+              </Button>
+            }
+          />
+        )}
+
+        {!isLoading && !error && !hasAnyRemates && (
+          <EmptyState
+            icon={<GavelIcon className="h-10 w-10" />}
+            title="Todavía no tenés remates"
+            description="Creá tu primer remate para empezar a prepararlo."
+            action={<Button onClick={() => setIsCreateModalOpen(true)}>Crear remate</Button>}
+          />
+        )}
+
+        {!isLoading && !error && filteredRemates.length > 0 && (
+          <>
+            <div className={CARD_GRID_CLASSES}>
+              {pageItems.map((remate, index) => (
+                <motion.div
+                  key={remate.id}
+                  initial={prefersReducedMotion ? undefined : { opacity: 0, y: 16 }}
+                  animate={prefersReducedMotion ? undefined : { opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: Math.min(index * 0.04, 0.32), ease: [0.21, 0.47, 0.32, 0.98] }}
+                >
+                  <RematadorRemateCard
+                    remate={remate}
+                    onChanged={reload}
+                    onStarted={setStartedRemate}
+                    isHighlighted={remate.id === highlightedRemateId}
+                  />
+                </motion.div>
+              ))}
+            </div>
+
+            <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
+          </>
+        )}
+      </div>
 
       <RemateFormModal
         isOpen={isCreateModalOpen}

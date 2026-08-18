@@ -126,6 +126,20 @@ export async function fetchLoteByIdRequest(remateId: string, loteId: string): Pr
 }
 
 /**
+ * Cuántos usuarios están conectados a la sala de un remate en este momento -- mismo
+ * `GET /remates/{id}/snapshot` que usa `features/sala` (`useRemateSnapshot`), pero
+ * tipado acá solo con el único campo que este feature necesita (`connected_users`) para
+ * no importar `RemateStateSnapshot` de `sala` -- `sala` ya depende de `remates` (por
+ * ejemplo `GavelIcon`), depender también en el otro sentido crearía un ciclo entre
+ * features. Snapshot HTTP puntual, sin WebSocket: el número queda desactualizado si
+ * alguien entra o sale después de pedirlo, igual que `fetchLoteCountRequest`.
+ */
+export async function fetchConnectedUsersCountRequest(remateId: string): Promise<number> {
+  const { data } = await apiClient.get<{ connected_users: number }>(`/remates/${remateId}/snapshot`);
+  return data.connected_users;
+}
+
+/**
  * Transiciones del motor de estados de `Remate` (Épica 2, Módulo 2.3,
  * `backend/app/modules/remates/router.py`) -- ninguna lleva body, las cuatro devuelven
  * el `Remate` ya actualizado. `start`/`resume`/`finish` se agregaron en el Dashboard del

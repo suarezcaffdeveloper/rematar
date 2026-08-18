@@ -22,16 +22,50 @@
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
 
-  --color-brand-50: #eff6ff;
-  --color-brand-100: #dbeafe;
-  --color-brand-200: #bfdbfe;
-  --color-brand-300: #93c5fd;
-  --color-brand-400: #5b8def;
-  --color-brand-500: #2563eb;
-  --color-brand-600: #1d4ed8;
-  --color-brand-700: #1e40af;
-  --color-brand-800: #1e3a8a;
-  --color-brand-900: #1e2f66;
+  /* Tipografía del prototipo aprobado (rediseño visual, Sala del Remate): pila de
+   * fuentes del sistema, no un archivo propio -- por eso NO reemplaza `--font-sans`
+   * (que sigue siendo Inter, autohospedada, para toda la app). Genera la utilidad
+   * `font-display`, que `SalaPage` aplica una sola vez en su contenedor raíz -- por
+   * herencia de CSS, cualquier texto adentro (incluidos componentes compartidos como
+   * `Button`/`Badge`/`ChatPanel`) hereda esta tipografía sin que haga falta tocar esos
+   * archivos ni el resto de la app. En Windows (donde se aprobó el prototipo) resuelve
+   * a "Segoe UI Variable" -- en otros sistemas cae a su propia fuente moderna nativa
+   * (`-apple-system` en macOS/iOS, etc.), mismo patrón que ya usan productos como
+   * GitHub para una tipografía "nativa" consistente sin pesar la carga con un archivo. */
+  --font-display:
+    'Segoe UI Variable Display', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Paleta neutra del prototipo aprobado -- deliberadamente distinta del `slate` de
+   * Tailwind que usa el resto de la app hoy (más next, menos azulado). Nombres nuevos
+   * (`ink`/`line`/`surface-subtle`), no un override de `slate`: pisar `slate` global
+   * repintaría de golpe TODA la aplicación (cada texto/borde/fondo gris de cualquier
+   * pantalla, no solo la Sala) -- exactamente lo que el proceso "panel por panel"
+   * pidió evitar. Estos tokens quedan disponibles para cualquier panel futuro que se
+   * rediseñe; por ahora solo los usan los componentes de la Sala. */
+  --color-ink: #101114;
+  --color-ink-muted: #6b6f76;
+  --color-ink-faint: #a2a5ab;
+  --color-line: #e7e7ea;
+  --color-line-strong: #d8d9dd;
+  --color-surface-subtle: #fafaf9;
+
+  /* Retinte del rediseño visual (Sala del Remate, primer panel del nuevo Design
+   * System -- ver prototipo aprobado): azul eléctrico controlado (#2451f2, anclado en
+   * `600`, mismo lugar que usa `Button` `primary` como fondo) en vez del azul por
+   * default de Tailwind -- pedido explícito de no usar "blue-600 de Tailwind" tal cual.
+   * Mismos nombres de variable: todo lo que ya referencia `brand-*` (Button, Badge,
+   * Input/focus ring, Alert, Tabs, ChatMessageItem, etc., en cualquier pantalla, no
+   * solo la Sala) recibe el tono nuevo automáticamente, sin tocar esos componentes. */
+  --color-brand-50: #f0f3fe;
+  --color-brand-100: #e1e8fd;
+  --color-brand-200: #c6d2fc;
+  --color-brand-300: #9db3fa;
+  --color-brand-400: #6e8bf7;
+  --color-brand-500: #3f64f4;
+  --color-brand-600: #2451f2;
+  --color-brand-700: #1b3fc4;
+  --color-brand-800: #16339c;
+  --color-brand-900: #142c7d;
 
   --color-danger-50: #fef2f2;
   --color-danger-100: #fee2e2;
@@ -69,6 +103,31 @@
 
 body {
   @apply bg-slate-50 font-sans text-slate-900 antialiased;
+}
+
+/*
+ * "El precio acaba de cambiar" (Sala del Remate -- ver `SalaBidPanel`): tinte verde
+ * breve + movimiento sutil de escala al recibir una nueva oferta, ida y vuelta al color
+ * normal. Puramente visual -- se dispara desde React comparando el valor de precio ya
+ * recibido, no toca WebSockets ni el cálculo/envío de ofertas.
+ */
+@keyframes price-flash {
+  0% {
+    color: var(--color-ink);
+    transform: scale(1);
+  }
+  30% {
+    color: var(--color-success-600);
+    transform: scale(1.04);
+  }
+  100% {
+    color: var(--color-ink);
+    transform: scale(1);
+  }
+}
+
+.animate-price-flash {
+  animation: price-flash 600ms ease-out;
 }
 
 /*

@@ -30,11 +30,11 @@ export function PresenceCounter({ count }: PresenceCounterProps) {
   return (
     <span
       className={clsx(
-        'flex items-center gap-1.5 font-medium text-slate-700 transition-colors duration-300',
+        'flex items-center gap-1.5 font-medium text-ink-muted transition-colors duration-300',
         isPulsing && 'text-brand-600',
       )}
     >
-      <UsersIcon className="h-4 w-4 shrink-0 text-slate-400" />
+      <UsersIcon className="h-4 w-4 shrink-0 text-ink-faint" />
       {count} {count === 1 ? 'conectado' : 'conectados'}
     </span>
   );

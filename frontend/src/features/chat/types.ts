@@ -19,6 +19,14 @@ export interface ChatMessage {
   author_id: string | null;
   author_name: string | null;
   author_role: UserRole | null;
+  /** Foto de perfil VIGENTE del autor -- `null` si nunca eligió una (avatar por
+   * defecto, iniciales) o si el mensaje es de sistema. A diferencia de
+   * `author_name`/`author_role`, el backend la resuelve en vivo en cada lectura (nunca
+   * se persiste junto al mensaje), así que un cambio de foto de perfil se ve reflejado
+   * también en mensajes viejos -- ver `backend/app/modules/chat/schemas.py::ChatMessageRead`.
+   * Mismos dos formatos que `User.avatar_url` (`features/auth/types.ts`): interpretado
+   * por `shared/components/UserAvatar.tsx`. */
+  author_avatar_url: string | null;
   content: string | null;
   system_event_type: string | null;
   is_deleted: boolean;

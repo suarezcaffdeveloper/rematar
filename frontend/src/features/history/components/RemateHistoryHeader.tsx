@@ -69,7 +69,7 @@ export function RemateHistoryHeader({
   ];
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
       <div className="relative aspect-[4/3] w-full sm:aspect-[21/9]">
         {remate.cover_image_url ? (
           <img src={remate.cover_image_url} alt="" className="absolute inset-0 h-full w-full object-cover" />

@@ -21,6 +21,7 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
     author_id: 'user-1',
     author_name: 'Juan',
     author_role: 'comprador',
+    author_avatar_url: null,
     content: 'Hola',
     system_event_type: null,
     is_deleted: false,
@@ -97,6 +98,7 @@ describe('useChatMessages', () => {
           author_id: 'user-2',
           author_name: 'Pedro',
           author_role: 'comprador',
+          author_avatar_url: 'https://cdn.example.com/pedro.jpg',
           content: 'Buenas',
           system_event_type: null,
           created_at: '2026-07-20T10:01:00Z',
@@ -106,6 +108,7 @@ describe('useChatMessages', () => {
 
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].content).toBe('Buenas');
+    expect(result.current.messages[0].author_avatar_url).toBe('https://cdn.example.com/pedro.jpg');
   });
 
   it('ignora mensajes que no son eventos de dominio de chat', async () => {
@@ -219,6 +222,7 @@ describe('useChatMessages', () => {
           author_id: 'user-2',
           author_name: 'Pedro',
           author_role: 'comprador',
+          author_avatar_url: null,
           content: 'Ya termino',
           system_event_type: null,
           created_at: 't',

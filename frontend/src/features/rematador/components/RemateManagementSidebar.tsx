@@ -43,7 +43,7 @@ export function RemateManagementSidebar({
 
   return (
     <aside className="flex w-full flex-col gap-4 lg:w-72 lg:shrink-0">
-      <div className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:border-slate-300 hover:shadow-md">
+      <div className="group overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-all duration-300 hover:border-line-strong hover:shadow-xl">
         <div className="aspect-video w-full overflow-hidden">
           {remate.cover_image_url ? (
             <img
@@ -62,10 +62,10 @@ export function RemateManagementSidebar({
               {CATEGORY_LABELS[remate.category]}
             </span>
           </div>
-          <h1 className="text-lg font-bold leading-snug text-slate-900">{remate.title}</h1>
+          <h1 className="text-lg font-bold leading-snug text-ink">{remate.title}</h1>
           {remate.starts_at && (
-            <div className="flex items-center gap-1.5 text-sm text-slate-500">
-              <CalendarIcon className="h-4 w-4 shrink-0 text-slate-400" />
+            <div className="flex items-center gap-1.5 text-sm text-ink-muted">
+              <CalendarIcon className="h-4 w-4 shrink-0 text-ink-faint" />
               <span>{formatDateTime(remate.starts_at)}</span>
             </div>
           )}
@@ -75,7 +75,7 @@ export function RemateManagementSidebar({
       <DropdownMenu
         triggerLabel="Configuración del remate"
         trigger={
-          <span className="inline-flex items-center gap-2 px-1.5 text-sm font-medium text-slate-600">
+          <span className="inline-flex items-center gap-2 px-1.5 text-sm font-medium text-ink-muted">
             <Settings aria-hidden="true" className="h-4 w-4" />
             Configuración del remate
           </span>

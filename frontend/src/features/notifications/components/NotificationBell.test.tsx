@@ -85,7 +85,7 @@ describe('NotificationBell', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Notificaciones' }));
 
     expect(screen.getByText('¡Ganaste un lote!')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Ganaste un lote/ })).toHaveAttribute('href', '/remates/remate-1');
+    expect(screen.getByRole('link', { name: /Ganaste un lote/ })).toHaveAttribute('href', '/mis-compras');
   });
 
   it('sin notificaciones, muestra el estado vacío', async () => {

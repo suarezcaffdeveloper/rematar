@@ -123,41 +123,55 @@ export function PlaceBidButton({
         <Button disabled className="w-full py-2.5 text-sm" title={disabledReason}>
           Realizar oferta
         </Button>
-        <p className="text-center text-xs text-slate-400">{disabledReason}</p>
+        <p className="text-center text-xs text-ink-faint">{disabledReason}</p>
       </div>
     );
   }
 
   return (
     <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-2.5">
-      <Input
-        label={`Tu oferta (mínimo ${formatCurrency(minimumAmount, currency)})`}
-        type="text"
-        inputMode="decimal"
-        value={amount}
-        onChange={(event) => {
-          setTouched(true);
-          setAmount(event.target.value);
-        }}
-        error={validationError ?? undefined}
-        disabled={isSubmitting}
-        className="py-1.5"
-      />
+      <div>
+        <Input
+          label="Tu oferta"
+          type="text"
+          inputMode="decimal"
+          variant="underline"
+          value={amount}
+          onChange={(event) => {
+            setTouched(true);
+            setAmount(event.target.value);
+          }}
+          error={validationError ?? undefined}
+          disabled={isSubmitting}
+          className="text-lg font-semibold"
+        />
+        {/* Monto mínimo en su propia línea, separado del label -- si viviera dentro del
+         * label (como antes) cada oferta ajena que llega por WebSocket cambia ese texto
+         * y puede volcarlo de una línea a dos (o al revés) según cuántos dígitos tenga
+         * el nuevo mínimo, empujando el resto del formulario para abajo/arriba en un
+         * saltito. Acá, en su propia línea de altura fija y con `tabular-nums`, solo
+         * cambian los dígitos -- nunca la altura. */}
+        <p className="mt-1 font-mono text-xs tabular-nums text-ink-faint">
+          Mínimo: {formatCurrency(minimumAmount, currency)}
+        </p>
+      </div>
 
       {/* Ofertas inteligentes: tres montos sugeridos (mínimo válido + dos escalones de
        * un incremento cada uno, ver `computeQuickBidSuggestions`) para completar el
        * input con un click en vez de calcularlo a mano -- elegir uno no manda la oferta,
        * eso sigue siendo el botón "Ofertar" de más abajo (pedido explícito, reemplaza al
-       * atajo único "+incremento mínimo" que había antes). */}
+       * atajo único "+incremento mínimo" que había antes). `tabular-nums` acá también --
+       * mismo motivo que el precio grande de `ActiveLotePanel`, para que una oferta ajena
+       * actualizando estos montos no genere el mismo saltito. */}
       <div className="grid grid-cols-3 gap-2">
         {quickBidSuggestions.map((suggestedAmount) => (
           <Button
             key={suggestedAmount}
             type="button"
-            variant="secondary"
+            variant="chip"
             onClick={() => handleSelectSuggestion(suggestedAmount)}
             disabled={isSubmitting}
-            className="min-w-0 whitespace-normal break-words px-1.5 py-2 text-center text-xs font-semibold leading-tight"
+            className="min-w-0 whitespace-normal break-words px-1.5 py-2 text-center font-mono text-xs font-semibold leading-tight tabular-nums"
           >
             {formatCurrency(suggestedAmount, currency)}
           </Button>
@@ -166,9 +180,10 @@ export function PlaceBidButton({
 
       <Button
         type="submit"
+        variant="hero"
         isLoading={isSubmitting}
         disabled={Boolean(validationError)}
-        className="w-full py-2 text-sm font-semibold"
+        className="mt-1 w-full py-2 text-sm font-semibold"
       >
         Ofertar
       </Button>

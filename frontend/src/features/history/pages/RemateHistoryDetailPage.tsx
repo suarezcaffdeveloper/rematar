@@ -68,7 +68,7 @@ export function RemateHistoryDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 font-display">
         <Skeleton className="aspect-[4/3] w-full rounded-2xl sm:aspect-[21/9]" />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {Array.from({ length: 5 }, (_, index) => (
@@ -81,7 +81,7 @@ export function RemateHistoryDetailPage() {
 
   if (remateError || !remate) {
     return (
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 font-display">
         <Alert variant="error">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{remateError?.message ?? 'No se pudo cargar este remate.'}</span>
@@ -101,7 +101,7 @@ export function RemateHistoryDetailPage() {
 
   if (detailError || !detail) {
     return (
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 font-display">
         <Alert variant="error">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{detailError?.message ?? 'No se pudo cargar el historial de este remate.'}</span>
@@ -120,7 +120,7 @@ export function RemateHistoryDetailPage() {
   const isExportDisabled = isLotesLoading || Boolean(lotesError);
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8 font-display">
       <RemateHistoryHeader
         remate={remate}
         isExportDisabled={isExportDisabled}
@@ -144,13 +144,13 @@ export function RemateHistoryDetailPage() {
       <div className="flex flex-col gap-3">
         {lotesError && (
           <>
-            <h2 className="text-lg font-semibold text-slate-900">Resultado de cada lote</h2>
+            <h2 className="text-lg font-semibold text-ink">Resultado de cada lote</h2>
             <Alert variant="error">{lotesError.message}</Alert>
           </>
         )}
         {isLotesLoading && !lotesError && (
           <>
-            <h2 className="text-lg font-semibold text-slate-900">Resultado de cada lote</h2>
+            <h2 className="text-lg font-semibold text-ink">Resultado de cada lote</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 3 }, (_, index) => (
                 <Skeleton key={index} className="h-64 rounded-2xl" />
@@ -169,7 +169,7 @@ export function RemateHistoryDetailPage() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <h2 className="text-lg font-semibold text-slate-900">Actividad del remate</h2>
+        <h2 className="text-lg font-semibold text-ink">Actividad del remate</h2>
         <AuditLogView scope={{ type: 'remate', remateId: id }} />
       </div>
     </div>

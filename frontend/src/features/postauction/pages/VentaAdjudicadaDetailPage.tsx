@@ -16,7 +16,6 @@ import { SaleHeader } from '../components/SaleHeader';
 import { StatusChangeForm } from '../components/StatusChangeForm';
 import { Timeline } from '../components/Timeline';
 import { useVentaDetail } from '../hooks';
-import { STATUS_LABELS } from '../labels';
 
 /**
  * Detalle de una venta adjudicada (Épica 7, Módulo 7.5), en
@@ -82,12 +81,7 @@ export function VentaAdjudicadaDetailPage() {
       </div>
 
       <Card>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-900">Estado de la venta</h2>
-          <p className="text-xs text-slate-500">
-            Estado actual: <span className="font-semibold text-slate-900">{STATUS_LABELS[data.status]}</span>
-          </p>
-        </div>
+        <h2 className="mb-4 text-sm font-semibold text-slate-900">Estado de la venta</h2>
         <ProgressStepper status={data.status} />
       </Card>
 

@@ -46,7 +46,7 @@ export function FinishedRemateList({ showOwner = false }: FinishedRemateListProp
       ) : isLoading && !data ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }, (_, index) => (
-            <Skeleton key={index} className="h-36 rounded-xl" />
+            <Skeleton key={index} className="h-64 rounded-2xl" />
           ))}
         </div>
       ) : data && data.items.length === 0 ? (
@@ -64,8 +64,8 @@ export function FinishedRemateList({ showOwner = false }: FinishedRemateListProp
           </div>
 
           {data && data.total > PAGE_SIZE && (
-            <div className="flex items-center justify-between border-t border-slate-200 pt-3">
-              <span className="text-xs text-slate-500">
+            <div className="flex items-center justify-between border-t border-line pt-3">
+              <span className="text-xs text-ink-muted">
                 {data.total} {data.total === 1 ? 'remate' : 'remates'} · página {page} de {totalPages}
               </span>
               <div className="flex gap-2">

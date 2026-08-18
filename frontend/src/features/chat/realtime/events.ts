@@ -25,6 +25,7 @@ export interface ChatMessageSentEvent extends ChatDomainEventBase {
   content: string;
   system_event_type: string | null;
   created_at: string;
+  author_avatar_url: string | null;
 }
 
 export interface ChatMessageDeletedEvent extends ChatDomainEventBase {

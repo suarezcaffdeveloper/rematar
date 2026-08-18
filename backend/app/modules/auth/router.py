@@ -13,7 +13,14 @@ from fastapi import APIRouter, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.modules.auth.dependencies import get_auth_service
-from app.modules.auth.schemas import LogoutRequest, RefreshRequest, Token
+from app.modules.auth.schemas import (
+    ForgotPasswordRequest,
+    LogoutRequest,
+    RefreshRequest,
+    ResetPasswordRequest,
+    ResetPasswordTokenValidation,
+    Token,
+)
 from app.modules.auth.service import AuthService
 from app.modules.users.schemas import UserCreate, UserRead
 
@@ -60,3 +67,43 @@ async def logout(
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> None:
     await auth_service.logout(payload.refresh_token)
+
+
+@router.post(
+    "/forgot-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Solicitar recuperación de contraseña",
+)
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> None:
+    """Responde siempre 204, exista o no el email (RNF-11, mismo criterio que
+    `AuthService.authenticate`): la respuesta nunca revela qué emails están
+    registrados. El único caso en el que se distingue es el rate limit (429) -- no
+    filtra existencia, se dispara igual haya o no una cuenta detrás del email."""
+    await auth_service.request_password_reset(payload.email)
+
+
+@router.post(
+    "/reset-password/validate",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Validar un link de recuperación antes de mostrar el formulario",
+)
+async def validate_reset_password_token(
+    payload: ResetPasswordTokenValidation,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> None:
+    await auth_service.validate_reset_token(payload.token)
+
+
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Completar la recuperación de contraseña",
+)
+async def reset_password(
+    payload: ResetPasswordRequest,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> None:
+    await auth_service.reset_password(payload.token, payload.new_password)

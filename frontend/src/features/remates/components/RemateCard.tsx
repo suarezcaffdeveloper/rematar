@@ -25,9 +25,9 @@ export function RemateCard({ remate }: RemateCardProps) {
 
   return (
     <article
-      className={`group flex flex-col overflow-hidden rounded-2xl border bg-white transition-all duration-300 hover:-translate-y-1 ${STATUS_CARD_ACCENT[remate.status]}`}
+      className={`group flex flex-col overflow-hidden rounded-2xl border bg-white transition-all duration-300 hover:-translate-y-1 ${STATUS_CARD_ACCENT}`}
     >
-      <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-surface-subtle">
         {remate.cover_image_url ? (
           <img
             src={remate.cover_image_url}
@@ -47,24 +47,24 @@ export function RemateCard({ remate }: RemateCardProps) {
           <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
             {CATEGORY_LABELS[remate.category]}
           </p>
-          <h3 className="mt-1.5 line-clamp-2 text-lg font-semibold leading-snug text-slate-900">{remate.title}</h3>
+          <h3 className="mt-1.5 line-clamp-2 text-lg font-semibold leading-snug text-ink">{remate.title}</h3>
         </div>
 
-        <dl className="flex flex-col gap-2 text-sm text-slate-600">
+        <dl className="flex flex-col gap-2 text-sm text-ink-muted">
           {remate.starts_at && (
             <div className="flex items-center gap-2">
-              <CalendarIcon className="h-4 w-4 shrink-0 text-slate-400" />
+              <CalendarIcon className="h-4 w-4 shrink-0 text-ink-faint" />
               <span>{formatDateTime(remate.starts_at)}</span>
             </div>
           )}
           {remate.location && (
             <div className="flex items-center gap-2">
-              <PinIcon className="h-4 w-4 shrink-0 text-slate-400" />
+              <PinIcon className="h-4 w-4 shrink-0 text-ink-faint" />
               <span className="truncate">{remate.location}</span>
             </div>
           )}
           <div className="flex items-center gap-2">
-            <BoxIcon className="h-4 w-4 shrink-0 text-slate-400" />
+            <BoxIcon className="h-4 w-4 shrink-0 text-ink-faint" />
             <span>
               {loteCount === null
                 ? 'Cargando lotes…'

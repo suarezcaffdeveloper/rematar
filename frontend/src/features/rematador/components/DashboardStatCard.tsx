@@ -7,17 +7,22 @@ export interface DashboardStatCardProps {
   icon: LucideIcon;
   /** Clases Tailwind para el fondo/texto del ícono, ej. `bg-brand-50 text-brand-600`. */
   toneClassName: string;
-  /** Punto pulsante junto al label -- reservado para el estado "en vivo". */
+  /** Punto pulsante junto al ícono -- reservado para el estado "en vivo". */
   pulse?: boolean;
   className?: string;
 }
 
 /**
- * Tarjeta de estadística del Dashboard del Rematador (Épica 9, Etapa 5 -- rediseño
- * visual): reemplaza al `StatCard` compartido *solo acá*, para no arrastrar este look
- * más grande/decorado a Analítica/Monitoreo/Historial (que siguen con `StatCard`, ver
- * `shared/components/StatCard.tsx`). Mantiene la misma estructura DOM que `StatCard`
- * (label y valor como hermanos directos) para que `RematadorDashboardStats.test.tsx`
+ * Celda de la franja de estadísticas del Dashboard del Rematador (retexturizado en la
+ * Épica 9, Etapa 9 -- ver prototipo aprobado): antes era una tarjeta con su propio
+ * `border`+`shadow`+`rounded-2xl`, siete veces seguidas -- justo el patrón de "más
+ * cards" que el rediseño pidió evitar. Ahora es una celda abierta (sin borde ni sombra
+ * propios); es `RematadorDashboardStats` quien dibuja un único contenedor con
+ * `divide-x`/`divide-y` alrededor de todas las celdas, así la separación se lee como
+ * una sola franja de datos, no siete widgets sueltos.
+ *
+ * Mantiene la misma estructura DOM que antes (label y valor como hermanos directos, en
+ * ese orden) para que `RematadorDashboardStats.test.tsx`
  * (`getByText(label).nextElementSibling`) siga funcionando igual.
  */
 export function DashboardStatCard({
@@ -29,28 +34,20 @@ export function DashboardStatCard({
   className,
 }: DashboardStatCardProps) {
   return (
-    <div
-      className={clsx(
-        'group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm',
-        'transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md',
-        className,
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <div className={clsx('flex h-9 w-9 items-center justify-center rounded-xl', toneClassName)}>
-          <Icon aria-hidden="true" className="h-5 w-5" />
-        </div>
+    <div className={clsx('flex min-w-0 items-center gap-3 px-4 py-3.5', className)}>
+      <div className={clsx('relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', toneClassName)}>
+        <Icon aria-hidden="true" className="h-4 w-4" />
         {pulse && (
-          <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
+          <span className="absolute -right-0.5 -top-0.5 flex h-2 w-2" aria-hidden="true">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-warning-400 opacity-75" />
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-warning-500" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-warning-500" />
           </span>
         )}
       </div>
-      <span className="mt-3 block truncate text-xs font-medium uppercase tracking-wide text-slate-500">
-        {label}
-      </span>
-      <span className="mt-0.5 block text-2xl font-bold tabular-nums text-slate-900">{formattedValue}</span>
+      <div className="flex min-w-0 flex-col">
+        <span className="truncate text-xs font-medium uppercase tracking-wide text-ink-faint">{label}</span>
+        <span className="text-lg font-semibold tabular-nums text-ink">{formattedValue}</span>
+      </div>
     </div>
   );
 }

@@ -16,8 +16,8 @@ export function RemateHistoryListPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Historial de remates</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Historial de remates</h1>
+        <p className="mt-1 max-w-xl text-sm text-ink-muted">
           Resultados de tus remates finalizados y cancelados.
         </p>
       </div>

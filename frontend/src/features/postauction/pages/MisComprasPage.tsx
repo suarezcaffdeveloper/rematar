@@ -37,7 +37,7 @@ export function MisComprasPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Mis compras</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Mis compras</h1>
         <p className="mt-1 text-sm text-slate-500">
           Lotes que ganaste y el estado de su proceso de pago y entrega.
         </p>

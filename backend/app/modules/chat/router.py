@@ -27,10 +27,10 @@ from app.moderation.redis_state import ModerationRedisGateway
 from app.modules.auth.dependencies import get_current_user
 from app.modules.bots.lookup import BotIdentityResolver
 from app.modules.chat.dependencies import get_chat_service
-from app.modules.chat.models import ChatMessage
 from app.modules.chat.schemas import ChatMessageCreate, ChatMessageRead
 from app.modules.chat.service import ChatService
 from app.modules.users.models import User
+from app.modules.users.repository import UserRepository
 
 router = APIRouter()
 
@@ -58,9 +58,14 @@ async def send_chat_message(
     moderation_gateway: Annotated[
         ModerationRedisGateway, Depends(get_moderation_redis_gateway)
     ],
-) -> ChatMessage:
+) -> ChatMessageRead:
     await _assert_can_send_message(remate_id, current_user.id, moderation_gateway)
-    return await service.send_message(remate_id, current_user, data)
+    message = await service.send_message(remate_id, current_user, data)
+    # El autor es siempre `current_user` acá -- su avatar ya está en memoria, sin
+    # necesidad de la consulta batch que sí hace falta en `list_chat_messages`.
+    return ChatMessageRead.model_validate(message).model_copy(
+        update={"author_avatar_url": current_user.avatar_url}
+    )
 
 
 @router.get(
@@ -89,9 +94,16 @@ async def list_chat_messages(
     # `ChatMessageRead.is_bot`. Una única consulta para todo el historial devuelto.
     author_ids = [m.author_id for m in messages if m.author_id is not None]
     bot_author_ids = await BotIdentityResolver(db).resolve(author_ids)
+    # Foto de perfil VIGENTE, no la que el autor tenía al momento de escribir cada
+    # mensaje -- ver docstring de `ChatMessageRead.author_avatar_url`. Misma idea que la
+    # consulta batch de arriba: una sola consulta para toda la página, sin JOIN por fila.
+    avatars_by_author = await UserRepository(db).list_avatars_by_ids(author_ids)
     return [
         ChatMessageRead.model_validate(m).model_copy(
-            update={"is_bot": m.author_id in bot_author_ids}
+            update={
+                "is_bot": m.author_id in bot_author_ids,
+                "author_avatar_url": avatars_by_author.get(m.author_id) if m.author_id else None,
+            }
         )
         for m in messages
     ]
@@ -107,8 +119,19 @@ async def delete_chat_message(
     message_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     service: Annotated[ChatService, Depends(get_chat_service)],
-) -> ChatMessage:
-    return await service.delete_message(remate_id, message_id, current_user)
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ChatMessageRead:
+    message = await service.delete_message(remate_id, message_id, current_user)
+    # Quien borra (moderador) no necesariamente es el autor -- se resuelve el avatar de
+    # `message.author_id`, no el de `current_user`. Ver docstring de
+    # `ChatMessageRead.author_avatar_url`.
+    avatar_url = None
+    if message.author_id is not None:
+        avatars = await UserRepository(db).list_avatars_by_ids([message.author_id])
+        avatar_url = avatars.get(message.author_id)
+    return ChatMessageRead.model_validate(message).model_copy(
+        update={"author_avatar_url": avatar_url}
+    )
 
 
 @router.post(

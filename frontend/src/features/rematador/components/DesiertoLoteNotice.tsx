@@ -30,10 +30,10 @@ export function DesiertoLoteNotice({ lote, onClose }: DesiertoLoteNoticeProps) {
   return (
     <Modal isOpen={lote !== null} onClose={onClose} title={lote ? `Lote ${lote.lot_number} quedó desierto` : ''} footer={<Button onClick={onClose}>Continuar</Button>}>
       <div className="flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-subtle text-ink-faint">
           <PackageX aria-hidden="true" className="h-5 w-5" />
         </span>
-        <p className="pt-1.5 text-sm text-slate-600">
+        <p className="pt-1.5 text-sm text-ink-muted">
           No recibió ninguna oferta válida. Podés incorporarlo de nuevo a la cola y ofrecerlo en una
           nueva ronda cuando quieras, desde &quot;Lotes desiertos&quot;.
         </p>

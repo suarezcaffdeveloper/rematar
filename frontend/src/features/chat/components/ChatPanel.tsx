@@ -44,6 +44,13 @@ export interface ChatPanelProps {
    * Consola Operativa). Sala del Remate (Épica 9, Etapa 4) pasa `h-full` para que
    * ocupe el resto de su columna lateral en vez de una altura fija. */
   className?: string;
+  /** `'boxed'` (default): borde/fondo/sombra propios, como siempre -- uso apilado a
+   * ancho completo (Consola Operativa). `'flat'`: sin esa "caja" propia, para vivir
+   * embebido dentro de un contenedor que ya aporta su propia jerarquía visual (rediseño
+   * de la Sala del Remate -- `SalaSidePanel`, dentro de una pestaña "Chat" al lado de
+   * "Historial de ofertas"). Solo cambia el contenedor externo -- header/lista/input
+   * quedan idénticos en ambos casos. */
+  chrome?: 'boxed' | 'flat';
 }
 
 /**
@@ -61,6 +68,7 @@ export function ChatPanel({
   connectedUsers,
   canModerate,
   className,
+  chrome = 'boxed',
 }: ChatPanelProps) {
   const {
     messages,
@@ -159,14 +167,26 @@ export function ChatPanel({
   }
 
   return (
-    <div className={clsx('flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm', className ?? 'h-[32rem]')}>
-      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-        <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-          <ChatBubbleIcon className="h-4 w-4 text-slate-400" />
-          Chat del remate
-        </span>
-        <PresenceCounter count={connectedUsers} />
-      </div>
+    <div
+      className={clsx(
+        'flex flex-col',
+        chrome === 'boxed' && 'rounded-xl border border-line bg-white shadow-sm',
+        className ?? 'h-[32rem]',
+      )}
+    >
+      {/* `chrome="flat"` (Sala del Remate, dentro de la pestaña "Chat" de
+       * `SalaSidePanel`): sin este encabezado -- la pestaña ya dice "Chat" y el
+       * contador de conectados ya vive junto a la campana en `SalaHeader`, repetirlos acá
+       * sería redundante (pedido explícito: "quiero que se vean los mensajes de una"). */}
+      {chrome === 'boxed' && (
+        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+          <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <ChatBubbleIcon className="h-4 w-4 text-ink-faint" />
+            Chat del remate
+          </span>
+          <PresenceCounter count={connectedUsers} />
+        </div>
+      )}
 
       <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-2 py-2">
         {isLoadingOlder && (
@@ -182,7 +202,7 @@ export function ChatPanel({
         ) : error ? (
           <p className="p-4 text-center text-sm text-danger-600">No se pudo cargar el chat.</p>
         ) : messages.length === 0 ? (
-          <p className="p-4 text-center text-sm text-slate-400">
+          <p className="p-4 text-center text-sm text-ink-faint">
             Sin mensajes todavía. ¡Sé el primero en escribir!
           </p>
         ) : (

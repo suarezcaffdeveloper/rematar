@@ -1,14 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import ExcelJS from 'exceljs';
 import type { Lote, Remate } from '../remates/types';
 import type { PostAuctionCase } from '../postauction/types';
 import type { LoteHistoryDetail, RemateHistoryDetail } from './types';
 
 const jsPdfInstance = {
   setFontSize: vi.fn(),
+  setFont: vi.fn(),
+  setTextColor: vi.fn(),
+  setFillColor: vi.fn(),
+  setDrawColor: vi.fn(),
+  setLineWidth: vi.fn(),
+  roundedRect: vi.fn(),
+  rect: vi.fn(),
+  line: vi.fn(),
+  setPage: vi.fn(),
   text: vi.fn(),
   save: vi.fn(),
   getNumberOfPages: vi.fn(() => 1),
-  internal: { pageSize: { getHeight: () => 297 } },
+  internal: { pageSize: { getHeight: () => 297, getWidth: () => 210 } },
   lastAutoTable: { finalY: 50 },
 };
 
@@ -21,35 +31,11 @@ vi.mock('jspdf', () => ({
 const autoTableMock = vi.fn();
 vi.mock('jspdf-autotable', () => ({ default: autoTableMock }));
 
-const summarySheet = {
-  columns: [] as unknown[],
-  getRow: vi.fn(() => ({ font: {} })),
-  addRow: vi.fn(),
-  getColumn: vi.fn(() => ({ numFmt: undefined })),
-};
-const lotesSheet = {
-  columns: [] as unknown[],
-  getRow: vi.fn(() => ({ font: {} })),
-  addRow: vi.fn(),
-  getColumn: vi.fn(() => ({ numFmt: undefined })),
-};
-const addWorksheetMock = vi.fn((name: string) => (name === 'Resumen' ? summarySheet : lotesSheet));
-const writeBufferMock = vi.fn(async () => new Uint8Array([1, 2, 3]));
-const workbookInstance = {
-  creator: '',
-  created: undefined as Date | undefined,
-  addWorksheet: addWorksheetMock,
-  xlsx: { writeBuffer: writeBufferMock },
-};
-
-vi.mock('exceljs', () => ({
-  default: {
-    Workbook: vi.fn(function WorkbookMock() {
-      return workbookInstance;
-    }),
-  },
-}));
-
+// `exceljs` NO se mockea acá (a diferencia de `jspdf`): es JS puro, corre bien en el
+// entorno `jsdom` de los tests, y mockear a mano toda la superficie que usa
+// `export.ts` (`addTable`, `mergeCells`, `getRow`/`getCell`, `views`, `numFmt`...)
+// sería más frágil que generar el `.xlsx` real y releerlo con la misma librería para
+// verificar su contenido.
 const { exportRemateHistoryToExcel, exportRemateHistoryToPdf } = await import('./export');
 
 function makeRemate(overrides: Partial<Remate> = {}): Remate {
@@ -198,52 +184,169 @@ describe('exportRemateHistoryToPdf', () => {
     vi.clearAllMocks();
   });
 
-  it('arma la tabla de lotes con el ganador y guarda el PDF con el nombre esperado', () => {
+  it('arma la tabla de lotes con el ganador, la variación y guarda el PDF con el nombre esperado', () => {
     exportRemateHistoryToPdf(makeBundle());
 
-    expect(autoTableMock).toHaveBeenCalledTimes(2);
-    const lotesTableCall = autoTableMock.mock.calls[1][1];
+    expect(autoTableMock).toHaveBeenCalledTimes(4);
+    const lotesTableCall = autoTableMock.mock.calls[2][1];
+    expect(lotesTableCall.head).toEqual([
+      ['Lote', 'Título', 'Estado', 'Base', 'Final', 'Variación', 'Ganador', 'Ofertas'],
+    ]);
     expect(lotesTableCall.body).toEqual([
-      ['1', 'Toro Angus', 'Vendido', '$ 1.000,00', '$ 1.200,00', 'Carlos Comprador', '3'],
+      ['1', 'Toro Angus', 'Vendido', '$ 1.000', '$ 1.200', '+20,0%', 'Carlos Comprador', '3'],
     ]);
     expect(jsPdfInstance.save).toHaveBeenCalledWith('historial-remate-de-hacienda.pdf');
   });
 });
 
 describe('exportRemateHistoryToExcel', () => {
+  let capturedBlob: Blob | undefined;
+  let downloadedFilename: string | undefined;
+  let clickSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
     vi.clearAllMocks();
-    summarySheet.addRow.mockClear();
-    lotesSheet.addRow.mockClear();
+    capturedBlob = undefined;
+    downloadedFilename = undefined;
     (globalThis.URL as unknown as { createObjectURL: ReturnType<typeof vi.fn> }).createObjectURL = vi.fn(
-      () => 'blob:mock-url',
+      (blob: Blob) => {
+        capturedBlob = blob;
+        return 'blob:mock-url';
+      },
     );
     (globalThis.URL as unknown as { revokeObjectURL: ReturnType<typeof vi.fn> }).revokeObjectURL = vi.fn();
+    clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloadedFilename = this.download;
+    });
   });
 
-  it('arma las dos hojas y dispara la descarga con el nombre esperado', async () => {
-    let downloadedFilename: string | undefined;
-    const clickSpy = vi
-      .spyOn(HTMLAnchorElement.prototype, 'click')
-      .mockImplementation(function (this: HTMLAnchorElement) {
-        downloadedFilename = this.download;
-      });
-
-    await exportRemateHistoryToExcel(makeBundle());
-
-    expect(addWorksheetMock).toHaveBeenCalledWith('Resumen');
-    expect(addWorksheetMock).toHaveBeenCalledWith('Lotes');
-    expect(lotesSheet.addRow).toHaveBeenCalledWith(
-      expect.objectContaining({
-        lot_number: '1',
-        winner_name: 'Carlos Comprador',
-        winner_email: 'carlos@example.com',
-        winner_phone: '+5491122334455',
-      }),
-    );
-    expect(writeBufferMock).toHaveBeenCalled();
-    expect(downloadedFilename).toBe('historial-remate-de-hacienda.xlsx');
-
+  afterEach(() => {
     clickSpy.mockRestore();
+  });
+
+  /** Genera el `.xlsx` con el bundle dado y lo relee con `exceljs` real -- así se
+   * verifica el archivo tal como lo abriría Excel/LibreOffice, no una llamada mockeada. */
+  async function exportAndReload(bundle: ReturnType<typeof makeBundle>) {
+    await exportRemateHistoryToExcel(bundle);
+    expect(capturedBlob).toBeDefined();
+    const buffer = await capturedBlob!.arrayBuffer();
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    return workbook;
+  }
+
+  it('dispara la descarga con el nombre esperado', async () => {
+    await exportAndReload(makeBundle());
+    expect(downloadedFilename).toBe('historial-remate-de-hacienda.xlsx');
+  });
+
+  it('arma las tres hojas (Resumen, Lotes, Adjudicaciones) en ese orden', async () => {
+    const workbook = await exportAndReload(makeBundle());
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(['Resumen', 'Lotes', 'Adjudicaciones']);
+  });
+
+  it('la hoja Resumen trae identificación, resultados económicos y del remate sin inventar indicadores ausentes', async () => {
+    const workbook = await exportAndReload(makeBundle());
+    const sheet = workbook.getWorksheet('Resumen')!;
+    const labels = new Map<string, ExcelJS.CellValue>();
+    sheet.eachRow((row) => {
+      const label = row.getCell(1).value;
+      if (typeof label === 'string') labels.set(label, row.getCell(2).value);
+    });
+
+    expect(labels.get('Nombre')).toBe('Remate de hacienda');
+    expect(labels.get('Categoría')).toBe('Hacienda');
+    expect(labels.get('Ubicación')).toBe('Rosario, Santa Fe');
+    expect(labels.get('Valor total adjudicado')).toBe(1200);
+    expect(labels.get('Total de lotes')).toBe(1);
+    expect(labels.get('Lotes vendidos')).toBe(1);
+    expect(labels.get('Participantes')).toBe(2);
+    // Sin `highest_oferta`/`top_lote_by_offers` en el bundle -- no debe inventarse fila.
+    expect(labels.has('Lote con mayor precio final')).toBe(false);
+    expect(labels.has('Lote con mayor cantidad de ofertas')).toBe(false);
+  });
+
+  it('la hoja Lotes es una tabla real con filtro, encabezado congelado y formato de moneda/porcentaje', async () => {
+    const workbook = await exportAndReload(makeBundle());
+    const sheet = workbook.getWorksheet('Lotes')!;
+
+    expect(sheet.views).toEqual([expect.objectContaining({ state: 'frozen', ySplit: 1 })]);
+    // Tabla real de Excel (`ListObject`), no solo autofilter suelto -- `getTable`
+    // devuelve el objeto (envuelto en `.table` tras un round-trip xlsx real, a
+    // diferencia de cuando se acaba de crear con `addTable`) solo si el rango quedó
+    // registrado como tabla en el archivo.
+    expect((sheet.getTable('TablaLotes') as unknown as { table: { name: string } }).table.name).toBe(
+      'TablaLotes',
+    );
+    expect(sheet.getRow(1).values).toEqual([
+      undefined,
+      'ID de lote',
+      'Lote',
+      'Título',
+      'Estado',
+      'Precio base',
+      'Precio final',
+      'Diferencia',
+      'Incremento %',
+      'Ofertas',
+      'Ganador',
+      'Estado de adjudicación',
+      'Estado de pago',
+    ]);
+    expect(sheet.getRow(2).values).toEqual([
+      undefined,
+      'lote-1',
+      '1',
+      'Toro Angus',
+      'Vendido',
+      1000,
+      1200,
+      200,
+      0.2,
+      3,
+      'Carlos Comprador',
+      'Pago recibido',
+      'Pendiente',
+    ]);
+    expect(sheet.getColumn(5).numFmt).toBe('#,##0 "ARS"');
+    expect(sheet.getColumn(8).numFmt).toBe('0.0%');
+  });
+
+  it('la hoja Adjudicaciones trae contacto del comprador y usa "No registrado" cuando falta', async () => {
+    const bundle = makeBundle();
+    bundle.casesByLoteId.set('lote-1', makeCase({ buyer_phone: null }));
+    // Sin teléfono tampoco en el respaldo (`offerResults[...].winner`) -- así se llega
+    // de verdad al fallback final ("No registrado"), no a la segunda fuente.
+    bundle.offerResults.set(
+      'lote-1',
+      makeOfferDetail({ winner: { ...makeOfferDetail().winner!, buyer_phone: null } }),
+    );
+    const workbook = await exportAndReload(bundle);
+    const sheet = workbook.getWorksheet('Adjudicaciones')!;
+
+    expect(
+      (sheet.getTable('TablaAdjudicaciones') as unknown as { table: { name: string } }).table.name,
+    ).toBe('TablaAdjudicaciones');
+    expect(sheet.getRow(2).values).toEqual([
+      undefined,
+      '1',
+      'Toro Angus',
+      'Carlos Comprador',
+      'carlos@example.com',
+      'No registrado',
+      1200,
+      'Pago recibido',
+      'Pendiente',
+    ]);
+  });
+
+  it('omite lotes sin adjudicación en la hoja Adjudicaciones', async () => {
+    const bundle = makeBundle();
+    bundle.casesByLoteId.clear();
+    const workbook = await exportAndReload(bundle);
+    const sheet = workbook.getWorksheet('Adjudicaciones')!;
+    expect(sheet.rowCount).toBe(1);
   });
 });

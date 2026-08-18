@@ -84,8 +84,8 @@ describe('VentaAdjudicadaDetailPage', () => {
     renderPage();
 
     expect((await screen.findAllByText('Ford Ranger XLT 3.2 4x2')).length).toBeGreaterThan(0);
-    expect(screen.getByText(/\$\s?10\.000\.000,00/)).toBeInTheDocument();
-    expect(screen.getAllByText(/\$\s?15\.000\.000,00/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/\$\s?10\.000\.000/)).toBeInTheDocument();
+    expect(screen.getAllByText(/\$\s?15\.000\.000/).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Pago pendiente').length).toBeGreaterThan(0);
     expect(screen.getByText('marcos@example.com')).toBeInTheDocument();
     expect(screen.getByText('+5491111111111')).toBeInTheDocument();

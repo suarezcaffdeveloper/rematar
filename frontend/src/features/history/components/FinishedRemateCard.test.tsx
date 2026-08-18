@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { FinishedRemateCard } from './FinishedRemateCard';
+import { formatDateTimeCompact } from '../../../shared/lib/format';
 import type { FinishedRemateSummary } from '../types';
 
 function makeRemate(overrides: Partial<FinishedRemateSummary> = {}): FinishedRemateSummary {
@@ -35,13 +36,24 @@ function renderCard(
 }
 
 describe('FinishedRemateCard', () => {
-  it('muestra título, categoría, estado y KPIs resumidos', () => {
+  it('muestra título, categoría y KPIs resumidos', () => {
     renderCard();
     expect(screen.getByText('Remate de hacienda')).toBeInTheDocument();
     expect(screen.getByText('Hacienda')).toBeInTheDocument();
-    expect(screen.getByText('Finalizado')).toBeInTheDocument();
-    expect(screen.getByText('2/3 vendidos')).toBeInTheDocument();
+    expect(screen.getByText('2/3')).toBeInTheDocument();
+    expect(screen.getByText('67% vendidos')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument(); // compradores
+    expect(screen.getByText(formatDateTimeCompact('2026-07-01T12:00:00Z'))).toBeInTheDocument();
+  });
+
+  it('remate finalizado, no muestra la etiqueta de estado (sería redundante)', () => {
+    renderCard({ status: 'finished' });
+    expect(screen.queryByText('Finalizado')).not.toBeInTheDocument();
+  });
+
+  it('remate cancelado, sí muestra la etiqueta de estado', () => {
+    renderCard({ status: 'cancelled' });
+    expect(screen.getByText('Cancelado')).toBeInTheDocument();
   });
 
   it('sin showOwner, no muestra el nombre del dueño', () => {

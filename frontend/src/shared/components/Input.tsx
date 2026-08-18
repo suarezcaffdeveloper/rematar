@@ -3,6 +3,17 @@ import clsx from 'clsx';
 import type { LucideIcon } from 'lucide-react';
 import { FIELD_CONTROL_CLASSES, FieldWrapper, useFieldIds } from './FieldWrapper';
 
+/** Variante sin caja -- solo un borde inferior, sin fondo/borde propios (rediseño
+ * visual, Sala del Remate -- ver prototipo aprobado). Pensada para montos grandes en
+ * `font-mono` (ver `PlaceBidButton`), no para reemplazar la caja con borde de siempre en
+ * el resto de la app -- por eso es opt-in (`variant="underline"`), nunca el default. Sin
+ * `text-*` propio a propósito: el tamaño/peso de letra queda en manos de quien la usa
+ * (vía `className`), la misma cifra grande se ve distinta según el contexto. */
+const UNDERLINE_CONTROL_CLASSES =
+  'w-full border-0 border-b-[1.5px] bg-transparent px-0.5 py-1.5 font-mono text-ink transition-colors ' +
+  'placeholder:text-ink-faint focus:outline-none focus:border-brand-600 ' +
+  'disabled:cursor-not-allowed disabled:text-ink-faint';
+
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
   error?: string;
@@ -12,6 +23,9 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   /** Contenido interactivo a la derecha del campo (ej. mostrar/ocultar contraseña,
    * un ícono de validación). Opcional, mismo criterio que `icon`. */
   rightElement?: ReactNode;
+  /** `'default'` (siempre, en todo el resto de la app): caja con borde, como siempre.
+   * `'underline'`: sin caja, ver `UNDERLINE_CONTROL_CLASSES`. */
+  variant?: 'default' | 'underline';
 }
 
 /**
@@ -24,7 +38,7 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
  * en que Tailwind genere esas dos utilidades en la hoja de estilos.
  */
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { label, error, id, className, icon: Icon, rightElement, style, ...props },
+  { label, error, id, className, icon: Icon, rightElement, style, variant = 'default', ...props },
   ref,
 ) {
   const { inputId, errorId } = useFieldIds(id);
@@ -48,7 +62,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             paddingRight: rightElement ? '2.5rem' : undefined,
             ...style,
           }}
-          className={clsx(FIELD_CONTROL_CLASSES, error ? 'border-danger-500' : 'border-slate-300', className)}
+          className={clsx(
+            variant === 'underline' ? UNDERLINE_CONTROL_CLASSES : FIELD_CONTROL_CLASSES,
+            error ? 'border-danger-500' : variant === 'underline' ? 'border-line-strong' : 'border-slate-300',
+            className,
+          )}
           {...props}
         />
         {rightElement && <div className="absolute right-3 top-1/2 -translate-y-1/2">{rightElement}</div>}

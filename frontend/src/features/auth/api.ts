@@ -12,7 +12,15 @@
  */
 
 import { apiClient, rawClient } from '../../shared/api/client';
-import type { AuthTokens, LoginPayload, RegisterPayload, User } from './types';
+import type {
+  AuthTokens,
+  ForgotPasswordPayload,
+  LoginPayload,
+  RegisterPayload,
+  ResetPasswordPayload,
+  ResetPasswordTokenPayload,
+  User,
+} from './types';
 
 export async function loginRequest(payload: LoginPayload): Promise<AuthTokens> {
   // POST /auth/login espera form-urlencoded (OAuth2PasswordRequestForm), no JSON --
@@ -46,4 +54,21 @@ export async function logoutRequest(refreshToken: string): Promise<void> {
 export async function fetchCurrentUserRequest(): Promise<User> {
   const { data } = await apiClient.get<User>('/users/me');
   return data;
+}
+
+// Recuperación de contraseña -- sin sesión todavía (igual que login/register), así que
+// usan `rawClient`, mismo criterio que el resto de los endpoints de esta lista.
+
+export async function forgotPasswordRequest(payload: ForgotPasswordPayload): Promise<void> {
+  await rawClient.post('/auth/forgot-password', payload);
+}
+
+export async function validateResetPasswordTokenRequest(
+  payload: ResetPasswordTokenPayload,
+): Promise<void> {
+  await rawClient.post('/auth/reset-password/validate', payload);
+}
+
+export async function resetPasswordRequest(payload: ResetPasswordPayload): Promise<void> {
+  await rawClient.post('/auth/reset-password', payload);
 }

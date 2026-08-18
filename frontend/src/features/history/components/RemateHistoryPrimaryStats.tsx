@@ -16,10 +16,11 @@ export interface RemateHistoryPrimaryStatsProps {
 export function RemateHistoryPrimaryStats({ detail, currency }: RemateHistoryPrimaryStatsProps) {
   return (
     <div className="flex flex-col gap-3">
-      <h2 className="text-lg font-semibold text-slate-900">Resumen ejecutivo</h2>
+      <h2 className="text-lg font-semibold text-ink">Resumen ejecutivo</h2>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatCard
           centered
+          tone="ink"
           label="Valor total adjudicado"
           value={Number(detail.total_awarded_value)}
           formattedValue={formatCurrency(detail.total_awarded_value, currency)}
@@ -27,6 +28,7 @@ export function RemateHistoryPrimaryStats({ detail, currency }: RemateHistoryPri
         />
         <StatCard
           centered
+          tone="ink"
           label="Lotes vendidos"
           value={detail.lote_status_counts.closed_sold}
           formattedValue={`${detail.lote_status_counts.closed_sold}/${detail.lote_status_counts.total}`}
@@ -34,6 +36,7 @@ export function RemateHistoryPrimaryStats({ detail, currency }: RemateHistoryPri
         />
         <StatCard
           centered
+          tone="ink"
           label="Total de lotes"
           value={detail.lote_status_counts.total}
           formattedValue={String(detail.lote_status_counts.total)}
@@ -41,6 +44,7 @@ export function RemateHistoryPrimaryStats({ detail, currency }: RemateHistoryPri
         />
         <StatCard
           centered
+          tone="ink"
           label="Participantes"
           value={detail.participants_count}
           formattedValue={String(detail.participants_count)}
@@ -48,6 +52,7 @@ export function RemateHistoryPrimaryStats({ detail, currency }: RemateHistoryPri
         />
         <StatCard
           centered
+          tone="ink"
           label="Total de ofertas"
           value={detail.total_ofertas}
           formattedValue={String(detail.total_ofertas)}

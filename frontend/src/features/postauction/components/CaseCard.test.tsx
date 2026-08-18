@@ -55,6 +55,6 @@ describe('CaseCard', () => {
     expect(screen.getByText('Toro Angus')).toBeInTheDocument();
     expect(screen.getByText(/Lote 7/)).toBeInTheDocument();
     expect(screen.getByText(/Remate de campo/)).toBeInTheDocument();
-    expect(screen.getByText(/\$\s?1\.500,00/)).toBeInTheDocument();
+    expect(screen.getByText(/\$\s?1\.500/)).toBeInTheDocument();
   });
 });

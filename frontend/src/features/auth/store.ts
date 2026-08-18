@@ -45,6 +45,10 @@ interface AuthState {
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => void;
   refreshSession: () => Promise<string>;
+  /** Mergea `patch` sobre el `user` actual -- para reflejar en el acto un cambio ya
+   * confirmado por el backend (ej. `avatar_url` tras `PATCH /users/me`, ver
+   * `features/profile`) sin depender de un refetch. No-op si no hay sesión. */
+  updateUser: (patch: Partial<User>) => void;
 }
 
 // Ver el comentario de arriba: capturado para que `onRehydrateStorage` pueda marcar
@@ -86,6 +90,12 @@ export const useAuthStore = create<AuthState>()(
             // del cliente -- no hay nada más que deshacer.
             void logoutRequest(refreshToken).catch(() => undefined);
           }
+        },
+
+        updateUser(patch) {
+          const current = get().user;
+          if (!current) return;
+          set({ user: { ...current, ...patch } });
         },
 
         async refreshSession() {

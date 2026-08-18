@@ -16,6 +16,7 @@ from app.modules.users.models import User, UserRole
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
 REMATES_URL = "/api/v1/remates"
+USERS_URL = "/api/v1/users"
 
 
 def _auth(token: str) -> dict:
@@ -226,6 +227,76 @@ async def test_typing_endpoint_returns_204(client: AsyncClient) -> None:
     )
 
     assert r.status_code == 204
+
+
+# --- Foto de perfil del autor -------------------------------------------------------------
+
+
+async def test_send_message_response_includes_the_senders_current_avatar(
+    client: AsyncClient,
+) -> None:
+    owner_token = await _owner(client, "chatrouter-avatar1@example.com")
+    patch = await client.patch(
+        f"{USERS_URL}/me", json={"avatar_url": "preset:bob"}, headers=_auth(owner_token)
+    )
+    assert patch.status_code == 200, patch.text
+    remate = await _create_and_schedule_remate(client, owner_token)
+
+    r = await _send(client, owner_token, remate["id"], "hola")
+
+    assert r.status_code == 201, r.text
+    assert r.json()["author_avatar_url"] == "preset:bob"
+
+
+async def test_list_messages_reflects_the_authors_current_avatar_even_for_old_messages(
+    client: AsyncClient,
+) -> None:
+    """Pedido explícito: si el autor cambia su foto de perfil, los mensajes que ya
+    había mandado tienen que mostrar la nueva -- a diferencia de `author_name`/
+    `author_role`, que sí quedan congelados al momento de enviar (ver ADR-037)."""
+    owner_token = await _owner(client, "chatrouter-avatar2@example.com")
+    remate = await _create_and_schedule_remate(client, owner_token)
+    await _send(client, owner_token, remate["id"], "antes de cambiar la foto")
+
+    patch = await client.patch(
+        f"{USERS_URL}/me", json={"avatar_url": "preset:senior"}, headers=_auth(owner_token)
+    )
+    assert patch.status_code == 200, patch.text
+
+    r = await client.get(f"{REMATES_URL}/{remate['id']}/chat/messages", headers=_auth(owner_token))
+
+    assert r.status_code == 200, r.text
+    messages = r.json()
+    assert len(messages) == 1
+    assert messages[0]["author_avatar_url"] == "preset:senior"
+
+
+async def test_list_messages_without_an_avatar_returns_null(client: AsyncClient) -> None:
+    owner_token = await _owner(client, "chatrouter-avatar3@example.com")
+    remate = await _create_and_schedule_remate(client, owner_token)
+    await _send(client, owner_token, remate["id"], "sin foto de perfil")
+
+    r = await client.get(f"{REMATES_URL}/{remate['id']}/chat/messages", headers=_auth(owner_token))
+
+    assert r.status_code == 200, r.text
+    assert r.json()[0]["author_avatar_url"] is None
+
+
+async def test_delete_message_response_includes_the_authors_avatar(client: AsyncClient) -> None:
+    owner_token = await _owner(client, "chatrouter-avatar4@example.com")
+    await client.patch(
+        f"{USERS_URL}/me", json={"avatar_url": "preset:curly"}, headers=_auth(owner_token)
+    )
+    remate = await _create_and_schedule_remate(client, owner_token)
+    sent = await _send(client, owner_token, remate["id"], "borrame")
+    message_id = sent.json()["id"]
+
+    r = await client.delete(
+        f"{REMATES_URL}/{remate['id']}/chat/messages/{message_id}", headers=_auth(owner_token)
+    )
+
+    assert r.status_code == 200, r.text
+    assert r.json()["author_avatar_url"] == "preset:curly"
 
 
 # --- Identidad de simuladores (módulo de Bots) -------------------------------------------

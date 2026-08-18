@@ -83,6 +83,23 @@ class Settings(BaseSettings):
     # --- CORS (para el futuro frontend Vite) ---
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]
 
+    # --- Frontend (para armar links absolutos en emails, ej. recuperación de
+    # contraseña) -- distinto de CORS_ORIGINS (que es una lista de orígenes permitidos,
+    # no "el" frontend); acá hace falta uno solo, concreto, para construir una URL.
+    FRONTEND_URL: str = "http://localhost:5173"
+
+    # --- Recuperación de contraseña ---
+    # Vigencia corta a propósito (RNF-11): el link viaja por email, un canal que puede
+    # quedar expuesto (bandeja compartida, forwarding) más tiempo del que tarda en
+    # usarse legítimamente. Ver app/modules/auth/security.py (TokenType.PASSWORD_RESET)
+    # y ADR-011 (mismo criterio de token persistido que refresh_tokens).
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 15
+    # Rate limit de POST /auth/forgot-password, por email normalizado -- evita que se
+    # use el endpoint para inundar de emails a una casilla ajena (mismo mecanismo que
+    # CHAT_RATE_LIMIT_*, ver app/redis/rate_limit.py).
+    PASSWORD_RESET_RATE_LIMIT_MAX_REQUESTS: int = 3
+    PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS: int = 900
+
     # --- Bootstrap del primer administrador (ver app/scripts/create_superuser.py) ---
     FIRST_ADMIN_EMAIL: str | None = None
     FIRST_ADMIN_PASSWORD: str | None = None
@@ -144,6 +161,29 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str | None = None
     SMTP_USE_TLS: bool = True
     SMTP_TIMEOUT_SECONDS: float = 10.0
+
+    # --- Notificaciones por WhatsApp (Meta WhatsApp Business Cloud API) ---
+    # `WHATSAPP_ENABLED=false` (o sin `WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID`)
+    # desactiva el envío real: se usa un `NullWhatsAppSender` que solo loguea, mismo
+    # criterio que `EMAIL_ENABLED`/`NullEmailSender` -- ver `app/whatsapp/` y
+    # `app/notify/dependencies.py`. Nunca usar un WhatsApp personal como número emisor.
+    WHATSAPP_ENABLED: bool = False
+    WHATSAPP_ACCESS_TOKEN: str | None = None
+    WHATSAPP_PHONE_NUMBER_ID: str | None = None
+    WHATSAPP_API_VERSION: str = "v21.0"
+    # Nombre e idioma de la plantilla Utility aprobada en Meta Business Manager (ver
+    # README) -- deben coincidir exactamente o la API rechaza el envío.
+    WHATSAPP_TEMPLATE_NAME: str = "lote_adjudicado"
+    WHATSAPP_TEMPLATE_LANGUAGE: str = "es_AR"
+    WHATSAPP_API_TIMEOUT_SECONDS: float = 10.0
+    # Código de país por defecto para normalizar teléfonos guardados sin él, y para la
+    # corrección del dígito móvil "9" que WhatsApp exige en Argentina -- ver
+    # `app/whatsapp/phone.py`.
+    WHATSAPP_DEFAULT_COUNTRY_CODE: str = "54"
+    # Vigencia del token firmado del botón "Contactar al rematador" (`GET /r/wa/{token}`)
+    # -- ver `app/whatsapp/redirect_token.py`. Reutiliza `SECRET_KEY`/`JWT_ALGORITHM`,
+    # sin secreto propio.
+    WHATSAPP_REDIRECT_TOKEN_TTL_DAYS: int = 30
 
 
 @lru_cache

@@ -97,6 +97,19 @@ function ConsolaSkeleton() {
  * Reemplaza la ruta `/remates/:remateId/gestionar` que hasta ahora mostraba
  * `GestionRematePlaceholderPage` (Épica 5.1) -- mismo patrón que la Sala reemplazó su
  * propio placeholder entre los Módulos 4.4 y 4.5, sin tocar el árbol de rutas.
+ *
+ * Retexturizado en la Épica 9, Etapa 10 (mismo sistema visual que la Sala del Remate y
+ * el Dashboard del Rematador ya retexturizados -- ver prototipo aprobado, sin copiar su
+ * layout): `font-display` + tokens `ink`/`line` en toda la página y sus subcomponentes
+ * (`ConsolaHeader`, `ConsolaLotePanel`, `ConsolaSidebar`, `ConsolaUpcomingLotesPanel`,
+ * `ConsolaDesiertoLotesPanel`, `ConsolaBotsPanel`, `RequeueLoteForm`,
+ * `DesiertoLoteNotice`, y `OfferHistoryPanel`/`ChatPanel`/`PresenceCounter`, compartidos
+ * con la Sala). `ConsolaHeader` pierde su "hero card" (mismo criterio que ya aplicó
+ * `SalaHeader`); "Próximos lotes" pasa de card a composición abierta con solo un eyebrow
+ * arriba (mismo patrón que usa `SalaPage` para su propia tira de próximos lotes). El
+ * panel de control (`ConsolaControlPanel`) mantiene su agrupación en cards a propósito
+ * -- ahí sí tiene sentido: cada card separa acciones por zona de riesgo real (gestión de
+ * lote / controles de remate / zona crítica), no es "más cards" sin motivo.
  */
 export function ConsolaOperativaPage() {
   const { remateId } = useParams<{ remateId: string }>();
@@ -175,7 +188,7 @@ export function ConsolaOperativaPage() {
   const currency = remate.settings.currency;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 font-display">
       {!isOperational ? (
         <>
           <ConsolaHeader remate={remate} connectedUsers={connectedUsers} connectionStatus={connectionStatus} />
@@ -220,9 +233,9 @@ export function ConsolaOperativaPage() {
                 />
               </div>
 
-              <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-slate-700">
-                  <ListOrdered aria-hidden="true" className="h-4 w-4 text-slate-400" />
+              <div className="flex flex-col gap-3">
+                <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+                  <ListOrdered aria-hidden="true" className="h-3.5 w-3.5" />
                   Próximos lotes
                 </h2>
                 <ConsolaUpcomingLotesPanel
@@ -234,8 +247,6 @@ export function ConsolaOperativaPage() {
               </div>
 
               <ConsolaDesiertoLotesPanel remateId={remate.id} lotes={desiertoLotes} />
-
-              <ConsolaBotsPanel remateId={remate.id} />
             </div>
 
             <div className="xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:self-stretch">
@@ -255,9 +266,16 @@ export function ConsolaOperativaPage() {
            * la operación del remate") -- mismo `AnalyticsPanel` de siempre (que ya trae
            * su propio encabezado "Analítica en tiempo real"), sin tocar su interior,
            * solo envuelto con menos peso visual que el resto de la consola. */}
-          <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 opacity-90">
+          <div className="rounded-xl border border-line bg-surface-subtle/60 p-4 opacity-90">
             <AnalyticsPanel remateId={remate.id} subscribeToRealtime={subscribeToRealtime} currency={currency} />
           </div>
+
+          {/* Simuladores (módulo de Bots Simuladores) -- pedido explícito: no forma
+           * parte del sistema original, es una herramienta de prueba para el equipo, así
+           * que va al final de la página, después de la analítica, en vez de mezclada
+           * con los paneles operativos reales (Próximos lotes/Lotes desiertos) que sí
+           * son parte del producto. */}
+          <ConsolaBotsPanel remateId={remate.id} />
         </>
       )}
     </div>

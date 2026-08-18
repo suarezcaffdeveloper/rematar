@@ -17,6 +17,8 @@ import { RequireAuth } from '../shared/guards/RequireAuth';
 import { RequireRole } from '../shared/guards/RequireRole';
 import { LoginPage } from '../features/auth/pages/LoginPage';
 import { RegisterPage } from '../features/auth/pages/RegisterPage';
+import { ForgotPasswordPage } from '../features/auth/pages/ForgotPasswordPage';
+import { ResetPasswordPage } from '../features/auth/pages/ResetPasswordPage';
 import { RemateDetailPage } from '../features/remates/pages/RemateDetailPage';
 import { BotProfilesPage } from '../features/bots/pages/BotProfilesPage';
 import { ConsolaOperativaPage } from '../features/rematador/pages/ConsolaOperativaPage';
@@ -29,6 +31,7 @@ import { MiCompraDetailPage } from '../features/postauction/pages/MiCompraDetail
 import { MisComprasPage } from '../features/postauction/pages/MisComprasPage';
 import { VentaAdjudicadaDetailPage } from '../features/postauction/pages/VentaAdjudicadaDetailPage';
 import { VentasAdjudicadasPage } from '../features/postauction/pages/VentasAdjudicadasPage';
+import { ProfilePage } from '../features/profile/pages/ProfilePage';
 import { SalaPage } from '../features/sala/pages/SalaPage';
 import { HomePage } from './pages/HomePage';
 import { PreviewSalaPage } from './pages/PreviewSalaPage';
@@ -46,9 +49,18 @@ export const router = createBrowserRouter([
         children: [
           { path: '/login', element: <LoginPage /> },
           { path: '/register', element: <RegisterPage /> },
-          { path: '/preview-sala', element: <PreviewSalaPage /> },
+          // Sin `AuthLayout` de dos columnas (no están en `FULL_BLEED_PATHS`): usan el
+          // fallback centrado que `AuthLayout` ya tenía previsto para esto.
+          { path: '/forgot-password', element: <ForgotPasswordPage /> },
+          { path: '/reset-password', element: <ResetPasswordPage /> },
         ],
       },
+      // Herramienta de desarrollo -- vista previa de los componentes de la Sala del
+      // Remate con datos de prueba, sin backend. Pública mismo criterio que
+      // login/register, pero SIN `AuthLayout` (contenedor angosto pensado para
+      // formularios) -- necesita el ancho real que usa `SalaPage` en `AppLayout` para
+      // que la vista previa sirva para comparar proporciones/tamaños de verdad.
+      { path: '/preview-sala', element: <PreviewSalaPage /> },
       // Protegidas: todo lo que cuelga de acá exige sesión iniciada.
       {
         element: <RequireAuth />,
@@ -100,6 +112,9 @@ export const router = createBrowserRouter([
               { path: '/ventas-adjudicadas/:caseId', element: <VentaAdjudicadaDetailPage /> },
               { path: '/mis-compras', element: <MisComprasPage /> },
               { path: '/mis-compras/:caseId', element: <MiCompraDetailPage /> },
+              // "Mi perfil" -- accesible desde el avatar/nombre del pie del sidebar
+              // (`Sidebar.tsx`), disponible para cualquier rol autenticado.
+              { path: '/perfil', element: <ProfilePage /> },
               // Protegidas además por rol: RequireRole asume que ya pasó RequireAuth.
               {
                 element: <RequireRole allowedRoles={['admin']} />,

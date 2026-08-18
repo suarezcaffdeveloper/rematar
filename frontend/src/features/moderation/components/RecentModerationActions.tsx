@@ -1,3 +1,4 @@
+import { Card } from '../../../shared/components/Card';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
 import { formatDateTime } from '../../../shared/lib/format';
@@ -19,7 +20,7 @@ export function RecentModerationActions({ remateId }: RecentModerationActionsPro
   const { data, isLoading, error } = useModerationHistory(remateId, 1, PAGE_SIZE);
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <Card className="flex flex-col gap-3">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
         Historial reciente
       </h2>
@@ -50,6 +51,6 @@ export function RecentModerationActions({ remateId }: RecentModerationActionsPro
           })}
         </ul>
       )}
-    </div>
+    </Card>
   );
 }

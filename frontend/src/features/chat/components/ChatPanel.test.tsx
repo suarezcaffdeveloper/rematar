@@ -29,6 +29,7 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
     author_id: 'user-1',
     author_name: 'Juan',
     author_role: 'comprador',
+    author_avatar_url: null,
     content: 'Hola',
     system_event_type: null,
     is_deleted: false,

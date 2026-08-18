@@ -69,7 +69,7 @@ export function CancelRemateModal({ isOpen, onClose, remate, onCancelled }: Canc
       }
     >
       <div className="flex flex-col gap-3">
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-ink-muted">
           ¿Seguro que querés cancelar <strong>{remate.title}</strong>? Esta acción no se puede deshacer, pero
           el remate queda conservado (no eliminado) con el motivo para su historial.
         </p>

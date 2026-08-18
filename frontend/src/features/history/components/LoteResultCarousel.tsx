@@ -35,8 +35,8 @@ function ArrowButton({
       onClick={onClick}
       disabled={disabled}
       className={clsx(
-        'flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm',
-        'transition-colors hover:bg-slate-50 hover:text-slate-900',
+        'flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-white text-ink-muted shadow-sm',
+        'transition-colors hover:bg-surface-subtle hover:text-ink',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
         'disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white',
       )}
@@ -89,7 +89,7 @@ export function LoteResultCarousel({ lotes, currency, offerResults, casesByLoteI
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-slate-900">Resultado de cada lote</h2>
+        <h2 className="text-lg font-semibold text-ink">Resultado de cada lote</h2>
         {lotes.length > 1 && (
           <div className="flex gap-2">
             <ArrowButton direction="prev" onClick={() => scrollByOneCard(-1)} disabled={!canScrollPrev} />

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ActiveLotePanel, type ActiveLotePanelProps } from './ActiveLotePanel';
 import type { Lote } from '../../remates/types';
-import type { OfertaSnapshotEntry } from '../types';
 
 function makeLote(overrides: Partial<Lote> = {}): Lote {
   return {
@@ -33,48 +32,18 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
 
 function makeProps(overrides: Partial<ActiveLotePanelProps> = {}): ActiveLotePanelProps {
   return {
-    remateId: 'remate-1',
     lote: makeLote(),
-    currency: 'ARS',
-    winningOffer: null,
-    remateStatus: 'live',
-    viewerRole: 'comprador',
     ...overrides,
   };
 }
 
 describe('ActiveLotePanel', () => {
-  it('sin ofertas, la "oferta actual" es el precio inicial', () => {
+  it('muestra número de lote, categoría, título y descripción', () => {
     render(<ActiveLotePanel {...makeProps()} />);
 
+    expect(screen.getByText('Lote 1 · Hacienda')).toBeInTheDocument();
     expect(screen.getByText('Toro Angus')).toBeInTheDocument();
-    expect(screen.getByText('Precio inicial')).toBeInTheDocument();
-    // Precio inicial y "oferta actual" muestran el mismo monto cuando no hay ofertas.
-    expect(screen.getAllByText(/1[.,]?000/).length).toBeGreaterThanOrEqual(2);
-  });
-
-  it('con una oferta ganadora, la "oferta actual" es su monto, no el precio inicial', () => {
-    const winningOffer: OfertaSnapshotEntry = {
-      id: 'oferta-1',
-      buyer_id: null,
-      amount: '1500.00',
-      status: 'accepted',
-      created_at: '2026-07-01T00:00:00Z',
-    };
-
-    render(<ActiveLotePanel {...makeProps({ winningOffer })} />);
-
-    expect(screen.getByText('Oferta actual')).toBeInTheDocument();
-    expect(screen.getByText(/1[.,]?500/)).toBeInTheDocument();
-  });
-
-  it('muestra los atributos libres del lote en la ficha técnica', () => {
-    render(<ActiveLotePanel {...makeProps()} />);
-
-    expect(screen.getByText('Peso kg')).toBeInTheDocument();
-    expect(screen.getByText('450')).toBeInTheDocument();
-    expect(screen.getByText('Raza')).toBeInTheDocument();
-    expect(screen.getByText('Angus')).toBeInTheDocument();
+    expect(screen.getByText('Toro reproductor de pedigrí.')).toBeInTheDocument();
   });
 
   it('sin descripción, muestra el mensaje por defecto en vez de dejarla vacía', () => {
@@ -89,34 +58,12 @@ describe('ActiveLotePanel', () => {
     expect(screen.queryByText('Abierto')).not.toBeInTheDocument();
   });
 
-  it('un comprador con el lote abierto y el remate en vivo ve el formulario de oferta habilitado', () => {
+  it('ya no muestra la ficha técnica (rediseño visual, pedido explícito) ni precio/formulario de oferta (se movieron a SalaBidPanel)', () => {
     render(<ActiveLotePanel {...makeProps()} />);
 
-    expect(screen.getByRole('button', { name: 'Ofertar' })).toBeEnabled();
-  });
-
-  it('un rematador visitando su propia sala ve el botón deshabilitado', () => {
-    render(<ActiveLotePanel {...makeProps({ viewerRole: 'rematador' })} />);
-
-    expect(screen.getByRole('button', { name: 'Realizar oferta' })).toBeDisabled();
-  });
-
-  it('con el remate pausado, el botón queda deshabilitado aunque el lote siga abierto', () => {
-    render(<ActiveLotePanel {...makeProps({ remateStatus: 'paused' })} />);
-
-    expect(screen.getByRole('button', { name: 'Realizar oferta' })).toBeDisabled();
-    expect(screen.getByText(/El remate no está en vivo/)).toBeInTheDocument();
-  });
-
-  it('con timer configurado, muestra la cuenta regresiva', () => {
-    render(
-      <ActiveLotePanel {...makeProps({ lote: makeLote({ timer_ends_at: '2026-08-01T00:01:00Z' }) })} />,
-    );
-    expect(screen.getByRole('timer')).toBeInTheDocument();
-  });
-
-  it('sin timer configurado, no muestra la cuenta regresiva', () => {
-    render(<ActiveLotePanel {...makeProps()} />);
-    expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ficha técnica')).not.toBeInTheDocument();
+    expect(screen.queryByText('Peso kg')).not.toBeInTheDocument();
+    expect(screen.queryByText('Precio inicial')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ofertar' })).not.toBeInTheDocument();
   });
 });

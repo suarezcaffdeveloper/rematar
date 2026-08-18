@@ -50,7 +50,7 @@ export function PurchaseHeader({ data }: PurchaseHeaderProps) {
           <p className="truncate text-xs font-medium uppercase tracking-wide text-slate-400">
             Lote {data.lot_number} · {data.remate_title}
           </p>
-          <h1 className="mt-0.5 truncate text-xl font-bold text-slate-900 sm:text-2xl">{data.lote_title}</h1>
+          <h1 className="mt-0.5 truncate text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{data.lote_title}</h1>
         </div>
       </div>
 

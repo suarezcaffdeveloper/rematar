@@ -50,6 +50,14 @@ class ChatMessageRead(BaseModel):
     # (`list_chat_messages`), nunca en `ChatService`, para no darle a ese servicio
     # ningún conocimiento de que los bots existen.
     is_bot: bool = False
+    # Foto de perfil VIGENTE del autor -- a propósito no es una columna de
+    # `ChatMessage` (ver docstring de `models.py`, `author_name`/`author_role` sí están
+    # denormalizados ahí): el pedido es que un cambio de foto de perfil se refleje
+    # también en los mensajes viejos, lo opuesto de lo que busca la denormalización. Se
+    # resuelve en el router (`list_chat_messages`/`send_chat_message`/
+    # `delete_chat_message`), igual que `is_bot`, con una consulta batch a `users` por
+    # los `author_id` de la página -- nunca un JOIN por mensaje.
+    author_avatar_url: str | None = None
 
     @model_validator(mode="after")
     def _hide_content_when_deleted(self) -> "ChatMessageRead":

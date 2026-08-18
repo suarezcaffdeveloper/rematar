@@ -103,6 +103,7 @@ from app.timer.scheduler import TimerExpiryScheduler
 from app.websocket.close_codes import SERVER_SHUTTING_DOWN
 from app.websocket.manager import ConnectionManager
 from app.websocket.rooms import RoomManager
+from app.whatsapp.redirect_router import router as whatsapp_redirect_router
 
 logger = structlog.get_logger(__name__)
 
@@ -250,6 +251,7 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
 
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(whatsapp_redirect_router)
 
     media_root = Path(settings.MEDIA_ROOT)
     media_root.mkdir(parents=True, exist_ok=True)

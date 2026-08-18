@@ -79,18 +79,18 @@ export function LoteManagementCard({
       className={clsx(
         'flex items-center gap-4 rounded-2xl border bg-white p-4 shadow-sm transition-shadow duration-200',
         'hover:shadow-lg',
-        isDragOver ? 'border-brand-500 ring-2 ring-brand-200' : 'border-slate-200',
+        isDragOver ? 'border-brand-500 ring-2 ring-brand-200' : 'border-line',
         isDragging && 'opacity-40',
       )}
     >
       {isEditable && (
-        <div className="flex flex-col items-center gap-1 text-slate-300">
+        <div className="flex flex-col items-center gap-1 text-ink-faint">
           <button
             type="button"
             aria-label={`Mover lote ${lote.lot_number} hacia arriba`}
             onClick={onMoveUp}
             disabled={!canMoveUp}
-            className="rounded p-0.5 hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded p-0.5 hover:bg-surface-subtle hover:text-ink-muted disabled:cursor-not-allowed disabled:opacity-30"
           >
             <ChevronUpIcon className="h-4 w-4" />
           </button>
@@ -100,7 +100,7 @@ export function LoteManagementCard({
             aria-label={`Mover lote ${lote.lot_number} hacia abajo`}
             onClick={onMoveDown}
             disabled={!canMoveDown}
-            className="rounded p-0.5 hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded p-0.5 hover:bg-surface-subtle hover:text-ink-muted disabled:cursor-not-allowed disabled:opacity-30"
           >
             <ChevronDownIcon className="h-4 w-4" />
           </button>
@@ -114,7 +114,7 @@ export function LoteManagementCard({
           <CoverPlaceholder className="h-full w-full" icon={<BoxIcon className="h-6 w-6 text-brand-300" />} />
         )}
         {lote.images.length > 0 && (
-          <span className="absolute bottom-1 right-1 inline-flex items-center gap-1 rounded-full bg-slate-900/70 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+          <span className="absolute bottom-1 right-1 inline-flex items-center gap-1 rounded-full bg-ink/70 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
             <ImageIcon aria-hidden="true" className="h-3 w-3" />
             {lote.images.length}
           </span>
@@ -123,13 +123,13 @@ export function LoteManagementCard({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
             Lote {lote.lot_number}
           </span>
           <Badge variant={LOTE_STATUS_BADGE_VARIANTS[lote.status]}>{LOTE_STATUS_LABELS[lote.status]}</Badge>
         </div>
-        <p className="truncate text-sm font-semibold text-slate-800">{lote.title}</p>
-        <p className="text-xs text-slate-400">
+        <p className="truncate text-sm font-semibold text-ink">{lote.title}</p>
+        <p className="text-xs text-ink-faint">
           {CATEGORY_LABELS[lote.category]} · {formatCurrency(lote.base_price, currency)}
         </p>
       </div>

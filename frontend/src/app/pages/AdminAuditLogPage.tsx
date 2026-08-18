@@ -36,7 +36,7 @@ export function AdminAuditLogPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Panel de administrador</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Panel de administrador</h1>
         <p className="mt-1 text-sm text-slate-600">
           Auditoría de acciones importantes y resultados de remates finalizados en toda
           la plataforma.

@@ -22,9 +22,10 @@ describe('formatCurrency', () => {
     expect(usdResult).not.toBe(arsResult);
   });
 
-  it('preserva la precisión de un monto con decimales', () => {
+  it('no muestra decimales, incluso si el monto los tiene', () => {
     const result = formatCurrency('1234.56', 'ARS');
-    expect(result).toMatch(/1[.,]?234[.,]56|1234[.,]56/);
+    expect(result).not.toMatch(/[.,]56/);
+    expect(result).toMatch(/1[.,]235|1235/);
   });
 
   it('ante un código de moneda inválido, no rompe -- cae a un formato de respaldo', () => {

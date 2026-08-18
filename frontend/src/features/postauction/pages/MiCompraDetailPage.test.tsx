@@ -96,7 +96,7 @@ describe('MiCompraDetailPage', () => {
     expect(screen.getAllByText('Pago pendiente').length).toBeGreaterThan(0);
     expect(screen.getByText('Tu compra está pendiente de pago.')).toBeInTheDocument();
     expect(screen.getByText('Contactá al rematador para coordinar el pago de esta compra.')).toBeInTheDocument();
-    expect(screen.getAllByText(/\$\s?15\.000\.000,00/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/\$\s?15\.000\.000/).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Rematador Demo').length).toBeGreaterThan(0);
   });
 

@@ -26,6 +26,7 @@ export function useAuthActions() {
       login: state.login,
       register: state.register,
       logout: state.logout,
+      updateUser: state.updateUser,
     })),
   );
 }

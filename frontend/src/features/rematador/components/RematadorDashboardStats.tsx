@@ -32,14 +32,19 @@ const TONE_CLASSES: Record<RemateStatus, string> = {
 const STATS_ORDER: RemateStatus[] = ['live', 'paused', 'scheduled', 'draft', 'finished', 'cancelled'];
 
 /**
- * Fila de indicadores del dashboard -- pedido explícito de este módulo: "apariencia de
+ * Franja de indicadores del dashboard -- pedido explícito de este módulo: "apariencia de
  * consola profesional", sin tablas. Se calcula client-side sobre la misma lista ya
  * cargada por `useRemates` (`RematadorDashboardPage`), sin ningún endpoint nuevo.
  *
- * Rediseño visual (Épica 9, Etapa 5): usa `DashboardStatCard` (local a `rematador/`,
- * no el `StatCard` compartido) para un look tipo Stripe/Vercel/Linear -- ícono por
- * estado, tarjeta más grande, sin la flecha de tendencia que sí tiene sentido en series
- * temporales (Analítica) pero no en un conteo puntual por categoría.
+ * Retexturizado en la Épica 9, Etapa 9 (ver prototipo aprobado): antes eran 7 tarjetas
+ * sueltas, cada una con su propio borde+sombra+esquinas redondeadas -- exactamente el
+ * patrón de "más cards" que el rediseño pidió evitar. Ahora es una única franja abierta
+ * (un solo `border`/`rounded-xl` para todo el conjunto) con `DashboardStatCard` como
+ * celdas separadas por hairlines (`divide-x`/`divide-y`), mismo espíritu que una barra de
+ * métricas tipo Linear/Vercel. Fila sin wrap (`flex` + `overflow-x-auto`, no `grid`): con
+ * `divide-x` un grid que wrappea deja una línea vertical de más en el primer ítem de cada
+ * fila nueva -- en mobile la franja scrollea horizontal en vez de wrappear, así los
+ * hairlines quedan siempre prolijos.
  */
 export function RematadorDashboardStats({ remates }: RematadorDashboardStatsProps) {
   const counts = useMemo(() => {
@@ -58,12 +63,13 @@ export function RematadorDashboardStats({ remates }: RematadorDashboardStatsProp
   }, [remates]);
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+    <div className="flex divide-x divide-line overflow-x-auto rounded-xl border border-line">
       <DashboardStatCard
         label="Total"
         formattedValue={String(remates.length)}
         icon={Gavel}
-        toneClassName="bg-slate-900 text-white"
+        toneClassName="bg-ink text-white"
+        className="shrink-0"
       />
       {STATS_ORDER.map((status) => (
         <DashboardStatCard
@@ -73,6 +79,7 @@ export function RematadorDashboardStats({ remates }: RematadorDashboardStatsProp
           icon={ICONS[status]}
           toneClassName={TONE_CLASSES[status]}
           pulse={status === 'live' && counts[status] > 0}
+          className="shrink-0"
         />
       ))}
     </div>

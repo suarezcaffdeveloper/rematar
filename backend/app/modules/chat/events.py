@@ -44,6 +44,12 @@ class ChatMessageSent(RemateScopedEvent):
     content: str
     system_event_type: str | None
     created_at: datetime
+    # A diferencia de `author_name`/`author_role` (denormalizados en la fila, ver
+    # docstring de `models.py`), el avatar viaja SOLO acá -- nunca se persiste en
+    # `ChatMessage` -- para que siempre refleje la foto de perfil vigente al momento de
+    # enviar, no la que el autor tenía en el pasado. El historial (`GET .../messages`)
+    # lo resuelve por separado, en vivo, en el router (ver `ChatMessageRead`).
+    author_avatar_url: str | None = None
 
 
 class ChatMessageDeleted(RemateScopedEvent):

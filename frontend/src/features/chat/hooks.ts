@@ -110,6 +110,7 @@ export function useChatMessages(
           author_id: payload.author_id,
           author_name: payload.author_name,
           author_role: payload.author_role as ChatMessage['author_role'],
+          author_avatar_url: payload.author_avatar_url,
           content: payload.content,
           system_event_type: payload.system_event_type,
           is_deleted: false,

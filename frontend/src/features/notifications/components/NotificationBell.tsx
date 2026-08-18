@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import clsx from 'clsx';
 import { formatDateTime } from '../../../shared/lib/format';
+import { useAuth } from '../../auth/hooks';
 import { useNotifications, useUnreadNotificationCount } from '../hooks';
 import { notificationIcon } from '../labels';
+import { notificationHref } from '../routing';
 import type { Notification } from '../types';
 
 const RECENT_COUNT = 8;
@@ -30,6 +32,7 @@ export function NotificationBell() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const { unreadCount, reload: reloadUnreadCount } = useUnreadNotificationCount();
   const { data, isLoading, markAsRead, markAllAsRead } = useNotifications(RECENT_COUNT);
+  const { user } = useAuth();
 
   function close(restoreFocus: boolean) {
     setIsOpen(false);
@@ -98,7 +101,7 @@ export function NotificationBell() {
         aria-label="Notificaciones"
         aria-haspopup="true"
         aria-expanded={isOpen}
-        className="relative rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        className="relative rounded-md p-2 text-ink-muted transition-colors hover:bg-surface-subtle hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
       >
         <Bell aria-hidden="true" className="h-5 w-5" />
         {unreadCount > 0 && (
@@ -113,10 +116,10 @@ export function NotificationBell() {
           ref={panelRef}
           role="region"
           aria-label="Notificaciones"
-          className="absolute right-0 z-20 mt-2 w-80 rounded-lg border border-slate-200 bg-white shadow-lg"
+          className="absolute right-0 z-20 mt-2 w-80 rounded-lg border border-line bg-white shadow-lg"
         >
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
-            <span className="text-sm font-semibold text-slate-900">Notificaciones</span>
+          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <span className="text-sm font-semibold text-ink">Notificaciones</span>
             {unreadCount > 0 && (
               <button
                 type="button"
@@ -130,9 +133,9 @@ export function NotificationBell() {
 
           <div className="max-h-96 overflow-y-auto">
             {isLoading ? (
-              <p className="px-4 py-6 text-center text-sm text-slate-400">Cargando…</p>
+              <p className="px-4 py-6 text-center text-sm text-ink-faint">Cargando…</p>
             ) : !data || data.items.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-slate-400">No tenés notificaciones.</p>
+              <p className="px-4 py-6 text-center text-sm text-ink-faint">No tenés notificaciones.</p>
             ) : (
               <ul>
                 {data.items.map((notification) => {
@@ -140,11 +143,11 @@ export function NotificationBell() {
                   const isUnread = notification.read_at === null;
                   const rowContent = (
                     <div className={clsx('flex gap-3 px-4 py-3 text-left text-sm', isUnread && 'bg-brand-50/50')}>
-                      <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                      <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" />
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-slate-900">{notification.title}</p>
-                        <p className="mt-0.5 text-slate-500">{notification.message}</p>
-                        <p className="mt-1 text-xs text-slate-400">{formatDateTime(notification.created_at)}</p>
+                        <p className="font-medium text-ink">{notification.title}</p>
+                        <p className="mt-0.5 text-ink-muted">{notification.message}</p>
+                        <p className="mt-1 text-xs text-ink-faint">{formatDateTime(notification.created_at)}</p>
                       </div>
                       {isUnread && (
                         <span aria-hidden="true" className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-500" />
@@ -152,13 +155,15 @@ export function NotificationBell() {
                     </div>
                   );
 
+                  const href = notificationHref(notification, user?.role);
+
                   return (
-                    <li key={notification.id} className="border-b border-slate-50 last:border-0">
-                      {notification.remate_id ? (
+                    <li key={notification.id} className="border-b border-line last:border-0">
+                      {href ? (
                         <Link
-                          to={`/remates/${notification.remate_id}`}
+                          to={href}
                           onClick={() => handleItemActivate(notification)}
-                          className="block transition-colors hover:bg-slate-50"
+                          className="block transition-colors hover:bg-surface-subtle"
                         >
                           {rowContent}
                         </Link>
@@ -166,7 +171,7 @@ export function NotificationBell() {
                         <button
                           type="button"
                           onClick={() => handleItemActivate(notification)}
-                          className="block w-full transition-colors hover:bg-slate-50"
+                          className="block w-full transition-colors hover:bg-surface-subtle"
                         >
                           {rowContent}
                         </button>

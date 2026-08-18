@@ -45,7 +45,8 @@ const HELP_TIPS = [
 
 /**
  * Formulario de Remate, crear y editar (Épica 5, Módulo 5.3; rediseño visual del modo
- * creación -- Épica 9). Valida en el cliente (`validateRemateForm`) antes de llamar al
+ * creación -- Épica 9; retexturizado sobre el sistema de diseño más reciente -- ver
+ * `FormSection`). Valida en el cliente (`validateRemateForm`) antes de llamar al
  * backend -- si igual llega un error de negocio (por ejemplo, el remate dejó de estar
  * en `draft`/`scheduled` mientras el modal estaba abierto), se muestra en un `Alert`
  * dentro del propio modal, sin cerrarlo, para que el usuario no pierda lo que ya
@@ -110,7 +111,7 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
       hideHeader
       footer={
         <div className="flex w-full flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-ink-faint">
             {isEditMode ? 'Los cambios se guardan de inmediato.' : 'El siguiente paso será cargar los lotes.'}
           </p>
           <div className="flex items-center gap-2">
@@ -121,11 +122,7 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
               whileHover={prefersReducedMotion || isSubmitting ? undefined : { scale: 1.02 }}
               whileTap={prefersReducedMotion || isSubmitting ? undefined : { scale: 0.98 }}
             >
-              <Button
-                onClick={handleSubmit}
-                isLoading={isSubmitting}
-                className="bg-gradient-to-r from-brand-600 to-brand-700 shadow-lg shadow-brand-600/25 hover:from-brand-700 hover:to-brand-800 hover:shadow-xl hover:shadow-brand-600/30"
-              >
+              <Button variant="hero" onClick={handleSubmit} isLoading={isSubmitting}>
                 {isEditMode ? 'Guardar cambios' : 'Crear remate'}
                 {!isSubmitting && <ArrowRight aria-hidden="true" className="h-4 w-4" />}
               </Button>
@@ -141,10 +138,10 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
               <GavelIcon className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              <h1 className="text-2xl font-semibold tracking-tight text-ink">
                 {isEditMode ? 'Editar remate' : 'Crear nuevo remate'}
               </h1>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-ink-muted">
                 Configure la información general del remate. Luego podrá agregar los lotes y comenzar la
                 subasta cuando lo desee.
               </p>
@@ -196,7 +193,7 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
                 maxLength={DESCRIPTION_MAX_LENGTH}
                 placeholder="Contá a los compradores qué van a encontrar en este remate: contexto, condiciones y detalles relevantes…"
               />
-              <span className="self-end text-xs text-slate-400">
+              <span className="self-end text-xs text-ink-faint">
                 {values.description.length} / {DESCRIPTION_MAX_LENGTH}
               </span>
             </div>
@@ -218,7 +215,7 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
               onChange={(event) => setField('starts_at', event.target.value)}
               error={errors.starts_at}
             />
-            <p className="-mt-2 text-xs text-slate-400">
+            <p className="-mt-2 text-xs text-ink-faint">
               La fecha de inicio hace falta para publicar el remate más adelante -- no es obligatoria para
               guardarlo como borrador.
             </p>
@@ -238,7 +235,7 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
               ))}
             </Select>
 
-            <div className="flex flex-col gap-3 border-t border-slate-100 pt-4">
+            <div className="flex flex-col gap-3 border-t border-line pt-4">
               <Switch
                 id={antiSnipingSwitchId}
                 label="Habilitar anti-sniping"
@@ -270,7 +267,7 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
               </AnimatePresence>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-slate-100 pt-4">
+            <div className="flex flex-col gap-3 border-t border-line pt-4">
               <Switch
                 id={loteTimerSwitchId}
                 label="Habilitar cuenta regresiva por lote"
@@ -305,7 +302,7 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
         </div>
 
         {!isEditMode && (
-          <aside className="flex h-fit flex-col gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 p-5 lg:sticky lg:top-1/2 lg:self-start lg:-translate-y-1/2">
+          <aside className="flex h-fit flex-col gap-3 rounded-xl border border-brand-100 bg-brand-50/60 p-5 lg:sticky lg:top-1/2 lg:self-start lg:-translate-y-1/2">
             <div className="flex items-center gap-2 text-brand-700">
               <Lightbulb aria-hidden="true" className="h-4 w-4" />
               <h3 className="text-sm font-semibold">Consejos</h3>

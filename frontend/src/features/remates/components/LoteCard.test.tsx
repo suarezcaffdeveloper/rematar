@@ -44,7 +44,7 @@ describe('LoteCard', () => {
   it('muestra precio inicial e incremento mínimo', () => {
     render(<LoteCard lote={makeLote({ base_price: '1000.00', min_increment: '50.00' })} currency="ARS" />);
 
-    expect(screen.getByText(/1\.000,00/)).toBeInTheDocument();
+    expect(screen.getByText(/1\.000/)).toBeInTheDocument();
     expect(screen.getByText(/Incremento/)).toBeInTheDocument();
   });
 

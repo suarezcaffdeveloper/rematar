@@ -22,6 +22,7 @@ from app.modules.users.models import UserRole
 class TokenType(StrEnum):
     ACCESS = "access"
     REFRESH = "refresh"
+    PASSWORD_RESET = "password_reset"
 
 
 def create_access_token(*, user_id: uuid.UUID, role: UserRole, settings: Settings) -> str:
@@ -39,6 +40,18 @@ def create_refresh_token(*, user_id: uuid.UUID, jti: uuid.UUID, settings: Settin
         secret_key=settings.SECRET_KEY,
         algorithm=settings.JWT_ALGORITHM,
         expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+    )
+
+
+def create_password_reset_token(*, user_id: uuid.UUID, jti: uuid.UUID, settings: Settings) -> str:
+    """Mismo criterio que `create_refresh_token`: el JWT nunca se persiste, solo su
+    `jti` (ver `PasswordResetToken` en `models.py`) -- leer la fila de la base no le
+    sirve a nadie sin este token firmado, que solo viaja por email."""
+    return encode_token(
+        {"sub": str(user_id), "jti": str(jti), "type": TokenType.PASSWORD_RESET.value},
+        secret_key=settings.SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
+        expires_delta=timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES),
     )
 
 

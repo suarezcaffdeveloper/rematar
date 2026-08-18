@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
+import { Card } from '../../../shared/components/Card';
 import { Input } from '../../../shared/components/Input';
 import { Skeleton } from '../../../shared/components/Skeleton';
 import { formatDateTime } from '../../../shared/lib/format';
@@ -39,7 +40,7 @@ export function ConnectedBuyersList({ remateId, reloadToken }: ConnectedBuyersLi
   }, [reloadToken]);
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <Card className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
           Compradores conectados
@@ -115,6 +116,6 @@ export function ConnectedBuyersList({ remateId, reloadToken }: ConnectedBuyersLi
           onMuted={reload}
         />
       )}
-    </div>
+    </Card>
   );
 }

@@ -3,8 +3,10 @@ import clsx from 'clsx';
 import { Card } from '../../../shared/components/Card';
 import { Skeleton } from '../../../shared/components/Skeleton';
 import { formatDateTime } from '../../../shared/lib/format';
+import { useAuth } from '../../auth/hooks';
 import { useNotifications } from '../hooks';
 import { notificationIcon } from '../labels';
+import { notificationHref } from '../routing';
 
 const RECENT_COUNT = 5;
 const SKELETON_COUNT = 3;
@@ -20,6 +22,7 @@ const SKELETON_COUNT = 3;
  */
 export function RecentActivityCard() {
   const { data, isLoading, markAsRead } = useNotifications(RECENT_COUNT);
+  const { user } = useAuth();
 
   return (
     <Card>
@@ -46,10 +49,12 @@ export function RecentActivityCard() {
               </div>
             );
 
-            return notification.remate_id ? (
+            const href = notificationHref(notification, user?.role);
+
+            return href ? (
               <Link
                 key={notification.id}
-                to={`/remates/${notification.remate_id}`}
+                to={href}
                 onClick={() => {
                   if (isUnread) void markAsRead(notification.id);
                 }}

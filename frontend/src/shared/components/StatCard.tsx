@@ -22,6 +22,12 @@ export interface StatCardProps {
    * la etiqueta completa por sobre una única línea prolija. */
   centered?: boolean;
   className?: string;
+  /** `'slate'` (default, resto de la app): paleta `slate` de Tailwind. `'ink'`: paleta
+   * `ink`/`line` del rediseño visual (Sala del Remate, Consola Operativa, Dashboards --
+   * ver `docs/43-sistema-de-diseno.md`) -- opt-in para no repintar de golpe a los demás
+   * consumidores de este componente (Analítica, Monitoreo) que todavía no pasaron por
+   * ese rediseño panel por panel. */
+  tone?: 'slate' | 'ink';
 }
 
 /**
@@ -40,6 +46,7 @@ export function StatCard({
   accentClassName,
   centered = false,
   className,
+  tone = 'slate',
 }: StatCardProps) {
   const [isPulsing, setIsPulsing] = useState(false);
   const [trend, setTrend] = useState<'up' | 'down' | null>(null);
@@ -57,7 +64,8 @@ export function StatCard({
   return (
     <div
       className={clsx(
-        'flex rounded-xl border border-slate-200 bg-white shadow-sm',
+        'flex rounded-xl border bg-white shadow-sm',
+        tone === 'ink' ? 'border-line' : 'border-slate-200',
         centered ? 'flex-col items-center gap-1 p-4 text-center' : 'items-center gap-3 p-3',
         className,
       )}
@@ -68,7 +76,8 @@ export function StatCard({
       <div className={clsx(centered ? 'flex flex-col items-center gap-1' : 'min-w-0 flex-1')}>
         <span
           className={clsx(
-            'text-xs font-medium uppercase tracking-wide text-slate-500',
+            'text-xs font-medium uppercase tracking-wide',
+            tone === 'ink' ? 'text-ink-faint' : 'text-slate-500',
             centered ? 'break-words' : 'block truncate',
           )}
         >
@@ -77,7 +86,8 @@ export function StatCard({
         <span className={clsx('flex items-center gap-1.5', centered && 'justify-center')}>
           <span
             className={clsx(
-              'text-lg font-semibold text-slate-900 transition-colors duration-300 sm:text-xl',
+              'text-lg font-semibold transition-colors duration-300 sm:text-xl',
+              tone === 'ink' ? 'text-ink' : 'text-slate-900',
               isPulsing && 'text-brand-600',
             )}
           >

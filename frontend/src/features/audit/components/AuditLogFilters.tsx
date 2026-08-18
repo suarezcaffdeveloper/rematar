@@ -1,4 +1,5 @@
 import { Button } from '../../../shared/components/Button';
+import { Card } from '../../../shared/components/Card';
 import { Input } from '../../../shared/components/Input';
 import { Select } from '../../../shared/components/Select';
 import { ACTION_FILTER_OPTIONS, describeAction } from '../labels';
@@ -23,7 +24,7 @@ export function AuditLogFilters({ value, onChange }: AuditLogFiltersProps) {
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:flex-wrap sm:items-end">
+    <Card className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
       <div className="min-w-[220px] flex-1">
         <Input
           label="Buscar por usuario"
@@ -97,6 +98,6 @@ export function AuditLogFilters({ value, onChange }: AuditLogFiltersProps) {
           Limpiar filtros
         </Button>
       )}
-    </div>
+    </Card>
   );
 }

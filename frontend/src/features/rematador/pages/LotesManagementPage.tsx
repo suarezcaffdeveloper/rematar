@@ -17,7 +17,7 @@ import {
   reorderLotesRequest,
   scheduleRemateRequest,
 } from '../../remates/api';
-import { GavelIcon, SearchIcon } from '../../remates/components/icons';
+import { SearchIcon } from '../../remates/components/icons';
 import { useLotes, useRemateDetail } from '../../remates/hooks';
 import type { Lote } from '../../remates/types';
 import { AddLoteButton } from '../components/AddLoteButton';
@@ -246,14 +246,11 @@ export function LotesManagementPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8 pb-20">
-      <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-brand-700 text-white shadow-sm">
-          <GavelIcon className="h-5 w-5" />
-        </div>
+    <div className="flex flex-col gap-8 pb-20 font-display">
+      <div className="flex flex-col gap-3 border-b border-line pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Preparación del Remate</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Preparación del Remate</h1>
+          <p className="mt-1 max-w-2xl text-sm text-ink-muted">
             Complete y organice los lotes que formarán parte del remate. Cuando todo esté listo podrá publicarlo y
             comenzar la subasta.
           </p>
@@ -273,7 +270,7 @@ export function LotesManagementPage() {
 
         <div className="flex flex-1 flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-slate-900">Lotes</h2>
+            <h2 className="text-lg font-semibold text-ink">Lotes</h2>
             {isStructureEditable && <AddLoteButton onClick={() => setLoteModalState({ mode: 'create' })} />}
           </div>
 
@@ -348,7 +345,7 @@ export function LotesManagementPage() {
               </div>
 
               {filteredLotes.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-slate-300 bg-white py-8 text-center text-sm text-slate-500">
+                <p className="rounded-xl border border-dashed border-line-strong bg-white py-8 text-center text-sm text-ink-muted">
                   No encontramos lotes que coincidan con &quot;{searchQuery}&quot;.
                 </p>
               ) : (
@@ -443,8 +440,8 @@ export function LotesManagementPage() {
 
       {isDraft && (
         <div className="fixed bottom-6 right-6 z-30">
-          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 pl-4 shadow-xl backdrop-blur-sm">
-            <span className="hidden text-sm text-slate-500 sm:block">
+          <div className="flex items-center gap-3 rounded-2xl border border-line bg-white/95 p-3 pl-4 shadow-xl backdrop-blur-sm">
+            <span className="hidden text-sm text-ink-muted sm:block">
               {canPublish ? 'Todo listo para comenzar' : publishBlockedReason}
             </span>
             <Button

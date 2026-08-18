@@ -181,7 +181,7 @@ export function LoteGalleryManager({ remateId, lote, onChanged }: LoteGalleryMan
   return (
     <div className="flex flex-col gap-3">
       {mainImage ? (
-        <div className="aspect-video w-full overflow-hidden rounded-xl bg-slate-100">
+        <div className="aspect-video w-full overflow-hidden rounded-xl bg-surface-subtle">
           <img src={mainImage.url} alt="Imagen principal del lote" className="h-full w-full object-cover" />
         </div>
       ) : (
@@ -207,7 +207,7 @@ export function LoteGalleryManager({ remateId, lote, onChanged }: LoteGalleryMan
                 }}
                 className={clsx(
                   'relative h-16 w-24 overflow-hidden rounded-lg border-2 transition-colors',
-                  index === 0 ? 'border-brand-600' : 'border-transparent hover:border-slate-300',
+                  index === 0 ? 'border-brand-600' : 'border-transparent hover:border-line-strong',
                   dragOverIndex === index && draggedIndex !== index && 'ring-2 ring-brand-300',
                   draggedIndex === index && 'opacity-40',
                 )}
@@ -230,18 +230,18 @@ export function LoteGalleryManager({ remateId, lote, onChanged }: LoteGalleryMan
                   type="button"
                   onClick={() => setDeletingIndex(index)}
                   aria-label={`Eliminar imagen ${index + 1}`}
-                  className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white hover:bg-black/80"
+                  className="absolute right-1 top-1 rounded-full bg-slate-900/60 p-1 text-white hover:bg-slate-900/80"
                 >
                   <TrashIcon className="h-3 w-3" />
                 </button>
               </div>
-              <div className="flex justify-center gap-1 text-slate-400">
+              <div className="flex justify-center gap-1 text-ink-faint">
                 <button
                   type="button"
                   onClick={() => handleMove(index, -1)}
                   disabled={index === 0}
                   aria-label={`Mover imagen ${index + 1} hacia la izquierda`}
-                  className="rounded p-0.5 hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-30"
+                  className="rounded p-0.5 hover:bg-surface-subtle hover:text-ink-muted disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <ChevronLeftIcon className="h-4 w-4" />
                 </button>
@@ -250,7 +250,7 @@ export function LoteGalleryManager({ remateId, lote, onChanged }: LoteGalleryMan
                   onClick={() => handleMove(index, 1)}
                   disabled={index === images.length - 1}
                   aria-label={`Mover imagen ${index + 1} hacia la derecha`}
-                  className="rounded p-0.5 hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-30"
+                  className="rounded p-0.5 hover:bg-surface-subtle hover:text-ink-muted disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <ChevronRightIcon className="h-4 w-4" />
                 </button>
@@ -260,7 +260,7 @@ export function LoteGalleryManager({ remateId, lote, onChanged }: LoteGalleryMan
 
           {pendingUploads.map((item) => (
             <div key={item.id} className="flex w-24 shrink-0 flex-col gap-1">
-              <div className="h-16 w-24 overflow-hidden rounded-lg border-2 border-slate-200">
+              <div className="h-16 w-24 overflow-hidden rounded-lg border-2 border-line">
                 <img src={item.previewUrl} alt="" className="h-full w-full object-cover opacity-60" />
               </div>
               <ProgressBar percent={item.progress} />

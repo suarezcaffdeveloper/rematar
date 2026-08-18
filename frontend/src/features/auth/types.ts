@@ -21,6 +21,10 @@ export interface User {
   email: string;
   full_name: string;
   phone: string | null;
+  /** `null` -> avatar por defecto (iniciales). Una URL real (foto subida) o
+   * `"preset:<id>"` (avatar predeterminado, ver `shared/lib/avatarPresets.ts`) --
+   * `shared/components/UserAvatar.tsx` es el único lugar que interpreta el valor. */
+  avatar_url: string | null;
   role: UserRole;
   is_active: boolean;
   created_at: string;
@@ -52,4 +56,25 @@ export interface RegisterPayload {
   full_name: string;
   phone: string;
   role: RegisterableRole;
+}
+
+/** `ForgotPasswordRequest` -- `backend/app/modules/auth/schemas.py`. */
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+/** `ResetPasswordTokenValidation` -- `backend/app/modules/auth/schemas.py`. */
+export interface ResetPasswordTokenPayload {
+  token: string;
+}
+
+/**
+ * `ResetPasswordRequest` -- `backend/app/modules/auth/schemas.py`. Igual que
+ * `RegisterPayload.confirm_password`, `confirm_new_password` es puramente de
+ * validación (el backend también la revalida) y nunca se persiste.
+ */
+export interface ResetPasswordPayload {
+  token: string;
+  new_password: string;
+  confirm_new_password: string;
 }

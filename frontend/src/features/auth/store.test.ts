@@ -16,6 +16,8 @@ const USER = {
   id: 'u1',
   email: 'buyer@example.com',
   full_name: 'Compradora Test',
+  phone: null,
+  avatar_url: null,
   role: 'comprador' as const,
   is_active: true,
   created_at: '2026-01-01T00:00:00Z',

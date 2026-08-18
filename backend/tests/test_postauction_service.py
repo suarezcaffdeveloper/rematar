@@ -40,13 +40,13 @@ class _RecordingEventBus:
 
 class _FakeNotificationChannel:
     """`NotificationChannel` de test -- registra los contextos recibidos en vez de
-    mandar un email de verdad. `should_fail` simula un proveedor SMTP caído, para
-    probar que `NotificationService`/`create_case_from_winner` lo absorben sin romper
-    la adjudicación."""
+    mandar una notificación de verdad. `should_fail` simula un proveedor caído (SMTP,
+    Meta Cloud API), para probar que `NotificationService`/`create_case_from_winner` lo
+    absorben sin romper la adjudicación. `name` configurable para poder representar
+    tanto el canal de email como el de WhatsApp con la misma clase."""
 
-    name = "email"
-
-    def __init__(self, *, should_fail: bool = False) -> None:
+    def __init__(self, *, name: str = "email", should_fail: bool = False) -> None:
+        self.name = name
         self.should_fail = should_fail
         self.calls: list = []
 
@@ -81,12 +81,15 @@ def _make_service(
     )
 
 
-async def _create_user(db_session: AsyncSession, *, role: UserRole, email: str) -> User:
+async def _create_user(
+    db_session: AsyncSession, *, role: UserRole, email: str, phone: str | None = None
+) -> User:
     user = User(
         email=email,
         hashed_password=hash_password("password123"),
         full_name=email.split("@")[0],
         role=role,
+        phone=phone,
     )
     db_session.add(user)
     await db_session.commit()
@@ -124,10 +127,16 @@ async def _build_case(
     notification_service: NotificationService | None = None,
 ):
     rematador = await _create_user(
-        db_session, role=UserRole.REMATADOR, email=f"r{uuid.uuid4()}@example.com"
+        db_session,
+        role=UserRole.REMATADOR,
+        email=f"r{uuid.uuid4()}@example.com",
+        phone="+5491133445566",
     )
     buyer = await _create_user(
-        db_session, role=UserRole.COMPRADOR, email=f"c{uuid.uuid4()}@example.com"
+        db_session,
+        role=UserRole.COMPRADOR,
+        email=f"c{uuid.uuid4()}@example.com",
+        phone="+5491122334455",
     )
     remate = await _create_remate(db_session, rematador)
     lote = await _create_lote(db_session, remate)
@@ -213,6 +222,25 @@ async def test_create_case_from_winner_triggers_email_notification(
     assert context.lot_number == "1"
     assert context.final_price == Decimal("1500")
     assert context.currency == "ARS"
+
+
+async def test_create_case_from_winner_context_includes_phone_and_rematador_id(
+    db_session: AsyncSession,
+) -> None:
+    email_channel = _FakeNotificationChannel(name="email")
+    whatsapp_channel = _FakeNotificationChannel(name="whatsapp")
+    event_bus = _RecordingEventBus()
+    _, case, rematador, buyer = await _build_case(
+        db_session, event_bus, NotificationService([email_channel, whatsapp_channel])
+    )
+
+    assert len(email_channel.calls) == 1
+    assert len(whatsapp_channel.calls) == 1
+    for context in (email_channel.calls[0], whatsapp_channel.calls[0]):
+        assert context.case_id == case.id
+        assert context.buyer_phone == buyer.phone
+        assert context.rematador_id == rematador.id
+        assert context.rematador_phone == rematador.phone
 
 
 async def test_create_case_from_winner_records_notification_timeline_entry(

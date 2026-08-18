@@ -66,6 +66,7 @@ class UserRead(BaseModel):
     email: EmailStr
     full_name: str
     phone: str | None
+    avatar_url: str | None
     role: UserRole
     is_active: bool
     created_at: datetime
@@ -73,3 +74,22 @@ class UserRead(BaseModel):
 
 class UserStatusUpdate(BaseModel):
     is_active: bool
+
+
+class UserAvatarUploadResponse(BaseModel):
+    """Respuesta de `POST /users/me/avatar` -- solo la URL resultante, mismo criterio
+    que `RemateCoverImageUploadResponse`: este endpoint no toca la fila del usuario,
+    quien sube la imagen decide cuándo asignarla vía `PATCH /users/me`."""
+
+    url: str
+
+
+class UserAvatarUpdate(BaseModel):
+    """`PATCH /users/me` -- por ahora solo actualiza `avatar_url` (foto propia subida
+    vía `POST /me/avatar`, un avatar predeterminado con el prefijo `preset:`, o `None`
+    para volver al avatar por defecto con iniciales). Nombre/email/teléfono quedan
+    fuera a propósito: todavía no está definido si esos campos se van a poder editar
+    ni bajo qué reglas (ver conversación de diseño del panel de perfil) -- ampliar este
+    schema cuando esa decisión esté tomada, en vez de adelantarla acá."""
+
+    avatar_url: str | None = Field(default=None, max_length=500)

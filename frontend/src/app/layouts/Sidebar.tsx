@@ -2,20 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { Bot, Gavel, History, LayoutDashboard, LogOut, Package, ShoppingBag, type LucideIcon } from 'lucide-react';
 import clsx from 'clsx';
+import logoRematar from '../../assets/brand/logo-rematar.png';
 import { useAuth, useAuthActions } from '../../features/auth/hooks';
 import type { UserRole } from '../../features/auth/types';
 import { Button } from '../../shared/components/Button';
+import { UserAvatar } from '../../shared/components/UserAvatar';
 import { useFocusTrap } from '../../shared/hooks/useFocusTrap';
 import { LogoutConfirmDialog } from './LogoutConfirmDialog';
-
-/** Iniciales para el avatar del pie del sidebar -- primera letra del primer y último
- * nombre (`"Ana Rematadora"` -> `"AR"`), o solo la primera si es una única palabra. */
-function getInitials(fullName: string): string {
-  const words = fullName.trim().split(/\s+/);
-  const first = words[0]?.[0] ?? '';
-  const last = words.length > 1 ? words[words.length - 1][0] : '';
-  return (first + last).toUpperCase();
-}
 
 export interface SidebarProps {
   role: UserRole | undefined;
@@ -69,6 +62,32 @@ function CollapsibleLabel({ compact, children }: { compact: boolean; children: s
   );
 }
 
+/** Logo oficial (`logo-rematar.png`, 660x245px -- isotipo + wordmark en un solo asset,
+ * sin versión recortada aparte). Mismo truco que `CollapsibleLabel`: la imagen nunca se
+ * escala de forma distinta a su proporción original (siempre `h-8`, ancho proporcional
+ * vía `w-auto`) -- lo que cambia es cuánto de ella queda visible, recortando con
+ * `overflow-hidden` sobre un contenedor cuyo ancho transiciona igual que el propio
+ * riel (`group-hover`/`group-focus-within`, sin JS). Anchos calculados a mano sobre el
+ * asset real: a `h-8` (32px) la imagen completa mide ~86px de ancho; el isotipo (sin el
+ * texto "RematAR") termina alrededor del píxel 226 del original y el texto arranca en el
+ * 240 -- 30px de contenedor revela hasta el ~230 (con margen a cada lado) sin cortar el
+ * isotipo ni asomar el texto. Si se reemplaza el asset por otro con proporciones
+ * distintas, estos dos anchos hay que recalcularlos. */
+function SidebarLogo({ compact }: { compact: boolean }) {
+  return (
+    <span
+      className={clsx(
+        'block h-8 shrink-0 overflow-hidden',
+        compact
+          ? 'w-[30px] transition-[width] duration-200 ease-out group-hover:w-[86px] group-focus-within:w-[86px]'
+          : 'w-[86px]',
+      )}
+    >
+      <img src={logoRematar} alt="RematAR" className="h-8 w-auto max-w-none" />
+    </span>
+  );
+}
+
 function NavItemLink({
   to,
   end,
@@ -91,9 +110,9 @@ function NavItemLink({
       onClick={onNavigate}
       className={({ isActive }) =>
         clsx(
-          'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+          'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
-          isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+          isActive ? 'bg-brand-50 text-brand-700' : 'text-ink-muted hover:bg-surface-subtle hover:text-ink',
         )
       }
     >
@@ -119,9 +138,8 @@ function SidebarContent({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <Link to="/" onClick={onNavigate} className="flex h-16 shrink-0 items-center gap-3 px-[1.125rem] text-lg font-bold text-brand-700">
-        <Gavel aria-hidden="true" className="h-6 w-6 shrink-0" />
-        <CollapsibleLabel compact={compact}>RematAR</CollapsibleLabel>
+      <Link to="/" onClick={onNavigate} className="flex h-16 shrink-0 items-center px-3">
+        <SidebarLogo compact={compact} />
       </Link>
       <nav aria-label="Navegación principal" className="flex-1 space-y-1 px-3 py-2">
         {items.map(({ label, to, icon }) => (
@@ -130,26 +148,29 @@ function SidebarContent({
       </nav>
 
       {user && (
-        <div className="flex shrink-0 flex-col gap-3 border-t border-slate-200 px-3 py-4">
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
-              {getInitials(user.full_name)}
-            </span>
+        <div className="flex shrink-0 flex-col gap-3 border-t border-line px-3 py-4">
+          <Link
+            to="/perfil"
+            onClick={onNavigate}
+            aria-label="Ver mi perfil"
+            className="flex items-center gap-3 rounded-xl p-1 -m-1 transition-colors hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          >
+            <UserAvatar avatarUrl={user.avatar_url} fullName={user.full_name} size="sm" />
             <div
               className={clsx(
                 'min-w-0',
                 compact && 'opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100',
               )}
             >
-              <p className="truncate text-sm font-semibold text-slate-900">{user.full_name}</p>
-              <p className="truncate text-xs capitalize text-slate-400">{user.role}</p>
+              <p className="truncate text-sm font-semibold text-ink">{user.full_name}</p>
+              <p className="truncate text-xs capitalize text-ink-faint">{user.role}</p>
             </div>
-          </div>
+          </Link>
           {compact ? (
             <button
               type="button"
               onClick={() => setIsLogoutConfirmOpen(true)}
-              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-muted transition-all duration-200 hover:bg-surface-subtle hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <LogOut aria-hidden="true" className="h-5 w-5 shrink-0" />
               <CollapsibleLabel compact>Cerrar sesión</CollapsibleLabel>
@@ -213,7 +234,7 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
 
   return (
     <>
-      <aside className="group hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:flex lg:w-16 lg:flex-col lg:overflow-hidden lg:border-r lg:border-slate-200 lg:bg-white lg:shadow-sm lg:transition-[width] lg:duration-200 lg:ease-out lg:hover:w-64 lg:focus-within:w-64">
+      <aside className="group hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-20 lg:flex lg:w-16 lg:flex-col lg:overflow-hidden lg:border-r lg:border-line lg:bg-white lg:shadow-sm lg:transition-[width,box-shadow] lg:duration-200 lg:ease-out lg:hover:w-64 lg:hover:shadow-lg lg:focus-within:w-64 lg:focus-within:shadow-lg">
         <SidebarContent role={role} onNavigate={() => {}} compact />
       </aside>
 
@@ -225,7 +246,7 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
             role="dialog"
             aria-modal="true"
             aria-label="Menú de navegación"
-            className="relative flex h-full w-64 flex-col border-r border-slate-200 bg-white shadow-xl"
+            className="relative flex h-full w-64 flex-col border-r border-line bg-white shadow-xl"
           >
             <SidebarContent role={role} onNavigate={onClose} />
           </aside>

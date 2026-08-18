@@ -89,7 +89,7 @@ class ChatService:
         self._repository.add(message)
         await self._repository.commit()
         await self._repository.refresh(message)
-        await self._publish_sent(message)
+        await self._publish_sent(message, author_avatar_url=author.avatar_url)
         return message
 
     async def delete_message(
@@ -223,7 +223,9 @@ class ChatService:
     def _typing_rate_limit_key(remate_id: uuid.UUID, user_id: uuid.UUID) -> str:
         return f"chat:ratelimit:typing:{remate_id}:{user_id}"
 
-    async def _publish_sent(self, message: ChatMessage) -> None:
+    async def _publish_sent(
+        self, message: ChatMessage, *, author_avatar_url: str | None = None
+    ) -> None:
         await self._event_bus.publish(
             ChatMessageSent(
                 remate_id=message.remate_id,
@@ -235,5 +237,6 @@ class ChatService:
                 content=message.content,
                 system_event_type=message.system_event_type,
                 created_at=message.created_at,
+                author_avatar_url=author_avatar_url,
             )
         )

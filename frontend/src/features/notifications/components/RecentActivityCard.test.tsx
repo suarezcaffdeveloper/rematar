@@ -62,7 +62,7 @@ describe('RecentActivityCard', () => {
     expect(screen.getByText('Todavía no hay actividad reciente.')).toBeInTheDocument();
   });
 
-  it('con actividad, renderiza cada notificación con link al remate', () => {
+  it('con actividad, renderiza cada notificación con link al recurso relacionado', () => {
     useNotificationsMock.mockReturnValue({
       data: { items: [makeNotification()], total: 1, page: 1, page_size: 5 },
       isLoading: false,
@@ -75,7 +75,7 @@ describe('RecentActivityCard', () => {
     renderCard();
 
     expect(screen.getByText('Cambio de estado')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Cambio de estado/ })).toHaveAttribute('href', '/remates/remate-1');
+    expect(screen.getByRole('link', { name: /Cambio de estado/ })).toHaveAttribute('href', '/mis-compras/case-1');
   });
 
   it('clickear una notificación no leída la marca como leída', async () => {

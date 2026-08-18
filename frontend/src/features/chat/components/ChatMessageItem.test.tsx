@@ -12,6 +12,7 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
     author_id: 'user-1',
     author_name: 'Juan Pérez',
     author_role: 'comprador',
+    author_avatar_url: null,
     content: 'Hola a todos',
     system_event_type: null,
     is_deleted: false,
@@ -43,6 +44,25 @@ describe('ChatMessageItem', () => {
     expect(screen.queryByText('Rematador')).not.toBeInTheDocument();
   });
 
+  it('con author_avatar_url, muestra la foto de perfil del autor en vez de sus iniciales', () => {
+    const { container } = render(
+      <ChatMessageItem
+        message={makeMessage({ author_avatar_url: 'https://cdn.example.com/juan.jpg' })}
+        canModerate={false}
+        onRequestDelete={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('img')).toHaveAttribute('src', 'https://cdn.example.com/juan.jpg');
+  });
+
+  it('sin author_avatar_url, muestra las iniciales del autor', () => {
+    const { container } = render(<ChatMessageItem message={makeMessage()} canModerate={false} onRequestDelete={vi.fn()} />);
+
+    expect(container.querySelector('img')).not.toBeInTheDocument();
+    expect(screen.getByText('JP')).toBeInTheDocument();
+  });
+
   it('un mensaje de un bot no muestra el globito "Simulador" (pedido explícito de sacarlo)', () => {
     render(
       <ChatMessageItem message={makeMessage({ is_bot: true })} canModerate={false} onRequestDelete={vi.fn()} />,
@@ -50,7 +70,7 @@ describe('ChatMessageItem', () => {
     expect(screen.queryByText('Simulador')).not.toBeInTheDocument();
   });
 
-  // --- Color de la nubecita según el rol (reemplaza la chip de texto de rol) -----------
+  // --- Color del nombre según el rol (rediseño visual -- fila plana, sin nubecita) -----
 
   it('un mensaje de un comprador usa el mismo gris de siempre', () => {
     render(
@@ -60,7 +80,7 @@ describe('ChatMessageItem', () => {
         onRequestDelete={vi.fn()}
       />,
     );
-    expect(screen.getByText('Hola a todos').closest('div')).toHaveClass('bg-slate-100');
+    expect(screen.getByText('Juan Pérez')).toHaveClass('text-ink-muted');
   });
 
   it('un mensaje del rematador se destaca en celeste, no en gris', () => {
@@ -71,12 +91,12 @@ describe('ChatMessageItem', () => {
         onRequestDelete={vi.fn()}
       />,
     );
-    const bubble = screen.getByText('Hola a todos').closest('div');
-    expect(bubble).toHaveClass('bg-sky-100');
-    expect(bubble).not.toHaveClass('bg-slate-100');
+    const name = screen.getByText('Juan Pérez');
+    expect(name).toHaveClass('text-sky-700');
+    expect(name).not.toHaveClass('text-ink-muted');
   });
 
-  it('un mensaje propio siempre usa el color de marca, sin importar el rol', () => {
+  it('un mensaje propio siempre usa el color de marca en el texto, sin importar el rol', () => {
     render(
       <ChatMessageItem
         message={makeMessage({ author_role: 'rematador' })}
@@ -85,7 +105,7 @@ describe('ChatMessageItem', () => {
         isOwnMessage
       />,
     );
-    expect(screen.getByText('Hola a todos').closest('div')).toHaveClass('bg-brand-600');
+    expect(screen.getByText('Hola a todos')).toHaveClass('text-brand-700');
   });
 
   it('sin permiso de moderación, no muestra el botón de eliminar', () => {

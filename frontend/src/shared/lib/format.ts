@@ -25,12 +25,43 @@ export function formatTime(iso: string): string {
   return TIME_FORMATTER.format(new Date(iso));
 }
 
+const COMPACT_DATE_PART_FORMATTER = new Intl.DateTimeFormat('es-AR', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+});
+const COMPACT_TIME_FORMATTER = new Intl.DateTimeFormat('es-AR', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+/**
+ * `"11 ago 2026 · 17:30"` a partir de un ISO 8601 -- variante compacta de
+ * `formatDateTime` (Épica 7, `FinishedRemateCard`): sin los "de" que agrega el patrón
+ * largo de `es-AR` entre día/mes/año, y en 24hs en vez de "05:30 p. m." (más corto, sin
+ * ambigüedad am/pm) para que quepa junto al resto de metadatos de una tarjeta.
+ */
+export function formatDateTimeCompact(iso: string): string {
+  const date = new Date(iso);
+  const dateOnly = COMPACT_DATE_PART_FORMATTER.formatToParts(date)
+    .filter((part) => part.type === 'day' || part.type === 'month' || part.type === 'year')
+    .map((part) => part.value)
+    .join(' ');
+  return `${dateOnly} · ${COMPACT_TIME_FORMATTER.format(date)}`;
+}
+
 const currencyFormatterCache = new Map<string, Intl.NumberFormat>();
 
 /**
  * Formatea un monto -- `amount` llega como `string` (Pydantic serializa `Decimal` así
  * para no perder precisión, ver `features/remates/types.ts::Lote`), nunca `number`.
  * `currency` es `Remate.settings.currency` (ISO 4217 de 3 letras, ej. "ARS", "USD").
+ *
+ * Sin decimales (pedido explícito): los montos de este dominio (remates de hacienda)
+ * siempre son montos redondos, los centavos son ruido visual. `maximumFractionDigits: 0`
+ * redondea en vez de truncar -- no importa porque `amount` en la práctica ya llega sin
+ * parte decimal significativa.
  *
  * `Intl.NumberFormat` tira `RangeError` si el código de moneda no es válido para el
  * runtime del navegador -- improbable dado que `RemateSettings.currency` ya se valida
@@ -42,7 +73,12 @@ export function formatCurrency(amount: string, currency: string): string {
   try {
     let formatter = currencyFormatterCache.get(currency);
     if (!formatter) {
-      formatter = new Intl.NumberFormat('es-AR', { style: 'currency', currency });
+      formatter = new Intl.NumberFormat('es-AR', {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      });
       currencyFormatterCache.set(currency, formatter);
     }
     return formatter.format(Number(amount));

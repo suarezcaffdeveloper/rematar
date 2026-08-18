@@ -26,7 +26,7 @@ export function HistoryFilters({ value, onChange }: HistoryFiltersProps) {
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:flex-wrap sm:items-end">
+    <div className="flex flex-col gap-3 rounded-xl border border-line bg-white p-4 shadow-sm sm:flex-row sm:flex-wrap sm:items-end">
       <div className="min-w-[220px] flex-1">
         <Input
           label="Buscar por título"

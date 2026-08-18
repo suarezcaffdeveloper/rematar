@@ -35,7 +35,7 @@ export function PasswordStrengthMeter({ password }: { password: string }) {
           <span
             key={segment}
             className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-              segment < score ? barClassName : 'bg-slate-200'
+              segment < score ? barClassName : 'bg-line'
             }`}
           />
         ))}

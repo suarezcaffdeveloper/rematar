@@ -20,10 +20,10 @@ export interface ConsolaHeaderProps {
  * (título, fecha, tiempo transcurrido, conectados), pedido explícito para que se vea
  * "limpio y elegante" en vez de competir visualmente con el panel de control. */
 const STATUS_DOT_CLASSES: Record<RemateStatus, string> = {
-  draft: 'bg-slate-300',
+  draft: 'bg-ink-faint',
   scheduled: 'bg-brand-500',
   live: 'bg-warning-500',
-  paused: 'bg-slate-400',
+  paused: 'bg-ink-faint',
   finished: 'bg-success-500',
   cancelled: 'bg-danger-500',
 };
@@ -50,14 +50,30 @@ const STATUS_DOT_CLASSES: Record<RemateStatus, string> = {
  * ocultarse en Modo Remate (ver `app/layouts/AppLayout.tsx`), así que la navegación de
  * vuelta al dashboard vive ahí, compacta y siempre visible, sin que este header necesite
  * ofrecer su propia salida.
+ *
+ * Retexturizado en la Épica 9, Etapa 10 (mismo sistema visual que la Sala del Remate --
+ * ver `SalaHeader`, prototipo aprobado): la "hero card" (`rounded-xl border bg-white
+ * shadow-sm`) se saca por completo -- mismo criterio que ya aplicó `SalaHeader`, un
+ * separador `border-b border-line` alcanza para que el título se sienta parte de la
+ * página en vez de un widget encerrado, sin competir con las cards de
+ * `ConsolaControlPanel` que sí tienen sentido como tal (agrupan acciones por zona de
+ * riesgo, no solo texto).
+ *
+ * Segunda vuelta sobre el prototipo aprobado (captura puntual de la Consola): el título
+ * pasa a vivir solo, a la izquierda, en una única fila -- el punto de estado + label ya
+ * no quedan apilados arriba del título (eso lo repetía dos veces: acá y en
+ * `ConsolaControlPanel`), se mudan a la derecha junto con fecha/tiempo/conectados, mismo
+ * lugar que ocupa el `Badge` de estado en `SalaHeader`.
  */
 export function ConsolaHeader({ remate, connectedUsers, connectionStatus }: ConsolaHeaderProps) {
   const elapsed = useElapsedTime(remate);
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
+    <div className="flex flex-col gap-2 border-b border-line pb-4 sm:flex-row sm:items-center sm:justify-between">
+      <h1 className="min-w-0 truncate text-xl font-semibold tracking-tight text-ink sm:text-2xl">{remate.title}</h1>
+
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-ink-muted">
+        <span className="flex items-center gap-1.5">
           <span
             aria-hidden="true"
             className={clsx(
@@ -66,23 +82,19 @@ export function ConsolaHeader({ remate, connectedUsers, connectionStatus }: Cons
               remate.status === 'live' && 'animate-pulse',
             )}
           />
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
             {STATUS_LABELS[remate.status]}
           </span>
-        </div>
-        <h1 className="mt-1 truncate text-xl font-semibold text-slate-900 sm:text-2xl">{remate.title}</h1>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-slate-600">
+        </span>
         {remate.starts_at && (
           <span className="flex items-center gap-1.5">
-            <CalendarIcon className="h-4 w-4 shrink-0 text-slate-400" />
+            <CalendarIcon className="h-4 w-4 shrink-0 text-ink-faint" />
             {formatDateTime(remate.starts_at)}
           </span>
         )}
         {elapsed && (
           <span className="flex items-center gap-1.5" title="Tiempo transcurrido desde la fecha programada">
-            <ClockIcon className="h-4 w-4 shrink-0 text-slate-400" />
+            <ClockIcon className="h-4 w-4 shrink-0 text-ink-faint" />
             {elapsed}
           </span>
         )}

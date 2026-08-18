@@ -1,8 +1,6 @@
 import type { ReactNode } from 'react';
 import { Badge } from '../../../shared/components/Badge';
-import { formatDateTime } from '../../../shared/lib/format';
 import type { ConnectionStatus } from '../../../shared/websocket/client';
-import { CalendarIcon, PersonIcon } from '../../remates/components/icons';
 import { STATUS_BADGE_VARIANTS, STATUS_LABELS } from '../../remates/labels';
 import type { Remate } from '../../remates/types';
 import { ConnectionStatusBadge } from './ConnectionStatusBadge';
@@ -38,33 +36,27 @@ export interface SalaHeaderProps {
 export function SalaHeader({ remate, connectedUsers, connectionStatus, notifications }: SalaHeaderProps) {
   const isLive = remate.status === 'live';
   return (
-    <div className="flex flex-col gap-3 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="relative inline-flex">
-            {isLive && (
-              <span
-                aria-hidden="true"
-                className="absolute -right-0.5 -top-0.5 h-2 w-2 animate-ping rounded-full bg-success-500"
-              />
-            )}
-            <Badge variant={STATUS_BADGE_VARIANTS[remate.status]}>{STATUS_LABELS[remate.status]}</Badge>
-          </span>
-          <ConnectionStatusBadge status={connectionStatus} />
-        </div>
-        <h1 className="mt-2 truncate text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-          {remate.title}
-        </h1>
-      </div>
+    <div className="flex flex-col gap-3 border-b border-line pb-5 sm:flex-row sm:items-center sm:justify-between">
+      <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+        {remate.title}
+      </h1>
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-500">
-        {remate.starts_at && (
-          <span className="flex items-center gap-1.5">
-            <CalendarIcon className="h-4 w-4 shrink-0 text-slate-400" />
-            {formatDateTime(remate.starts_at)}
-          </span>
-        )}
-        
+      {/* Estado + conectados + campana agrupados a la derecha (rediseño visual -- ver
+       * prototipo aprobado), sin la fecha de inicio: el prototipo no la muestra en la
+       * cabecera. `ConnectionStatusBadge` se mantiene (solo se pinta cuando la conexión
+       * no está `open`) -- es aviso real de que algo anda mal con el WebSocket, no una
+       * decoración. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted">
+        <span className="relative inline-flex">
+          {isLive && (
+            <span
+              aria-hidden="true"
+              className="absolute -right-0.5 -top-0.5 h-2 w-2 animate-ping rounded-full bg-success-500"
+            />
+          )}
+          <Badge variant={STATUS_BADGE_VARIANTS[remate.status]}>{STATUS_LABELS[remate.status]}</Badge>
+        </span>
+        <ConnectionStatusBadge status={connectionStatus} />
         <PresenceCounter count={connectedUsers} />
         {notifications}
       </div>

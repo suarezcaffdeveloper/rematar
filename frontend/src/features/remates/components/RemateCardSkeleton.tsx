@@ -4,7 +4,7 @@ import { Skeleton } from '../../../shared/components/Skeleton';
  * mientras `useRemates` todavía no resolvió la primera carga. */
 export function RemateCardSkeleton() {
   return (
-    <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="flex flex-col overflow-hidden rounded-xl border border-line bg-white shadow-sm">
       <Skeleton className="aspect-[4/3] w-full rounded-none" />
       <div className="flex flex-col gap-4 p-5">
         <div>

@@ -2,7 +2,6 @@ import { memo } from 'react';
 import clsx from 'clsx';
 import { CoverPlaceholder } from '../../remates/components/CoverPlaceholder';
 import { BoxIcon } from '../../remates/components/icons';
-import { CATEGORY_LABELS } from '../../remates/labels';
 import type { Lote } from '../../remates/types';
 
 interface UpcomingLoteCardProps {
@@ -35,16 +34,15 @@ const UpcomingLoteCard = memo(function UpcomingLoteCard({
         )}
       </div>
       <div className="flex flex-col gap-0.5 p-3 text-left">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Lote {lote.lot_number}</span>
-        <p className="truncate text-sm font-medium text-slate-800">{lote.title}</p>
-        <span className="text-xs text-slate-400">{CATEGORY_LABELS[lote.category]}</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Lote {lote.lot_number}</span>
+        <p className="truncate text-sm font-medium text-ink">{lote.title}</p>
       </div>
     </>
   );
 
   const cardClassName = clsx(
     'flex w-48 shrink-0 flex-col overflow-hidden rounded-lg border-2 bg-white shadow-sm transition-colors',
-    isSelected ? 'border-brand-600 ring-2 ring-brand-200' : 'border-slate-200',
+    isSelected ? 'border-brand-600 ring-2 ring-brand-200' : 'border-line',
   );
 
   // No seleccionable: mismo criterio que la tira de "próximos lotes" del comprador
@@ -91,6 +89,12 @@ export interface ConsolaUpcomingLotesPanelProps {
  * de propósito explícita en el enunciado -- acá el rematador puede seleccionar cuál abrir
  * a continuación (`ConsolaControlPanel` usa `selectedLoteId` para "Abrir lote"), no solo
  * mirarlos.
+ *
+ * Retexturizado sobre el prototipo aprobado: cada tarjeta pierde la categoría (ya se
+ * repetía en el lote activo de arriba, acá alcanza con "Lote N" + título) y siempre
+ * muestra una ayuda de una línea -- "hacé click para elegir" cuando se puede
+ * seleccionar, o por qué no se puede todavía, en vez de dejar la fila muda sin ningún
+ * indicio de que es interactiva.
  */
 export function ConsolaUpcomingLotesPanel({
   lotes,
@@ -99,16 +103,16 @@ export function ConsolaUpcomingLotesPanel({
   selectionEnabled,
 }: ConsolaUpcomingLotesPanelProps) {
   if (lotes.length === 0) {
-    return <p className="text-sm text-slate-500">No hay más lotes cargados en este remate.</p>;
+    return <p className="text-sm text-ink-muted">No hay más lotes cargados en este remate.</p>;
   }
 
   return (
     <div className="flex flex-col gap-2">
-      {!selectionEnabled && (
-        <p className="text-xs text-slate-400">
-          La selección se habilita cuando el remate está en vivo y no hay un lote abierto.
-        </p>
-      )}
+      <p className="text-xs text-ink-faint">
+        {selectionEnabled
+          ? 'Hacé click para seleccionar el próximo lote a abrir.'
+          : 'La selección se habilita cuando el remate está en vivo y no hay un lote abierto.'}
+      </p>
       <div role="list" aria-label="Próximos lotes" className="flex gap-4 overflow-x-auto pb-2">
         {lotes.map((lote) => (
           <UpcomingLoteCard

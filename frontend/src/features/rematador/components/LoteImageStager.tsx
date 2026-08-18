@@ -94,7 +94,7 @@ export function LoteImageStager({ value, onChange }: LoteImageStagerProps) {
   return (
     <div className="flex flex-col gap-3">
       {mainImage ? (
-        <div className="aspect-video w-full overflow-hidden rounded-xl bg-slate-100">
+        <div className="aspect-video w-full overflow-hidden rounded-xl bg-surface-subtle">
           <img src={mainImage.previewUrl} alt="Imagen principal del lote" className="h-full w-full object-cover" />
         </div>
       ) : (
@@ -120,7 +120,7 @@ export function LoteImageStager({ value, onChange }: LoteImageStagerProps) {
               }}
               className={clsx(
                 'relative h-16 w-24 shrink-0 overflow-hidden rounded-lg border-2 transition-colors',
-                index === 0 ? 'border-brand-600' : 'border-transparent hover:border-slate-300',
+                index === 0 ? 'border-brand-600' : 'border-transparent hover:border-line-strong',
                 dragOverIndex === index && draggedIndex !== index && 'ring-2 ring-brand-300',
                 draggedIndex === index && 'opacity-40',
               )}
@@ -143,7 +143,7 @@ export function LoteImageStager({ value, onChange }: LoteImageStagerProps) {
                 type="button"
                 onClick={() => handleRemove(index)}
                 aria-label={`Quitar imagen ${index + 1}`}
-                className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white hover:bg-black/80"
+                className="absolute right-1 top-1 rounded-full bg-slate-900/60 p-1 text-white hover:bg-slate-900/80"
               >
                 <X aria-hidden="true" className="h-3 w-3" />
               </button>

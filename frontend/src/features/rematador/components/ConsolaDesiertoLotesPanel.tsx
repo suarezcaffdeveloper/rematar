@@ -13,8 +13,8 @@ function DesiertoLoteCard({ remateId, lote }: { remateId: string; lote: Lote }) 
 
   if (isRequeuing) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-white p-3">
-        <p className="mb-2 text-sm font-medium text-slate-800">
+      <div className="rounded-lg border border-line bg-white p-3">
+        <p className="mb-2 text-sm font-medium text-ink">
           Lote {lote.lot_number} · {lote.title}
         </p>
         <RequeueLoteForm
@@ -28,7 +28,7 @@ function DesiertoLoteCard({ remateId, lote }: { remateId: string; lote: Lote }) 
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3">
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-white p-3">
       <div className="flex min-w-0 items-center gap-3">
         <div className="h-12 w-16 shrink-0 overflow-hidden rounded-md">
           {mainImage ? (
@@ -39,12 +39,12 @@ function DesiertoLoteCard({ remateId, lote }: { remateId: string; lote: Lote }) 
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
               Lote {lote.lot_number}
             </span>
             <Badge variant="neutral">Desierto</Badge>
           </div>
-          <p className="truncate text-sm font-medium text-slate-800">{lote.title}</p>
+          <p className="truncate text-sm font-medium text-ink">{lote.title}</p>
         </div>
       </div>
       <Button variant="brand-soft" className="shrink-0 !gap-1.5" onClick={() => setIsRequeuing(true)}>
@@ -77,9 +77,9 @@ export function ConsolaDesiertoLotesPanel({ remateId, lotes }: ConsolaDesiertoLo
   if (lotes.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-slate-700">
-        <PackageX aria-hidden="true" className="h-4 w-4 text-slate-400" />
+    <div className="flex flex-col gap-3 rounded-xl border border-line bg-white p-4 shadow-sm">
+      <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-ink-muted">
+        <PackageX aria-hidden="true" className="h-4 w-4 text-ink-faint" />
         Lotes desiertos
       </h2>
       <div className="flex flex-col gap-2">

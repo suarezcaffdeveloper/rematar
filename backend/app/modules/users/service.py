@@ -7,8 +7,12 @@ módulo.
 
 import uuid
 
+from fastapi import UploadFile
+
+from app.core.config import Settings
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.security import hash_password
+from app.modules.users import media_storage
 from app.modules.users.models import User, UserRole
 from app.modules.users.repository import UserRepository
 from app.modules.users.schemas import UserCreate
@@ -76,3 +80,21 @@ class UserService:
     async def list_users(self, *, page: int, page_size: int) -> tuple[list[User], int]:
         offset = (page - 1) * page_size
         return await self._repository.list_all(offset=offset, limit=page_size)
+
+    async def upload_avatar_image(
+        self, user: User, upload: UploadFile, settings: Settings, request_base_url: str
+    ) -> str:
+        """Sube una foto de perfil (`POST /users/me/avatar`). No toca la fila de
+        `User`, igual que `RemateService.upload_cover_image`: devuelve solo la URL,
+        quien la llama decide si la asigna vía `update_avatar`."""
+        return await media_storage.save_user_avatar_image(user.id, upload, settings, request_base_url)
+
+    async def update_avatar(self, user: User, avatar_url: str | None) -> User:
+        """`PATCH /users/me` -- `avatar_url` puede ser una URL recién subida
+        (`upload_avatar_image`), un avatar predeterminado (`"preset:<id>"`, el frontend
+        decide qué representa cada id, ver `shared/lib/avatarPresets.ts`) o `None` para
+        volver al avatar por defecto (iniciales)."""
+        user.avatar_url = avatar_url
+        await self._repository.commit()
+        await self._repository.refresh(user)
+        return user

@@ -47,6 +47,16 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # adelante, para integrarse con una API de WhatsApp -- por eso se normaliza a un
     # formato tipo E.164 (solo dígitos, `+` opcional al inicio) antes de persistirse.
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # `None` -> avatar por defecto (iniciales, ver `UserAvatar` en el frontend). Dos
+    # formatos posibles, sin distinción a nivel de columna (el frontend decide cómo
+    # renderizar cada uno, ver `shared/lib/avatarPresets.ts`): una URL real bajo
+    # `MEDIA_URL_PREFIX` (foto subida por `POST /users/me/avatar`, mismo storage local
+    # en disco que `Remate.cover_image_url`/`LoteImage.url`, ver ADR-035) o el string
+    # `preset:<id>` (uno de los avatares predeterminados -- las imágenes en sí viven
+    # empaquetadas como asset del frontend, `frontend/src/assets/avatars/`, no en este
+    # storage: son fijas, no subidas por el usuario, así que no tiene sentido guardarlas
+    # acá).
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     def __repr__(self) -> str:
         return f"<User id={self.id} email={self.email!r} role={self.role.value}>"

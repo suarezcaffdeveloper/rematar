@@ -82,7 +82,7 @@ export function LoteHistoryDetailPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">
+          <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
             Lote {data.lot_number} -- {data.title}
           </h1>
         </div>

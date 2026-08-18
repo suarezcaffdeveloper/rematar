@@ -15,10 +15,11 @@ export interface RemateHistorySecondaryStatsProps {
 export function RemateHistorySecondaryStats({ detail, currency }: RemateHistorySecondaryStatsProps) {
   return (
     <div className="flex flex-col gap-3">
-      <h2 className="text-lg font-semibold text-slate-900">Rendimiento</h2>
+      <h2 className="text-lg font-semibold text-ink">Rendimiento</h2>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard
           centered
+          tone="ink"
           label="Oferta más alta"
           value={detail.highest_oferta ? Number(detail.highest_oferta.amount) : 0}
           formattedValue={detail.highest_oferta ? formatCurrency(detail.highest_oferta.amount, currency) : '—'}
@@ -26,6 +27,7 @@ export function RemateHistorySecondaryStats({ detail, currency }: RemateHistoryS
         />
         <StatCard
           centered
+          tone="ink"
           label="Duración total"
           value={detail.duration_seconds ?? 0}
           formattedValue={detail.duration_seconds != null ? formatDuration(detail.duration_seconds * 1000) : '—'}
@@ -33,6 +35,7 @@ export function RemateHistorySecondaryStats({ detail, currency }: RemateHistoryS
         />
         <StatCard
           centered
+          tone="ink"
           label="Tiempo prom. por lote"
           value={detail.average_lote_duration_seconds ?? 0}
           formattedValue={
@@ -44,6 +47,7 @@ export function RemateHistorySecondaryStats({ detail, currency }: RemateHistoryS
         />
         <StatCard
           centered
+          tone="ink"
           label="Mensajes de chat"
           value={detail.chat_activity.message_count}
           formattedValue={String(detail.chat_activity.message_count)}
@@ -51,6 +55,7 @@ export function RemateHistorySecondaryStats({ detail, currency }: RemateHistoryS
         />
         <StatCard
           centered
+          tone="ink"
           label="Participantes del chat"
           value={detail.chat_activity.participant_count}
           formattedValue={String(detail.chat_activity.participant_count)}
@@ -58,6 +63,7 @@ export function RemateHistorySecondaryStats({ detail, currency }: RemateHistoryS
         />
         <StatCard
           centered
+          tone="ink"
           label="Mensajes moderados"
           value={detail.chat_activity.deleted_count}
           formattedValue={String(detail.chat_activity.deleted_count)}

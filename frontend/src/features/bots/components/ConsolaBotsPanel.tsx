@@ -78,17 +78,17 @@ export function ConsolaBotsPanel({ remateId }: ConsolaBotsPanelProps) {
   if (isLoadingBots || isLoadingRoster) return null;
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="flex flex-col gap-4 rounded-xl border border-line bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-slate-700">
-          <Bot aria-hidden="true" className="h-4 w-4 text-slate-400" />
+        <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-ink-muted">
+          <Bot aria-hidden="true" className="h-4 w-4 text-ink-faint" />
           Simuladores
         </h2>
         <Badge variant={SIMULATION_STATUS_BADGE_VARIANTS[status]}>{SIMULATION_STATUS_LABELS[status]}</Badge>
       </div>
 
       {!hasActiveBots ? (
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-ink-muted">
           Todavía no tenés simuladores activos.{' '}
           <Link to="/simuladores" className="font-medium text-brand-600 hover:text-brand-700">
             Creá uno acá
@@ -103,8 +103,8 @@ export function ConsolaBotsPanel({ remateId }: ConsolaBotsPanelProps) {
               <li key={bot.id}>
                 <label
                   className={clsx(
-                    'flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm',
-                    canEditSelection ? 'cursor-pointer hover:bg-slate-50' : 'opacity-70',
+                    'flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-sm',
+                    canEditSelection ? 'cursor-pointer hover:bg-surface-subtle' : 'opacity-70',
                   )}
                 >
                   <span className="flex items-center gap-2 min-w-0">
@@ -113,9 +113,9 @@ export function ConsolaBotsPanel({ remateId }: ConsolaBotsPanelProps) {
                       checked={selectedIds.has(bot.id)}
                       disabled={!canEditSelection || pendingBotId === bot.id}
                       onChange={(event) => toggleSelection(bot.id, event.target.checked)}
-                      className="h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                      className="h-4 w-4 shrink-0 rounded border-line-strong text-brand-600 focus:ring-brand-500"
                     />
-                    <span className="truncate font-medium text-slate-800">{bot.display_name}</span>
+                    <span className="truncate font-medium text-ink">{bot.display_name}</span>
                   </span>
                   <Badge variant={PERSONALITY_BADGE_VARIANTS[bot.personality]}>
                     {PERSONALITY_LABELS[bot.personality]}
@@ -127,10 +127,10 @@ export function ConsolaBotsPanel({ remateId }: ConsolaBotsPanelProps) {
       )}
 
       {!canEditSelection && (
-        <p className="text-xs text-slate-400">Detené la simulación para cambiar qué bots participan.</p>
+        <p className="text-xs text-ink-faint">Detené la simulación para cambiar qué bots participan.</p>
       )}
 
-      <div className="flex flex-col gap-1.5 border-t border-slate-100 pt-3">
+      <div className="flex flex-col gap-1.5 border-t border-line pt-3">
         {status === 'stopped' && (
           <Button
             variant="success-soft"
@@ -177,7 +177,7 @@ export function ConsolaBotsPanel({ remateId }: ConsolaBotsPanelProps) {
         )}
         <Link
           to="/simuladores"
-          className="mt-1 flex items-center justify-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700"
+          className="mt-1 flex items-center justify-center gap-1.5 text-xs font-medium text-ink-faint hover:text-ink-muted"
         >
           <Settings aria-hidden="true" className="h-3.5 w-3.5" />
           Administrar simuladores

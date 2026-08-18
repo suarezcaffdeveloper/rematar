@@ -15,7 +15,10 @@ class LoteAdjudicadoContext:
     remate_id: uuid.UUID
     buyer_email: str
     buyer_name: str
+    buyer_phone: str | None
+    rematador_id: uuid.UUID
     rematador_name: str
+    rematador_phone: str | None
     remate_title: str
     lote_title: str
     lot_number: str

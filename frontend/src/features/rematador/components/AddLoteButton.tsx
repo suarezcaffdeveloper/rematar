@@ -1,5 +1,6 @@
 import { Plus } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
+import { Button } from '../../../shared/components/Button';
 
 export interface AddLoteButtonProps {
   onClick: () => void;
@@ -9,24 +10,25 @@ export interface AddLoteButtonProps {
 /**
  * CTA principal de la Gestión de Lotes (Épica 5, Módulo 5.3; rediseño a "centro de
  * preparación del remate") -- "Agregar lote" es la acción que de verdad importa en esta
- * pantalla, así que lleva el mismo tratamiento que `CreateRemateButton` (gradiente de
- * marca + microinteracciones) en vez del `Button` "primary" genérico. `label` opcional
- * para reusar el mismo look en el estado vacío ("Crear primer lote").
+ * pantalla, así que reusa el `Button` compartido en su variante `hero` (Épica 9, Etapa 4),
+ * mismo tratamiento que `CreateRemateButton` para la acción principal de una pantalla, en
+ * vez del gradiente + sombra de color propio que tenía antes. `label` opcional para
+ * reusar el mismo look en el estado vacío ("Crear primer lote").
  */
 export function AddLoteButton({ onClick, label = 'Agregar lote' }: AddLoteButtonProps) {
   const prefersReducedMotion = useReducedMotion();
 
   return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      whileHover={prefersReducedMotion ? undefined : { scale: 1.03, y: -2 }}
-      whileTap={prefersReducedMotion ? undefined : { scale: 0.97 }}
+    <motion.div
+      className="inline-block"
+      whileHover={prefersReducedMotion ? undefined : { scale: 1.02 }}
+      whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
       transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-      className="group inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-brand-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition-shadow duration-200 hover:shadow-xl hover:shadow-brand-600/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
     >
-      <Plus aria-hidden="true" className="h-4 w-4 transition-transform duration-200 group-hover:rotate-90" />
-      {label}
-    </motion.button>
+      <Button variant="hero" onClick={onClick} className="group px-5 py-2.5">
+        <Plus aria-hidden="true" className="h-4 w-4 transition-transform duration-200 group-hover:rotate-90" />
+        {label}
+      </Button>
+    </motion.div>
   );
 }

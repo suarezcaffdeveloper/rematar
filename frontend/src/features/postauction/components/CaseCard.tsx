@@ -26,8 +26,8 @@ export function CaseCard({ item, to, perspective, currency = 'ARS' }: CaseCardPr
   const counterpartName = perspective === 'rematador' ? item.buyer_name : item.rematador_name;
 
   return (
-    <article className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-slate-300 hover:shadow-xl">
-      <div className="relative aspect-[16/9] w-full overflow-hidden bg-slate-100">
+    <article className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-line-strong hover:shadow-xl">
+      <div className="relative aspect-[16/9] w-full overflow-hidden bg-surface-subtle">
         {item.lote_cover_image_url ? (
           <img
             src={item.lote_cover_image_url}
@@ -44,14 +44,14 @@ export function CaseCard({ item, to, perspective, currency = 'ARS' }: CaseCardPr
 
       <div className="flex flex-1 flex-col gap-4 p-5">
         <div>
-          <h3 className="line-clamp-2 text-base font-semibold leading-snug text-slate-900">{item.lote_title}</h3>
-          <p className="mt-1 text-xs text-slate-500">
+          <h3 className="line-clamp-2 text-base font-semibold leading-snug text-ink">{item.lote_title}</h3>
+          <p className="mt-1 text-xs text-ink-muted">
             Lote {item.lot_number} · {item.remate_title}
           </p>
         </div>
 
-        <div className="flex flex-col border-t border-slate-100 pt-4">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Precio final</span>
+        <div className="flex flex-col border-t border-line pt-4">
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Precio final</span>
           <span className="text-2xl font-bold text-brand-600">{formatCurrency(item.final_price, currency)}</span>
         </div>
 
@@ -61,12 +61,12 @@ export function CaseCard({ item, to, perspective, currency = 'ARS' }: CaseCardPr
               <PersonIcon className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{counterpartLabel}</p>
-              <p className="truncate text-sm font-medium text-slate-700">{counterpartName ?? '—'}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">{counterpartLabel}</p>
+              <p className="truncate text-sm font-medium text-ink">{counterpartName ?? '—'}</p>
             </div>
           </div>
-          <p className="text-xs text-slate-400">
-            Adjudicado el <span className="font-medium text-slate-600">{formatDateTime(item.created_at)}</span>
+          <p className="text-xs text-ink-faint">
+            Adjudicado el <span className="font-medium text-ink-muted">{formatDateTime(item.created_at)}</span>
           </p>
         </div>
 

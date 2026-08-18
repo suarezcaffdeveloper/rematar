@@ -52,7 +52,7 @@ export function RemateDetailPage() {
 
   if (isRemateLoading) {
     return (
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 font-display">
         <Skeleton className="h-4 w-48" />
         <DetailSkeleton />
       </div>
@@ -61,7 +61,7 @@ export function RemateDetailPage() {
 
   if (remateError || !remate) {
     return (
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 font-display">
         <Alert variant="error">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{remateError?.message ?? 'No se pudo cargar este remate.'}</span>
@@ -80,13 +80,13 @@ export function RemateDetailPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8 font-display">
       <RemateDetailOverview remate={remate} onEnterRoom={() => navigate(`/remates/${remate.id}/sala`)} />
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 border-t border-line pt-8">
         <div className="flex flex-col gap-1">
-          <h2 className="text-xl font-bold text-slate-900">Lotes de este remate</h2>
-          <p className="text-sm text-slate-500">Explorá y seleccioná tus lotes de interés antes del inicio.</p>
+          <h2 className="text-xl font-semibold tracking-tight text-ink">Lotes de este remate</h2>
+          <p className="text-sm text-ink-muted">Explorá y seleccioná tus lotes de interés antes del inicio.</p>
         </div>
 
         {lotesError && (

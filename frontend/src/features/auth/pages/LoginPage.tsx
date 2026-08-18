@@ -7,7 +7,6 @@ import { normalizeApiError } from '../../../shared/api/errors';
 import { Button } from '../../../shared/components/Button';
 import { Input } from '../../../shared/components/Input';
 import { Alert } from '../../../shared/components/Alert';
-import { useToastStore } from '../../../shared/toast/toastStore';
 import { LoginShowcase } from '../components/LoginShowcase';
 
 interface LocationState {
@@ -22,9 +21,7 @@ interface LocationState {
  * `normalizeApiError`, redirect a `state.from` o `/`) -- sólo cambió el marcado
  * alrededor.
  *
- * "¿Olvidaste tu contraseña?" no navega a ningún lado: no existe (todavía) un flujo de
- * recuperación de contraseña en el backend, así que en vez de un link roto o inventar
- * una ruta nueva, avisa por el sistema de toasts ya existente (`shared/toast`).
+ * "¿Olvidaste tu contraseña?" navega a `/forgot-password` (RNF-11).
  */
 export function LoginPage() {
   const { login } = useAuthActions();
@@ -51,10 +48,6 @@ export function LoginPage() {
     }
   }
 
-  function handleForgotPassword() {
-    useToastStore.getState().push('info', 'La recuperación de contraseña estará disponible próximamente.');
-  }
-
   return (
     <div className="flex min-h-screen">
       <div className="relative flex w-full flex-col justify-center overflow-hidden bg-white px-6 py-12 sm:px-12 md:w-2/3 lg:w-2/5 lg:px-16 xl:px-20">
@@ -74,10 +67,10 @@ export function LoginPage() {
             <span className="text-lg font-bold tracking-tight text-brand-700">RematAR</span>
           </Link>
 
-          <h1 className="mt-10 text-3xl font-bold tracking-tight text-slate-900">
+          <h1 className="mt-10 text-3xl font-bold tracking-tight text-ink">
             Bienvenido a RematAR
           </h1>
-          <p className="mt-3 text-base leading-relaxed text-slate-500">
+          <p className="mt-3 text-base leading-relaxed text-ink-muted">
             Plataforma profesional para la gestión y participación en remates en tiempo
             real.
           </p>
@@ -103,20 +96,19 @@ export function LoginPage() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
               />
-              <button
-                type="button"
-                onClick={handleForgotPassword}
-                className="mt-2 text-sm font-medium text-brand-600 transition-colors hover:text-brand-700 hover:underline"
+              <Link
+                to="/forgot-password"
+                className="mt-2 inline-block text-sm font-medium text-brand-600 transition-colors hover:text-brand-700 hover:underline"
               >
                 ¿Olvidaste tu contraseña?
-              </button>
+              </Link>
             </div>
             <Button type="submit" isLoading={isSubmitting} className="mt-2 w-full py-2.5 text-base">
               Entrar
             </Button>
           </form>
 
-          <p className="mt-8 text-center text-sm text-slate-500">
+          <p className="mt-8 text-center text-sm text-ink-muted">
             ¿No tenés cuenta?{' '}
             <Link to="/register" className="font-semibold text-brand-600 hover:underline">
               Registrate

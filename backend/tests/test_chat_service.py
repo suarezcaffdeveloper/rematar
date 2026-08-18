@@ -328,6 +328,52 @@ async def test_delete_message_not_in_that_remate_raises_not_found(
         pass
 
 
+# --- Foto de perfil del autor (evento en vivo) -----------------------------------------
+
+
+async def test_send_message_publishes_the_authors_current_avatar(
+    client: AsyncClient, db_session: AsyncSession, db_engine: AsyncEngine, redis_client: Redis
+) -> None:
+    """A diferencia de `author_name`/`author_role` (denormalizados en la fila), el
+    avatar del evento en vivo viene del objeto `User` recién leído -- ver docstring de
+    `ChatMessageSent.author_avatar_url`."""
+    owner_id, owner_token = await _owner(client, "chatsvc15-owner@example.com")
+    patch = await client.patch(
+        "/api/v1/users/me", json={"avatar_url": "preset:bob"}, headers=_auth(owner_token)
+    )
+    assert patch.status_code == 200, patch.text
+    remate = await _create_and_schedule_remate(client, owner_token)
+    owner = await _fetch_user(db_engine, owner_id)
+    event_bus = _RecordingEventBus()
+    service = _make_service(db_session, redis_client, event_bus=event_bus)
+
+    await service.send_message(uuid.UUID(remate["id"]), owner, ChatMessageCreate(content="hola"))
+
+    sent_events = [e for e in event_bus.published if isinstance(e, ChatMessageSent)]
+    assert len(sent_events) == 1
+    assert sent_events[0].author_avatar_url == "preset:bob"
+
+
+async def test_record_system_message_publishes_without_an_author_avatar(
+    client: AsyncClient, db_session: AsyncSession, db_engine: AsyncEngine, redis_client: Redis
+) -> None:
+    owner_id, owner_token = await _owner(client, "chatsvc16-owner@example.com")
+    remate = await _create_and_schedule_remate(client, owner_token)
+    event_bus = _RecordingEventBus()
+    service = _make_service(db_session, redis_client, event_bus=event_bus)
+
+    await service.record_system_message(
+        uuid.UUID(remate["id"]),
+        "Se abrió el lote 1.",
+        system_event_type="lote.opened",
+        source_event_id=uuid.uuid4(),
+    )
+
+    sent_events = [e for e in event_bus.published if isinstance(e, ChatMessageSent)]
+    assert len(sent_events) == 1
+    assert sent_events[0].author_avatar_url is None
+
+
 # --- record_system_message ------------------------------------------------------------
 
 

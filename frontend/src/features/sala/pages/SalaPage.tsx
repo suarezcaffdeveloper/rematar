@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useFocusMode } from '../../../app/layouts/useFocusMode';
 import { useWideLayout } from '../../../app/layouts/useWideLayout';
@@ -8,12 +8,13 @@ import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
 import { useToastStore } from '../../../shared/toast/toastStore';
 import { useAuth } from '../../auth/hooks';
-import { ChatPanel } from '../../chat/components/ChatPanel';
 import { NotificationBell } from '../../notifications/components/NotificationBell';
 import { GavelIcon } from '../../remates/components/icons';
 import { ActiveLotePanel } from '../components/ActiveLotePanel';
-import { OfferHistoryPanel } from '../components/OfferHistoryPanel';
+import { LoteWonOverlay, type WonLoteInfo } from '../components/LoteWonOverlay';
+import { SalaBidPanel } from '../components/SalaBidPanel';
 import { SalaHeader } from '../components/SalaHeader';
+import { SalaSidePanel } from '../components/SalaSidePanel';
 import { UpcomingLotesStrip } from '../components/UpcomingLotesStrip';
 import { useLiveRemateState } from '../hooks';
 import { isDomainEventMessage } from '../realtime/messages';
@@ -35,17 +36,22 @@ function FloatingNotificationBell() {
 
 function SalaSkeleton() {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-[85rem] flex-col gap-4 font-display">
       <FloatingNotificationBell />
-      <Skeleton className="h-24 w-full rounded-xl" />
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_380px]">
+      <Skeleton className="h-16 w-full rounded-lg" />
+      <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1fr_380px]">
         <div className="flex flex-col gap-4">
           <Skeleton className="aspect-video w-full rounded-xl" />
-          <Skeleton className="h-40 w-full rounded-xl" />
+          <Skeleton className="h-6 w-2/3 rounded-md" />
+          <Skeleton className="h-16 w-full rounded-md" />
         </div>
-        <Skeleton className="h-96 w-full rounded-xl" />
+        <div className="flex flex-col gap-4">
+          <Skeleton className="h-24 w-full rounded-md" />
+          <Skeleton className="h-32 w-full rounded-md" />
+          <Skeleton className="h-64 w-full rounded-md" />
+        </div>
       </div>
-      <Skeleton className="h-40 w-full rounded-xl" />
+      <Skeleton className="h-32 w-full rounded-xl" />
     </div>
   );
 }
@@ -59,17 +65,19 @@ function SalaSkeleton() {
  * pantalla que corresponde, sin recargar nada. Ver
  * docs/28-websocket-tiempo-real-sala.md para el flujo completo.
  *
- * Layout nuevo (Épica 9, Etapa 4): `useWideLayout()` le pide a `AppLayout` un `<main>`
- * más ancho (sin esto, el sidebar de ofertas+chat no entra cómodo junto al lote). Desde
- * `xl:` (1280px), grid de dos columnas -- lote activo a la izquierda (la información
- * que hace falta ver/hacer ahora: precio, cuenta regresiva, ofertar, todo dentro de
- * `ActiveLotePanel`) y un sidebar fijo a la derecha (`sticky`, alto de viewport) con
- * ofertas recientes arriba y chat ocupando el resto -- todo lo importante visible sin
- * scroll de la página en desktop, pedido explícito del enunciado. Por debajo de `xl:`
- * (tablet/mobile), se apila en una sola columna como ya hacía antes -- ningún
- * componente de presentación de acá para abajo (`SalaHeader`, `ActiveLotePanel`,
- * `OfferHistoryPanel`, `UpcomingLotesStrip`) sabe que existe un WebSocket, tal como
- * anticipaba `docs/27-sala-del-remate.md`, "Preparación para WebSockets".
+ * Layout (Épica 9, Etapa 4; recompuesto en el rediseño visual -- ver prototipo
+ * aprobado): `useWideLayout()` le pide a `AppLayout` un `<main>` más ancho (sin esto, el
+ * sidebar de ofertar+historial+chat no entra cómodo junto al lote). Desde `xl:`
+ * (1280px), grid de dos columnas -- identidad del lote a la izquierda
+ * (`ActiveLotePanel`: imagen/título/descripción) y un sidebar fijo a la derecha
+ * (`sticky`, alto de viewport) con precio + ofertar (`SalaBidPanel`, solo con lote
+ * activo) arriba e historial/chat con pestañas (`SalaSidePanel`) ocupando el resto --
+ * todo lo importante visible sin scroll de la página en desktop, pedido explícito del
+ * enunciado. Por debajo de `xl:` (tablet/mobile), se apila en una sola columna como ya
+ * hacía antes -- ningún componente de presentación de acá para abajo (`SalaHeader`,
+ * `ActiveLotePanel`, `SalaBidPanel`, `SalaSidePanel`, `UpcomingLotesStrip`) sabe que
+ * existe un WebSocket, tal como anticipaba `docs/27-sala-del-remate.md`, "Preparación
+ * para WebSockets".
  *
  * Sin navbar global (rediseño -- vista del comprador): `useFocusMode(true)`, mismo
  * mecanismo que ya usaba el "Modo Remate" de la Consola del rematador
@@ -116,6 +124,63 @@ export function SalaPage() {
     });
   }, [subscribeToRealtime]);
 
+  // Cartel "ganaste el lote" (pedido explícito, comprador): el snapshot enmascara
+  // siempre `buyer_id` a `null` (ADR-031, anonimato entre postores -- ver
+  // `realtime/reducer.ts::toOfertaSnapshotEntry`), así que no alcanza con mirar
+  // `winningOffer` para saber si el ganador es quien está mirando esta pantalla. Los
+  // eventos crudos del Event Dispatcher sí traen el `buyer_id` real (`oferta.accepted`/
+  // `oferta.winner_changed`, ver `realtime/events.ts`), así que acá se sigue "quién va
+  // liderando" fuera del reducer -- mismo patrón que el toast de `lote.closed` de más
+  // abajo -- y se compara contra `user.id` recién cuando el lote cierra vendido. Esto
+  // cubre tanto el cierre manual del rematador como el automático por timer: en los dos
+  // casos la oferta ganadora ya pasó por `oferta.accepted` antes del cierre, así que no
+  // hace falta distinguir `lote.winner_determined` (que solo se publica en el cierre
+  // automático, ver ADR-018) por separado.
+  //
+  // `activeLoteRef`/`currencyRef`: `lote.closed` ya limpia `active_lote` a `null` en el
+  // mismo tick (`reducer.ts`), así que para el título/N° de lote/moneda del cartel hace
+  // falta guardarlos aparte -- no se puede leer del `snapshot` en el momento del cierre.
+  const activeLoteRef = useRef<NonNullable<typeof snapshot>['active_lote']>(null);
+  const currencyRef = useRef('');
+  useEffect(() => {
+    activeLoteRef.current = snapshot?.active_lote ?? null;
+    currencyRef.current = snapshot?.remate.settings.currency ?? '';
+  }, [snapshot]);
+
+  const leadingBuyerRef = useRef<{ loteId: string; buyerId: string } | null>(null);
+  const [wonLote, setWonLote] = useState<WonLoteInfo | null>(null);
+  useEffect(() => {
+    return subscribeToRealtime((message) => {
+      if (!isDomainEventMessage(message)) return;
+      const { payload } = message;
+
+      if (payload.event_type === 'oferta.accepted') {
+        leadingBuyerRef.current = { loteId: payload.lote_id, buyerId: payload.buyer_id };
+        return;
+      }
+      if (payload.event_type === 'oferta.winner_changed') {
+        leadingBuyerRef.current = { loteId: payload.lote_id, buyerId: payload.new_buyer_id };
+        return;
+      }
+      if (payload.event_type === 'lote.opened') {
+        leadingBuyerRef.current = null;
+        return;
+      }
+      if (payload.event_type !== 'lote.closed' || payload.outcome !== 'sold') return;
+
+      const leading = leadingBuyerRef.current;
+      if (!leading || leading.loteId !== payload.lote_id || !user?.id || leading.buyerId !== user.id) return;
+
+      const closingLote = activeLoteRef.current;
+      setWonLote({
+        lotNumber: closingLote?.lot_number ?? '',
+        title: closingLote?.title ?? '',
+        finalPrice: payload.final_price ?? closingLote?.base_price ?? '0',
+        currency: currencyRef.current,
+      });
+    });
+  }, [subscribeToRealtime, user?.id]);
+
   // Fin del remate (Módulo de lotes desiertos): el comprador no debe quedar
   // indefinidamente en una sala que ya terminó -- toast informativo y, tras una
   // pequeña transición, redirección suave al listado de remates. `remate.finished` ya
@@ -142,7 +207,7 @@ export function SalaPage() {
 
   if (snapshotError || !snapshot) {
     return (
-      <div className="flex flex-col gap-6">
+      <div className="mx-auto flex w-full max-w-[85rem] flex-col gap-6 font-display">
         <FloatingNotificationBell />
         <Alert variant="error">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -165,7 +230,9 @@ export function SalaPage() {
   const currency = remate.settings.currency;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-[85rem] flex-col gap-4 font-display">
+      <LoteWonOverlay wonLote={wonLote} onContinue={() => setWonLote(null)} />
+
       <SalaHeader
         remate={remate}
         connectedUsers={snapshot.connected_users}
@@ -173,24 +240,19 @@ export function SalaPage() {
         notifications={<NotificationBell />}
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_380px]">
-        {/* `xl:h-[calc(100vh-2rem)]`, mismo alto exacto que el sidebar de al lado
-         * (ofertas + chat, más abajo) -- para que la tarjeta del lote (imagen + info +
-         * ofertar, `ActiveLotePanel`) termine alineada con el final del chat, sin el
-         * espacio en blanco que quedaba antes de "Próximos lotes" cuando la tarjeta era
-         * más baja que el sidebar. `ActiveLotePanel` upa ese alto con `h-full` y lo
-         * reparte internamente: la imagen (`flex-1`) es lo único que crece para
-         * absorber el espacio sobrante, ver ese componente. */}
-        <div className="flex min-w-0 flex-col xl:h-[calc(100vh-2rem)]">
+      {/* Rediseño visual (ver prototipo aprobado): columna izquierda -- solo identidad
+       * del lote (imagen/título/descripción, `ActiveLotePanel`); precio + formulario de
+       * ofertar (`SalaBidPanel`) e historial/chat (`SalaSidePanel`, con pestañas) ahora
+       * viven juntos en el sidebar derecho, ya no repartidos entre `ActiveLotePanel` y
+       * un stack separado. `gap-14` (56px, igual que el prototipo aprobado): sin la
+       * "card" de `ActiveLotePanel` que antes delimitaba visualmente la columna, hace
+       * falta más aire entre columnas para que sigan leyéndose como dos bloques
+       * distintos -- y de paso dejar más espacio para precio/historial/chat, en vez de
+       * que la imagen ocupe todo el ancho disponible. */}
+      <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1fr_380px] xl:gap-14">
+        <div className="flex min-w-0 flex-col">
           {activeLote ? (
-            <ActiveLotePanel
-              remateId={remate.id}
-              lote={activeLote}
-              currency={currency}
-              winningOffer={winningOffer}
-              remateStatus={remate.status}
-              viewerRole={user?.role}
-            />
+            <ActiveLotePanel lote={activeLote} />
           ) : (
             <EmptyState
               icon={<GavelIcon className="h-10 w-10" />}
@@ -205,40 +267,38 @@ export function SalaPage() {
           )}
         </div>
 
-        {/* Sidebar: ofertas + chat, siempre visibles sin scroll de página en desktop
-         * (`xl:sticky` + alto de viewport) -- "Historial de ofertas" y "Chat lateral"
-         * son dos pedidos separados del enunciado, así que van apiladas (no en tabs,
-         * que ocultarían una mientras se ve la otra). Alturas fijas en las dos
-         * (`OfferHistoryPanel` en `h-72 shrink-0`, `ChatPanel` en `flex-1`) para que
-         * ninguna empuje a la otra al crecer -- antes `OfferHistoryPanel` crecía con
-         * cada oferta nueva (hasta un tope interno) y de paso achicaba visualmente al
-         * chat, que absorbía lo que quedaba del alto fijo del sidebar. Cada una scrollea
-         * su propio contenido cuando no entra, ninguna cambia de tamaño.
-         *
-         * `top-4`/`calc(100vh-2rem)`, no `top-20`/`calc(100vh-7rem)`: ese offset estaba
-         * tunado para el `Header` global (`h-16` sticky) que ya no se muestra acá (ver
-         * `useFocusMode(true)` arriba) -- mismos valores que ya usa `ConsolaSidebar` para
-         * el mismo caso (sin `Header`, `<main>` en `py-4`). */}
-        <div className="flex flex-col gap-4 xl:sticky xl:top-4 xl:h-[calc(100vh-2rem)]">
-          <OfferHistoryPanel
-            winningOffer={winningOffer}
+        {/* Precio/ofertar solo con lote activo (igual que antes: `PlaceBidButton` nunca
+         * se mostraba sin un lote abierto) + historial/chat, siempre visibles. Mismo
+         * `top-4`/`calc(100vh-2rem)` de siempre -- tunado para el `Header` global oculto
+         * acá (`useFocusMode(true)`). */}
+        <div className="flex flex-col gap-6 xl:sticky xl:top-4 xl:h-[calc(100vh-2rem)]">
+          {activeLote && (
+            <>
+              <SalaBidPanel
+                remateId={remate.id}
+                lote={activeLote}
+                currency={currency}
+                winningOffer={winningOffer}
+                remateStatus={remate.status}
+                viewerRole={user?.role}
+              />
+              <hr className="border-t border-line" />
+            </>
+          )}
+          <SalaSidePanel
             recentOffers={recentOffers}
             currency={currency}
-            className="h-72 shrink-0"
-          />
-          <ChatPanel
             remateId={remate.id}
             subscribeToRealtime={subscribeToRealtime}
             currentUserId={user?.id}
             connectedUsers={snapshot.connected_users}
-            canModerate={false}
             className="min-h-0 flex-1"
           />
         </div>
       </div>
 
       <div className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-slate-900">Próximos lotes</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Próximos lotes</h2>
         {isUpcomingLotesLoading ? (
           <Skeleton className="h-32 w-full rounded-xl" />
         ) : (

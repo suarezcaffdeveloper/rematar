@@ -1,10 +1,9 @@
 import { type ReactNode, useState } from 'react';
 import {
-  AlertTriangle,
+  ChevronsRight,
   PackageCheck,
   PauseCircle,
   PlayCircle,
-  SkipForward,
   XOctagon,
   type LucideIcon,
 } from 'lucide-react';
@@ -60,23 +59,21 @@ type PendingAction = 'pause' | 'resume' | 'finish' | 'openSelected' | 'openNext'
 type ConfirmableAction = 'pause' | 'finish';
 
 /** Botón de acción del panel -- mismo `Button` compartido (conserva `isLoading`/
- * `disabled`/estados de variante que el resto de la app). `SIZE_CLASSES` solo ajusta
- * densidad/tamaño (`!` para no depender del orden en que Tailwind emite las reglas de
- * padding/tamaño de texto, que `Button` también fija) -- dos tamaños para reflejar la
- * jerarquía por uso del panel: `lg` para la única acción hero ("Pasar al siguiente
- * lote"), `md` para el resto (abrir/cerrar lote, pausar/reanudar remate, finalizar
- * remate en la zona crítica), todos a todo el ancho de su card (pedido explícito del
- * rediseño sobre la referencia visual: botones grandes, uno por fila).
+ * `disabled`/estados de variante que el resto de la app). `!` en las clases: no depende
+ * del orden en que Tailwind emite las reglas de padding/tamaño de texto, que `Button`
+ * también fija.
  *
- * Microinteracción compartida por ambos tamaños (`hover:-translate-y-0.5
- * hover:shadow-md`, con `active:` volviendo a su lugar): mismo lenguaje "SaaS premium"
- * (Linear/Stripe/Vercel) pedido para toda la pantalla -- un botón que se levanta
- * levemente al pasar el mouse y vuelve al hacer click, sin animaciones exageradas. */
-const SIZE_CLASSES: Record<'md' | 'lg', string> = {
-  md: '!gap-2.5 !rounded-xl !px-5 !py-3.5 !text-base !font-semibold',
-  lg: '!gap-3 !rounded-xl !px-6 !py-5 !text-lg !font-bold',
-};
-
+ * Retexturizado sobre el prototipo aprobado (captura puntual de la Consola Operativa):
+ * antes cada botón ocupaba una fila completa dentro de una card con fondo de color
+ * sólido ("soft") -- ahora van de a dos por fila (`grid-cols-2`, ver más abajo) en
+ * variantes "outline" (fondo blanco, el color vive en el borde/texto -- ver
+ * `shared/components/Button.tsx`), look más compacto y "de consola" en vez de una pila
+ * de botones grandes.
+ *
+ * Microinteracción (`hover:-translate-y-0.5 hover:shadow-md`, con `active:` volviendo a
+ * su lugar): mismo lenguaje "SaaS premium" (Linear/Stripe/Vercel) pedido para toda la
+ * pantalla -- un botón que se levanta levemente al pasar el mouse y vuelve al hacer
+ * click, sin animaciones exageradas. */
 const HOVER_LIFT_CLASSES =
   'transition-all duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-sm disabled:hover:translate-y-0 disabled:hover:shadow-none';
 
@@ -84,25 +81,30 @@ function ActionButton({
   icon: Icon,
   children,
   className,
-  size = 'md',
   variant = 'primary',
   ...props
-}: ButtonProps & { icon: LucideIcon; size?: 'md' | 'lg' }) {
+}: ButtonProps & { icon: LucideIcon }) {
   return (
-    <Button variant={variant} className={clsx(SIZE_CLASSES[size], HOVER_LIFT_CLASSES, className)} {...props}>
-      <Icon aria-hidden="true" className="h-5 w-5 shrink-0" />
+    <Button
+      variant={variant}
+      className={clsx('!gap-2 !rounded-lg !px-4 !py-3 !text-sm !font-semibold', HOVER_LIFT_CLASSES, className)}
+      {...props}
+    >
+      <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
       {children}
     </Button>
   );
 }
 
-/** Card de agrupación -- etiqueta chica en mayúsculas, mismo patrón que
- * `text-xs font-bold uppercase tracking-wide text-slate-500` de `ConsolaOfferPanel`. */
+/** Grupo de acciones -- etiqueta chica en mayúsculas + una grilla de 2 columnas con los
+ * botones del grupo. Sin card propia: la card única ya la pone el panel entero (ver el
+ * `<div>` raíz del `return` de `ConsolaControlPanel`), así que cada grupo alcanza con
+ * espacio + un label para separarse del de al lado, sin anidar una caja adentro de otra. */
 function ControlSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">{title}</h3>
-      {children}
+    <div className="flex flex-col gap-3">
+      <h3 className="text-xs font-bold uppercase tracking-wide text-ink-faint">{title}</h3>
+      <div className="grid grid-cols-2 gap-2">{children}</div>
     </div>
   );
 }
@@ -117,15 +119,18 @@ function ControlSection({ title, children }: { title: string; children: ReactNod
  * lote, pasar al siguiente lote, finalizar) siguen consumiendo exactamente los mismos
  * endpoints del motor de estados (`docs/16-motor-de-estados.md`) y las mismas
  * precondiciones cliente-side que ya validaba este panel -- el rediseño es puramente de
- * presentación: "Pasar al siguiente lote" (la acción que más se usa durante un remate en
- * vivo) queda arriba de todo, sola, como botón hero a todo el ancho sobre una card
- * "azul fuerte" ("Panel de control operativo"); el resto de los controles se agrupan en
- * dos cards propias ("Gestión de lote": abrir/cerrar; "Controles de remate": pausar/
- * reanudar), cada botón a todo el ancho y con un color "soft" que comunica la naturaleza
- * de la acción (verde para abrir, azul claro para cerrar/reanudar, naranja para pausar --
- * paleta alineada con el mockup de referencia "Modo Remate"/Stitch); "Finalizar remate"
- * sigue en su propia "Zona crítica" con acento rojo. Los botones siguen siempre visibles,
- * habilitándose/deshabilitando según el estado actual, sin ningún cambio de lógica.
+ * presentación: todo el panel vive dentro de una única card de fondo suave ("Panel de
+ * control operativo", ver el `<div>` raíz del `return`), para que se lea de un vistazo
+ * que es un bloque de gestión aparte del resto de la pantalla. Adentro, los controles se
+ * agrupan de a dos por fila ("Gestión de lote": pasar al siguiente lote (a todo el
+ * ancho, arriba) + abrir/cerrar; "Controles de remate": pausar/reanudar), en variantes
+ * "outline" (fondo blanco, el color vive en el borde/texto -- ver
+ * `shared/components/Button.tsx`) que comunican la naturaleza de la acción (azul de
+ * marca para "pasar al siguiente lote", verde para abrir, ícono/texto neutro para
+ * cerrar/reanudar, naranja para pausar); "Finalizar remate" sigue en su propia "Zona
+ * crítica", separada solo por un divisor + label en rojo (sin card roja propia). Los
+ * botones siguen siempre visibles, habilitándose/deshabilitando según el estado actual,
+ * sin ningún cambio de lógica.
  *
  * "Cerrar lote" y "Pasar al siguiente lote" comparten la decisión de qué hacer con el
  * lote activo, en base a `winningOffer` (Módulo de lotes desiertos, pedido explícito:
@@ -341,17 +346,17 @@ export function ConsolaControlPanel({
 
   if (isClosingLote && activeLote) {
     return (
-      <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface-subtle p-5 shadow-sm">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
             <PackageCheck aria-hidden="true" className="h-4 w-4" />
           </div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-faint">
             Cerrar lote {activeLote.lot_number}
           </h2>
         </div>
 
-        <div className="flex gap-4 text-sm text-slate-700">
+        <div className="flex gap-4 text-sm text-ink-muted">
           <label className="flex items-center gap-2">
             <input
               type="radio"
@@ -408,99 +413,108 @@ export function ConsolaControlPanel({
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      {/* Hero: la acción que más se usa durante un remate en vivo, sola, a todo el
-       * ancho -- jerarquía por uso. Label + acción viven en la misma card (look
-       * "AuctionPro"), sin el header separado que tenía antes ni el chip de estado
-       * ("Remate activo"), que el rediseño "Modo Remate" saca por completo del panel --
-       * ese estado ya se infiere de qué botones quedan habilitados. */}
-      <div className="flex flex-col gap-2 rounded-xl bg-brand-700 p-5 shadow-sm">
-        <h2 className="text-xs font-bold uppercase tracking-wide text-brand-100">
-          Panel de control operativo
-        </h2>
-        <ActionButton
-          icon={SkipForward}
-          variant="inverse"
-          className="w-full"
-          onClick={() => handleAdvance()}
-          isLoading={pendingAction === 'close' || pendingAction === 'openNext'}
-          disabled={!isLive || (!activeLote && !hasUpcomingLotes) || pendingAction !== null}
-        >
-          Pasar al siguiente lote
-        </ActionButton>
-      </div>
+    <div className="flex flex-col gap-6 rounded-xl border border-line bg-surface-subtle p-5 shadow-sm">
+      {/* Título único para todo el panel (antes solo encabezaba el botón hero) -- pedido
+       * explícito: que se lea de un vistazo que toda esta columna, de acá para abajo, es
+       * "la botonera de gestión" del remate. La card oscura (`bg-ink`) que tenía antes
+       * el botón "Pasar al siguiente lote" se saca por completo -- en su lugar, todo el
+       * panel (título + las tres secciones de abajo) queda contenido en una única card
+       * de fondo suave (`bg-surface-subtle`, mismo tono que usa el resto del sistema de
+       * diseño para "contenedor neutro discreto"), que ya alcanza para diferenciarlo del
+       * resto de la página sin necesitar un acento oscuro. */}
+      <h2 className="text-center text-sm font-extrabold uppercase tracking-wide text-ink-muted">
+        Panel de control operativo
+      </h2>
 
       {/* Módulo de lotes desiertos: aviso flotante (no una tarjeta embebida acá) --
        * ver `DesiertoLoteNotice`. Se renderiza siempre (portal a `document.body`,
        * controlado por `isOpen`/`lote`), así que su posición en este JSX no importa. */}
       <DesiertoLoteNotice lote={desiertoBanner} onClose={() => setDesiertoBanner(null)} />
 
+      {/* "Pasar al siguiente lote" (la acción que más se usa durante un remate en vivo)
+       * se muda adentro de "Gestión de lote", arriba de "Abrir lote"/"Cerrar lote" --
+       * las tres acciones operan sobre el mismo lote activo, tiene sentido que vivan
+       * juntas. Mismo ancho que "Finalizar remate" (a todo el ancho del panel, `w-full`
+       * fuera de la grilla de 2 columnas) y misma estética que el resto de los botones
+       * (`ActionButton`, variante "outline") -- ya no es un botón especial en una card
+       * propia, es la primera acción del grupo, distinguida solo por su color de marca
+       * (`brand-outline`, la única variante "outline" con acento azul) en vez de tamaño
+       * o fondo distinto. */}
       <ControlSection title="Gestión de lote">
-        <div className="flex flex-col gap-1.5">
-          <ActionButton
-            icon={PlayCircle}
-            variant="success-soft"
-            className="w-full"
-            onClick={() =>
-              selectedLoteId &&
-              runSimpleAction('openSelected', () => openLoteRequest(remate.id, selectedLoteId), 'Lote abierto.')
-            }
-            isLoading={pendingAction === 'openSelected'}
-            disabled={!isLive || Boolean(activeLote) || !selectedLoteId || pendingAction !== null}
-            title={!selectedLoteId ? 'Seleccioná un lote en "Próximos lotes" primero.' : undefined}
-          >
-            Abrir lote
-          </ActionButton>
+        <ActionButton
+          icon={ChevronsRight}
+          variant="brand-outline"
+          className="col-span-2 w-full"
+          onClick={() => handleAdvance()}
+          isLoading={pendingAction === 'close' || pendingAction === 'openNext'}
+          disabled={!isLive || (!activeLote && !hasUpcomingLotes) || pendingAction !== null}
+        >
+          Pasar al siguiente lote
+        </ActionButton>
 
-          <ActionButton
-            icon={PackageCheck}
-            variant="brand-soft"
-            className="w-full"
-            onClick={handleCloseLoteClick}
-            isLoading={pendingAction === 'close'}
-            disabled={!(isLive || isPaused) || !activeLote || pendingAction !== null}
-          >
-            Cerrar lote
-          </ActionButton>
-        </div>
+        <ActionButton
+          icon={PlayCircle}
+          variant="success-outline"
+          className="w-full"
+          onClick={() =>
+            selectedLoteId &&
+            runSimpleAction('openSelected', () => openLoteRequest(remate.id, selectedLoteId), 'Lote abierto.')
+          }
+          isLoading={pendingAction === 'openSelected'}
+          disabled={!isLive || Boolean(activeLote) || !selectedLoteId || pendingAction !== null}
+          title={!selectedLoteId ? 'Seleccioná un lote en "Próximos lotes" primero.' : undefined}
+        >
+          Abrir lote
+        </ActionButton>
+
+        <ActionButton
+          icon={PackageCheck}
+          variant="ink-outline"
+          className="w-full"
+          onClick={handleCloseLoteClick}
+          isLoading={pendingAction === 'close'}
+          disabled={!(isLive || isPaused) || !activeLote || pendingAction !== null}
+        >
+          Cerrar lote
+        </ActionButton>
       </ControlSection>
 
       <ControlSection title="Controles de remate">
-        <div className="flex flex-col gap-1.5">
-          <ActionButton
-            icon={PauseCircle}
-            variant="warning-soft"
-            className="w-full"
-            onClick={() => setConfirmAction('pause')}
-            isLoading={pendingAction === 'pause'}
-            disabled={!isLive || pendingAction !== null}
-          >
-            Pausar remate
-          </ActionButton>
+        <ActionButton
+          icon={PauseCircle}
+          variant="warning-outline"
+          className="w-full"
+          onClick={() => setConfirmAction('pause')}
+          isLoading={pendingAction === 'pause'}
+          disabled={!isLive || pendingAction !== null}
+        >
+          Pausar remate
+        </ActionButton>
 
-          <ActionButton
-            icon={PlayCircle}
-            variant="brand-soft"
-            className="w-full"
-            onClick={() => runSimpleAction('resume', () => resumeRemateRequest(remate.id), 'El remate se reanudó.')}
-            isLoading={pendingAction === 'resume'}
-            disabled={!isPaused || pendingAction !== null}
-          >
-            Reanudar remate
-          </ActionButton>
-        </div>
+        <ActionButton
+          icon={PlayCircle}
+          variant="ink-outline"
+          className="w-full"
+          onClick={() => runSimpleAction('resume', () => resumeRemateRequest(remate.id), 'El remate se reanudó.')}
+          isLoading={pendingAction === 'resume'}
+          disabled={!isPaused || pendingAction !== null}
+        >
+          Reanudar remate
+        </ActionButton>
       </ControlSection>
 
-      <div className="flex flex-col gap-1.5 rounded-xl border border-danger-200 bg-danger-50 p-5 shadow-sm">
-        <div className="flex items-center gap-2">
-          <div>
-            <h3 className="text-xs font-bold uppercase tracking-wide text-danger-700">Zona crítica</h3>
-            
-          </div>
-        </div>
+      {/* "Zona crítica" pierde su card roja (`border-danger-200 bg-danger-50`) sobre el
+       * prototipo aprobado: un separador `border-t border-line` + el label en rojo ya
+       * comunican "cuidado" sin necesitar una caja de color propia -- mismo criterio "no
+       * más cards" que el resto del panel. El texto de ayuda debajo del botón (antes solo
+       * un `title` en el `<button>`, invisible sin hover) ahora es visible siempre que la
+       * acción está bloqueada por un lote abierto, para que quede claro sin depender de
+       * un tooltip. */}
+      <div className="flex flex-col gap-2 border-t border-line pt-4">
+        <h3 className="text-xs font-bold uppercase tracking-wide text-danger-600">Zona crítica</h3>
         <ActionButton
           icon={XOctagon}
-          variant="danger"
+          variant="danger-outline"
           onClick={() => setConfirmAction('finish')}
           isLoading={pendingAction === 'finish'}
           disabled={!isLive || Boolean(activeLote) || pendingAction !== null}
@@ -509,6 +523,9 @@ export function ConsolaControlPanel({
         >
           Finalizar remate
         </ActionButton>
+        {activeLote && (
+          <p className="text-xs text-ink-faint">Cerrá el lote abierto antes de finalizar el remate.</p>
+        )}
       </div>
 
       {/* Título + descripción + Cancelar/Confirmar (pedido explícito) -- `confirmLabel`/

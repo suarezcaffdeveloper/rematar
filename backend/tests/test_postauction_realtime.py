@@ -33,11 +33,11 @@ class _RecordingEventBus:
 class _FakeNotificationChannel:
     """Ver `test_postauction_service.py::_FakeNotificationChannel` -- misma idea, acá a
     nivel dispatcher (evento crudo -> caso creado -> canal disparado), no a nivel
-    servicio."""
+    servicio. `name` configurable para poder representar tanto el canal de email como
+    el de WhatsApp con la misma clase."""
 
-    name = "email"
-
-    def __init__(self) -> None:
+    def __init__(self, *, name: str = "email") -> None:
+        self.name = name
         self.calls: list = []
 
     async def notify_lote_adjudicado(self, context) -> None:
@@ -217,6 +217,26 @@ async def test_lote_winner_determined_triggers_email_notification(
     assert len(channel.calls) == 1
     assert channel.calls[0].lote_id == lote_id
     assert channel.calls[0].buyer_email is not None
+    assert channel.calls[0].final_price == Decimal("1500")
+
+
+async def test_lote_winner_determined_triggers_whatsapp_notification(
+    client: AsyncClient, db_engine: AsyncEngine
+) -> None:
+    remate_id, lote_id, buyer_id = await _setup_remate_and_lote(client)
+    channel = _FakeNotificationChannel(name="whatsapp")
+    dispatcher = _make_dispatcher(db_engine, _RecordingEventBus(), NotificationService([channel]))
+    event = LoteWinnerDetermined(
+        remate_id=remate_id, lote_id=lote_id, oferta_id=uuid.uuid4(), buyer_id=buyer_id,
+        amount=Decimal("1500"),
+    )
+
+    await dispatcher.dispatch(event.model_dump_json())
+
+    assert len(channel.calls) == 1
+    assert channel.calls[0].lote_id == lote_id
+    assert channel.calls[0].buyer_phone is not None
+    assert channel.calls[0].rematador_phone is not None
     assert channel.calls[0].final_price == Decimal("1500")
 
 
