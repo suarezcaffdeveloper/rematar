@@ -123,6 +123,7 @@ export function RemateHistoryDetailPage() {
     <div className="flex flex-col gap-8 font-display">
       <RemateHistoryHeader
         remate={remate}
+        lotes={lotes}
         isExportDisabled={isExportDisabled}
         onExportPdf={() => exportRemateHistoryToPdf(exportBundle)}
         onExportExcel={() => {

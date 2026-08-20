@@ -2,10 +2,10 @@ import { useNavigate } from 'react-router-dom';
 import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
 import { formatDateTime } from '../../../shared/lib/format';
-import { useLoteCount } from '../hooks';
+import { useLoteCount, useLoteCoverImages } from '../hooks';
 import { CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_CARD_ACCENT, STATUS_LABELS } from '../labels';
 import type { Remate } from '../types';
-import { CoverPlaceholder } from './CoverPlaceholder';
+import { LotesCollagePlaceholder } from './LotesCollagePlaceholder';
 import { BoxIcon, CalendarIcon, PinIcon } from './icons';
 
 export interface RemateCardProps {
@@ -22,6 +22,7 @@ export interface RemateCardProps {
 export function RemateCard({ remate }: RemateCardProps) {
   const navigate = useNavigate();
   const loteCount = useLoteCount(remate.id);
+  const loteCoverImages = useLoteCoverImages(remate.id);
 
   return (
     <article
@@ -35,7 +36,7 @@ export function RemateCard({ remate }: RemateCardProps) {
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
-          <CoverPlaceholder className="h-full w-full" />
+          <LotesCollagePlaceholder images={loteCoverImages ?? []} className="h-full w-full" />
         )}
         <div className="absolute left-3 top-3">
           <Badge variant={STATUS_BADGE_VARIANTS[remate.status]}>{STATUS_LABELS[remate.status]}</Badge>

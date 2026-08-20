@@ -5,14 +5,16 @@ import { MemoryRouter } from 'react-router-dom';
 import { CompradorDashboardPage } from './CompradorDashboardPage';
 import type { Remate } from '../types';
 
-const { useRematesMock, useLoteCountMock } = vi.hoisted(() => ({
+const { useRematesMock, useLoteCountMock, useLoteCoverImagesMock } = vi.hoisted(() => ({
   useRematesMock: vi.fn(),
   useLoteCountMock: vi.fn(),
+  useLoteCoverImagesMock: vi.fn(() => []),
 }));
 
 vi.mock('../hooks', () => ({
   useRemates: useRematesMock,
   useLoteCount: useLoteCountMock,
+  useLoteCoverImages: useLoteCoverImagesMock,
 }));
 
 function makeRemate(overrides: Partial<Remate>): Remate {

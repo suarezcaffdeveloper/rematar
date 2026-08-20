@@ -3,13 +3,18 @@ import type { LucideIcon } from 'lucide-react';
 import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
 import { formatDateTime } from '../../../shared/lib/format';
+import { pickLoteCoverImages } from '../../remates/collage';
 import { CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_LABELS } from '../../remates/labels';
 import { CalendarIcon, PinIcon } from '../../remates/components/icons';
-import { CoverPlaceholder } from '../../remates/components/CoverPlaceholder';
-import type { Remate } from '../../remates/types';
+import { LotesCollagePlaceholder } from '../../remates/components/LotesCollagePlaceholder';
+import type { Lote, Remate } from '../../remates/types';
 
 export interface RemateHistoryHeaderProps {
   remate: Remate;
+  /** Para armar el collage de portada cuando el remate no tiene `cover_image_url`
+   * propio -- ya cargados por `RemateHistoryDetailPage` (`useLotes`), sin request nueva
+   * acá. `[]` por defecto: cae al degradé genérico. */
+  lotes?: Lote[];
   /** `undefined` = todavía no hay datos suficientes para armar el archivo (lotes en
    * carga o con error) -- los botones quedan deshabilitados hasta que estén listos. */
   onExportPdf?: () => void;
@@ -44,6 +49,7 @@ interface ExportAction {
  */
 export function RemateHistoryHeader({
   remate,
+  lotes = [],
   onExportPdf,
   onExportExcel,
   isExportDisabled = false,
@@ -74,7 +80,10 @@ export function RemateHistoryHeader({
         {remate.cover_image_url ? (
           <img src={remate.cover_image_url} alt="" className="absolute inset-0 h-full w-full object-cover" />
         ) : (
-          <CoverPlaceholder className="absolute inset-0 h-full w-full" />
+          <LotesCollagePlaceholder
+            images={pickLoteCoverImages(lotes)}
+            className="absolute inset-0 h-full w-full"
+          />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent" />
 

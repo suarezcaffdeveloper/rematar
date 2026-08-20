@@ -81,7 +81,11 @@ export function RemateDetailPage() {
 
   return (
     <div className="flex flex-col gap-8 font-display">
-      <RemateDetailOverview remate={remate} onEnterRoom={() => navigate(`/remates/${remate.id}/sala`)} />
+      <RemateDetailOverview
+        remate={remate}
+        lotes={lotes}
+        onEnterRoom={() => navigate(`/remates/${remate.id}/sala`)}
+      />
 
       <div className="flex flex-col gap-4 border-t border-line pt-8">
         <div className="flex flex-col gap-1">

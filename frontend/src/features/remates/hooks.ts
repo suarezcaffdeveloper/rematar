@@ -16,6 +16,7 @@ import {
   fetchRemateByIdRequest,
   fetchRematesRequest,
 } from './api';
+import { pickLoteCoverImages } from './collage';
 import type { Lote, Remate } from './types';
 
 const PAGE_SIZE = 100;
@@ -126,6 +127,41 @@ export function useConnectedUsersCount(remateId: string): number | null {
   }, [remateId]);
 
   return count;
+}
+
+const COVER_IMAGES_LIMIT = 4;
+// Un poco más que COVER_IMAGES_LIMIT: alcanza para juntar 4 imágenes incluso si algunos
+// de los primeros lotes todavía no tienen fotos cargadas, sin traer los 300 lotes que
+// trae useLotes -- esta es una portada de tarjeta, no la pantalla de administración.
+const COVER_IMAGES_SAMPLE_SIZE = 12;
+
+/**
+ * Portada de respaldo de un remate sin `cover_image_url` propio: la primera imagen de
+ * hasta 4 lotes (`pickLoteCoverImages`), para `LotesCollagePlaceholder`. Mismo patrón
+ * perezoso que `useLoteCount` -- una request aparte por tarjeta (`page_size` chico),
+ * `null` mientras carga o si falló, sin bloquear el resto de la tarjeta por este dato
+ * secundario. Pensado para tarjetas que, a diferencia de `RemateDetailOverview`, no
+ * tienen ya los lotes cargados en memoria.
+ */
+export function useLoteCoverImages(remateId: string): string[] | null {
+  const [images, setImages] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setImages(null);
+    fetchLotesRequest(remateId, { page: 1, page_size: COVER_IMAGES_SAMPLE_SIZE })
+      .then((result) => {
+        if (!cancelled) setImages(pickLoteCoverImages(result.items, COVER_IMAGES_LIMIT));
+      })
+      .catch(() => {
+        if (!cancelled) setImages(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [remateId]);
+
+  return images;
 }
 
 export interface UseRemateDetailResult {

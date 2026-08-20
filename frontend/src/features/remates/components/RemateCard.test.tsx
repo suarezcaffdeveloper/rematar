@@ -1,13 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { RemateCard } from './RemateCard';
 import type { Remate } from '../types';
 
-const { navigateMock, useLoteCountMock } = vi.hoisted(() => ({
+const { navigateMock, useLoteCountMock, useLoteCoverImagesMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   useLoteCountMock: vi.fn(),
+  useLoteCoverImagesMock: vi.fn(),
 }));
 
 vi.mock('react-router-dom', async () => {
@@ -15,7 +16,7 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => navigateMock };
 });
 
-vi.mock('../hooks', () => ({ useLoteCount: useLoteCountMock }));
+vi.mock('../hooks', () => ({ useLoteCount: useLoteCountMock, useLoteCoverImages: useLoteCoverImagesMock }));
 
 const REMATE: Remate = {
   id: 'remate-1',
@@ -45,6 +46,10 @@ function renderCard(remate: Remate = REMATE) {
 }
 
 describe('RemateCard', () => {
+  beforeEach(() => {
+    useLoteCoverImagesMock.mockReturnValue([]);
+  });
+
   it('muestra título, categoría, estado, ubicación y lote count', () => {
     useLoteCountMock.mockReturnValue(3);
 
@@ -65,12 +70,23 @@ describe('RemateCard', () => {
     expect(screen.getByText('Cargando lotes…')).toBeInTheDocument();
   });
 
-  it('sin cover_image_url, no intenta renderizar un <img> roto', () => {
+  it('sin cover_image_url ni imágenes de lote, no intenta renderizar un <img> roto', () => {
     useLoteCountMock.mockReturnValue(0);
 
     renderCard();
 
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
+  it('sin cover_image_url pero con imágenes de lote, arma un collage con ellas', () => {
+    useLoteCountMock.mockReturnValue(2);
+    useLoteCoverImagesMock.mockReturnValue(['a.jpg', 'b.jpg']);
+
+    const { container } = renderCard();
+
+    const imgs = container.querySelectorAll('img');
+    expect(imgs).toHaveLength(2);
+    expect(Array.from(imgs).map((img) => img.getAttribute('src'))).toEqual(['a.jpg', 'b.jpg']);
   });
 
   it('al hacer click en "Ver remate", navega al detalle de ESE remate', async () => {

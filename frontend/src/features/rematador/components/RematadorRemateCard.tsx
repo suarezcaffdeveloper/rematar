@@ -9,7 +9,7 @@ import { normalizeApiError } from '../../../shared/api/errors';
 import { formatDateTime } from '../../../shared/lib/format';
 import { useToastStore } from '../../../shared/toast/toastStore';
 import { deleteRemateRequest, scheduleRemateRequest, startRemateRequest } from '../../remates/api';
-import { CoverPlaceholder } from '../../remates/components/CoverPlaceholder';
+import { LotesCollagePlaceholder } from '../../remates/components/LotesCollagePlaceholder';
 import { BoxIcon, CalendarIcon, UsersIcon } from '../../remates/components/icons';
 import { CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_CARD_ACCENT, STATUS_LABELS } from '../../remates/labels';
 import type { Remate } from '../../remates/types';
@@ -72,7 +72,7 @@ function describeLoteState(
 export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighted }: RematadorRemateCardProps) {
   const navigate = useNavigate();
   const prefersReducedMotion = useReducedMotion();
-  const { loteCount, activeLote, nextLote, connectedUsers, isLoadingLotes } = useRemateOperationalInfo(
+  const { loteCount, activeLote, nextLote, connectedUsers, coverImages, isLoadingLotes } = useRemateOperationalInfo(
     remate.id,
     remate.status,
   );
@@ -156,7 +156,7 @@ export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighte
             className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
           />
         ) : (
-          <CoverPlaceholder className="h-full w-full" />
+          <LotesCollagePlaceholder images={coverImages} className="h-full w-full" />
         )}
       </div>
 

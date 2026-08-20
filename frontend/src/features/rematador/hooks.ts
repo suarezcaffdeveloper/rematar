@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { formatDuration } from '../../shared/lib/format';
 import { useAsyncResource, type UseAsyncResourceResult } from '../../shared/hooks/useAsyncResource';
 import { fetchLotesRequest } from '../remates/api';
+import { pickLoteCoverImages } from '../remates/collage';
 import type { Lote, Remate, RemateStatus } from '../remates/types';
 import { fetchRemateSnapshotRequest } from '../sala/api';
 
@@ -29,6 +30,10 @@ export interface RemateOperationalInfo {
   /** `null` si el remate no está `live`/`paused` (no tiene sentido mostrar "conectados"
    * de un remate que nadie puede estar viendo en vivo) o si la request falló. */
   connectedUsers: number | null;
+  /** Primera imagen de hasta 4 lotes (`pickLoteCoverImages`), para el collage de portada
+   * de `RematadorRemateCard` cuando el remate no tiene `cover_image_url` propio -- se
+   * calcula sobre la misma muestra de lotes que ya trae esta request, sin pedido nuevo. */
+  coverImages: string[];
   isLoadingLotes: boolean;
 }
 
@@ -49,6 +54,7 @@ export function useRemateOperationalInfo(remateId: string, status: RemateStatus)
   const [activeLote, setActiveLote] = useState<Lote | null>(null);
   const [nextLote, setNextLote] = useState<Lote | null>(null);
   const [connectedUsers, setConnectedUsers] = useState<number | null>(null);
+  const [coverImages, setCoverImages] = useState<string[]>([]);
   const [isLoadingLotes, setIsLoadingLotes] = useState(true);
 
   useEffect(() => {
@@ -62,12 +68,14 @@ export function useRemateOperationalInfo(remateId: string, status: RemateStatus)
         // el primero que matchee cada status es, por construcción, el correcto.
         setActiveLote(result.items.find((lote) => lote.status === 'open') ?? null);
         setNextLote(result.items.find((lote) => lote.status === 'pending') ?? null);
+        setCoverImages(pickLoteCoverImages(result.items));
       })
       .catch(() => {
         if (cancelled) return;
         setLoteCount(null);
         setActiveLote(null);
         setNextLote(null);
+        setCoverImages([]);
       })
       .finally(() => {
         if (!cancelled) setIsLoadingLotes(false);
@@ -95,7 +103,7 @@ export function useRemateOperationalInfo(remateId: string, status: RemateStatus)
     };
   }, [remateId, status]);
 
-  return { loteCount, activeLote, nextLote, connectedUsers, isLoadingLotes };
+  return { loteCount, activeLote, nextLote, connectedUsers, coverImages, isLoadingLotes };
 }
 
 const TICK_INTERVAL_MS = 1000;

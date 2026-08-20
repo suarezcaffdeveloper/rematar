@@ -15,7 +15,7 @@ vi.mock('../sala/api', () => salaApiMocks);
 const { useRemateOperationalInfo, useElapsedTime, useLiveOperationalSummary } = await import('./hooks');
 
 function lote(id: string, status: 'pending' | 'open' | 'closed_sold' | 'closed_unsold' | 'cancelled') {
-  return { id, title: `Lote ${id}`, status };
+  return { id, title: `Lote ${id}`, status, images: [] };
 }
 
 describe('useRemateOperationalInfo', () => {

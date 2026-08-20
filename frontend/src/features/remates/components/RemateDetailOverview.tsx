@@ -4,13 +4,18 @@ import { ArrowRight, Info } from 'lucide-react';
 import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
 import { formatDateTime } from '../../../shared/lib/format';
+import { pickLoteCoverImages } from '../collage';
 import { CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_LABELS } from '../labels';
-import type { Remate } from '../types';
+import type { Lote, Remate } from '../types';
 import { CalendarIcon, PinIcon } from './icons';
-import { CoverPlaceholder } from './CoverPlaceholder';
+import { LotesCollagePlaceholder } from './LotesCollagePlaceholder';
 
 export interface RemateDetailOverviewProps {
   remate: Remate;
+  /** Para armar el collage de portada cuando el remate no tiene `cover_image_url`
+   * propio (`LotesCollagePlaceholder`) -- ya cargados por `RemateDetailPage`
+   * (`useLotes`), sin request nueva acá. `[]` por defecto: cae al degradé genérico. */
+  lotes?: Lote[];
   onEnterRoom: () => void;
 }
 
@@ -37,7 +42,7 @@ function DetailRow({ icon, label, children }: { icon: ReactNode; label: string; 
  * `RematadorDashboardStats`) en vez de dos `Card` con fondo/borde/sombra, para una
  * lectura más suelta ("en el aire") acorde al resto del rediseño (Épica 9).
  */
-export function RemateDetailOverview({ remate, onEnterRoom }: RemateDetailOverviewProps) {
+export function RemateDetailOverview({ remate, lotes = [], onEnterRoom }: RemateDetailOverviewProps) {
   const prefersReducedMotion = useReducedMotion();
 
   return (
@@ -47,7 +52,10 @@ export function RemateDetailOverview({ remate, onEnterRoom }: RemateDetailOvervi
           {remate.cover_image_url ? (
             <img src={remate.cover_image_url} alt="" className="absolute inset-0 h-full w-full object-cover" />
           ) : (
-            <CoverPlaceholder className="absolute inset-0 h-full w-full" />
+            <LotesCollagePlaceholder
+              images={pickLoteCoverImages(lotes)}
+              className="absolute inset-0 h-full w-full"
+            />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/30 to-transparent" />
 

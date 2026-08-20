@@ -59,6 +59,7 @@ function defaultOperationalInfo(overrides = {}) {
     activeLote: null,
     nextLote: null,
     connectedUsers: null,
+    coverImages: [],
     isLoadingLotes: false,
     ...overrides,
   };
@@ -84,6 +85,15 @@ describe('RematadorRemateCard', () => {
     expect(screen.getByText('Remate de hacienda')).toBeInTheDocument();
     expect(screen.getByText('Programado')).toBeInTheDocument();
     expect(screen.getByText('3 lotes')).toBeInTheDocument();
+  });
+
+  it('sin cover_image_url pero con coverImages, arma un collage con ellas', () => {
+    useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo({ coverImages: ['a.jpg', 'b.jpg'] }));
+    const { container } = renderCard(makeRemate());
+
+    const imgs = container.querySelectorAll('img');
+    expect(imgs).toHaveLength(2);
+    expect(Array.from(imgs).map((img) => img.getAttribute('src'))).toEqual(['a.jpg', 'b.jpg']);
   });
 
   it('isHighlighted muestra el brillo de "recién publicado"; por default, no', () => {

@@ -84,6 +84,7 @@ describe('RematadorDashboardPage', () => {
       activeLote: null,
       nextLote: null,
       connectedUsers: null,
+      coverImages: [],
       isLoadingLotes: false,
     });
 
@@ -135,6 +136,7 @@ describe('RematadorDashboardPage', () => {
       activeLote: null,
       nextLote: null,
       connectedUsers: null,
+      coverImages: [],
       isLoadingLotes: false,
     });
     useRematesMock.mockReturnValue({
@@ -163,6 +165,7 @@ describe('RematadorDashboardPage', () => {
       activeLote: null,
       nextLote: null,
       connectedUsers: null,
+      coverImages: [],
       isLoadingLotes: false,
     });
     useRematesMock.mockReturnValue({
@@ -217,6 +220,7 @@ describe('RematadorDashboardPage', () => {
       activeLote: null,
       nextLote: null,
       connectedUsers: null,
+      coverImages: [],
       isLoadingLotes: false,
     });
 
@@ -254,6 +258,7 @@ describe('RematadorDashboardPage', () => {
       activeLote: null,
       nextLote: null,
       connectedUsers: null,
+      coverImages: [],
       isLoadingLotes: false,
     });
     const remateA = makeRemate({ id: 'remate-a', title: 'Remate A' });
@@ -281,6 +286,7 @@ describe('RematadorDashboardPage', () => {
       activeLote: null,
       nextLote: null,
       connectedUsers: null,
+      coverImages: [],
       isLoadingLotes: false,
     });
     useRematesMock.mockReturnValue({
