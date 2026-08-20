@@ -1,0 +1,51 @@
+# Blueprint de Render para el backend (ver https://render.com/docs/blueprint-spec).
+#
+# Uso: en el dashboard de Render, "New" -> "Blueprint", apuntar al repo de GitHub. Render
+# lee este archivo y crea el servicio con esta configuracion ya cargada -- solo faltan
+# completar a mano las variables marcadas "sync: false" (las que dependen de servicios
+# externos que Render no gestiona: la base en Neon y Redis en Upstash/Render).
+#
+# No incluye Postgres ni Redis como servicios de este blueprint a proposito: la base
+# vive en Neon (decision del usuario, fuera de Render) y Redis puede ir en Upstash o en
+# el Redis administrado de Render -- cualquiera de los dos, se pega la URL como
+# REDIS_URL despues de crear el blueprint.
+services:
+  - type: web
+    name: rematar-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_JSON
+        value: "true"
+      # Pegar la connection string de Neon tal cual la da su dashboard
+      # (postgresql://usuario:password@host/db?sslmode=require) -- el backend la
+      # convierte solo al driver async y descarta el query param, ver
+      # app/core/config.py::get_async_database_url.
+      - key: DATABASE_URL
+        sync: false
+      # Pegar la URL de Upstash (rediss://...) o del Redis administrado de Render.
+      - key: REDIS_URL
+        sync: false
+      # Render genera un valor aleatorio seguro al crear el blueprint -- no hace falta
+      # tocarlo.
+      - key: SECRET_KEY
+        generateValue: true
+      # Completar con la URL real de Vercel una vez creado ese proyecto, ej.
+      # ["https://rematar.vercel.app"] -- formato de lista JSON, con corchetes y comillas.
+      - key: CORS_ORIGINS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      # Opcional: bootstrap del primer admin (ver app/scripts/create_superuser.py).
+      # Alternativa mas simple que no depende de tener acceso a una shell en Render:
+      # registrarse como usuario normal desde la app y promoverlo a admin con un UPDATE
+      # en el editor SQL de Neon.
+      - key: FIRST_ADMIN_EMAIL
+        sync: false
+      - key: FIRST_ADMIN_PASSWORD
+        sync: false
