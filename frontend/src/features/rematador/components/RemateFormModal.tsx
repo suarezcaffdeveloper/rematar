@@ -38,7 +38,7 @@ const REVEAL_TRANSITION = { duration: 0.25, ease: [0.21, 0.47, 0.32, 0.98] as co
 
 const HELP_TIPS = [
   'Podrás agregar los lotes después de crear el remate.',
-  'La imagen seleccionada será la portada del remate.',
+  'La imagen seleccionada será la portada del remate. Si no eliges imagen, el sistema automáticamente crea un collage con las imágenes de cada lote',
   'El horario final se determina automáticamente cuando termina el último lote.',
   'Estas configuraciones podrán modificarse antes de iniciar el remate.',
 ];

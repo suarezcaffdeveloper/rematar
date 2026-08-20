@@ -224,4 +224,91 @@ describe('ChatMessageItem', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Eliminar mensaje' }));
     expect(onRequestDelete).toHaveBeenCalledWith(message);
   });
+
+  // --- XSS (Fase 5 de remediación del WebSocket Security Audit) -------------------------
+  //
+  // `ChatMessageItem` renderiza `message.content`/`message.author_name` como children de
+  // texto de JSX (`{message.content}`) -- React los escapa automáticamente, nunca los
+  // interpreta como HTML (a diferencia de `dangerouslySetInnerHTML`, que este componente
+  // no usa en ningún lado). Estos tests son la prueba directa de esa garantía: si alguna
+  // vez alguien reemplazara la interpolación de texto por un sink inseguro, estos tests
+  // fallarían porque el payload SÍ aparecería como un nodo real del DOM.
+
+  it('TEST 1 -- un <script> en el contenido nunca se convierte en un nodo <script> real', () => {
+    const payload = '<script>alert(1)</script>';
+    const { container } = render(
+      <ChatMessageItem message={makeMessage({ content: payload })} canModerate={false} onRequestDelete={vi.fn()} />,
+    );
+
+    expect(container.querySelector('script')).not.toBeInTheDocument();
+    expect(screen.getByText(payload)).toBeInTheDocument();
+  });
+
+  it('TEST 2 -- un <img onerror> en el contenido nunca se convierte en un <img> real con el handler activo', () => {
+    const payload = '<img src=x onerror=alert(1)>';
+    const { container } = render(
+      <ChatMessageItem message={makeMessage({ content: payload })} canModerate={false} onRequestDelete={vi.fn()} />,
+    );
+
+    // El único <img> legítimo de este componente es el avatar (con author_avatar_url
+    // null en este mensaje, ni siquiera ese existe) -- ninguno debe tener `onerror`.
+    expect(container.querySelectorAll('img[onerror]')).toHaveLength(0);
+    expect(screen.getByText(payload)).toBeInTheDocument();
+  });
+
+  it('TEST 3 -- un SVG con handler en el contenido nunca se convierte en un <svg> real', () => {
+    const payload = '<svg onload=alert(1)><circle r=1></circle></svg>';
+    const { container } = render(
+      <ChatMessageItem message={makeMessage({ content: payload })} canModerate={false} onRequestDelete={vi.fn()} />,
+    );
+
+    expect(container.querySelector('svg')).not.toBeInTheDocument();
+    expect(screen.getByText(payload)).toBeInTheDocument();
+  });
+
+  it('TEST 4 -- un link javascript: nunca se convierte en un <a> real (el chat no soporta links)', () => {
+    const payload = '<a href="javascript:alert(1)">click acá</a>';
+    const { container } = render(
+      <ChatMessageItem message={makeMessage({ content: payload })} canModerate={false} onRequestDelete={vi.fn()} />,
+    );
+
+    expect(container.querySelector('a')).not.toBeInTheDocument();
+    expect(screen.getByText(payload)).toBeInTheDocument();
+  });
+
+  it('TEST 5 -- una variante encoded/obfuscada tampoco se decodifica en HTML real', () => {
+    const payload = '&lt;script&gt;alert(1)&lt;/script&gt;<script>alert(1)</script>';
+    const { container } = render(
+      <ChatMessageItem message={makeMessage({ content: payload })} canModerate={false} onRequestDelete={vi.fn()} />,
+    );
+
+    expect(container.querySelector('script')).not.toBeInTheDocument();
+    // El texto llega literal -- ni siquiera las entidades HTML (`&lt;`) se decodifican
+    // dos veces, porque nunca pasan por un parser de HTML.
+    expect(screen.getByText(payload)).toBeInTheDocument();
+  });
+
+  it('un mensaje de sistema con contenido malicioso tampoco se interpreta (mismo sink de texto)', () => {
+    const payload = '<img src=x onerror=alert(1)>';
+    const { container } = render(
+      <ChatMessageItem
+        message={makeMessage({ kind: 'system', content: payload, author_id: null, author_name: null, author_role: null })}
+        canModerate
+        onRequestDelete={vi.fn()}
+      />,
+    );
+
+    expect(container.querySelector('img')).not.toBeInTheDocument();
+    expect(screen.getByText(payload, { exact: false })).toBeInTheDocument();
+  });
+
+  it('un author_name malicioso (denormalizado del usuario) tampoco se interpreta', () => {
+    const payload = '<img src=x onerror=alert(1)>';
+    const { container } = render(
+      <ChatMessageItem message={makeMessage({ author_name: payload })} canModerate={false} onRequestDelete={vi.fn()} />,
+    );
+
+    expect(container.querySelector('img[onerror]')).toBeNull();
+    expect(screen.getByText(payload)).toBeInTheDocument();
+  });
 });

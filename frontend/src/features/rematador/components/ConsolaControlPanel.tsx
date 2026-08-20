@@ -1,6 +1,7 @@
 import { type ReactNode, useState } from 'react';
 import {
   ChevronsRight,
+  Gavel,
   PackageCheck,
   PauseCircle,
   PlayCircle,
@@ -11,7 +12,6 @@ import clsx from 'clsx';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Button, type ButtonProps } from '../../../shared/components/Button';
 import { ConfirmModal } from '../../../shared/components/ConfirmModal';
-import { Input } from '../../../shared/components/Input';
 import { formatCurrency } from '../../../shared/lib/format';
 import { useToastStore } from '../../../shared/toast/toastStore';
 import {
@@ -30,21 +30,22 @@ export interface ConsolaControlPanelProps {
   remate: Remate;
   activeLote: Lote | null;
   /** Oferta líder del lote activo (mismo dato que ya recibe `ConsolaLotePanel`) --
-   * `null` si nadie ofertó todavía. La usa "Pasar al siguiente lote" para adjudicar el
-   * lote activo automáticamente antes de abrir el próximo, ver docstring más abajo. */
+   * `null` si nadie ofertó todavía. Determina si "Cerrar lote" (sin oferta) o "Adjudicar
+   * lote" (con oferta) está habilitado, ver docstring más abajo. */
   winningOffer: OfertaSnapshotEntry | null;
   /** Ofertas recientes del lote activo, más nueva primero (mismo dato/orden que ya
-   * consume `ConsolaOfferPanel`) -- se usa solo para la advertencia de "Cerrar lote" de
-   * más abajo, ver `secondsSinceLastOffer`. */
+   * consume `ConsolaOfferPanel`) -- se usa solo para la advertencia de "Adjudicar lote"
+   * de más abajo, ver `secondsSinceLastOffer`. */
   recentOffers: OfertaSnapshotEntry[];
   selectedLoteId: string | null;
   hasUpcomingLotes: boolean;
 }
 
-/** Si la oferta más reciente entró hace menos de esto, "Cerrar lote" pide confirmación
- * extra en vez de abrir el formulario de cierre directo (pedido explícito: evitar cerrar
- * un lote justo cuando acaba de entrar una oferta que el rematador todavía no vio). */
-const RECENT_OFFER_WARNING_SECONDS = 15;
+/** Si la oferta más reciente entró hace menos de esto, "Adjudicar lote" pide
+ * confirmación extra antes de adjudicar (pedido explícito: evitar que una oferta que
+ * entró al milisegundo anterior se quede sin la chance de ser superada por otro
+ * comprador). */
+const ADJUDICATE_WARNING_SECONDS = 10;
 
 /** `recentOffers[0]` es siempre la más nueva (mismo criterio que `ConsolaOfferPanel`'s
  * `latestOfferId`) -- `null` si todavía no hay ninguna oferta en el lote. */
@@ -54,7 +55,15 @@ function secondsSinceLastOffer(recentOffers: OfertaSnapshotEntry[]): number | nu
   return Math.floor((Date.now() - new Date(lastOffer.created_at).getTime()) / 1000);
 }
 
-type PendingAction = 'pause' | 'resume' | 'finish' | 'openSelected' | 'openNext' | 'close' | null;
+type PendingAction =
+  | 'pause'
+  | 'resume'
+  | 'finish'
+  | 'openSelected'
+  | 'openNext'
+  | 'close'
+  | 'adjudicate'
+  | null;
 
 type ConfirmableAction = 'pause' | 'finish';
 
@@ -112,54 +121,45 @@ function ControlSection({ title, children }: { title: string; children: ReactNod
 /**
  * Panel de control de la Consola Operativa (Épica 5, Módulo 5.2; rediseñado en la
  * Épica 9, Etapa 6; con la jerarquía "opción 1A" del proyecto de diseño "Panel de
- * Remate"; y de nuevo en el rediseño "Modo Remate" sobre la captura de Stitch, que
- * elimina por completo el concepto de timer -- ya no hay pausar/reanudar/reiniciar
- * timer, cierre automático ni fijar tiempo restante, ni acá ni en `ConsolaLotePanel`).
- * Las cinco acciones que quedan (abrir lote, pausar remate, reanudar remate, cerrar
- * lote, pasar al siguiente lote, finalizar) siguen consumiendo exactamente los mismos
- * endpoints del motor de estados (`docs/16-motor-de-estados.md`) y las mismas
- * precondiciones cliente-side que ya validaba este panel -- el rediseño es puramente de
- * presentación: todo el panel vive dentro de una única card de fondo suave ("Panel de
- * control operativo", ver el `<div>` raíz del `return`), para que se lea de un vistazo
- * que es un bloque de gestión aparte del resto de la pantalla. Adentro, los controles se
- * agrupan de a dos por fila ("Gestión de lote": pasar al siguiente lote (a todo el
- * ancho, arriba) + abrir/cerrar; "Controles de remate": pausar/reanudar), en variantes
- * "outline" (fondo blanco, el color vive en el borde/texto -- ver
- * `shared/components/Button.tsx`) que comunican la naturaleza de la acción (azul de
- * marca para "pasar al siguiente lote", verde para abrir, ícono/texto neutro para
- * cerrar/reanudar, naranja para pausar); "Finalizar remate" sigue en su propia "Zona
- * crítica", separada solo por un divisor + label en rojo (sin card roja propia). Los
- * botones siguen siempre visibles, habilitándose/deshabilitando según el estado actual,
- * sin ningún cambio de lógica.
+ * Remate"; en el rediseño "Modo Remate" sobre la captura de Stitch, que elimina por
+ * completo el concepto de timer; y con el módulo de "Adjudicación de lote" que separa
+ * la venta de un lote en su propia acción explícita, ver más abajo). Las seis acciones
+ * (abrir lote, cerrar lote, adjudicar lote, pausar remate, reanudar remate, pasar al
+ * siguiente lote, finalizar) siguen consumiendo los endpoints del motor de estados
+ * (`docs/16-motor-de-estados.md`) -- todo el panel vive dentro de una única card de
+ * fondo suave ("Panel de control operativo", ver el `<div>` raíz del `return`), en tres
+ * grupos: "Gestión de lote" (pasar al siguiente lote, arriba, a todo el ancho + abrir/
+ * cerrar), "Adjudicación de lote" (el nuevo botón, solo él, a todo el ancho) y
+ * "Controles de remate" (pausar/reanudar), en variantes "outline" (fondo blanco, el
+ * color vive en el borde/texto -- ver `shared/components/Button.tsx`); "Finalizar
+ * remate" sigue en su propia "Zona crítica", separada solo por un divisor + label rojo.
  *
- * "Cerrar lote" y "Pasar al siguiente lote" comparten la decisión de qué hacer con el
- * lote activo, en base a `winningOffer` (Módulo de lotes desiertos, pedido explícito:
- * "ambos botones deberían hacer lo mismo si el lote está desierto"): sin ninguna oferta,
- * los dos cierran el lote directo como `outcome: 'unsold'` (`closeActiveLoteAsUnsold`) y
- * disparan el aviso flotante `DesiertoLoteNotice` (ver más abajo) -- no tiene sentido
- * preguntar Vendido/Desierto ni pedir un precio cuando no hay ninguna oferta que pudiera
- * haberlo vendido. Con oferta ganadora, "Pasar al siguiente lote" adjudica solo
- * (`outcome: 'sold'`, `final_price` igual al monto de `winningOffer`) y "Cerrar lote"
- * sigue abriendo el formulario manual de siempre (para ajustar el precio final, o
- * declarar el lote desierto igual pese a la oferta) -- en ambos casos "Pasar al
- * siguiente lote" recién después abre el siguiente lote, con un solo click. Reusa el
- * mismo endpoint de cierre manual (`closeLoteRequest`) sin ningún cambio de backend:
- * `PostAuctionEventDispatcher` (`app/postauction/realtime.py`) ya resuelve el comprador
- * real a partir de la oferta `ACCEPTED` vigente del lote cuando un cierre manual declara
- * `sold` (corrección de ADR-018 documentada ahí mismo), así que el caso post-remate se
- * crea igual que si hubiera cerrado por vencimiento del timer. Si el cierre falla, no se
- * intenta abrir el siguiente lote. "Pausar remate" y "Finalizar remate" usan
- * `ConfirmModal` en vez de `window.confirm` -- consistente con el resto de
- * confirmaciones destructivas de la app, sin ejecutar la acción hasta que el usuario
- * confirma en el modal.
+ * Adjudicar un lote (marcarlo `sold`) es exclusivo del botón "Adjudicar lote" (pedido
+ * explícito: ni "Cerrar lote" ni "Pasar al siguiente lote" venden un lote nunca, para
+ * que no exista la chance de que una oferta que acaba de entrar pierda su oportunidad de
+ * ser superada por un cierre/avance automático):
+ * - "Cerrar lote" solo está habilitado cuando el lote activo no tiene ninguna oferta
+ *   (`!winningOffer`) -- lo cierra directo como `outcome: 'unsold'`
+ *   (`handleCloseLoteClick`) y dispara el aviso flotante `DesiertoLoteNotice` (ver más
+ *   abajo). Con oferta ganadora queda deshabilitado: la única forma de resolver ese lote
+ *   pasa a ser "Adjudicar lote".
+ * - "Adjudicar lote" solo está habilitado cuando hay oferta ganadora
+ *   (`winningOffer`) -- cierra el lote como `outcome: 'sold'`, `final_price` igual al
+ *   monto de `winningOffer` (reusa `closeLoteRequest` sin ningún cambio de backend:
+ *   `PostAuctionEventDispatcher`, `app/postauction/realtime.py`, ya resuelve el
+ *   comprador real a partir de la oferta `ACCEPTED` vigente del lote). Antes de
+ *   adjudicar, chequea `recentOffers`: si la oferta más nueva entró hace menos de
+ *   `ADJUDICATE_WARNING_SECONDS`, primero muestra un `ConfirmModal` de advertencia
+ *   ("Adjudicar igual"/"Cancelar") -- el rematador puede seguir igual, esto no bloquea
+ *   nada, solo evita adjudicar al milisegundo de haber entrado una oferta sin darle
+ *   chance al resto de los compradores de superarla.
+ * - "Pasar al siguiente lote" ya no toca el lote activo: queda deshabilitado mientras
+ *   haya uno (cerrado o adjudicado, no importa cuál de los dos, es tarea del
+ *   rematador resolverlo primero con los botones de arriba) y solo abre el próximo lote.
  *
- * "Cerrar lote" manual (con oferta ganadora), además, chequea `recentOffers` antes de
- * abrir el formulario (pedido explícito del rediseño "Modo Remate"): si la oferta más
- * nueva entró hace menos de `RECENT_OFFER_WARNING_SECONDS`, primero muestra un
- * `ConfirmModal` de advertencia ("Continuar cierre"/"Cancelar") -- el rematador puede
- * seguir igual, esto no bloquea nada, solo evita que cierre un lote sin haber visto la
- * última oferta. Sin ninguna oferta, esta advertencia no aplica (no hay nada reciente
- * que se pudiera haber pasado por alto).
+ * "Pausar remate" y "Finalizar remate" usan `ConfirmModal` en vez de `window.confirm` --
+ * consistente con el resto de confirmaciones destructivas de la app, sin ejecutar la
+ * acción hasta que el usuario confirma en el modal.
  *
  * Aviso "Lote desierto" (`desiertoBanner` + `DesiertoLoteNotice`, Módulo de lotes
  * desiertos): pedido explícito -- NO una tarjeta embebida en este panel, sino una nube
@@ -193,11 +193,9 @@ export function ConsolaControlPanel({
 }: ConsolaControlPanelProps) {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmableAction | null>(null);
-  const [isClosingLote, setIsClosingLote] = useState(false);
-  const [closeOutcome, setCloseOutcome] = useState<'sold' | 'unsold'>('sold');
-  const [finalPrice, setFinalPrice] = useState('');
-  const [closeError, setCloseError] = useState<string | null>(null);
-  const [closeWarningSeconds, setCloseWarningSeconds] = useState<number | null>(null);
+  // Advertencia de "Adjudicar lote" cuando la última oferta entró hace menos de
+  // `ADJUDICATE_WARNING_SECONDS` -- `null` cuando no hay ninguna advertencia pendiente.
+  const [adjudicateWarningSeconds, setAdjudicateWarningSeconds] = useState<number | null>(null);
   // Módulo de lotes desiertos: lote que acaba de cerrarse sin adjudicación -- dispara
   // el aviso flotante `DesiertoLoteNotice` (ver docstring más abajo). `null` cuando no
   // hay ninguno para mostrar. Se queda abierto hasta que el rematador lo cierra a mano
@@ -209,7 +207,7 @@ export function ConsolaControlPanel({
   const isPaused = remate.status === 'paused';
 
   async function runSimpleAction(
-    action: Exclude<PendingAction, 'close' | null>,
+    action: Exclude<PendingAction, 'close' | 'adjudicate' | null>,
     request: () => Promise<unknown>,
     successMessage: string,
   ) {
@@ -233,183 +231,63 @@ export function ConsolaControlPanel({
     setConfirmAction(null);
   }
 
-  /** Cierra el lote activo como desierto (sin ofertas) y muestra el cartel de lote
-   * desierto -- compartido por "Pasar al siguiente lote" y "Cerrar lote" cuando no hay
-   * ninguna oferta: sin nada que elegir (no hay precio ni "vendido" posible), ambos
-   * botones hacen exactamente lo mismo en ese caso (pedido explícito) en vez de abrir
-   * el formulario manual de Vendido/Desierto. Devuelve `true` si el cierre tuvo éxito. */
-  async function closeActiveLoteAsUnsold(lote: Lote): Promise<boolean> {
+  /** "Cerrar lote": exclusivo del caso sin ninguna oferta (ver docstring del
+   * componente) -- se cierra directo como `outcome: 'unsold'` y dispara el aviso
+   * flotante `DesiertoLoteNotice` (ver más abajo). Con oferta ganadora el botón queda
+   * deshabilitado (ver el JSX más abajo): la única forma de resolver ese lote pasa a ser
+   * "Adjudicar lote". */
+  async function handleCloseLoteClick() {
+    if (!activeLote || winningOffer) return;
     setPendingAction('close');
     try {
-      await closeLoteRequest(remate.id, lote.id, { outcome: 'unsold', final_price: undefined });
+      await closeLoteRequest(remate.id, activeLote.id, { outcome: 'unsold', final_price: undefined });
       useToastStore.getState().push('success', 'Lote cerrado como desierto (sin ofertas).');
-      setDesiertoBanner(lote);
-      return true;
+      setDesiertoBanner(activeLote);
     } catch (err) {
       useToastStore.getState().push('error', normalizeApiError(err).message);
-      return false;
     } finally {
       setPendingAction(null);
     }
   }
 
-  /** "Pasar al siguiente lote": si hay un lote activo, primero lo adjudica solo (ver
-   * docstring del componente) y recién si eso funciona abre el siguiente -- si no hay
-   * lote activo, se comporta como siempre (solo abre el siguiente). */
+  /** "Pasar al siguiente lote": ya no toca el lote activo -- queda deshabilitado
+   * mientras haya uno (ver el JSX más abajo, es tarea del rematador cerrarlo/adjudicarlo
+   * primero con los botones de arriba) y acá solo abre el próximo. */
   async function handleAdvance() {
-    if (activeLote) {
-      if (winningOffer) {
-        setPendingAction('close');
-        try {
-          await closeLoteRequest(remate.id, activeLote.id, {
-            outcome: 'sold',
-            final_price: winningOffer.amount,
-          });
-          useToastStore
-            .getState()
-            .push('success', `Lote adjudicado por ${formatCurrency(winningOffer.amount, remate.settings.currency)}.`);
-        } catch (err) {
-          useToastStore.getState().push('error', normalizeApiError(err).message);
-          return;
-        } finally {
-          setPendingAction(null);
-        }
-      } else if (!(await closeActiveLoteAsUnsold(activeLote))) {
-        return;
-      }
-      if (!hasUpcomingLotes) return;
-    }
     await runSimpleAction('openNext', () => openNextLoteRequest(remate.id), 'Lote abierto.');
   }
 
-  function openCloseForm() {
-    setCloseOutcome('sold');
-    setFinalPrice('');
-    setCloseError(null);
-    setIsClosingLote(true);
-  }
-
-  /** "Cerrar lote": sin ninguna oferta no hay nada que decidir -- se cierra directo
-   * como desierto (mismo camino que "Pasar al siguiente lote" en ese caso, ver
-   * `closeActiveLoteAsUnsold`), sin pasar por el formulario manual de Vendido/Desierto.
-   * Con una oferta ganadora, sigue disponible el formulario de siempre (para ajustar el
-   * precio final o declarar el lote desierto igual pese a la oferta) -- y, si esa
-   * oferta entró hace menos de `RECENT_OFFER_WARNING_SECONDS`, primero pide
-   * confirmación extra (pedido explícito -- evitar cerrar justo cuando acaba de entrar
-   * una oferta que el rematador todavía no vio) en vez de abrir el formulario directo. */
-  async function handleCloseLoteClick() {
-    if (!activeLote) return;
-    if (!winningOffer) {
-      await closeActiveLoteAsUnsold(activeLote);
-      return;
-    }
-    const seconds = secondsSinceLastOffer(recentOffers);
-    if (seconds !== null && seconds < RECENT_OFFER_WARNING_SECONDS) {
-      setCloseWarningSeconds(seconds);
-      return;
-    }
-    openCloseForm();
-  }
-
-  function cancelCloseForm() {
-    setIsClosingLote(false);
-    setCloseError(null);
-  }
-
-  const basePrice = activeLote ? Number(activeLote.base_price) : 0;
-  const parsedFinalPrice = Number(finalPrice);
-  const isFinalPriceValid =
-    finalPrice.trim() !== '' && Number.isFinite(parsedFinalPrice) && parsedFinalPrice >= basePrice;
-
-  async function submitClose() {
-    // "Confirmar cierre" ya queda deshabilitado mientras `outcome === 'sold'` y el
-    // precio no es válido (ver el botón más abajo) -- acá no hace falta repetir esa
-    // validación, este handler nunca se dispara en ese estado.
-    if (!activeLote) return;
-
-    setPendingAction('close');
-    setCloseError(null);
+  /** Adjudica el lote activo a la oferta ganadora (`outcome: 'sold'`, `final_price`
+   * igual al monto de `winningOffer`) -- llamado directo por "Adjudicar lote" cuando no
+   * hace falta advertencia, o por el `ConfirmModal` de "oferta reciente" cuando el
+   * rematador confirma igual. */
+  async function runAdjudicate(lote: Lote, offer: OfertaSnapshotEntry) {
+    setPendingAction('adjudicate');
     try {
-      await closeLoteRequest(remate.id, activeLote.id, {
-        outcome: closeOutcome,
-        final_price: closeOutcome === 'sold' ? finalPrice : undefined,
-      });
-      useToastStore.getState().push('success', 'El lote se cerró.');
-      if (closeOutcome === 'unsold') setDesiertoBanner(activeLote);
-      setIsClosingLote(false);
+      await closeLoteRequest(remate.id, lote.id, { outcome: 'sold', final_price: offer.amount });
+      useToastStore
+        .getState()
+        .push('success', `Lote adjudicado por ${formatCurrency(offer.amount, remate.settings.currency)}.`);
     } catch (err) {
-      setCloseError(normalizeApiError(err).message);
+      useToastStore.getState().push('error', normalizeApiError(err).message);
     } finally {
       setPendingAction(null);
     }
   }
 
-  if (isClosingLote && activeLote) {
-    return (
-      <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface-subtle p-5 shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
-            <PackageCheck aria-hidden="true" className="h-4 w-4" />
-          </div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-faint">
-            Cerrar lote {activeLote.lot_number}
-          </h2>
-        </div>
-
-        <div className="flex gap-4 text-sm text-ink-muted">
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              name="close-outcome"
-              checked={closeOutcome === 'sold'}
-              onChange={() => {
-                setCloseOutcome('sold');
-                setCloseError(null);
-              }}
-            />
-            Vendido
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              name="close-outcome"
-              checked={closeOutcome === 'unsold'}
-              onChange={() => {
-                setCloseOutcome('unsold');
-                setCloseError(null);
-              }}
-            />
-            Desierto
-          </label>
-        </div>
-
-        {closeOutcome === 'sold' && (
-          <Input
-            label="Precio final"
-            type="number"
-            min={activeLote.base_price}
-            step="0.01"
-            value={finalPrice}
-            onChange={(event) => setFinalPrice(event.target.value)}
-            error={closeError ?? undefined}
-          />
-        )}
-        {closeOutcome === 'unsold' && closeError && <p className="text-sm text-danger-600">{closeError}</p>}
-
-        <div className="flex gap-2">
-          <Button
-            onClick={submitClose}
-            isLoading={pendingAction === 'close'}
-            disabled={closeOutcome === 'sold' && !isFinalPriceValid}
-          >
-            Confirmar cierre
-          </Button>
-          <Button variant="ghost" onClick={cancelCloseForm} disabled={pendingAction === 'close'}>
-            Cancelar
-          </Button>
-        </div>
-      </div>
-    );
+  /** "Adjudicar lote": solo tiene sentido con oferta ganadora (ver el JSX más abajo,
+   * deshabilitado sin ella). Si la oferta más nueva entró hace menos de
+   * `ADJUDICATE_WARNING_SECONDS`, primero pide confirmación extra (pedido explícito --
+   * evitar adjudicar al milisegundo de haber entrado una oferta, sin darle chance al
+   * resto de los compradores de superarla) en vez de adjudicar directo. */
+  async function handleAdjudicateClick() {
+    if (!activeLote || !winningOffer) return;
+    const seconds = secondsSinceLastOffer(recentOffers);
+    if (seconds !== null && seconds < ADJUDICATE_WARNING_SECONDS) {
+      setAdjudicateWarningSeconds(seconds);
+      return;
+    }
+    await runAdjudicate(activeLote, winningOffer);
   }
 
   return (
@@ -432,22 +310,23 @@ export function ConsolaControlPanel({
       <DesiertoLoteNotice lote={desiertoBanner} onClose={() => setDesiertoBanner(null)} />
 
       {/* "Pasar al siguiente lote" (la acción que más se usa durante un remate en vivo)
-       * se muda adentro de "Gestión de lote", arriba de "Abrir lote"/"Cerrar lote" --
-       * las tres acciones operan sobre el mismo lote activo, tiene sentido que vivan
-       * juntas. Mismo ancho que "Finalizar remate" (a todo el ancho del panel, `w-full`
-       * fuera de la grilla de 2 columnas) y misma estética que el resto de los botones
-       * (`ActionButton`, variante "outline") -- ya no es un botón especial en una card
-       * propia, es la primera acción del grupo, distinguida solo por su color de marca
-       * (`brand-outline`, la única variante "outline" con acento azul) en vez de tamaño
-       * o fondo distinto. */}
+       * vive adentro de "Gestión de lote", arriba de "Abrir lote"/"Cerrar lote" -- las
+       * tres acciones operan sobre el mismo lote activo, tiene sentido que vivan juntas.
+       * Ya no toca el lote activo (ver `handleAdvance`): queda deshabilitada mientras
+       * haya uno, sin importar si tiene ofertas o no -- resolverlo (cerrarlo o
+       * adjudicarlo) es tarea de los otros botones. Mismo ancho que "Finalizar remate"
+       * (a todo el ancho del panel, `w-full` fuera de la grilla de 2 columnas) y misma
+       * estética que el resto de los botones (`ActionButton`, variante "outline") --
+       * distinguida solo por su color de marca (`brand-outline`, la única variante
+       * "outline" con acento azul) en vez de tamaño o fondo distinto. */}
       <ControlSection title="Gestión de lote">
         <ActionButton
           icon={ChevronsRight}
           variant="brand-outline"
           className="col-span-2 w-full"
           onClick={() => handleAdvance()}
-          isLoading={pendingAction === 'close' || pendingAction === 'openNext'}
-          disabled={!isLive || (!activeLote && !hasUpcomingLotes) || pendingAction !== null}
+          isLoading={pendingAction === 'openNext'}
+          disabled={!isLive || Boolean(activeLote) || !hasUpcomingLotes || pendingAction !== null}
         >
           Pasar al siguiente lote
         </ActionButton>
@@ -467,15 +346,37 @@ export function ConsolaControlPanel({
           Abrir lote
         </ActionButton>
 
+        {/* Solo cierra lotes sin ninguna oferta (declararlos desierto) -- con oferta
+         * ganadora queda deshabilitado, ver docstring del componente: la única forma de
+         * resolver ese lote pasa a ser "Adjudicar lote". */}
         <ActionButton
           icon={PackageCheck}
           variant="ink-outline"
           className="w-full"
           onClick={handleCloseLoteClick}
           isLoading={pendingAction === 'close'}
-          disabled={!(isLive || isPaused) || !activeLote || pendingAction !== null}
+          disabled={!(isLive || isPaused) || !activeLote || Boolean(winningOffer) || pendingAction !== null}
+          title={activeLote && winningOffer ? 'Este lote tiene ofertas: adjudicalo o esperá a que se retracten.' : undefined}
         >
           Cerrar lote
+        </ActionButton>
+      </ControlSection>
+
+      {/* "Adjudicación de lote" (nuevo módulo): única forma de marcar un lote como
+       * vendido -- ver docstring del componente. Solo tiene sentido con oferta ganadora,
+       * así que queda deshabilitado sin ella. Grupo propio entre "Gestión de lote" y
+       * "Controles de remate" (pedido explícito), un solo botón a todo el ancho. */}
+      <ControlSection title="Adjudicación de lote">
+        <ActionButton
+          icon={Gavel}
+          variant="success-outline"
+          className="col-span-2 w-full"
+          onClick={handleAdjudicateClick}
+          isLoading={pendingAction === 'adjudicate'}
+          disabled={!(isLive || isPaused) || !activeLote || !winningOffer || pendingAction !== null}
+          title={activeLote && !winningOffer ? 'Este lote todavía no tiene ninguna oferta.' : undefined}
+        >
+          Adjudicar lote
         </ActionButton>
       </ControlSection>
 
@@ -545,19 +446,21 @@ export function ConsolaControlPanel({
         }
       />
 
-      {/* Oferta reciente al cerrar el lote (pedido explícito): no bloquea el cierre,
-       * solo confirma que el rematador vio que acaba de entrar una oferta antes de
-       * seguir. `onConfirm` recién ahí abre el formulario de cierre de siempre. */}
+      {/* Oferta reciente al adjudicar el lote (pedido explícito): no bloquea la
+       * adjudicación, solo confirma que el rematador vio que acaba de entrar una oferta
+       * antes de seguir -- evita adjudicar al milisegundo de haber entrado una oferta,
+       * sin darle chance al resto de los compradores de superarla. `onConfirm` recién ahí
+       * adjudica de verdad. */}
       <ConfirmModal
-        isOpen={closeWarningSeconds !== null}
-        onClose={() => setCloseWarningSeconds(null)}
+        isOpen={adjudicateWarningSeconds !== null}
+        onClose={() => setAdjudicateWarningSeconds(null)}
         onConfirm={() => {
-          setCloseWarningSeconds(null);
-          openCloseForm();
+          setAdjudicateWarningSeconds(null);
+          if (activeLote && winningOffer) void runAdjudicate(activeLote, winningOffer);
         }}
         title="Oferta reciente"
-        message={`Se recibió una oferta recientemente. Última oferta hace ${closeWarningSeconds} segundos. ¿Desea cerrar igualmente el lote?`}
-        confirmLabel="Continuar cierre"
+        message={`Se recibió una oferta recientemente. Última oferta hace ${adjudicateWarningSeconds} segundos. ¿Desea adjudicar igualmente el lote?`}
+        confirmLabel="Adjudicar igual"
         cancelLabel="Cancelar"
       />
     </div>

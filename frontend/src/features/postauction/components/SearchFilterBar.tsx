@@ -42,11 +42,9 @@ export function SearchFilterBar({ value, onChange }: SearchFilterBarProps) {
         </Select>
       </div>
 
-      {(value.search || value.status) && (
-        <Button variant="ghost" onClick={() => onChange({})}>
-          Limpiar filtros
-        </Button>
-      )}
+      <Button variant="ghost" onClick={() => onChange({})}>
+        Limpiar filtros
+      </Button>
     </div>
   );
 }

@@ -107,6 +107,7 @@ describe('ConsolaControlPanel', () => {
     expect(screen.getByRole('button', { name: 'Abrir lote' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Pasar al siguiente lote' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Cerrar lote' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Adjudicar lote' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Pausar remate' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Reanudar remate' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Finalizar remate' })).toBeEnabled();
@@ -117,19 +118,25 @@ describe('ConsolaControlPanel', () => {
     expect(screen.getByRole('button', { name: 'Abrir lote' })).toBeEnabled();
   });
 
-  it('con un lote activo, "Abrir"/"Finalizar" se deshabilitan pero "Cerrar lote" y "Pasar al siguiente lote" siguen disponibles', () => {
+  it('con un lote activo sin ofertas: "Abrir"/"Finalizar"/"Pasar al siguiente lote"/"Adjudicar lote" deshabilitados, "Cerrar lote" disponible', () => {
     renderPanel({ activeLote: makeLote(), selectedLoteId: 'lote-9', hasUpcomingLotes: true });
 
     expect(screen.getByRole('button', { name: 'Abrir lote' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Finalizar remate' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Pasar al siguiente lote' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Cerrar lote' })).toBeEnabled();
-    // "Pasar al siguiente lote" ahora también adjudica el lote activo antes de abrir el
-    // siguiente (ver describe "Pasar al siguiente lote con un lote activo" más abajo) --
-    // por eso queda habilitado en vez de deshabilitarse como antes.
-    expect(screen.getByRole('button', { name: 'Pasar al siguiente lote' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Adjudicar lote' })).toBeDisabled();
   });
 
-  it('remate "paused": "Reanudar" habilitado, "Pausar"/"Abrir"/"Finalizar" deshabilitados, "Cerrar lote" sigue disponible', () => {
+  it('con un lote activo con oferta ganadora: "Cerrar lote" se deshabilita, "Adjudicar lote" se habilita, "Pasar al siguiente lote" sigue deshabilitado', () => {
+    renderPanel({ activeLote: makeLote(), winningOffer: makeWinningOffer(), hasUpcomingLotes: true });
+
+    expect(screen.getByRole('button', { name: 'Cerrar lote' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Adjudicar lote' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Pasar al siguiente lote' })).toBeDisabled();
+  });
+
+  it('remate "paused": "Reanudar" habilitado, "Pausar"/"Abrir"/"Finalizar" deshabilitados, "Cerrar lote" sigue disponible (sin oferta)', () => {
     renderPanel({ remate: makeRemate({ status: 'paused' }), activeLote: makeLote() });
 
     expect(screen.getByRole('button', { name: 'Reanudar remate' })).toBeEnabled();
@@ -195,7 +202,7 @@ describe('ConsolaControlPanel', () => {
     expect(apiMocks.openLoteRequest).toHaveBeenCalledWith('remate-1', 'lote-9');
   });
 
-  it('"Pasar al siguiente lote" llama a openNextLoteRequest', async () => {
+  it('"Pasar al siguiente lote" (sin lote activo) llama a openNextLoteRequest', async () => {
     apiMocks.openNextLoteRequest.mockResolvedValue(makeLote({ status: 'open' }));
     renderPanel({ hasUpcomingLotes: true });
 
@@ -204,173 +211,40 @@ describe('ConsolaControlPanel', () => {
     expect(apiMocks.openNextLoteRequest).toHaveBeenCalledWith('remate-1');
   });
 
-  describe('"Pasar al siguiente lote" con un lote activo (adjudicación automática)', () => {
-    it('con oferta ganadora, cierra el lote como vendido por ese monto y recién después abre el siguiente', async () => {
-      apiMocks.closeLoteRequest.mockResolvedValue(makeLote({ status: 'closed_sold' }));
-      apiMocks.openNextLoteRequest.mockResolvedValue(makeLote({ status: 'open' }));
-      renderPanel({ activeLote: makeLote(), winningOffer: makeWinningOffer(), hasUpcomingLotes: true });
+  it('"Pasar al siguiente lote" queda deshabilitado con un lote activo, sin importar si tiene oferta -- no adjudica ni cierra nada', () => {
+    renderPanel({ activeLote: makeLote(), winningOffer: makeWinningOffer(), hasUpcomingLotes: true });
 
-      await userEvent.click(screen.getByRole('button', { name: 'Pasar al siguiente lote' }));
+    expect(screen.getByRole('button', { name: 'Pasar al siguiente lote' })).toBeDisabled();
+    expect(apiMocks.closeLoteRequest).not.toHaveBeenCalled();
+    expect(apiMocks.openNextLoteRequest).not.toHaveBeenCalled();
+  });
 
-      expect(apiMocks.closeLoteRequest).toHaveBeenCalledWith('remate-1', 'lote-1', {
-        outcome: 'sold',
-        final_price: '1500.00',
-      });
-      expect(toastPushMock).toHaveBeenCalledWith('success', expect.stringContaining('adjudicado'));
-      await waitFor(() => expect(apiMocks.openNextLoteRequest).toHaveBeenCalledWith('remate-1'));
-    });
-
-    it('sin ninguna oferta, cierra el lote como desierto (sin precio) y abre el siguiente', async () => {
+  describe('Cerrar lote (exclusivo del caso sin ninguna oferta)', () => {
+    it('cierra el lote directo como desierto, sin ningún formulario', async () => {
       apiMocks.closeLoteRequest.mockResolvedValue(makeLote({ status: 'closed_unsold' }));
-      apiMocks.openNextLoteRequest.mockResolvedValue(makeLote({ status: 'open' }));
-      renderPanel({ activeLote: makeLote(), winningOffer: null, hasUpcomingLotes: true });
+      renderPanel({ activeLote: makeLote(), winningOffer: null, recentOffers: [] });
 
-      await userEvent.click(screen.getByRole('button', { name: 'Pasar al siguiente lote' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
 
       expect(apiMocks.closeLoteRequest).toHaveBeenCalledWith('remate-1', 'lote-1', {
         outcome: 'unsold',
         final_price: undefined,
       });
       expect(toastPushMock).toHaveBeenCalledWith('success', expect.stringContaining('desierto'));
-      await waitFor(() => expect(apiMocks.openNextLoteRequest).toHaveBeenCalledWith('remate-1'));
     });
 
-    it('sin lotes próximos, solo cierra el lote activo -- no intenta abrir el siguiente', async () => {
-      apiMocks.closeLoteRequest.mockResolvedValue(makeLote({ status: 'closed_sold' }));
-      renderPanel({ activeLote: makeLote(), winningOffer: makeWinningOffer(), hasUpcomingLotes: false });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Pasar al siguiente lote' }));
-
-      await waitFor(() => expect(apiMocks.closeLoteRequest).toHaveBeenCalled());
-      expect(apiMocks.openNextLoteRequest).not.toHaveBeenCalled();
-    });
-
-    it('si falla el cierre, no intenta abrir el siguiente lote', async () => {
-      apiMocks.closeLoteRequest.mockRejectedValue({
-        isAxiosError: true,
-        response: { status: 422, data: { error: { code: 'business_rule', message: 'No se pudo cerrar.' } } },
-      });
-      renderPanel({ activeLote: makeLote(), winningOffer: makeWinningOffer(), hasUpcomingLotes: true });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Pasar al siguiente lote' }));
-
-      await waitFor(() => expect(toastPushMock).toHaveBeenCalledWith('error', 'No se pudo cerrar.'));
-      expect(apiMocks.openNextLoteRequest).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('Cerrar lote (con oferta ganadora -- el formulario manual solo aplica en este caso)', () => {
-    it('abre un formulario en línea, con "Vendido" seleccionado por default', async () => {
-      renderPanel({ activeLote: makeLote(), winningOffer: makeWinningOffer() });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
-
-      expect(screen.getByText('Cerrar lote 1')).toBeInTheDocument();
-      expect(screen.getByLabelText('Vendido')).toBeChecked();
-      expect(screen.getByLabelText('Precio final')).toBeInTheDocument();
-    });
-
-    it('con "Desierto", no pide precio final y confirma directo', async () => {
-      apiMocks.closeLoteRequest.mockResolvedValue(makeLote({ status: 'closed_unsold' }));
-      renderPanel({ activeLote: makeLote(), winningOffer: makeWinningOffer() });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
-      await userEvent.click(screen.getByLabelText('Desierto'));
-      expect(screen.queryByLabelText('Precio final')).not.toBeInTheDocument();
-
-      await userEvent.click(screen.getByRole('button', { name: 'Confirmar cierre' }));
-
-      expect(apiMocks.closeLoteRequest).toHaveBeenCalledWith('remate-1', 'lote-1', {
-        outcome: 'unsold',
-        final_price: undefined,
-      });
-    });
-
-    it('"Vendido" con precio menor al inicial, mantiene "Confirmar cierre" deshabilitado', async () => {
-      renderPanel({ activeLote: makeLote({ base_price: '1000.00' }), winningOffer: makeWinningOffer() });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
-      await userEvent.type(screen.getByLabelText('Precio final'), '500');
-
-      expect(screen.getByRole('button', { name: 'Confirmar cierre' })).toBeDisabled();
-      expect(apiMocks.closeLoteRequest).not.toHaveBeenCalled();
-    });
-
-    it('"Vendido" sin ingresar precio, "Confirmar cierre" queda deshabilitado', async () => {
-      renderPanel({ activeLote: makeLote({ base_price: '1000.00' }), winningOffer: makeWinningOffer() });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
-
-      expect(screen.getByRole('button', { name: 'Confirmar cierre' })).toBeDisabled();
-    });
-
-    it('"Vendido" con precio válido, llama a closeLoteRequest y cierra el formulario', async () => {
-      apiMocks.closeLoteRequest.mockResolvedValue(makeLote({ status: 'closed_sold', final_price: '1500.00' }));
-      renderPanel({ activeLote: makeLote({ base_price: '1000.00' }), winningOffer: makeWinningOffer() });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
-      await userEvent.type(screen.getByLabelText('Precio final'), '1500');
-      await userEvent.click(screen.getByRole('button', { name: 'Confirmar cierre' }));
-
-      expect(apiMocks.closeLoteRequest).toHaveBeenCalledWith('remate-1', 'lote-1', {
-        outcome: 'sold',
-        final_price: '1500',
-      });
-      expect(screen.queryByText('Cerrar lote 1')).not.toBeInTheDocument();
-    });
-
-    it('"Cancelar" descarta el formulario sin llamar a ningún endpoint', async () => {
-      renderPanel({ activeLote: makeLote(), winningOffer: makeWinningOffer() });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
-      await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
-
-      expect(screen.queryByText('Cerrar lote 1')).not.toBeInTheDocument();
-      expect(apiMocks.closeLoteRequest).not.toHaveBeenCalled();
-    });
-
-    it('ante un error del backend, muestra el mensaje en el formulario (no lo cierra)', async () => {
-      apiMocks.closeLoteRequest.mockRejectedValue({
-        isAxiosError: true,
-        response: { status: 422, data: { error: { code: 'business_rule', message: 'Precio inválido.' } } },
-      });
-      renderPanel({ activeLote: makeLote({ base_price: '1000.00' }), winningOffer: makeWinningOffer() });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
-      await userEvent.type(screen.getByLabelText('Precio final'), '1500');
-      await userEvent.click(screen.getByRole('button', { name: 'Confirmar cierre' }));
-
-      expect(screen.getByText('Precio inválido.')).toBeInTheDocument();
-      expect(screen.getByText('Cerrar lote 1')).toBeInTheDocument();
-    });
-  });
-
-  describe('Cerrar lote (sin ninguna oferta -- se cierra directo, sin formulario)', () => {
-    it('cierra el lote directo como desierto, sin mostrar el formulario manual de Vendido/Desierto', async () => {
+    it('muestra el aviso flotante de lote desierto tras cerrar', async () => {
       apiMocks.closeLoteRequest.mockResolvedValue(makeLote({ status: 'closed_unsold' }));
       renderPanel({ activeLote: makeLote(), winningOffer: null, recentOffers: [] });
 
       await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
 
-      expect(apiMocks.closeLoteRequest).toHaveBeenCalledWith('remate-1', 'lote-1', {
-        outcome: 'unsold',
-        final_price: undefined,
-      });
-      expect(screen.queryByText('Cerrar lote 1')).not.toBeInTheDocument();
-      expect(screen.queryByLabelText('Vendido')).not.toBeInTheDocument();
-      expect(screen.queryByLabelText('Desierto')).not.toBeInTheDocument();
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog).toHaveTextContent('Lote 1 quedó desierto');
+      expect(within(dialog).getByRole('button', { name: 'Continuar' })).toBeInTheDocument();
     });
 
-    it('muestra el mismo cartel de lote desierto que "Pasar al siguiente lote"', async () => {
-      apiMocks.closeLoteRequest.mockResolvedValue(makeLote({ status: 'closed_unsold' }));
-      renderPanel({ activeLote: makeLote(), winningOffer: null, recentOffers: [] });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
-
-      await waitFor(() => expect(screen.getByText('Lote 1 quedó desierto')).toBeInTheDocument());
-    });
-
-    it('ante un error del backend, muestra el error como toast (no hay formulario donde mostrarlo)', async () => {
+    it('ante un error del backend, muestra el error como toast', async () => {
       apiMocks.closeLoteRequest.mockRejectedValue({
         isAxiosError: true,
         response: { status: 422, data: { error: { code: 'business_rule', message: 'No se pudo cerrar.' } } },
@@ -382,118 +256,124 @@ describe('ConsolaControlPanel', () => {
       await waitFor(() => expect(toastPushMock).toHaveBeenCalledWith('error', 'No se pudo cerrar.'));
       expect(screen.queryByText('Lote 1 quedó desierto')).not.toBeInTheDocument();
     });
+
+    it('con oferta ganadora, el botón queda deshabilitado -- no se puede usar para rechazar ofertas', () => {
+      renderPanel({ activeLote: makeLote(), winningOffer: makeWinningOffer() });
+
+      expect(screen.getByRole('button', { name: 'Cerrar lote' })).toBeDisabled();
+    });
   });
 
-  describe('advertencia de oferta reciente al cerrar el lote', () => {
-    // Timestamps relativos a `Date.now()` en vez de `vi.useFakeTimers()` -- `userEvent`
-    // depende de temporizadores reales para sus propias esperas internas entre
-    // interacciones, y se cuelga si el reloj queda congelado.
-    function makeRecentOffer(secondsAgo: number) {
-      return {
-        id: 'oferta-1',
-        buyer_id: 'buyer-1',
-        amount: '1500.00',
-        status: 'accepted' as const,
-        created_at: new Date(Date.now() - secondsAgo * 1000).toISOString(),
-      };
-    }
+  describe('Adjudicar lote (exclusivo del caso con oferta ganadora)', () => {
+    it('sin oferta ganadora, el botón queda deshabilitado', () => {
+      renderPanel({ activeLote: makeLote(), winningOffer: null });
 
-    it('con una oferta de hace 8 segundos, muestra el modal de advertencia en vez del formulario', async () => {
-      renderPanel({
-        activeLote: makeLote(),
-        winningOffer: makeWinningOffer({ created_at: makeRecentOffer(8).created_at }),
-        recentOffers: [makeRecentOffer(8)],
-      });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
-
-      expect(screen.getByRole('dialog')).toHaveTextContent('Última oferta hace 8 segundos');
-      expect(screen.queryByText('Cerrar lote 1')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Adjudicar lote' })).toBeDisabled();
     });
 
-    it('"Cancelar" en el modal de advertencia no abre el formulario ni cierra el lote', async () => {
-      renderPanel({
-        activeLote: makeLote(),
-        winningOffer: makeWinningOffer({ created_at: makeRecentOffer(8).created_at }),
-        recentOffers: [makeRecentOffer(8)],
-      });
+    it('con oferta ganadora ya no reciente, adjudica directo (sin advertencia): cierra el lote como vendido por ese monto', async () => {
+      apiMocks.closeLoteRequest.mockResolvedValue(makeLote({ status: 'closed_sold' }));
+      renderPanel({ activeLote: makeLote(), winningOffer: makeWinningOffer(), recentOffers: [makeWinningOffer()] });
 
-      await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
-      await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Adjudicar lote' }));
 
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-      expect(screen.queryByText('Cerrar lote 1')).not.toBeInTheDocument();
-      expect(apiMocks.closeLoteRequest).not.toHaveBeenCalled();
-    });
-
-    it('"Continuar cierre" en el modal de advertencia abre el formulario normal', async () => {
-      renderPanel({
-        activeLote: makeLote(),
-        winningOffer: makeWinningOffer({ created_at: makeRecentOffer(8).created_at }),
-        recentOffers: [makeRecentOffer(8)],
-      });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
-      await userEvent.click(screen.getByRole('button', { name: 'Continuar cierre' }));
-
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-      expect(screen.getByText('Cerrar lote 1')).toBeInTheDocument();
-    });
-
-    it('con una oferta ganadora de hace varios minutos, "Cerrar lote" abre el formulario directo (sin advertencia)', async () => {
-      renderPanel({
-        activeLote: makeLote(),
-        winningOffer: makeWinningOffer({ created_at: makeRecentOffer(600).created_at }),
-        recentOffers: [makeRecentOffer(600)],
-      });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
-
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-      expect(screen.getByText('Cerrar lote 1')).toBeInTheDocument();
-    });
-
-    it('sin ninguna oferta, "Cerrar lote" ni siquiera evalúa la advertencia -- cierra directo, sin el modal de advertencia', async () => {
-      apiMocks.closeLoteRequest.mockResolvedValue(makeLote({ status: 'closed_unsold' }));
-      renderPanel({ activeLote: makeLote(), winningOffer: null, recentOffers: [] });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
-
-      expect(screen.queryByText('Cerrar lote 1')).not.toBeInTheDocument();
-      expect(screen.queryByText(/Última oferta hace/)).not.toBeInTheDocument();
       expect(apiMocks.closeLoteRequest).toHaveBeenCalledWith('remate-1', 'lote-1', {
-        outcome: 'unsold',
-        final_price: undefined,
+        outcome: 'sold',
+        final_price: '1500.00',
+      });
+      expect(toastPushMock).toHaveBeenCalledWith('success', expect.stringContaining('adjudicado'));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('ante un error del backend, muestra el error como toast', async () => {
+      apiMocks.closeLoteRequest.mockRejectedValue({
+        isAxiosError: true,
+        response: { status: 422, data: { error: { code: 'business_rule', message: 'No se pudo adjudicar.' } } },
+      });
+      renderPanel({ activeLote: makeLote(), winningOffer: makeWinningOffer(), recentOffers: [makeWinningOffer()] });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Adjudicar lote' }));
+
+      await waitFor(() => expect(toastPushMock).toHaveBeenCalledWith('error', 'No se pudo adjudicar.'));
+    });
+
+    describe('advertencia de oferta reciente (menos de 10 segundos)', () => {
+      function makeRecentOffer(secondsAgo: number) {
+        return {
+          id: 'oferta-1',
+          buyer_id: 'buyer-1',
+          amount: '1500.00',
+          status: 'accepted' as const,
+          created_at: new Date(Date.now() - secondsAgo * 1000).toISOString(),
+        };
+      }
+
+      it('con una oferta de hace 8 segundos, muestra el modal de advertencia en vez de adjudicar directo', async () => {
+        renderPanel({
+          activeLote: makeLote(),
+          winningOffer: makeWinningOffer({ created_at: makeRecentOffer(8).created_at }),
+          recentOffers: [makeRecentOffer(8)],
+        });
+
+        await userEvent.click(screen.getByRole('button', { name: 'Adjudicar lote' }));
+
+        expect(screen.getByRole('dialog')).toHaveTextContent('Última oferta hace 8 segundos');
+        expect(apiMocks.closeLoteRequest).not.toHaveBeenCalled();
+      });
+
+      it('"Cancelar" en el modal de advertencia no adjudica', async () => {
+        renderPanel({
+          activeLote: makeLote(),
+          winningOffer: makeWinningOffer({ created_at: makeRecentOffer(8).created_at }),
+          recentOffers: [makeRecentOffer(8)],
+        });
+
+        await userEvent.click(screen.getByRole('button', { name: 'Adjudicar lote' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(apiMocks.closeLoteRequest).not.toHaveBeenCalled();
+      });
+
+      it('"Adjudicar igual" en el modal de advertencia sí adjudica', async () => {
+        apiMocks.closeLoteRequest.mockResolvedValue(makeLote({ status: 'closed_sold' }));
+        renderPanel({
+          activeLote: makeLote(),
+          winningOffer: makeWinningOffer({ created_at: makeRecentOffer(8).created_at }),
+          recentOffers: [makeRecentOffer(8)],
+        });
+
+        await userEvent.click(screen.getByRole('button', { name: 'Adjudicar lote' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Adjudicar igual' }));
+
+        expect(apiMocks.closeLoteRequest).toHaveBeenCalledWith('remate-1', 'lote-1', {
+          outcome: 'sold',
+          final_price: '1500.00',
+        });
+      });
+
+      it('con una oferta ganadora de hace varios minutos, adjudica directo (sin advertencia)', async () => {
+        apiMocks.closeLoteRequest.mockResolvedValue(makeLote({ status: 'closed_sold' }));
+        renderPanel({
+          activeLote: makeLote(),
+          winningOffer: makeWinningOffer({ created_at: makeRecentOffer(600).created_at }),
+          recentOffers: [makeRecentOffer(600)],
+        });
+
+        await userEvent.click(screen.getByRole('button', { name: 'Adjudicar lote' }));
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(apiMocks.closeLoteRequest).toHaveBeenCalled();
       });
     });
   });
 
   describe('aviso flotante de lote desierto (Módulo de lotes desiertos)', () => {
-    it('"Pasar al siguiente lote" sin ganador muestra el aviso como un diálogo centrado (no una tarjeta del panel)', async () => {
-      apiMocks.closeLoteRequest.mockResolvedValue(makeLote({ status: 'closed_unsold' }));
-      renderPanel({ activeLote: makeLote(), winningOffer: null, hasUpcomingLotes: false });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Pasar al siguiente lote' }));
-
-      const dialog = await screen.findByRole('dialog');
-      expect(dialog).toHaveTextContent('Lote 1 quedó desierto');
-    });
-
-    it('"Cerrar lote" sin ninguna oferta hace exactamente lo mismo: cierra directo y muestra el mismo aviso', async () => {
+    it('el aviso es puramente informativo: solo "Continuar" -- no ofrece reincorporar desde ahí', async () => {
       apiMocks.closeLoteRequest.mockResolvedValue(makeLote({ status: 'closed_unsold' }));
       renderPanel({ activeLote: makeLote(), winningOffer: null, recentOffers: [] });
 
       await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
-
-      const dialog = await screen.findByRole('dialog');
-      expect(dialog).toHaveTextContent('Lote 1 quedó desierto');
-    });
-
-    it('el aviso es puramente informativo: solo "Continuar" -- no ofrece reincorporar desde ahí', async () => {
-      apiMocks.closeLoteRequest.mockResolvedValue(makeLote({ status: 'closed_unsold' }));
-      renderPanel({ activeLote: makeLote(), winningOffer: null, hasUpcomingLotes: false });
-
-      await userEvent.click(screen.getByRole('button', { name: 'Pasar al siguiente lote' }));
       const dialog = await screen.findByRole('dialog');
 
       expect(within(dialog).getByRole('button', { name: 'Continuar' })).toBeInTheDocument();
@@ -502,8 +382,8 @@ describe('ConsolaControlPanel', () => {
 
     it('"Continuar" cierra el aviso sin llamar a requeue', async () => {
       apiMocks.closeLoteRequest.mockResolvedValue(makeLote({ status: 'closed_unsold' }));
-      renderPanel({ activeLote: makeLote(), winningOffer: null, hasUpcomingLotes: false });
-      await userEvent.click(screen.getByRole('button', { name: 'Pasar al siguiente lote' }));
+      renderPanel({ activeLote: makeLote(), winningOffer: null, recentOffers: [] });
+      await userEvent.click(screen.getByRole('button', { name: 'Cerrar lote' }));
       await screen.findByRole('dialog');
 
       await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));

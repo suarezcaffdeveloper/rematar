@@ -63,7 +63,7 @@ export function RematadorDashboardStats({ remates }: RematadorDashboardStatsProp
   }, [remates]);
 
   return (
-    <div className="flex divide-x divide-line overflow-x-auto rounded-xl border border-line">
+    <div className="flex justify-center divide-x divide-line overflow-x-auto rounded-xl border border-line">
       <DashboardStatCard
         label="Total"
         formattedValue={String(remates.length)}
