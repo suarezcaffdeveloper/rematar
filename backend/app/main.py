@@ -294,14 +294,20 @@ def create_app() -> FastAPI:
     return app
 
 def register_system_routes(app: FastAPI) -> None:
-    @app.get("/", include_in_schema=False)
+    # methods=["GET", "HEAD"], no @app.get: FastAPI/Starlette no agrega HEAD
+    # automáticamente a una ruta declarada solo con GET (a diferencia de un `Route` de
+    # Starlette puro) -- Render (y probablemente otros PaaS) usa HEAD "/" para su chequeo
+    # de puerto abierto al desplegar, previo e independiente del Health Check Path
+    # configurado; sin esto devolvía 405, Render nunca daba el deploy por saludable y
+    # terminaba matando el contenedor por timeout.
+    @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
     async def root():
         return {
             "service": "RematAR API",
             "status": "ok",
         }
 
-    @app.get("/health", include_in_schema=False)
+    @app.api_route("/health", methods=["GET", "HEAD"], include_in_schema=False)
     async def health():
         return {
             "status": "ok",
