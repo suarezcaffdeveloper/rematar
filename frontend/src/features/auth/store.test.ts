@@ -67,7 +67,9 @@ describe('useAuthStore', () => {
     await useAuthStore.getState().register({
       email: USER.email,
       password: 'secret123',
+      confirm_password: 'secret123',
       full_name: USER.full_name,
+      phone: '+5491100000000',
       role: 'comprador',
     });
 

@@ -65,24 +65,31 @@ export function LoteManagementCard({
   const mainImage = [...lote.images].sort((a, b) => a.order - b.order)[0];
 
   return (
-    <motion.article
+    // `motion.div` solo para la animación de entrada/hover -- los props nativos de
+    // drag & drop (onDragStart/onDragEnd/etc.) van en el <article> plano de adentro:
+    // framer-motion intercepta esos mismos nombres de prop para sus propios gestos de
+    // drag (firma `(event, info: PanInfo) => void`), incompatible con los `DragEvent`
+    // nativos de HTML5 que usa este componente (ADR-034, sin librería de D&D).
+    <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: [0.21, 0.47, 0.32, 0.98] }}
       whileHover={prefersReducedMotion ? undefined : { y: -2 }}
-      draggable={isEditable}
-      onDragStart={onDragStart}
-      onDragEnter={onDragEnter}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
-      className={clsx(
-        'flex items-center gap-4 rounded-2xl border bg-white p-4 shadow-sm transition-shadow duration-200',
-        'hover:shadow-lg',
-        isDragOver ? 'border-brand-500 ring-2 ring-brand-200' : 'border-line',
-        isDragging && 'opacity-40',
-      )}
     >
+      <article
+        draggable={isEditable}
+        onDragStart={onDragStart}
+        onDragEnter={onDragEnter}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        onDragEnd={onDragEnd}
+        className={clsx(
+          'flex items-center gap-4 rounded-2xl border bg-white p-4 shadow-sm transition-shadow duration-200',
+          'hover:shadow-lg',
+          isDragOver ? 'border-brand-500 ring-2 ring-brand-200' : 'border-line',
+          isDragging && 'opacity-40',
+        )}
+      >
       {isEditable && (
         <div className="flex flex-col items-center gap-1 text-ink-faint">
           <button
@@ -134,14 +141,15 @@ export function LoteManagementCard({
         </p>
       </div>
 
-      <DropdownMenu
-        triggerLabel={`Más acciones para el lote ${lote.lot_number}`}
-        items={[
-          { label: 'Editar', onSelect: onEdit, disabled: !isEditable },
-          { label: 'Duplicar', onSelect: onDuplicate, disabled: !isEditable },
-          { label: 'Eliminar', onSelect: onDelete, disabled: !isEditable, variant: 'danger' },
-        ]}
-      />
-    </motion.article>
+        <DropdownMenu
+          triggerLabel={`Más acciones para el lote ${lote.lot_number}`}
+          items={[
+            { label: 'Editar', onSelect: onEdit, disabled: !isEditable },
+            { label: 'Duplicar', onSelect: onDuplicate, disabled: !isEditable },
+            { label: 'Eliminar', onSelect: onDelete, disabled: !isEditable, variant: 'danger' },
+          ]}
+        />
+      </article>
+    </motion.div>
   );
 }

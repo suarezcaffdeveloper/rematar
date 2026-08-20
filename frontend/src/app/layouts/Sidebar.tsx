@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { Bot, Gavel, History, LayoutDashboard, LogOut, Package, ShoppingBag, type LucideIcon } from 'lucide-react';
+import { Gavel, History, LayoutDashboard, LogOut, Package, ShoppingBag, type LucideIcon } from 'lucide-react';
 import clsx from 'clsx';
 import logoRematar from '../../assets/brand/logo-rematar.png';
 import { useAuth, useAuthActions } from '../../features/auth/hooks';
