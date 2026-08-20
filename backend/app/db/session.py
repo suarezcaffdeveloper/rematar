@@ -15,17 +15,14 @@ from app.core.config import get_async_database_url, get_settings
 
 settings = get_settings()
 
-database_url = settings.DATABASE_URL.replace(
-    "postgresql://",
-    "postgresql+asyncpg://",
-).split("?")[0]
+database_url = get_async_database_url(settings.DATABASE_URL)
 
 # En entorno local (Docker Compose) Postgres no tiene SSL configurado; en staging y
 # producción sí se exige SSL para cifrar la conexión.
 ssl_context = False if settings.ENVIRONMENT == "local" else ssl.create_default_context()
 
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    database_url,
     pool_pre_ping=True,
     echo=False,
     connect_args={
