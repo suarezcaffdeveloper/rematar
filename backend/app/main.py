@@ -88,6 +88,8 @@ from app.core.middleware import RequestContextMiddleware
 from app.db.session import AsyncSessionLocal
 from app.events.redis_bus import RedisEventBus
 from app.moderation.realtime import ModerationEventDispatcher
+from app.modules.auth.events import SESSION_INVALIDATED_TOPIC
+from app.modules.auth.realtime import SessionInvalidationDispatcher
 from app.modules.bots.dispatcher import BotEventDispatcher
 from app.modules.bots.repository import BotSimulationRunRepository
 from app.modules.bots.runner import BotRunnerRegistry
@@ -120,7 +122,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.connection_manager = ConnectionManager()
     app.state.room_manager = RoomManager()
 
-    dispatcher = EventDispatcher(app.state.connection_manager, app.state.room_manager)
+    # `session_factory`: Fase 1 de remediación del WebSocket Security Audit (ver
+    # app/realtime/privilege.py) -- EventDispatcher necesita resolver dueño/rol para
+    # enmascarar buyer_id/reserve_price por destinatario en los eventos protegidos.
+    # Mismo criterio que chat_session_factory/timer_session_factory/etc. dos líneas más
+    # abajo: reusa `app.state.db_session_factory` si el test ya lo fijó, si no
+    # `AsyncSessionLocal`.
+    dispatcher_session_factory = getattr(app.state, "db_session_factory", None) or AsyncSessionLocal
+    dispatcher = EventDispatcher(
+        app.state.connection_manager, app.state.room_manager, dispatcher_session_factory
+    )
     app.state.event_consumer = EventConsumer(
         app.state.redis,
         dispatcher,
@@ -187,6 +198,22 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     app.state.moderation_event_consumer.start()
 
+    # Fase 3 de remediación del WebSocket Security Audit -- ver
+    # app/modules/auth/realtime.py y app/modules/auth/events.py. Sin `session_factory`
+    # (a diferencia de los consumidores de arriba): `SessionInvalidationDispatcher` no
+    # toca la base, solo `app.state.connection_manager` (en memoria). Suscripto a un
+    # canal propio (`SESSION_INVALIDATED_TOPIC`, no al patrón `events.*` de arriba,
+    # que es para eventos scoped a un remate -- este no lo está).
+    session_invalidation_dispatcher = SessionInvalidationDispatcher(app.state.connection_manager)
+    app.state.session_invalidation_consumer = EventConsumer(
+        app.state.redis,
+        session_invalidation_dispatcher,
+        pattern=SESSION_INVALIDATED_TOPIC,
+        retry_base_seconds=settings.REALTIME_CONSUMER_RETRY_BASE_SECONDS,
+        retry_max_seconds=settings.REALTIME_CONSUMER_RETRY_MAX_SECONDS,
+    )
+    app.state.session_invalidation_consumer.start()
+
     bots_session_factory = getattr(app.state, "db_session_factory", None) or AsyncSessionLocal
     async with bots_session_factory() as reconciliation_db:
         reconciled = await BotSimulationRunRepository(reconciliation_db).reconcile_orphaned_runs()
@@ -213,6 +240,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("app_shutting_down")
         await app.state.bot_event_consumer.stop()
         await app.state.bot_runner_registry.shutdown()
+        await app.state.session_invalidation_consumer.stop()
         await app.state.moderation_event_consumer.stop()
         await app.state.postauction_event_consumer.stop()
         await app.state.timer_expiry_scheduler.stop()

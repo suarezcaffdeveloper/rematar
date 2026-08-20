@@ -61,6 +61,42 @@ class Settings(BaseSettings):
     WS_PING_INTERVAL_SECONDS: float = 20.0
     WS_PONG_TIMEOUT_SECONDS: float = 40.0
 
+    # --- Rate Limiting y protección DoS del Gateway WebSocket (Fase 4 de remediación
+    # del WebSocket Security Audit) --- Ver app/websocket/rate_limit.py.
+    # Conexiones nuevas por IP, contadas ANTES de autenticar (única identidad disponible
+    # en ese momento, ver ADR-023) -- capa adicional, no la única defensa una vez que hay
+    # user_id (WS_MAX_CONNECTIONS_PER_USER, más abajo). Ventana corta a propósito: deja
+    # pasar ráfagas legítimas (varias pestañas abriéndose juntas, una reconexión masiva
+    # tras un deploy detrás de la misma IP/NAT) sin permitir una inundación sostenida de
+    # cientos/miles de conexiones.
+    WS_IP_CONNECT_RATE_LIMIT_MAX: int = 20
+    WS_IP_CONNECT_RATE_LIMIT_WINDOW_SECONDS: int = 10
+    # Conexiones simultáneas por usuario ya autenticado -- gauge en memoria
+    # (ConnectionManager.connections_for_user), no un contador Redis (ver docstring de
+    # app/websocket/rate_limit.py para la limitación documentada en multi-instancia).
+    # Cubre navegador de escritorio + celular + un puñado de pestañas con margen, sin
+    # permitir que una única cuenta abra cientos de conexiones.
+    WS_MAX_CONNECTIONS_PER_USER: int = 8
+    # Mensajes CLIENTE -> SERVIDOR por conexión, de cualquier tipo (incluidos inválidos/
+    # no reconocidos) -- protege contra flooding y costo de parseo. El tráfico legítimo
+    # normal es esporádico (un `pong` cada WS_PING_INTERVAL_SECONDS, algún join/leave
+    # ocasional), muy por debajo de este techo -- superarlo ya implica abuso, por eso la
+    # acción es cerrar la conexión, no solo un error recuperable.
+    WS_MESSAGE_RATE_LIMIT_MAX: int = 30
+    WS_MESSAGE_RATE_LIMIT_WINDOW_SECONDS: int = 10
+    # join_room + leave_room combinados (un único balde, no dos -- ambos tocan el mismo
+    # RoomManager/PresenceService), por usuario -- más estricto que el límite general de
+    # mensajes porque cada intento de join dispara una consulta a Postgres
+    # (SnapshotService.assert_visible) y, si tiene éxito, una publicación por Redis
+    # Pub/Sub (PresenceService) -- mucho más costoso que un `pong` descartado. Recuperable
+    # (no cierra la conexión): navegar rápido entre remates es tráfico legítimo.
+    WS_ROOM_ACTION_RATE_LIMIT_MAX: int = 10
+    WS_ROOM_ACTION_RATE_LIMIT_WINDOW_SECONDS: int = 10
+    # Tamaño máximo de un mensaje CLIENTE -> SERVIDOR, en bytes UTF-8. El mensaje
+    # legítimo más grande del protocolo actual es `auth` (lleva un JWT) -- 8 KiB deja
+    # margen amplio sin permitir payloads de varios MB.
+    WS_MAX_MESSAGE_BYTES: int = 8192
+
     # --- Sincronización de eventos en tiempo real (Épica 3, Módulo 3.5) ---
     # Backoff exponencial de reconexión del Event Consumer a Redis Pub/Sub — ver
     # docs/22-sincronizacion-tiempo-real.md y ADR-025.
@@ -87,6 +123,17 @@ class Settings(BaseSettings):
     # contraseña) -- distinto de CORS_ORIGINS (que es una lista de orígenes permitidos,
     # no "el" frontend); acá hace falta uno solo, concreto, para construir una URL.
     FRONTEND_URL: str = "http://localhost:5173"
+
+    # --- Login (Fase 7 de remediación del WebSocket Security Audit: HTTP Authentication
+    # & Session Security) ---
+    # Rate limit de POST /auth/login, por email normalizado -- mismo mecanismo que
+    # PASSWORD_RESET_RATE_LIMIT_*, ver app/redis/rate_limit.py. Ventana más laxa que la
+    # de password-reset (10 intentos, no 3): login es un camino de alta frecuencia
+    # legítima (typos, más de un dispositivo) y el costo por intento ya es alto (un
+    # verify Argon2id completo, ver LOGIN_RATE_LIMIT abajo), así que el límite es una
+    # defensa contra automatización sostenida, no un freno al uso normal.
+    LOGIN_RATE_LIMIT_MAX_ATTEMPTS: int = 10
+    LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 900
 
     # --- Recuperación de contraseña ---
     # Vigencia corta a propósito (RNF-11): el link viaja por email, un canal que puede

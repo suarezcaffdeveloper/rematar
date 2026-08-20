@@ -141,8 +141,26 @@ class LoteService:
     async def _get_owned_lote_or_raise(
         self, remate_id: uuid.UUID, lote_id: uuid.UUID, owner: User
     ) -> tuple[Remate, Lote]:
+        """Fase 9 de remediación del WebSocket Security Audit (Auction Business Logic
+        Security): usa `get_by_id_for_update` (el mismo `SELECT ... FOR UPDATE` de
+        ADR-004 que ya serializa `AuctionEngine.place_bid`/`TimerExpiryScheduler.auto_close`
+        contra este lote), no `get_by_id`. Antes de este fix, `open`/`close`/`cancel`/
+        `requeue`/`update`/`soft_delete`/`upload_image` leían el lote sin lock: dos
+        cierres concurrentes del mismo lote (doble click, reintento de red) podían
+        completar los DOS con éxito -- el segundo pisando en silencio el resultado
+        (`final_price`/`outcome`) del primero, sin ningún error, pese a que
+        `LoteStatus.CLOSED_SOLD`/`CLOSED_UNSOLD` no tienen transiciones salientes
+        (`lotes/state_machine.py`) -- y una oferta podía terminar `ACCEPTED` sobre un
+        lote que, en términos de negocio, ya se había cerrado (inconsistente con la
+        garantía equivalente que sí existe para el cierre automático por timer, ver
+        `test_lote_timer.py::test_concurrent_bid_and_scheduler_never_leave_an_inconsistent_state`).
+        Con el lock, la segunda llamada concurrente bloquea hasta que la primera
+        comitea, y al desbloquearse relee el estado YA actualizado -- `_apply_close`
+        entonces rechaza la segunda transición (`assert_transition_allowed` ve
+        `CLOSED_SOLD`/`CLOSED_UNSOLD`, no `OPEN`) en vez de aplicarla igual. Ver
+        `tests/test_lote_close_concurrency.py`."""
         remate = await self._remate_service.get_owned_or_raise(remate_id, owner)
-        lote = await self._repository.get_by_id(lote_id)
+        lote = await self._repository.get_by_id_for_update(lote_id)
         if lote is None or lote.remate_id != remate_id:
             raise NotFoundError("Lote no encontrado.")
         return remate, lote

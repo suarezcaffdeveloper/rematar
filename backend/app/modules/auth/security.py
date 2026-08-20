@@ -25,9 +25,24 @@ class TokenType(StrEnum):
     PASSWORD_RESET = "password_reset"
 
 
-def create_access_token(*, user_id: uuid.UUID, role: UserRole, settings: Settings) -> str:
+def create_access_token(
+    *, user_id: uuid.UUID, role: UserRole, session_id: uuid.UUID, settings: Settings
+) -> str:
+    """`session_id` (claim `sid`) es el `RefreshToken.id` emitido junto con este access
+    token en el mismo `issue_tokens` (`app/modules/auth/service.py`) -- no es un dato
+    nuevo, es el identificador de sesión que ya existía (ADR-011) pero que hasta la
+    Fase 3 de remediación del WebSocket Security Audit solo viajaba en el refresh
+    token. Permite que el Gateway WebSocket (`app/websocket/auth.py`) sepa a qué sesión
+    puntual pertenece una conexión, para poder cerrar solo esa conexión cuando esa
+    sesión específica se revoca (logout de un dispositivo) sin afectar las demás
+    sesiones activas del mismo usuario (ver `ConnectionManager.close_connections`)."""
     return encode_token(
-        {"sub": str(user_id), "role": role.value, "type": TokenType.ACCESS.value},
+        {
+            "sub": str(user_id),
+            "role": role.value,
+            "type": TokenType.ACCESS.value,
+            "sid": str(session_id),
+        },
         secret_key=settings.SECRET_KEY,
         algorithm=settings.JWT_ALGORITHM,
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),

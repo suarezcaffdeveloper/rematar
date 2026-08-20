@@ -64,7 +64,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.audit.actions import AuditAction
 from app.audit.repository import AuditLogRepository
-from app.core.exceptions import ForbiddenError, NotFoundError
+from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.events.bus import EventBus
 from app.modules.ofertas.events import (
     OfertaAccepted,
@@ -109,7 +109,7 @@ class AuctionEngine:
 
         if data.client_token is not None:
             existing = await self._repository.get_by_buyer_and_token(
-                buyer.id, data.client_token
+                buyer.id, data.client_token, lote_id=lote_id
             )
             if existing is not None:
                 return existing
@@ -226,6 +226,14 @@ class AuctionEngine:
         buyer: User,
         client_token: str | None,
     ) -> Oferta:
+        # Capturados ANTES de cualquier posible rollback: `Session.rollback()` expira
+        # los atributos de TODOS los objetos de la sesión (no solo `oferta` -- también
+        # `buyer`, cargado aparte) -- leerlos recién en el bloque `except` de abajo
+        # dispara un lazy-load que necesita I/O async y revienta con `MissingGreenlet`
+        # (no hay ningún `await` disponible ahí). Ninguno de los dos valores cambia
+        # entre acá y ese punto, así que capturarlos ahora es seguro.
+        lote_id = oferta.lote_id
+        buyer_id = buyer.id
         self._repository.add(oferta)
         try:
             # `oferta.id` es un default client-side -- flush lo asigna sin comitear, para
@@ -238,16 +246,33 @@ class AuctionEngine:
         except IntegrityError:
             await self._repository.rollback()
             # Dos reintentos concurrentes del mismo comprador con el mismo client_token
-            # pueden pasar ambos el chequeo de idempotencia de `place_bid` si ninguno
-            # todavía había confirmado — acá se recupera la fila que sí llegó a
-            # persistirse (sin publicar nada: no es un evento nuevo). Si el conflicto no
-            # es por el client_token (ej. se violó el invariante "a lo sumo una ACCEPTED
-            # por lote", que el lock ya debería impedir), se re-lanza: eso sí es un error
-            # inesperado, no un conflicto de negocio esperable.
+            # sobre el MISMO lote pueden pasar ambos el chequeo de idempotencia de
+            # `place_bid` si ninguno todavía había confirmado — acá se recupera la fila
+            # que sí llegó a persistirse (sin publicar nada: no es un evento nuevo).
             if client_token is not None:
-                existing = await self._repository.get_by_buyer_and_token(buyer.id, client_token)
+                existing = await self._repository.get_by_buyer_and_token(
+                    buyer_id, client_token, lote_id=lote_id
+                )
                 if existing is not None:
                     return existing
+                # Fase 9 de remediación del WebSocket Security Audit: llegar acá con
+                # `existing is None` significa que el índice único de la base
+                # (`uq_ofertas_buyer_id_client_token`, global por comprador, sin
+                # `lote_id`) chocó contra una oferta de OTRO lote -- el mismo
+                # `client_token` ya se usó ahí. Antes de este fix, `get_by_buyer_and_token`
+                # no filtraba por lote, así que este caso nunca llegaba acá: devolvía esa
+                # oferta ajena como si fuera el resultado de ofertar en este lote,
+                # dejando al comprador creyendo que ofertó acá sin haber registrado nada.
+                # Un error claro es preferible a una respuesta silenciosamente
+                # incorrecta -- y a dejar propagar el `IntegrityError` crudo como 500.
+                raise ConflictError(
+                    "Ese client_token ya se usó para ofertar en otro lote; generá uno "
+                    "nuevo para esta oferta."
+                ) from None
+            # Si el conflicto no es por el client_token (ej. se violó el invariante "a
+            # lo sumo una ACCEPTED por lote", que el lock ya debería impedir), se
+            # re-lanza: eso sí es un error inesperado, no un conflicto de negocio
+            # esperable.
             raise
 
         audit_action = (

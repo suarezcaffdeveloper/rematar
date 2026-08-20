@@ -78,7 +78,7 @@ def test_expired_token_is_rejected() -> None:
 def test_auth_access_token_is_rejected_by_type_claim() -> None:
     settings = _settings()
     access_token = create_access_token(
-        user_id=uuid.uuid4(), role=UserRole.COMPRADOR, settings=settings
+        user_id=uuid.uuid4(), role=UserRole.COMPRADOR, session_id=uuid.uuid4(), settings=settings
     )
 
     with pytest.raises(WhatsAppRedirectTokenInvalidError):

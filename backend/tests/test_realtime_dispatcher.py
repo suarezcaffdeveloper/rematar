@@ -9,8 +9,10 @@ import json
 import uuid
 from decimal import Decimal
 
+from app.moderation.events import ModerationInvalidBidThresholdExceeded
 from app.modules.ofertas.events import OfertaAccepted
 from app.modules.remates.events import RemateStarted
+from app.modules.remates.lotes.events import LoteRequeued
 from app.realtime.dispatcher import EventDispatcher
 from app.websocket.manager import ConnectionContext, ConnectionManager
 from app.websocket.rooms import RoomManager
@@ -190,3 +192,133 @@ async def test_oferta_accepted_event_is_translated_and_delivered() -> None:
     delivered = json.loads(ws.sent[0])
     assert delivered["event_type"] == "oferta.accepted"
     assert delivered["payload"]["amount"] == "1500.00"
+
+
+# --- Fase 1 de remediación del WebSocket Security Audit: enmascarado por destinatario --
+#
+# `EventDispatcher` acá arriba nunca recibe un `session_factory` (mismo criterio que ya
+# tenía este archivo: `ConnectionManager`/`RoomManager` en memoria, sin Postgres real) --
+# eso es exactamente lo que verifican los tests de esta sección: *fail closed*, sin poder
+# resolver privilegio real, `buyer_id`/`reserve_price` deben llegar ocultos, nunca en
+# claro. Los tests que verifican que el DUEÑO/ADMIN sí siguen viendo el dato real (que
+# necesitan una base de datos real para resolver ownership/rol) están en
+# `tests/test_realtime_masking.py`.
+
+
+async def test_oferta_accepted_masks_buyer_id_for_a_bystander_without_session_factory() -> None:
+    connection_manager = ConnectionManager()
+    room_manager = RoomManager()
+    dispatcher = EventDispatcher(connection_manager, room_manager)  # sin session_factory
+
+    room_id = uuid.uuid4()
+    ws, ctx = _make_connection()  # user_id aleatorio, no es el buyer_id del evento
+    await _join(connection_manager, room_manager, ctx, room_id)
+
+    real_buyer_id = uuid.uuid4()
+    event = OfertaAccepted(
+        remate_id=room_id,
+        oferta_id=uuid.uuid4(),
+        lote_id=uuid.uuid4(),
+        buyer_id=real_buyer_id,
+        amount=Decimal("1500.00"),
+    )
+
+    await dispatcher.dispatch(event.model_dump_json())
+
+    delivered = json.loads(ws.sent[0])
+    assert delivered["payload"]["buyer_id"] is None
+    assert delivered["payload"]["amount"] == "1500.00"  # el resto de la info no se toca
+
+
+async def test_oferta_accepted_still_shows_the_buyer_their_own_buyer_id() -> None:
+    """Sin `session_factory` no se puede saber si el destinatario es dueño/admin, pero
+    SÍ se puede saber si el evento es sobre él mismo -- eso no depende de la base, solo
+    de comparar `buyer_id` contra `context.user_id` de la propia conexión."""
+    connection_manager = ConnectionManager()
+    room_manager = RoomManager()
+    dispatcher = EventDispatcher(connection_manager, room_manager)
+
+    room_id = uuid.uuid4()
+    ws, ctx = _make_connection()
+    await _join(connection_manager, room_manager, ctx, room_id)
+
+    event = OfertaAccepted(
+        remate_id=room_id,
+        oferta_id=uuid.uuid4(),
+        lote_id=uuid.uuid4(),
+        buyer_id=ctx.user_id,  # la conexión conectada ES el comprador de esta oferta
+        amount=Decimal("1500.00"),
+    )
+
+    await dispatcher.dispatch(event.model_dump_json())
+
+    delivered = json.loads(ws.sent[0])
+    assert delivered["payload"]["buyer_id"] == str(ctx.user_id)
+
+
+async def test_lote_requeued_masks_reserve_price_without_session_factory() -> None:
+    connection_manager = ConnectionManager()
+    room_manager = RoomManager()
+    dispatcher = EventDispatcher(connection_manager, room_manager)
+
+    room_id = uuid.uuid4()
+    ws, ctx = _make_connection()
+    await _join(connection_manager, room_manager, ctx, room_id)
+
+    event = LoteRequeued(
+        remate_id=room_id,
+        lote_id=uuid.uuid4(),
+        lot_number="1",
+        display_order=1,
+        round_number=2,
+        base_price=Decimal("1000.00"),
+        min_increment=Decimal("100.00"),
+        reserve_price=Decimal("5000.00"),
+    )
+
+    await dispatcher.dispatch(event.model_dump_json())
+
+    delivered = json.loads(ws.sent[0])
+    assert delivered["payload"]["reserve_price"] is None
+    assert delivered["payload"]["base_price"] == "1000.00"  # el resto de la info no se toca
+
+
+async def test_moderation_invalid_bid_threshold_is_never_delivered_without_session_factory() -> None:
+    """Evento privilegiado-only (ver `PRIVILEGED_ONLY_EVENTS`): sin poder resolver
+    privilegio, no se entrega a NADIE -- fail closed, distinto de "se entrega
+    enmascarado" (acá no hay campo que enmascarar, el evento entero es sensible)."""
+    connection_manager = ConnectionManager()
+    room_manager = RoomManager()
+    dispatcher = EventDispatcher(connection_manager, room_manager)
+
+    room_id = uuid.uuid4()
+    ws, ctx = _make_connection()
+    await _join(connection_manager, room_manager, ctx, room_id)
+
+    event = ModerationInvalidBidThresholdExceeded(
+        remate_id=room_id, buyer_id=uuid.uuid4(), attempt_count=5, threshold=5
+    )
+
+    await dispatcher.dispatch(event.model_dump_json())
+
+    assert ws.sent == []
+
+
+async def test_unprotected_event_is_unaffected_by_masking_and_needs_no_session_factory() -> None:
+    """Regresión: un evento fuera de `PROTECTED_EVENT_TYPES` (la inmensa mayoría de
+    `SYNCED_EVENTS`) se sigue entregando exactamente igual que antes de esta
+    remediación -- ya cubierto por
+    `test_event_delivered_only_to_connections_in_the_matching_room` arriba, este test
+    lo deja explícito como caso de regresión de esta fase en particular."""
+    connection_manager = ConnectionManager()
+    room_manager = RoomManager()
+    dispatcher = EventDispatcher(connection_manager, room_manager)
+
+    room_id = uuid.uuid4()
+    ws, ctx = _make_connection()
+    await _join(connection_manager, room_manager, ctx, room_id)
+
+    await dispatcher.dispatch(_remate_started(room_id))
+
+    delivered = json.loads(ws.sent[0])
+    assert delivered["event_type"] == "remate.started"

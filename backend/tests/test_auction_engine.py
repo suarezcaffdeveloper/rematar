@@ -584,3 +584,62 @@ async def test_non_owner_rematador_cannot_list_history(client: AsyncClient) -> N
 
     response = await client.get(_ofertas_url(remate_id, lote_id), headers=_auth(other_rematador))
     assert response.status_code == 403
+
+
+async def test_same_client_token_reused_across_different_lotes_does_not_cross_contaminate(
+    client: AsyncClient,
+) -> None:
+    """Fase 9 -- ADR-020 sección D pensó `client_token` para reintentar la MISMA oferta
+    (mismo lote), no como un identificador de sesión reutilizable entre lotes distintos.
+    Si un cliente (una request armada a mano, o un bug de un cliente HTTP no oficial)
+    reutiliza el mismo `client_token` para ofertar en un lote B habiendo ya ofertado en
+    un lote A con ese token, el servidor NO debe devolver silenciosamente la oferta de
+    A como si fuera el resultado de ofertar en B -- eso dejaría al comprador creyendo
+    que ofertó en B cuando en realidad no se registró ninguna oferta ahí."""
+    owner_token = await _register_and_login(
+        client, email="rematador-crosslote@example.com", role="rematador"
+    )
+    remate = await _create_remate(client, owner_token)
+    remate_id = remate["id"]
+    lote_a = await _create_lote(client, owner_token, remate_id, lot_number="1")
+    lote_b = await _create_lote(
+        client, owner_token, remate_id, lot_number="2", title="Vaquillona"
+    )
+    lote_a_id = lote_a["id"]
+    lote_b_id = lote_b["id"]
+    await client.post(f"{REMATES_URL}/{remate_id}/schedule", headers=_auth(owner_token))
+    await client.post(f"{REMATES_URL}/{remate_id}/start", headers=_auth(owner_token))
+    await client.post(f"{_lotes_url(remate_id)}/{lote_a_id}/open", headers=_auth(owner_token))
+
+    comprador_token = await _register_and_login(
+        client, email="comprador-crosslote@example.com", role="comprador"
+    )
+
+    first = await _bid(
+        client, comprador_token, remate_id, lote_a_id, "1000.00", client_token="shared-token"
+    )
+    assert first.status_code == 201
+    assert first.json()["lote_id"] == lote_a_id
+
+    close_a = await client.post(
+        f"{_lotes_url(remate_id)}/{lote_a_id}/close",
+        json={"outcome": "sold", "final_price": "1000.00"},
+        headers=_auth(owner_token),
+    )
+    assert close_a.status_code == 200, close_a.text
+    open_b = await client.post(
+        f"{_lotes_url(remate_id)}/{lote_b_id}/open", headers=_auth(owner_token)
+    )
+    assert open_b.status_code == 200, open_b.text
+
+    second = await _bid(
+        client, comprador_token, remate_id, lote_b_id, "1000.00", client_token="shared-token"
+    )
+    # Nunca 201 con la oferta ajena de lote_a disfrazada de resultado en lote_b -- o se
+    # crea una oferta genuina en lote_b (201, id distinto), o se rechaza con un error
+    # claro de conflicto (409), nunca una respuesta silenciosamente incorrecta.
+    if second.status_code == 201:
+        assert second.json()["lote_id"] == lote_b_id
+        assert second.json()["id"] != first.json()["id"]
+    else:
+        assert second.status_code == 409, second.text

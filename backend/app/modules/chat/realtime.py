@@ -33,6 +33,7 @@ from app.core.config import Settings
 from app.events.bus import EventBus
 from app.modules.chat.repository import ChatMessageRepository
 from app.modules.chat.service import ChatService
+from app.modules.chat.text import sanitize_chat_text
 from app.modules.remates.lotes.repository import LoteRepository
 from app.modules.remates.repository import RemateRepository
 from app.modules.remates.service import RemateService
@@ -143,7 +144,14 @@ class ChatSystemEventDispatcher:
         try:
             remate_id = uuid.UUID(remate_id_raw)
             source_event_id = uuid.UUID(event_id_raw)
-            content = builder(envelope)
+            # Fase 5 de remediación del WebSocket Security Audit: algunos builders
+            # interpolan datos que en última instancia vienen de un usuario (ej.
+            # `user_name` en `_moderation_user_kicked_text`/`_muted_text`, el
+            # `full_name` de la persona moderada) -- un mensaje "del sistema" no es
+            # automáticamente seguro solo por generarlo el backend si arrastra texto
+            # que alguien más eligió. Mismo `sanitize_chat_text` que ya usa
+            # `ChatMessageCreate` para mensajes de usuario (ver su docstring).
+            content = sanitize_chat_text(builder(envelope))
         except (ValueError, TypeError):
             logger.warning("chat_system_event_malformed_payload", event_type=event_type)
             return

@@ -89,13 +89,33 @@ def test_realtime_only_depends_on_events_and_websocket_public_surface() -> None:
     Gateway -- es, a propósito, el único paquete al que se le permite conocer ambos
     mundos (ver docstring de app/realtime/__init__.py). No debería, sin embargo,
     necesitar nada del Snapshot Service (Módulo 3.6): son consumidores hermanos e
-    independientes del mismo Gateway, no se conocen entre sí."""
-    forbidden_prefixes = ("app.modules.auth", "app.modules.users", "app.snapshot")
+    independientes del mismo Gateway, no se conocen entre sí.
+
+    `privilege.py` es la única excepción documentada a `app.modules.users` (Fase 1 de
+    remediación del WebSocket Security Audit): `is_privileged_viewer`/
+    `RealtimePrivilegeResolver` necesitan `User`/`UserRole` para resolver, por evento,
+    si un destinatario es dueño del remate o admin antes de enmascarar `buyer_id`/
+    `reserve_price` -- ver su propio docstring ("Fail closed") para el porqué no se
+    reimplementa esa consulta en otro lado. `app.modules.auth` sigue prohibido en todo
+    el paquete (nada de `app/realtime/` necesita autenticación en sí, solo el modelo de
+    usuario para resolver rol)."""
+    forbidden_prefixes = ("app.modules.auth", "app.snapshot")
     realtime_dir = APP_DIR / "realtime"
+    files_except_privilege = [p for p in realtime_dir.glob("*.py") if p.name != "privilege.py"]
     offenders = _find_forbidden_imports(
-        list(realtime_dir.glob("*.py")), forbidden_prefixes, relative_to=realtime_dir
+        files_except_privilege,
+        (*forbidden_prefixes, "app.modules.users"),
+        relative_to=realtime_dir,
     )
     assert offenders == {}, f"app/realtime/ no debería depender de auth/users/snapshot: {offenders}"
+
+    privilege_offenders = _find_forbidden_imports(
+        [realtime_dir / "privilege.py"], forbidden_prefixes, relative_to=realtime_dir
+    )
+    assert privilege_offenders == {}, (
+        f"app/realtime/privilege.py no debería depender de auth/snapshot (users sí está "
+        f"permitido acá, ver docstring): {privilege_offenders}"
+    )
 
 
 def test_snapshot_service_core_never_imports_gateway_or_realtime() -> None:

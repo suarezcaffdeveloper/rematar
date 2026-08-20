@@ -26,6 +26,11 @@ logger = structlog.get_logger(__name__)
 ERROR_INVALID_ROOM_ID = "invalid_room_id"
 ERROR_ALREADY_IN_ROOM = "already_in_room"
 ERROR_NOT_IN_ROOM = "not_in_room"
+# Fase 4 de remediación del WebSocket Security Audit -- ver app/websocket/rate_limit.py.
+# `join_room`/`leave_room` superó el límite de acciones de sala por usuario. Recuperable
+# en la misma conexión (no cierra el socket) -- a diferencia de un abuso genérico de
+# mensajes, un usuario navegando rápido entre remates es tráfico legítimo, no un ataque.
+ERROR_RATE_LIMITED = "rate_limited"
 
 
 class RoomManager:

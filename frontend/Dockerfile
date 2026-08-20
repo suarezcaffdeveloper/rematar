@@ -14,6 +14,14 @@ RUN npm install
 
 COPY . .
 
+# Fase 10 de remediación del WebSocket Security Audit (SAST/semgrep): la imagen corría
+# como root por default. `node:24-slim` ya trae un usuario "node" sin privilegios
+# (uid 1000) -- el `chown` cubre también node_modules (instalado arriba como root) para
+# que el volumen nombrado `frontend_node_modules` (ver docker-compose.yml) se inicialice
+# con esos permisos.
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 5173
 
 # --host 0.0.0.0: sin esto, Vite solo escucha en localhost DENTRO del contenedor y el

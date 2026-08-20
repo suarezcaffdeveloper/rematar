@@ -87,10 +87,26 @@ async def test_non_banned_buyer_can_join_the_same_remate(
 
     remate_response = ws_client.post(
         REMATES_URL,
-        json={"title": "Remate de campo", "category": "hacienda"},
+        json={
+            "title": "Remate de campo",
+            "category": "hacienda",
+            "starts_at": "2027-06-01T10:00:00Z",
+        },
         headers={"Authorization": f"Bearer {rematador_token}"},
     )
     remate_id = uuid.UUID(remate_response.json()["id"])
+    # Fase 2 de remediación del WebSocket Security Audit: `join_room` ahora exige
+    # autorización de dominio antes de la membresía -- un remate recién creado queda en
+    # DRAFT (solo visible para su dueño), así que hace falta programarlo para que este
+    # comprador (no dueño, no admin) también pueda verlo. Lo que este test verifica
+    # específicamente es que el chequeo de baneo no rechace a alguien que no está
+    # baneado -- no la autorización de visibilidad en sí, ya cubierta en
+    # `test_websocket_gateway.py`.
+    schedule = ws_client.post(
+        f"{REMATES_URL}/{remate_id}/schedule",
+        headers={"Authorization": f"Bearer {rematador_token}"},
+    )
+    assert schedule.status_code == 200, schedule.text
 
     with ws_client.websocket_connect(WS_URL) as websocket:
         websocket.send_json({"type": "auth", "token": other_buyer_token})

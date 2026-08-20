@@ -44,18 +44,54 @@ async def event_bus() -> AsyncIterator[RedisEventBus]:
 
 
 def _register_and_login(client: TestClient, *, email: str, role: str = "comprador") -> str:
-    client.post(
+    register = client.post(
         REGISTER_URL,
         json={
             "email": email,
             "password": "password123",
+            "confirm_password": "password123",
             "full_name": "Realtime Sync",
+            "phone": "+5491122334455",
             "role": role,
         },
     )
+    assert register.status_code == 201, register.text
     login = client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
+
+
+def _create_visible_remate(client: TestClient, *, suffix: str) -> uuid.UUID:
+    """Crea y programa (DRAFT -> SCHEDULED) un remate para que sea visible para
+    cualquier usuario autenticado -- ver `RemateService._is_visible`.
+
+    Fase 2 de remediación del WebSocket Security Audit: `join_room` ahora exige
+    autorización de dominio ANTES de crear la membresía en la sala
+    (`app/websocket/router.py::_handle_join_room`). Este archivo es de la Fase 1 (Módulo
+    3.5) y usaba `remate_id = uuid.uuid4()` a propósito -- a estos tests de
+    sincronización Redis Pub/Sub -> WS no les importa el dominio, solo el mecanismo de
+    entrega (ADR-025) -- pero un UUID que no corresponde a ningún remate real ya no
+    alcanza para unirse a una sala: hace falta un remate real y visible."""
+    owner_token = _register_and_login(
+        client, email=f"sync-owner-{suffix}@example.com", role="rematador"
+    )
+    remate = client.post(
+        "/api/v1/remates",
+        json={
+            "title": "Remate de sincronización realtime",
+            "category": "hacienda",
+            "starts_at": "2027-06-01T10:00:00Z",
+        },
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert remate.status_code == 201, remate.text
+    remate_id = remate.json()["id"]
+    schedule = client.post(
+        f"/api/v1/remates/{remate_id}/schedule",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert schedule.status_code == 200, schedule.text
+    return uuid.UUID(remate_id)
 
 
 # Ver el mismo mecanismo, comentado en detalle, en test_websocket_gateway.py.
@@ -89,11 +125,10 @@ def _connect_join(ws_client: TestClient, token: str, remate_id: uuid.UUID):
     websocket.receive_json()  # connected
     websocket.send_json({"type": "join_room", "remate_id": str(remate_id)})
     _receive_non_presence_message(websocket)  # room_joined
-    # Épica 3, Módulo 3.6: justo después de `room_joined` llega un `snapshot` (o, para
-    # los `remate_id` aleatorios que usan estos tests, un `error/snapshot_unavailable`
-    # -- ninguno de los dos es lo que estos tests de sincronización quieren observar).
-    # Drenarlo acá, antes de volver al test, evita una carrera real contra los eventos
-    # de dominio que el test publique después (ver docs/23-snapshot-service.md).
+    # Épica 3, Módulo 3.6: justo después de `room_joined` llega un `snapshot` -- no es
+    # lo que estos tests de sincronización quieren observar. Drenarlo acá, antes de
+    # volver al test, evita una carrera real contra los eventos de dominio que el test
+    # publique después (ver docs/23-snapshot-service.md).
     _receive_non_presence_message(websocket)
     return websocket
 
@@ -101,7 +136,8 @@ def _connect_join(ws_client: TestClient, token: str, remate_id: uuid.UUID):
 async def test_domain_event_reaches_only_connections_in_the_matching_room(
     ws_client: TestClient, event_bus: RedisEventBus
 ) -> None:
-    room_a, room_b = uuid.uuid4(), uuid.uuid4()
+    room_a = _create_visible_remate(ws_client, suffix="1a")
+    room_b = _create_visible_remate(ws_client, suffix="1b")
     token_a1 = _register_and_login(ws_client, email="sync1@example.com")
     token_a2 = _register_and_login(ws_client, email="sync2@example.com")
     token_b = _register_and_login(ws_client, email="sync3@example.com")
@@ -135,7 +171,7 @@ async def test_domain_event_reaches_only_connections_in_the_matching_room(
 async def test_multiple_registered_event_types_are_synced_in_order(
     ws_client: TestClient, event_bus: RedisEventBus
 ) -> None:
-    remate_id = uuid.uuid4()
+    remate_id = _create_visible_remate(ws_client, suffix="4")
     token = _register_and_login(ws_client, email="sync4@example.com")
     websocket = _connect_join(ws_client, token, remate_id)
     try:
@@ -171,7 +207,7 @@ async def test_multiple_registered_event_types_are_synced_in_order(
 async def test_unregistered_event_type_is_not_forwarded(
     ws_client: TestClient, event_bus: RedisEventBus
 ) -> None:
-    remate_id = uuid.uuid4()
+    remate_id = _create_visible_remate(ws_client, suffix="5")
     token = _register_and_login(ws_client, email="sync5@example.com")
     websocket = _connect_join(ws_client, token, remate_id)
     try:
@@ -202,7 +238,7 @@ async def test_event_for_room_without_connections_does_not_break_anything(
 
     # El consumer sigue vivo y funcionando: un remate con conexión real sigue
     # recibiendo sus eventos con normalidad.
-    remate_id = uuid.uuid4()
+    remate_id = _create_visible_remate(ws_client, suffix="6")
     token = _register_and_login(ws_client, email="sync6@example.com")
     websocket = _connect_join(ws_client, token, remate_id)
     try:

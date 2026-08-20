@@ -26,6 +26,7 @@ from app.core.security import hash_password, verify_password
 from app.db.session import get_db
 from app.email.message import EmailMessage
 from app.email.renderer import EmailTemplateRenderer
+from app.events.redis_bus import RedisEventBus
 from app.main import create_app
 from app.modules.auth.notifications import AuthEmailNotifier
 from app.modules.auth.repository import PasswordResetTokenRepository, RefreshTokenRepository
@@ -35,6 +36,7 @@ from app.modules.users.models import User, UserRole
 from app.modules.users.repository import UserRepository
 from app.modules.users.service import UserService
 from app.notify.dependencies import get_email_sender
+from app.redis.pubsub import RedisPubSub
 from app.redis.rate_limit import RedisRateLimiter
 
 FORGOT_PASSWORD_URL = "/api/v1/auth/forgot-password"
@@ -108,14 +110,16 @@ def _make_service(
 ) -> AuthService:
     user_repository = UserRepository(db_session)
     settings = get_settings().model_copy(update=settings_overrides)
+    event_bus = RedisEventBus(RedisPubSub(redis_client))
     return AuthService(
         user_repository=user_repository,
-        user_service=UserService(user_repository),
+        user_service=UserService(user_repository, event_bus),
         refresh_token_repository=RefreshTokenRepository(db_session),
         password_reset_token_repository=PasswordResetTokenRepository(db_session),
         audit_repository=AuditLogRepository(db_session),
         email_notifier=AuthEmailNotifier(email_sender, EmailTemplateRenderer()),
         rate_limiter=RedisRateLimiter(redis_client),
+        event_bus=event_bus,
         settings=settings,
     )
 

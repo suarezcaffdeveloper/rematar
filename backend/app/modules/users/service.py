@@ -12,6 +12,8 @@ from fastapi import UploadFile
 from app.core.config import Settings
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.security import hash_password
+from app.events.bus import EventBus
+from app.modules.auth.events import SessionInvalidated
 from app.modules.users import media_storage
 from app.modules.users.models import User, UserRole
 from app.modules.users.repository import UserRepository
@@ -19,8 +21,16 @@ from app.modules.users.schemas import UserCreate
 
 
 class UserService:
-    def __init__(self, repository: UserRepository) -> None:
+    def __init__(self, repository: UserRepository, event_bus: EventBus | None = None) -> None:
         self._repository = repository
+        # Opcional -- `None` es un no-op seguro (ver `set_active_status`): mismo
+        # criterio permisivo que el resto del proyecto usa para dependencias que solo
+        # hace falta pasar de verdad desde algunos callers (`cache: RedisCache | None`
+        # en `SnapshotService`, `bot_identity_resolver` en varios servicios). Evita que
+        # `app/scripts/create_superuser.py` (que nunca suspende una cuenta, un
+        # bootstrap fuera de la app HTTP) necesite construir un `EventBus` real solo
+        # para instanciar este servicio.
+        self._event_bus = event_bus
 
     async def register(self, data: UserCreate) -> User:
         existing = await self._repository.get_by_email(data.email)
@@ -75,6 +85,20 @@ class UserService:
         user.is_active = is_active
         await self._repository.commit()
         await self._repository.refresh(user)
+
+        # Fase 3 de remediación del WebSocket Security Audit: una cuenta suspendida ya
+        # no puede autenticarse por HTTP (`AuthService.authenticate`/
+        # `get_current_user_from_access_token` ya chequean `is_active`), pero una
+        # conexión WS abierta ANTES de la suspensión no se enteraba -- seguía viva
+        # hasta que el access token expirara por su cuenta. `session_id=None`: se
+        # suspende la cuenta entera, no una sesión puntual, así que se cierran todas
+        # las conexiones activas del usuario (ver
+        # `app/modules/auth/realtime.py::SessionInvalidationDispatcher`). Reactivar una
+        # cuenta (`is_active=True`) no invalida nada -- no hay ninguna sesión que cerrar.
+        if not is_active and self._event_bus is not None:
+            await self._event_bus.publish(
+                SessionInvalidated(user_id=user_id, session_id=None, reason="user_suspended")
+            )
         return user
 
     async def list_users(self, *, page: int, page_size: int) -> tuple[list[User], int]:

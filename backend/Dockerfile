@@ -18,10 +18,25 @@ WORKDIR /app
 
 COPY . .
 
+# Fase 10 de remediación del WebSocket Security Audit (SAST/semgrep): la imagen corría
+# el proceso como root por default -- si un atacante lograra ejecución de código dentro
+# del contenedor (ej. vía una dependencia comprometida), tendría privilegios de root
+# dentro de él. `appuser` no tiene privilegios especiales; `chown` cubre /app porque
+# MEDIA_ROOT ("media", ver app/core/config.py) escribe imágenes de lote ahí en runtime.
 RUN pip install -e . \
-    && chmod +x docker-entrypoint.sh
+    && chmod +x docker-entrypoint.sh \
+    && useradd --create-home --shell /usr/sbin/nologin appuser \
+    && chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 10000
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10000"]
+# --ws-max-size: defensa en profundidad de tamaño de frame (Fase 4 de remediación del
+# WebSocket Security Audit, ver app/websocket/rate_limit.py) -- rechaza un frame
+# demasiado grande a nivel de transporte, antes de que la app llegue a bufferearlo
+# entero en memoria. El chequeo real (el único que corre en tests, que no pasan por
+# uvicorn) es el de la app, WS_MAX_MESSAGE_BYTES; este es un techo más generoso y
+# puramente de contención.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10000", "--ws-max-size", "65536"]

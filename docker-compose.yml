@@ -55,7 +55,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    # --ws-max-size: ver el mismo flag en backend/Dockerfile -- defensa en profundidad de
+    # tamaño de frame a nivel de transporte (Fase 4 de remediación del WebSocket Security
+    # Audit).
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--ws-max-size", "65536"]
 
   frontend:
     build:

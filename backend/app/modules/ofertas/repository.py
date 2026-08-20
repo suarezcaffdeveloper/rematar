@@ -18,10 +18,24 @@ class OfertaRepository:
         self._db = db
 
     async def get_by_buyer_and_token(
-        self, buyer_id: uuid.UUID, client_token: str
+        self, buyer_id: uuid.UUID, client_token: str, *, lote_id: uuid.UUID
     ) -> Oferta | None:
+        """Fase 9 de remediación del WebSocket Security Audit (Auction Business Logic
+        Security): filtra también por `lote_id`, aunque el índice único de la base
+        (`uq_ofertas_buyer_id_client_token`, `models.py`) sea sobre `(buyer_id,
+        client_token)` sin `lote_id` -- un cambio de índice implicaría una migración,
+        fuera del alcance mínimo de este fix. Sin este filtro, un `client_token`
+        reusado por error (o a propósito) para ofertar en un lote B distinto del lote A
+        donde se usó por primera vez encontraba igual la fila de A y la devolvía como
+        si fuera el resultado de ofertar en B -- el comprador se iba pensando que
+        ofertó en B sin que se hubiera registrado nada ahí. Con el filtro, ese caso ya
+        no "encuentra" la fila de A (ver `AuctionEngine.place_bid`/`_save`, que ahora
+        traducen el conflicto resultante del índice único en un error claro en vez de
+        una respuesta silenciosamente incorrecta)."""
         stmt = select(Oferta).where(
-            Oferta.buyer_id == buyer_id, Oferta.client_token == client_token
+            Oferta.buyer_id == buyer_id,
+            Oferta.client_token == client_token,
+            Oferta.lote_id == lote_id,
         )
         return (await self._db.execute(stmt)).scalar_one_or_none()
 

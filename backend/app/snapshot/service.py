@@ -58,6 +58,23 @@ class SnapshotService:
         # criterio permisivo que `cache: RedisCache | None`.
         self._bot_identity_resolver = bot_identity_resolver or BotIdentityResolver(db)
 
+    async def assert_visible(self, remate_id: uuid.UUID, viewer: User) -> None:
+        """Levanta `NotFoundError` (mismo criterio anti-enumeración que `build`, no
+        distingue "no existe" de "existe pero no es tuyo") si `remate_id` no existe o
+        no es visible para `viewer` -- sin construir ningún snapshot.
+
+        Fase 2 de remediación del WebSocket Security Audit: el Gateway
+        (`app/websocket/router.py::_handle_join_room`) la usa para autorizar el ingreso
+        a una sala **antes** de crear la membresía, reutilizando la misma
+        `RemateService` que este servicio ya tiene inyectada -- sin este método, el
+        Gateway necesitaría su propia dependencia de `RemateService`, violando la regla
+        "el Gateway WebSocket nunca debe conocer lógica de negocio" que
+        `tests/test_architecture_boundaries.py::test_gateway_websocket_never_imports_domain`
+        verifica de forma estática (`SnapshotService` es, junto con `PresenceService`/
+        `ModerationService`, de los pocos paquetes "de negocio" que el Gateway sí tiene
+        permitido conocer)."""
+        await self._remate_service.get_visible_or_raise(remate_id, viewer)
+
     async def build(
         self,
         remate_id: uuid.UUID,

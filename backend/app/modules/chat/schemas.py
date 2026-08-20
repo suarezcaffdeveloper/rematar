@@ -7,6 +7,24 @@ docs/34-chat-del-remate.md.
 capa de servicio en todo el proyecto, no en el schema (mismo criterio que
 `MAX_IMAGE_UPLOAD_BYTES`, validado en `app/modules/remates/lotes/media_storage.py`, no
 en un `Field` de Pydantic).
+
+## Fase 5 de remediación del WebSocket Security Audit ("Chat/XSS y hardening")
+
+`model_config = ConfigDict(extra="forbid")`: el único campo legítimo es `content` --
+`author_id`/`author_name`/`author_role`/`created_at`/`remate_id` se derivan SIEMPRE del
+lado del servidor (`ChatService.send_message` los toma de `author: User`, el usuario ya
+autenticado por `get_current_user`, y de `remate_id` -- un parámetro de la URL, no del
+body; ver `app/modules/chat/router.py`) -- nunca del body de la request. Antes de esta
+fase, un `{"content": "hola", "user_id": "...", "role": "admin"}` ya era inofensivo
+porque esos campos jamás se leían, pero se ignoraban en silencio (`extra="ignore"`, el
+default de Pydantic); `extra="forbid"` lo vuelve explícito y falla ruidoso (422) en vez
+de silencioso, mejor para detectar un cliente que está sondeando el endpoint.
+
+`content_must_not_be_blank` ahora también pasa el texto por `sanitize_chat_text`
+(`app/modules/chat/text.py`) antes de agarrar vacío/whitespace -- ver ese módulo para
+el porqué (normalización de caracteres de control/bidi-override, no un sanitizador de
+HTML: el chat es texto plano, nunca se interpreta como HTML en ningún punto del
+pipeline, ver docstring de `text.py`).
 """
 
 import uuid
@@ -15,15 +33,18 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.modules.chat.models import ChatMessageKind
+from app.modules.chat.text import sanitize_chat_text
 
 
 class ChatMessageCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     content: str
 
     @field_validator("content")
     @classmethod
     def content_must_not_be_blank(cls, value: str) -> str:
-        stripped = value.strip()
+        stripped = sanitize_chat_text(value).strip()
         if not stripped:
             raise ValueError("El mensaje no puede estar vacío.")
         return stripped

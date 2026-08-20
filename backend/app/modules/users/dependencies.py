@@ -11,6 +11,8 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.events.bus import EventBus
+from app.events.dependencies import get_event_bus
 from app.modules.users.repository import UserRepository
 from app.modules.users.service import UserService
 
@@ -21,5 +23,6 @@ def get_user_repository(db: Annotated[AsyncSession, Depends(get_db)]) -> UserRep
 
 def get_user_service(
     repository: Annotated[UserRepository, Depends(get_user_repository)],
+    event_bus: Annotated[EventBus, Depends(get_event_bus)],
 ) -> UserService:
-    return UserService(repository)
+    return UserService(repository, event_bus)

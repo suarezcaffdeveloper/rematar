@@ -19,6 +19,8 @@ from app.core.exceptions import ForbiddenError
 from app.db.session import get_db
 from app.email.renderer import EmailTemplateRenderer
 from app.email.sender import EmailSender
+from app.events.bus import EventBus
+from app.events.dependencies import get_event_bus
 from app.modules.auth.notifications import AuthEmailNotifier
 from app.modules.auth.repository import PasswordResetTokenRepository, RefreshTokenRepository
 from app.modules.auth.service import AuthService
@@ -67,6 +69,7 @@ def get_auth_service(
     audit_repository: Annotated[AuditLogRepository, Depends(get_audit_log_repository)],
     email_notifier: Annotated[AuthEmailNotifier, Depends(get_auth_email_notifier)],
     rate_limiter: Annotated[RedisRateLimiter, Depends(get_rate_limiter)],
+    event_bus: Annotated[EventBus, Depends(get_event_bus)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AuthService:
     return AuthService(
@@ -77,6 +80,7 @@ def get_auth_service(
         audit_repository=audit_repository,
         email_notifier=email_notifier,
         rate_limiter=rate_limiter,
+        event_bus=event_bus,
         settings=settings,
     )
 

@@ -20,6 +20,8 @@ from app.audit.repository import AuditLogRepository
 from app.core.config import Settings
 from app.core.exceptions import RateLimitError, UnauthorizedError
 from app.core.security import hash_password, verify_password
+from app.events.bus import EventBus
+from app.modules.auth.events import SessionInvalidated
 from app.modules.auth.models import PasswordResetToken, RefreshToken
 from app.modules.auth.notifications import AuthEmailNotifier
 from app.modules.auth.repository import PasswordResetTokenRepository, RefreshTokenRepository
@@ -37,6 +39,12 @@ from app.modules.users.schemas import UserCreate
 from app.modules.users.service import UserService
 from app.redis.rate_limit import RedisRateLimiter
 
+# Hash precalculado (una sola vez, al importar el módulo) contra el que se verifica un
+# login con email inexistente -- ver el comentario dentro de `AuthService.authenticate`.
+# La contraseña de origen es arbitraria: este hash nunca corresponde a ninguna cuenta
+# real, solo existe para que `verify_password` tenga algo contra qué calcular.
+_DUMMY_PASSWORD_HASH = hash_password("dummy-password-for-constant-time-login-check")
+
 
 class AuthService:
     def __init__(
@@ -49,6 +57,7 @@ class AuthService:
         audit_repository: AuditLogRepository,
         email_notifier: AuthEmailNotifier,
         rate_limiter: RedisRateLimiter,
+        event_bus: EventBus,
         settings: Settings,
     ) -> None:
         self._user_repository = user_repository
@@ -58,16 +67,50 @@ class AuthService:
         self._audit_repository = audit_repository
         self._email_notifier = email_notifier
         self._rate_limiter = rate_limiter
+        # Fase 3 de remediación del WebSocket Security Audit: `logout`/`reset_password`
+        # publican `SessionInvalidated` (`app/modules/auth/events.py`) para que el
+        # Gateway WebSocket, en cualquier instancia del backend, cierre la(s) conexión
+        # (es) correspondiente(s) -- ver `app/modules/auth/realtime.py`. `EventBus.publish`
+        # nunca lanza (contrato, ver `app/events/bus.py`), así que esto nunca puede
+        # convertir un logout/reset exitoso en un error.
+        self._event_bus = event_bus
         self._settings = settings
 
     async def register(self, data: UserCreate) -> User:
         return await self._user_service.register(data)
 
     async def authenticate(self, email: str, password: str) -> User:
+        # Fase 7 de remediación del WebSocket Security Audit (HTTP Authentication &
+        # Session Security): protección de fuerza bruta, mismo mecanismo que ya usa
+        # `request_password_reset` (RedisRateLimiter, por email normalizado). Se cuenta
+        # ANTES de tocar la contraseña -- incluye intentos con email inexistente, mismo
+        # criterio que password-reset (no filtra existencia de cuenta a través del rate
+        # limit tampoco).
+        allowed = await self._rate_limiter.check_and_increment(
+            f"login:{email.strip().lower()}",
+            limit=self._settings.LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+            window_seconds=self._settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+        )
+        if not allowed:
+            raise RateLimitError(
+                "Demasiados intentos de inicio de sesión. Esperá unos minutos antes de "
+                "volver a intentar."
+            )
+
         user = await self._user_repository.get_by_email(email)
         # Mismo mensaje de error exista o no el email, para no filtrar por enumeración
-        # qué emails están registrados (RNF-11).
-        if user is None or not verify_password(password, user.hashed_password):
+        # qué emails están registrados (RNF-11). El `or` de Python hace *short-circuit*:
+        # sin el `else`, un email inexistente nunca pagaría el costo de un verify
+        # Argon2id (~decenas de ms) mientras uno existente sí -- una diferencia de
+        # timing medible que reintroduciría la misma enumeración que el mensaje
+        # uniforme buscaba evitar. `_DUMMY_PASSWORD_HASH` existe solo para that: pagar
+        # ese mismo costo también cuando no hay usuario contra quien verificar.
+        if user is not None:
+            password_valid = verify_password(password, user.hashed_password)
+        else:
+            verify_password(password, _DUMMY_PASSWORD_HASH)
+            password_valid = False
+        if user is None or not password_valid:
             raise UnauthorizedError("Email o contraseña incorrectos.")
         if not user.is_active:
             raise UnauthorizedError("La cuenta está suspendida.")
@@ -82,7 +125,9 @@ class AuthService:
         await self._refresh_token_repository.commit()
         await self._refresh_token_repository.refresh(refresh_row)
 
-        access_token = create_access_token(user_id=user.id, role=user.role, settings=self._settings)
+        access_token = create_access_token(
+            user_id=user.id, role=user.role, session_id=refresh_row.id, settings=self._settings
+        )
         refresh_token = create_refresh_token(
             user_id=user.id, jti=refresh_row.id, settings=self._settings
         )
@@ -150,6 +195,17 @@ class AuthService:
             )
             await self._refresh_token_repository.commit()
 
+            # Fase 3 de remediación del WebSocket Security Audit: si esta sesión tenía
+            # una conexión WS abierta en cualquier instancia del backend, debe dejar de
+            # estar autorizada de inmediato -- no recién cuando el access token expire
+            # por su cuenta (hasta 30 min por default). `session_id` puntual (no
+            # `None`): un logout cierra ÚNICAMENTE la sesión/dispositivo que lo pidió,
+            # nunca las demás sesiones activas del mismo usuario (ver
+            # `app/modules/auth/realtime.py::SessionInvalidationDispatcher`).
+            await self._event_bus.publish(
+                SessionInvalidated(user_id=stored.user_id, session_id=token_id, reason="logout")
+            )
+
     async def get_current_user_from_access_token(self, token: str) -> User:
         payload = decode_and_validate(
             token, expected_type=TokenType.ACCESS, settings=self._settings
@@ -159,6 +215,46 @@ class AuthService:
         if user is None or not user.is_active:
             raise UnauthorizedError("Cuenta inexistente o suspendida.")
         return user
+
+    async def get_current_session_from_access_token(
+        self, token: str
+    ) -> tuple[User, uuid.UUID | None]:
+        """Variante de `get_current_user_from_access_token` para el Gateway WebSocket
+        (`app/websocket/auth.py`) -- Fase 3 de remediación del WebSocket Security Audit.
+
+        Además de resolver el usuario (misma validación de `is_active`), resuelve el
+        `session_id` (claim `sid`, el `RefreshToken.id` con el que se emitió este
+        access token -- `None` para tokens emitidos antes de la Fase 3, o si algún día
+        se emite un access token sin sesión asociada) y, si hay uno, valida que esa
+        sesión siga vigente (no revocada ni expirada). Esto es lo que hace que
+        reconectar con un access token todavía no vencido, pero cuya sesión ya fue
+        revocada (logout/cambio de contraseña/suspensión), sea rechazado -- sin este
+        chequeo, el access token seguiría siendo válido por sí solo hasta su propio
+        `exp` (hasta 30 min), sin importar que la sesión ya no exista.
+
+        Deliberadamente NO se fusiona con `get_current_user_from_access_token`: ese
+        método lo usa CADA request HTTP (`get_current_user`, Depends en ~15+ endpoints)
+        y agregarle una consulta extra a `refresh_tokens` ahí sería tocar el camino
+        caliente de toda la API por un chequeo que esta fase solo pide para el momento,
+        mucho menos frecuente, de abrir una conexión WS de larga duración."""
+        payload = decode_and_validate(
+            token, expected_type=TokenType.ACCESS, settings=self._settings
+        )
+        user_id = uuid.UUID(payload["sub"])
+        user = await self._user_repository.get_by_id(user_id)
+        if user is None or not user.is_active:
+            raise UnauthorizedError("Cuenta inexistente o suspendida.")
+
+        session_id_raw = payload.get("sid")
+        if session_id_raw is None:
+            return user, None
+
+        session_id = uuid.UUID(session_id_raw)
+        stored = await self._refresh_token_repository.get_by_id(session_id)
+        if stored is None or stored.revoked_at is not None or stored.expires_at < datetime.now(UTC):
+            raise UnauthorizedError("La sesión fue revocada o expiró.")
+
+        return user, session_id
 
     async def request_password_reset(self, email: str) -> None:
         """No lanza si el email no existe -- el router siempre responde igual (RNF-11,
@@ -250,6 +346,14 @@ class AuthService:
         # Cierra cualquier sesión activa -- si alguien más quedó logueado con la
         # contraseña vieja (por ejemplo, quien la comprometió), esto lo saca (RNF-11).
         await self._refresh_token_repository.revoke_all_for_user(user.id)
+
+        # Fase 3 de remediación del WebSocket Security Audit: `session_id=None` --
+        # revoke-all, no una sesión puntual (misma política que `revoke_all_for_user`
+        # dos líneas arriba) -- cierra TODAS las conexiones WS activas de este usuario
+        # en cualquier instancia, no solo la que hizo el cambio de contraseña.
+        await self._event_bus.publish(
+            SessionInvalidated(user_id=user.id, session_id=None, reason="password_changed")
+        )
 
         self._audit_repository.record(
             actor_id=user.id,

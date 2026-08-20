@@ -25,8 +25,11 @@ from sqlalchemy.ext.asyncio import (
 from starlette.websockets import WebSocketDisconnect
 
 from app.core.config import get_settings
+from app.core.security import hash_password
 from app.db.session import get_db
 from app.main import create_app
+from app.modules.users.models import User, UserRole
+from app.snapshot.dependencies import get_snapshot_service
 from app.snapshot.messages import SNAPSHOT_UNAVAILABLE
 from app.websocket import close_codes
 from app.websocket.rooms import ERROR_ALREADY_IN_ROOM, ERROR_INVALID_ROOM_ID, ERROR_NOT_IN_ROOM
@@ -88,6 +91,30 @@ def _register_and_login(client: TestClient, *, email: str, role: str = "comprado
     login = client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
+
+
+def _create_visible_remate(client: TestClient, *, suffix: str) -> str:
+    """Crea y programa (DRAFT -> SCHEDULED) un remate para que sea visible para
+    cualquier usuario autenticado, no solo su dueño (ver `RemateService._is_visible`).
+
+    Fase 2 de remediación del WebSocket Security Audit: desde que `join_room` exige
+    autorización de dominio ANTES de crear la membresía en la sala (ver
+    `app/websocket/router.py::_handle_join_room`), los tests de mecánica pura de sala/
+    presencia de acá abajo -- que antes usaban un `remate_id` aleatorio a propósito,
+    porque no les importaba el dominio (ADR-024, sección D) -- necesitan un remate real
+    y visible para poder unirse. Un remate en DRAFT (el estado por default de
+    `_create_remate`) solo es visible para su dueño; programarlo alcanza para que
+    cualquier comprador también pueda verlo, sin necesitar iniciarlo/abrir un lote."""
+    owner_token = _register_and_login(
+        client, email=f"room-owner-{suffix}@example.com", role="rematador"
+    )
+    remate = _create_remate(client, owner_token)
+    r = client.post(
+        f"{REMATES_URL}/{remate['id']}/schedule",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert r.status_code == 200, r.text
+    return remate["id"]
 
 
 # Prefijos de `event_type` que corresponden a canales "laterales" (Épica 6): eventos
@@ -302,7 +329,7 @@ async def test_unrecognized_message_after_auth_does_not_break_connection(
 
 async def test_join_room_creates_room_and_confirms(ws_client: TestClient) -> None:
     token = _register_and_login(ws_client, email="room1@example.com")
-    remate_id = uuid.uuid4()
+    remate_id = uuid.UUID(_create_visible_remate(ws_client, suffix="j1"))
     room_manager = ws_client.app.state.room_manager
 
     with ws_client.websocket_connect(WS_URL) as websocket:
@@ -336,7 +363,11 @@ async def test_join_room_with_invalid_remate_id_returns_error(ws_client: TestCli
 
 async def test_join_room_already_in_another_room_returns_error(ws_client: TestClient) -> None:
     token = _register_and_login(ws_client, email="room3@example.com")
-    room_a, room_b = uuid.uuid4(), uuid.uuid4()
+    # Ambas salas tienen que ser visibles para que la autorización de la Fase 2 pase
+    # para las dos -- lo que este test quiere comprobar es específicamente el rechazo
+    # por "ya estás en otra sala" (RoomManager), no un rechazo por autorización.
+    room_a = uuid.UUID(_create_visible_remate(ws_client, suffix="j3a"))
+    room_b = uuid.UUID(_create_visible_remate(ws_client, suffix="j3b"))
 
     with ws_client.websocket_connect(WS_URL) as websocket:
         websocket.send_json({"type": "auth", "token": token})
@@ -360,7 +391,7 @@ async def test_join_room_already_in_another_room_returns_error(ws_client: TestCl
 
 async def test_rejoining_same_room_is_idempotent_over_the_wire(ws_client: TestClient) -> None:
     token = _register_and_login(ws_client, email="room4@example.com")
-    remate_id = uuid.uuid4()
+    remate_id = uuid.UUID(_create_visible_remate(ws_client, suffix="j4"))
 
     with ws_client.websocket_connect(WS_URL) as websocket:
         websocket.send_json({"type": "auth", "token": token})
@@ -378,7 +409,7 @@ async def test_rejoining_same_room_is_idempotent_over_the_wire(ws_client: TestCl
 
 async def test_leave_room_confirms_and_removes_connection(ws_client: TestClient) -> None:
     token = _register_and_login(ws_client, email="room5@example.com")
-    remate_id = uuid.uuid4()
+    remate_id = uuid.UUID(_create_visible_remate(ws_client, suffix="j5"))
     room_manager = ws_client.app.state.room_manager
 
     with ws_client.websocket_connect(WS_URL) as websocket:
@@ -411,7 +442,8 @@ async def test_leave_room_when_not_in_a_room_returns_error(ws_client: TestClient
 
 async def test_leave_then_join_a_different_room_succeeds(ws_client: TestClient) -> None:
     token = _register_and_login(ws_client, email="room7@example.com")
-    room_a, room_b = uuid.uuid4(), uuid.uuid4()
+    room_a = uuid.UUID(_create_visible_remate(ws_client, suffix="j7a"))
+    room_b = uuid.UUID(_create_visible_remate(ws_client, suffix="j7b"))
 
     with ws_client.websocket_connect(WS_URL) as websocket:
         websocket.send_json({"type": "auth", "token": token})
@@ -434,7 +466,7 @@ async def test_room_survives_when_one_of_two_connections_disconnects(
     ws_client: TestClient,
 ) -> None:
     token = _register_and_login(ws_client, email="room8@example.com")
-    remate_id = uuid.uuid4()
+    remate_id = uuid.UUID(_create_visible_remate(ws_client, suffix="j8"))
     room_manager = ws_client.app.state.room_manager
 
     with ws_client.websocket_connect(WS_URL) as ws_a:
@@ -462,7 +494,7 @@ async def test_same_user_multiple_connections_join_same_room_independently(
     ws_client: TestClient,
 ) -> None:
     token = _register_and_login(ws_client, email="room9@example.com")
-    remate_id = uuid.uuid4()
+    remate_id = uuid.UUID(_create_visible_remate(ws_client, suffix="j9"))
     room_manager = ws_client.app.state.room_manager
 
     with (
@@ -488,7 +520,8 @@ async def test_same_user_multiple_connections_join_different_rooms_independently
     ws_client: TestClient,
 ) -> None:
     token = _register_and_login(ws_client, email="room10@example.com")
-    room_a, room_b = uuid.uuid4(), uuid.uuid4()
+    room_a = uuid.UUID(_create_visible_remate(ws_client, suffix="j10a"))
+    room_b = uuid.UUID(_create_visible_remate(ws_client, suffix="j10b"))
     room_manager = ws_client.app.state.room_manager
 
     with (
@@ -514,8 +547,8 @@ async def test_heartbeat_after_joining_a_room_does_not_break_room_membership(
     db_engine: AsyncEngine,
 ) -> None:
     app = _build_ws_app(db_engine, WS_PING_INTERVAL_SECONDS=0.2, WS_PONG_TIMEOUT_SECONDS=5.0)
-    remate_id = uuid.uuid4()
     with TestClient(app) as client:
+        remate_id = uuid.UUID(_create_visible_remate(client, suffix="j11"))
         token = _register_and_login(client, email="room11@example.com")
         with client.websocket_connect(WS_URL) as websocket:
             websocket.send_json({"type": "auth", "token": token})
@@ -672,29 +705,252 @@ async def test_snapshot_masks_reserve_price_for_non_owner_over_ws(ws_client: Tes
         buyer_ws.__exit__(None, None, None)
 
 
-async def test_join_room_for_nonexistent_remate_sends_snapshot_unavailable_error(
+async def test_join_room_for_nonexistent_remate_is_rejected_before_joining(
     ws_client: TestClient,
 ) -> None:
+    """Fase 2 de remediación del WebSocket Security Audit -- reemplaza el
+    comportamiento viejo (que este mismo test verificaba hasta la Fase 1): antes,
+    `RoomManager.join` se llamaba y confirmaba `room_joined` ANTES de que
+    `SnapshotService.build` recién ahí descubriera que el remate no existía, dejando
+    una membresía indexada en `RoomManager` pese al error. Ahora la autorización
+    (`RemateService.get_visible_or_raise`) corre antes de tocar `RoomManager` -- un
+    `remate_id` inexistente nunca llega a ser una sala."""
     token = _register_and_login(ws_client, email="snapws4@example.com")
     fake_remate_id = uuid.uuid4()
+    room_manager = ws_client.app.state.room_manager
 
     with ws_client.websocket_connect(WS_URL) as websocket:
         websocket.send_json({"type": "auth", "token": token})
         websocket.receive_json()  # connected
         websocket.send_json({"type": "join_room", "remate_id": str(fake_remate_id)})
 
-        joined = _receive_protocol_message(websocket)
-        error = _receive_protocol_message(websocket)
+        response = _receive_protocol_message(websocket)
 
-        # El join a la sala en sí no se deshace ni falla -- ADR-024 sección D ya
-        # decidió que RoomManager no valida contra el dominio; ADR-026 lo respeta y
-        # solo informa que el snapshot puntual no se pudo construir.
-        assert joined["type"] == "room_joined"
-        assert error["type"] == "error"
-        assert error["code"] == SNAPSHOT_UNAVAILABLE
+        assert response["type"] == "error"
+        assert response["code"] == SNAPSHOT_UNAVAILABLE
+        assert room_manager.connection_count(fake_remate_id) == 0
+        assert room_manager.room_count() == 0
+        assert fake_remate_id not in room_manager.list_rooms()
 
+
+async def test_join_room_for_draft_remate_of_another_owner_is_rejected_before_joining(
+    ws_client: TestClient,
+) -> None:
+    """Caso crítico del audit (Fase 2, sección 7): un comprador nunca debe convertirse
+    en miembro de la sala de un remate DRAFT ajeno, ni siquiera transitoriamente."""
+    owner_token = _register_owner(ws_client, "draft-owner@example.com")
+    remate = _create_remate(ws_client, owner_token)  # queda en DRAFT, sin programar
+    room_manager = ws_client.app.state.room_manager
+
+    buyer_token = _register_and_login(ws_client, email="draft-buyer@example.com")
+    with ws_client.websocket_connect(WS_URL) as websocket:
+        websocket.send_json({"type": "auth", "token": buyer_token})
+        websocket.receive_json()  # connected
+        websocket.send_json({"type": "join_room", "remate_id": remate["id"]})
+
+        response = _receive_protocol_message(websocket)
+
+        # Mismo código/mensaje genérico que "no existe" -- ver docstring de
+        # `RemateService.get_visible_or_raise`, anti-enumeración: no debe ser posible
+        # distinguir "existe pero no es tuyo" de "no existe" desde el WS, igual que ya
+        # es imposible distinguirlo desde HTTP (`GET /remates/{id}` también da 404).
+        assert response["type"] == "error"
+        assert response["code"] == SNAPSHOT_UNAVAILABLE
+        assert room_manager.connection_count(uuid.UUID(remate["id"])) == 0
+        assert room_manager.room_count() == 0
+
+
+async def test_owner_can_join_the_room_of_their_own_draft_remate(
+    ws_client: TestClient,
+) -> None:
+    """Regresión: la autorización nueva no debe bloquear al propio dueño de un DRAFT
+    (`RemateService._is_visible` ya lo permite ver, igual que por HTTP)."""
+    owner_token = _register_owner(ws_client, "draft-self-owner@example.com")
+    remate = _create_remate(ws_client, owner_token)  # DRAFT
+    room_manager = ws_client.app.state.room_manager
+
+    with ws_client.websocket_connect(WS_URL) as websocket:
+        websocket.send_json({"type": "auth", "token": owner_token})
+        websocket.receive_json()  # connected
+        websocket.send_json({"type": "join_room", "remate_id": remate["id"]})
+
+        response = _receive_protocol_message(websocket)
+
+        assert response["type"] == "room_joined"
+        assert room_manager.connection_count(uuid.UUID(remate["id"])) == 1
+
+
+async def test_admin_can_join_the_room_of_a_draft_remate_they_do_not_own(
+    ws_client: TestClient, db_session: AsyncSession
+) -> None:
+    """Regresión: un admin ve cualquier remate (`RemateService._is_visible`), incluido
+    un DRAFT ajeno -- la autorización de `join_room` respeta esa misma regla."""
+    owner_token = _register_owner(ws_client, "draft-admin-owner@example.com")
+    remate = _create_remate(ws_client, owner_token)  # DRAFT
+
+    db_session.add(
+        User(
+            email="draft-admin@example.com",
+            hashed_password=hash_password("adminpass123"),
+            full_name="Admin WS Join",
+            role=UserRole.ADMIN,
+        )
+    )
+    await db_session.commit()
+    admin_login = ws_client.post(
+        LOGIN_URL, data={"username": "draft-admin@example.com", "password": "adminpass123"}
+    )
+    assert admin_login.status_code == 200, admin_login.text
+    admin_token = admin_login.json()["access_token"]
+
+    with ws_client.websocket_connect(WS_URL) as websocket:
+        websocket.send_json({"type": "auth", "token": admin_token})
+        websocket.receive_json()  # connected
+        websocket.send_json({"type": "join_room", "remate_id": remate["id"]})
+
+        response = _receive_protocol_message(websocket)
+
+        assert response["type"] == "room_joined"
+
+
+async def test_rejected_join_to_room_b_does_not_kick_user_out_of_valid_room_a(
+    ws_client: TestClient,
+) -> None:
+    """Test obligatorio de la Fase 2 (sección 10): un usuario legítimamente conectado a
+    la sala A no debe perder esa sala por intentar (sin éxito) unirse a una sala B no
+    autorizada."""
+    room_a = _create_visible_remate(ws_client, suffix="noeject-a")
+    owner_b_token = _register_owner(ws_client, "noeject-owner-b@example.com")
+    room_b = _create_remate(ws_client, owner_b_token)["id"]  # DRAFT, ajeno al usuario
+
+    token = _register_and_login(ws_client, email="noeject-buyer@example.com")
+    room_manager = ws_client.app.state.room_manager
+
+    with ws_client.websocket_connect(WS_URL) as websocket:
+        websocket.send_json({"type": "auth", "token": token})
+        connected = websocket.receive_json()
+        websocket.send_json({"type": "join_room", "remate_id": room_a})
+        joined_a = _receive_protocol_message(websocket)
+        _drain_join_room_extras(websocket)  # snapshot
+        assert joined_a["type"] == "room_joined"
+
+        websocket.send_json({"type": "join_room", "remate_id": room_b})
+        rejected = _receive_protocol_message(websocket)
+
+        assert rejected["type"] == "error"
+        assert rejected["code"] == SNAPSHOT_UNAVAILABLE
+
+        connection_id = uuid.UUID(connected["connection_id"])
+        assert room_manager.room_id_for_connection(connection_id) == uuid.UUID(room_a)
+        assert room_manager.connection_count(uuid.UUID(room_b)) == 0
+
+
+async def test_rejected_join_does_not_publish_presence_connected_event(
+    ws_client: TestClient,
+) -> None:
+    """Test obligatorio de la Fase 2 (sección 8/13): un `join_room` rechazado por
+    autorización no debe generar un evento de presencia -- la conexión nunca llegó a
+    ser miembro de la sala, así que no hay ninguna "conexión nueva" real que anunciar."""
+    owner_token = _register_owner(ws_client, "no-presence-owner@example.com")
+    draft_remate_id = _create_remate(ws_client, owner_token)["id"]  # DRAFT, ajeno
+
+    observer_token = _register_and_login(ws_client, email="no-presence-observer@example.com")
+    visible_remate_id = _create_visible_remate(ws_client, suffix="no-presence-observer")
+
+    with ws_client.websocket_connect(WS_URL) as observer:
+        observer.send_json({"type": "auth", "token": observer_token})
+        observer.receive_json()  # connected
+        observer.send_json({"type": "join_room", "remate_id": visible_remate_id})
+        _receive_protocol_message(observer)  # room_joined
+        _drain_join_room_extras(observer)  # snapshot
+
+        buyer_token = _register_and_login(ws_client, email="no-presence-buyer@example.com")
+        with ws_client.websocket_connect(WS_URL) as buyer:
+            buyer.send_json({"type": "auth", "token": buyer_token})
+            buyer.receive_json()  # connected
+            # Intento rechazado contra un remate DISTINTO al que observa `observer` --
+            # si esto publicara presencia igual, sería un evento fantasma sin sala real
+            # detrás. No hay nada que esperar del lado de `observer` para ESTE join: se
+            # confirma con la técnica ya usada en el resto de la suite (provocar una
+            # respuesta propia del propio `buyer` y verificar que el rechazo, no un
+            # evento de presencia, es lo que le llega a él).
+            buyer.send_json({"type": "join_room", "remate_id": draft_remate_id})
+            rejected = _receive_protocol_message(buyer)
+            assert rejected["type"] == "error"
+            assert rejected["code"] == SNAPSHOT_UNAVAILABLE
+
+            # Ahora un join real y autorizado del mismo `buyer` -- si el intento
+            # rechazado de arriba hubiera publicado presencia igual, `observer`
+            # recibiría DOS eventos "conectado" para el mismo `connection_id` en vez de
+            # uno solo; nos quedamos con el primero que llegue y confirmamos que
+            # corresponde a este join real.
+            buyer.send_json({"type": "join_room", "remate_id": visible_remate_id})
+            joined = _receive_protocol_message(buyer)
+            assert joined["type"] == "room_joined"
+
+            connected_buyer_id = None
+            for _ in range(2):
+                event = observer.receive_json()
+                if (
+                    event.get("type") == "domain_event"
+                    and event.get("event_type") == "presencia.usuario_conectado"
+                ):
+                    connected_buyer_id = event["payload"]["connection_id"]
+                    break
+            assert connected_buyer_id is not None
+            # Un único evento de conexión para este `buyer` -- no dos (uno fantasma del
+            # intento rechazado + uno real de este join).
+            room_manager = ws_client.app.state.room_manager
+            assert room_manager.connection_count(uuid.UUID(visible_remate_id)) == 2
+
+
+async def test_snapshot_build_failure_after_authorized_join_keeps_room_membership(
+    ws_client: TestClient,
+) -> None:
+    """Test obligatorio de la Fase 2 (sección 6/12): una excepción inesperada DENTRO de
+    `SnapshotService.build` -- para un usuario ya autorizado, ya miembro de la sala --
+    no es una falla de autorización, es un problema de infraestructura puntual (Redis/
+    Postgres momentáneamente caído, etc.). No corresponde deshacer una membresía válida
+    por eso (sería una "transacción artificial" que el propio audit pidió evitar si no
+    hace falta) -- la conexión sigue en la sala, recibe un error recuperable, y puede
+    seguir operando con normalidad (acá: `leave_room` responde con normalidad)."""
+    remate_id = _create_visible_remate(ws_client, suffix="snapfail")
+
+    class _BrokenSnapshotService:
+        async def assert_visible(self, *args, **kwargs):
+            return None  # autorizado -- el problema es específicamente el snapshot
+
+        async def build(self, *args, **kwargs):
+            raise RuntimeError("Redis caído, simulado para este test")
+
+    ws_client.app.dependency_overrides[get_snapshot_service] = lambda: _BrokenSnapshotService()
+    try:
+        token = _register_and_login(ws_client, email="snapfail-buyer@example.com")
         room_manager = ws_client.app.state.room_manager
-        assert room_manager.connection_count(fake_remate_id) == 1
+
+        with ws_client.websocket_connect(WS_URL) as websocket:
+            websocket.send_json({"type": "auth", "token": token})
+            connected = websocket.receive_json()
+            websocket.send_json({"type": "join_room", "remate_id": remate_id})
+
+            joined = _receive_protocol_message(websocket)
+            error = _receive_protocol_message(websocket)
+
+            assert joined["type"] == "room_joined"
+            assert error["type"] == "error"
+            assert error["code"] == SNAPSHOT_UNAVAILABLE
+
+            connection_id = uuid.UUID(connected["connection_id"])
+            assert room_manager.room_id_for_connection(connection_id) == uuid.UUID(remate_id)
+            assert room_manager.connection_count(uuid.UUID(remate_id)) == 1
+
+            # La conexión sigue funcionando con normalidad después del fallo puntual.
+            websocket.send_json({"type": "leave_room"})
+            left = _receive_protocol_message(websocket)
+            assert left["type"] == "room_left"
+            assert room_manager.room_count() == 0
+    finally:
+        ws_client.app.dependency_overrides.pop(get_snapshot_service, None)
 
 
 async def test_snapshot_connected_users_reflects_current_room_size(ws_client: TestClient) -> None:
@@ -753,7 +1009,7 @@ async def test_join_room_broadcasts_presence_connected_to_existing_room_members(
 ) -> None:
     token_a = _register_and_login(ws_client, email="presence1a@example.com")
     token_b = _register_and_login(ws_client, email="presence1b@example.com")
-    remate_id = uuid.uuid4()
+    remate_id = uuid.UUID(_create_visible_remate(ws_client, suffix="p1"))
 
     with ws_client.websocket_connect(WS_URL) as ws_a:
         ws_a.send_json({"type": "auth", "token": token_a})
@@ -785,7 +1041,7 @@ async def test_idempotent_rejoin_does_not_broadcast_a_second_presence_event(
 ) -> None:
     observer_token = _register_and_login(ws_client, email="presence2-observer@example.com")
     actor_token = _register_and_login(ws_client, email="presence2-actor@example.com")
-    remate_id = uuid.uuid4()
+    remate_id = uuid.UUID(_create_visible_remate(ws_client, suffix="p2"))
 
     with ws_client.websocket_connect(WS_URL) as observer:
         observer.send_json({"type": "auth", "token": observer_token})
@@ -831,7 +1087,7 @@ async def test_leave_room_broadcasts_presence_disconnected_to_remaining_room_mem
 ) -> None:
     token_a = _register_and_login(ws_client, email="presence3a@example.com")
     token_b = _register_and_login(ws_client, email="presence3b@example.com")
-    remate_id = uuid.uuid4()
+    remate_id = uuid.UUID(_create_visible_remate(ws_client, suffix="p3"))
 
     with ws_client.websocket_connect(WS_URL) as ws_a:
         ws_a.send_json({"type": "auth", "token": token_a})
@@ -871,7 +1127,7 @@ async def test_client_disconnect_without_leave_room_broadcasts_presence_disconne
     no solo un `leave_room` explícito."""
     token_a = _register_and_login(ws_client, email="presence4a@example.com")
     token_b = _register_and_login(ws_client, email="presence4b@example.com")
-    remate_id = uuid.uuid4()
+    remate_id = uuid.UUID(_create_visible_remate(ws_client, suffix="p4"))
 
     with ws_client.websocket_connect(WS_URL) as ws_a:
         ws_a.send_json({"type": "auth", "token": token_a})
