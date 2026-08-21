@@ -47,6 +47,47 @@ prioridad de negocio:
     servicio separado) — solo si la escala real lo justifica; ver [ADR-001](adr/ADR-001-modular-monolito-vs-microservicios.md)
     para la razón de por qué no se empieza así.
 
+## Deploy a producción — pendiente, bloqueado por un healthcheck que no pasa
+
+Estado al 2026-08-21: el backend buildea y arranca correctamente tanto en Render como en
+Railway (migraciones OK, `uvicorn` escuchando en el puerto correcto, `GET /health` y
+`HEAD /health` devuelven 200 verificado con `curl` local contra la imagen real), pero en
+ambas plataformas el deploy termina matado por el healthcheck ("service unavailable" /
+"1/1 replicas never became healthy") antes de promoverse a producción. Se prueba de
+nuevo cuando se retome esta fase — antes de asumir que es el mismo bug ya descartado,
+releer esto primero.
+
+Ya descartado (con evidencia, no supuesto):
+- Puerto hardcodeado / `$PORT` no resuelto: `docker-entrypoint.sh` arranca `uvicorn`
+  resolviendo `${PORT:-10000}` en su propio shell (no depende de cómo Docker combina
+  `CMD` con `ENTRYPOINT`, ver commit `ca973e7`). Confirmado con un contenedor corrido
+  localmente igual que en producción (sin `command:` override, `PORT` inyectado a un
+  valor distinto de 10000): `uvicorn` loguea que arrancó en ese puerto.
+- Target port mal configurado en Railway: Settings → Networking lo tiene en 8080,
+  coincide con el puerto real.
+- El endpoint `/health` en sí (`app/main.py`): es una ruta trivial sin DB/Redis de por
+  medio, responde `{"status":"ok"}` a GET y HEAD.
+- Que la app se cuelgue o crashee: los logs de Railway muestran `GET /health` → 200
+  repetido durante toda la ventana de 5 minutos del healthcheck, no solo al principio.
+
+Lo raro que queda sin explicar: en los deploy logs de Railway, los timestamps de esos
+`GET /health` → 200 coinciden casi exactamente con el backoff de reintentos que el propio
+banner de Railway reporta como fallidos ("Attempt #1... #11 failed with service
+unavailable") — todo indica que son las mismas requests del healthcheck, contestadas
+200 por la app, pero igual marcadas como fallidas. Pasa igual en Render, una plataforma
+con infraestructura de proxy/healthcheck totalmente distinta, lo que descarta que sea
+un problema puntual de la red/edge de Railway.
+
+Próximos pasos sugeridos cuando se retome (no probados todavía):
+- Comparar el log crudo de Render (nunca se llegó a revisar en detalle, solo se confirmó
+  que falla "igual").
+- Probar bindear `uvicorn` a `--host ::` (dual-stack) en vez de `0.0.0.0`, por si el
+  healthcheck de alguna de las dos plataformas prueba por IPv6 y el bind actual
+  (IPv4-only) lo rechaza silenciosamente mientras otra ruta interna sí llega.
+- Probar un healthcheck manual mínimo (imagen `hello-world` HTTP sin toda la app detrás)
+  en el mismo servicio de Railway/Render, para aislar si el problema es de la app o de
+  cómo estas dos plataformas evalúan el healthcheck en este proyecto puntual.
+
 ## Qué NO es roadmap, es explícitamente fuera de alcance del proyecto
 
 - Reemplazar el contacto manual post-remate (pago/entrega) por un flujo transaccional
