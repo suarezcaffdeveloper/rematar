@@ -16,4 +16,15 @@ echo "[entrypoint] Aplicando migraciones..."
 alembic upgrade head
 
 echo "[entrypoint] Iniciando aplicación..."
-exec "$@"
+# Si el contenedor recibe un comando explícito (docker-compose local, o
+# `docker compose run backend ...`), respetarlo tal cual. Si no (producción:
+# Render, Railway, o cualquier PaaS que corra la imagen sin overridear CMD),
+# arrancar uvicorn acá mismo -- la expansión de $PORT ocurre en este shell,
+# no depende de cómo el Dockerfile escriba CMD ni de la sintaxis de
+# interpolación de variables del dashboard de cada plataforma (Railway usa
+# ${{VAR}}, no $VAR, en su campo de "Start Command", por ejemplo).
+if [ "$#" -gt 0 ]; then
+    exec "$@"
+else
+    exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-10000}" --ws-max-size 65536
+fi
