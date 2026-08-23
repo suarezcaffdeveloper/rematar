@@ -25,6 +25,10 @@ import { isDomainEventMessage } from '../realtime/messages';
  * esta burbuja flotante solo cubre los estados que no llegan a renderizar `SalaHeader`
  * (esqueleto de carga, error), donde igual tiene que quedar accesible. */
 function FloatingNotificationBell() {
+  const { isAuthenticated } = useAuth();
+  // Visitante anónimo (ADR-049): sin sesión no hay notificaciones que pedir -- montar
+  // igual dispararía un 401 contra un endpoint autenticado.
+  if (!isAuthenticated) return null;
   return (
     <div className="flex justify-end">
       <div className="rounded-full border border-slate-200 bg-white p-1 shadow-sm">
@@ -92,7 +96,7 @@ function SalaSkeleton() {
 export function SalaPage() {
   const { remateId } = useParams<{ remateId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   useWideLayout();
   useFocusMode(true);
 
@@ -237,7 +241,7 @@ export function SalaPage() {
         remate={remate}
         connectedUsers={snapshot.connected_users}
         connectionStatus={connectionStatus}
-        notifications={<NotificationBell />}
+        notifications={isAuthenticated ? <NotificationBell /> : null}
       />
 
       {/* Rediseño visual (ver prototipo aprobado): columna izquierda -- solo identidad

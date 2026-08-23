@@ -175,7 +175,9 @@ describe('SalaPage', () => {
     // -- el rediseño lo reemplazó por pestañas fijas Historial/Chat (`SalaSidePanel`).
     expect(screen.getByRole('tab', { name: 'Historial de ofertas' })).toBeInTheDocument();
     expect(screen.getByText('Vaquillona')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Realizar oferta' })).toBeDisabled();
+    // Sin mock de sesión, `useAuth()` real devuelve un visitante anónimo (ADR-049) --
+    // ve el llamado a iniciar sesión, no el botón deshabilitado por rol.
+    expect(screen.getByRole('button', { name: 'Iniciá sesión para ofertar' })).toBeInTheDocument();
   });
 
   it('mientras la conexión se reestablece, la cabecera muestra "Reconectando..."', () => {

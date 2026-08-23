@@ -19,6 +19,7 @@ from app.analytics.repository import AnalyticsRepository
 from app.modules.ofertas.models import Oferta, OfertaStatus
 from app.modules.remates.lotes.models import Lote
 from app.modules.users.models import UserRole
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -39,13 +40,15 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
         "role": role,
     }
     register = await client.post(REGISTER_URL, json=payload)
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return register.json()["id"], login.json()["access_token"]
 
 
 async def _owner(client: AsyncClient, email: str) -> tuple[str, str]:
-    return await _register_and_login(client, email=email, role="rematador")
+    return await _register_and_login(client, email=email, role="empresa")
 
 
 async def _buyer(client: AsyncClient, email: str) -> tuple[str, str]:
@@ -337,7 +340,7 @@ async def test_get_roles_by_ids_resolves_mixed_roles(
     repo = AnalyticsRepository(db_session)
     roles = await repo.get_roles_by_ids({uuid.UUID(owner_id), uuid.UUID(buyer_id)})
 
-    assert roles[uuid.UUID(owner_id)] == UserRole.REMATADOR
+    assert roles[uuid.UUID(owner_id)] == UserRole.EMPRESA
     assert roles[uuid.UUID(buyer_id)] == UserRole.COMPRADOR
 
 

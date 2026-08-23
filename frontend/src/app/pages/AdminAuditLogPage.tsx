@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { AuditLogView } from '../../features/audit/components/AuditLogView';
 import { AdminHistoryPanel } from '../../features/history/components/AdminHistoryPanel';
 import { MonitoringPanel } from '../../features/monitoring/components/MonitoringPanel';
+import { UsersPanel } from '../../features/users/components/UsersPanel';
 import { Tabs } from '../../shared/components/Tabs';
 
-type AdminTab = 'auditoria' | 'historial' | 'monitoreo';
+type AdminTab = 'auditoria' | 'historial' | 'monitoreo' | 'usuarios';
 
 const TABS: { id: AdminTab; label: string }[] = [
   { id: 'auditoria', label: 'Auditoría' },
   { id: 'historial', label: 'Historial' },
   { id: 'monitoreo', label: 'Monitoreo' },
+  { id: 'usuarios', label: 'Usuarios' },
 ];
 
 /**
@@ -48,6 +50,7 @@ export function AdminAuditLogPage() {
       {tab === 'auditoria' && <AuditLogView scope={{ type: 'global' }} />}
       {tab === 'historial' && <AdminHistoryPanel />}
       {tab === 'monitoreo' && <MonitoringPanel />}
+      {tab === 'usuarios' && <UsersPanel />}
     </div>
   );
 }

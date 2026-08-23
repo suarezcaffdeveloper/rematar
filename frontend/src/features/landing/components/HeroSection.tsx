@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowRight, CheckCircle2, Gavel, MessageSquare, PlayCircle, TrendingUp } from 'lucide-react';
+import { ArrowRight, CheckCircle2, MessageSquare, PlayCircle, TrendingUp } from 'lucide-react';
 import { MockupWindow } from './MockupWindow';
 import { AnimatedCounter } from './AnimatedCounter';
 import { useLandingCta } from '../ctaContext';
@@ -71,10 +71,7 @@ export function HeroSection() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7 }}
         >
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 ring-1 ring-brand-100">
-            <Gavel className="h-3.5 w-3.5" /> Remates en tiempo real
-          </span>
-
+          
           <h1 className="mt-6 text-4xl font-bold leading-[1.1] tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
             La nueva generación de <span className="text-brand-600">remates en tiempo real</span>.
           </h1>
@@ -117,7 +114,7 @@ export function HeroSection() {
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-900">
-                <AnimatedCounter value={6} />
+                <AnimatedCounter value={9} />
               </p>
               <p className="mt-1 text-sm text-slate-500">Rubros soportados</p>
             </div>

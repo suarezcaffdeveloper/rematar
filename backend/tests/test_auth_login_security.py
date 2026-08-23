@@ -142,7 +142,10 @@ async def test_login_rejects_suspended_user_even_with_correct_password(
         await service.authenticate(user.email, "password123")
         raise AssertionError("se esperaba UnauthorizedError")
     except UnauthorizedError as exc:
-        assert exc.message == "La cuenta está suspendida."
+        assert exc.message == (
+            "La cuenta todavía no está activa. Si te registraste como empresa o "
+            "rematador, está pendiente de aprobación por el equipo de RematAR."
+        )
 
 
 async def test_login_rejects_suspended_user_with_wrong_password_using_generic_message(

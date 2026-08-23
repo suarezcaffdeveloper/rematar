@@ -52,6 +52,24 @@ describe('validateLoteForm', () => {
   it('precio de reserva vacío es válido (opcional)', () => {
     expect(validateLoteForm(makeValues({ reserve_price: '' })).reserve_price).toBeUndefined();
   });
+
+  it('reencolado preautorizado deshabilitado no exige precios (ADR-048)', () => {
+    const result = validateLoteForm(makeValues({ requeue_preset_enabled: false }));
+    expect(result.requeue_preset_base_price).toBeUndefined();
+    expect(result.requeue_preset_min_increment).toBeUndefined();
+  });
+
+  it('reencolado preautorizado habilitado exige precio inicial e incremento mínimo válidos', () => {
+    const result = validateLoteForm(
+      makeValues({
+        requeue_preset_enabled: true,
+        requeue_preset_base_price: '',
+        requeue_preset_min_increment: '0',
+      }),
+    );
+    expect(result).toHaveProperty('requeue_preset_base_price');
+    expect(result).toHaveProperty('requeue_preset_min_increment');
+  });
 });
 
 describe('buildLoteFormPayload', () => {
@@ -70,6 +88,32 @@ describe('buildLoteFormPayload', () => {
   it('reserve_price vacío se manda como null', () => {
     const payload = buildLoteFormPayload(makeValues({ reserve_price: '' }));
     expect(payload.reserve_price).toBeNull();
+  });
+
+  it('reencolado preautorizado deshabilitado manda los precios como null (ADR-048)', () => {
+    const payload = buildLoteFormPayload(
+      makeValues({
+        requeue_preset_enabled: false,
+        requeue_preset_base_price: '1200.00',
+        requeue_preset_min_increment: '100.00',
+      }),
+    );
+    expect(payload.requeue_preset_enabled).toBe(false);
+    expect(payload.requeue_preset_base_price).toBeNull();
+    expect(payload.requeue_preset_min_increment).toBeNull();
+  });
+
+  it('reencolado preautorizado habilitado manda los precios cargados', () => {
+    const payload = buildLoteFormPayload(
+      makeValues({
+        requeue_preset_enabled: true,
+        requeue_preset_base_price: '1200.00',
+        requeue_preset_min_increment: '100.00',
+      }),
+    );
+    expect(payload.requeue_preset_enabled).toBe(true);
+    expect(payload.requeue_preset_base_price).toBe('1200.00');
+    expect(payload.requeue_preset_min_increment).toBe('100.00');
   });
 });
 
@@ -109,6 +153,9 @@ describe('loteToFormValues', () => {
       base_price: '1000.00',
       min_increment: '50.00',
       reserve_price: '',
+      requeue_preset_enabled: false,
+      requeue_preset_base_price: '',
+      requeue_preset_min_increment: '',
     });
   });
 });

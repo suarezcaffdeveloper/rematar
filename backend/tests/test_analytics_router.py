@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.modules.users.models import User, UserRole
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -32,6 +33,8 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return register.json()["id"], login.json()["access_token"]
@@ -72,7 +75,7 @@ async def _start_remate(client: AsyncClient, token: str, remate_id: str) -> None
 
 async def test_analytics_endpoint_returns_full_shape_for_owner(client: AsyncClient) -> None:
     _, owner_token = await _register_and_login(
-        client, email="anhttp1@example.com", role="rematador"
+        client, email="anhttp1@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     await _create_lote(client, owner_token, remate["id"])
@@ -105,7 +108,7 @@ async def test_analytics_endpoint_on_remate_without_activity_is_all_zeroes_no_50
     client: AsyncClient,
 ) -> None:
     _, owner_token = await _register_and_login(
-        client, email="anhttp2@example.com", role="rematador"
+        client, email="anhttp2@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)  # sin lotes, sin ofertas, en DRAFT
 
@@ -136,7 +139,7 @@ async def test_analytics_endpoint_succeeds_for_admin(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
     _, owner_token = await _register_and_login(
-        client, email="anhttp3@example.com", role="rematador"
+        client, email="anhttp3@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     await _create_lote(client, owner_token, remate["id"])
@@ -170,7 +173,7 @@ async def test_analytics_endpoint_returns_403_for_unrelated_comprador_on_live_re
     client: AsyncClient,
 ) -> None:
     _, owner_token = await _register_and_login(
-        client, email="anhttp4@example.com", role="rematador"
+        client, email="anhttp4@example.com", role="empresa"
     )
     _, stranger_token = await _register_and_login(
         client, email="anhttp4-stranger@example.com", role="comprador"
@@ -189,7 +192,7 @@ async def test_analytics_endpoint_returns_404_for_draft_remate_seen_by_a_strange
     client: AsyncClient,
 ) -> None:
     _, owner_token = await _register_and_login(
-        client, email="anhttp5@example.com", role="rematador"
+        client, email="anhttp5@example.com", role="empresa"
     )
     _, stranger_token = await _register_and_login(
         client, email="anhttp5-stranger@example.com", role="comprador"
@@ -204,7 +207,7 @@ async def test_analytics_endpoint_returns_404_for_draft_remate_seen_by_a_strange
 
 async def test_analytics_endpoint_requires_authentication(client: AsyncClient) -> None:
     _, owner_token = await _register_and_login(
-        client, email="anhttp6@example.com", role="rematador"
+        client, email="anhttp6@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
 
@@ -215,7 +218,7 @@ async def test_analytics_endpoint_requires_authentication(client: AsyncClient) -
 
 async def test_analytics_endpoint_returns_404_for_nonexistent_remate(client: AsyncClient) -> None:
     _, owner_token = await _register_and_login(
-        client, email="anhttp7@example.com", role="rematador"
+        client, email="anhttp7@example.com", role="empresa"
     )
 
     r = await client.get(

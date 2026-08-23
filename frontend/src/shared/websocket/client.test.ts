@@ -209,13 +209,23 @@ describe('WebSocketClient', () => {
     expect(createSocket).toHaveBeenCalledTimes(1);
   });
 
-  it('sin token, no abre ningún socket y queda "closed"', () => {
-    const { client, createSocket } = setup({ token: null });
+  it('sin token (visitante anónimo, ADR-049), igual abre el socket y manda auth con token null', () => {
+    const { client, sockets, createSocket } = setup({ token: null });
 
     client.connect();
+    sockets[0].simulateOpen();
 
-    expect(createSocket).not.toHaveBeenCalled();
-    expect(client.getStatus()).toBe('closed');
+    expect(createSocket).toHaveBeenCalledTimes(1);
+    expect(sockets[0].sent).toEqual([{ schema_version: 1, type: 'auth', token: null }]);
+  });
+
+  it('sin token, igual llega a "open" al recibir "connected" (mirar sin sesión)', () => {
+    const { client, sockets } = setup({ token: null });
+
+    client.connect();
+    authenticate(sockets);
+
+    expect(client.getStatus()).toBe('open');
   });
 
   it('onStatusChange/onMessage devuelven una función de desuscripción', () => {

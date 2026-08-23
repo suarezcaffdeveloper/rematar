@@ -125,7 +125,7 @@ def _make_service(
 
 
 async def _setup(db_session: AsyncSession):
-    rematador = await _create_user(db_session, role=UserRole.REMATADOR)
+    rematador = await _create_user(db_session, role=UserRole.EMPRESA)
     buyer = await _create_user(db_session)
     remate = await _create_remate(db_session, rematador)
     return rematador, buyer, remate
@@ -189,7 +189,7 @@ async def test_kick_user_forbidden_for_non_owner(
     remate.status = RemateStatus.SCHEDULED
     remate.starts_at = datetime.now(UTC) + timedelta(days=1)
     await db_session.commit()
-    other_rematador = await _create_user(db_session, role=UserRole.REMATADOR)
+    other_rematador = await _create_user(db_session, role=UserRole.EMPRESA)
     connection_manager = ConnectionManager()
     room_manager = RoomManager()
     event_bus = _RecordingEventBus()
@@ -203,7 +203,7 @@ async def test_kick_user_rejects_non_comprador_target(
     db_session: AsyncSession, redis_client: Redis
 ) -> None:
     rematador, _, remate = await _setup(db_session)
-    another_rematador = await _create_user(db_session, role=UserRole.REMATADOR)
+    another_rematador = await _create_user(db_session, role=UserRole.EMPRESA)
     connection_manager = ConnectionManager()
     room_manager = RoomManager()
     event_bus = _RecordingEventBus()

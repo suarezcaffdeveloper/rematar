@@ -29,7 +29,7 @@ describe('notificationHref', () => {
     expect(notificationHref(notification, 'comprador')).toBe('/mis-compras');
   });
 
-  it('lote adjudicado, del lado del rematador, va al detalle de esa venta puntual', () => {
+  it('lote adjudicado, del lado de la empresa dueña del remate (ADR-047), va al detalle de esa venta puntual', () => {
     const notification = makeNotification({
       type: 'postauction.case_created',
       resource_type: 'postauction_case',
@@ -37,7 +37,7 @@ describe('notificationHref', () => {
       remate_id: 'remate-1',
     });
 
-    expect(notificationHref(notification, 'rematador')).toBe('/ventas-adjudicadas/case-1');
+    expect(notificationHref(notification, 'empresa')).toBe('/ventas-adjudicadas/case-1');
   });
 
   it('actualización de estado de una compra va al detalle de esa compra puntual', () => {

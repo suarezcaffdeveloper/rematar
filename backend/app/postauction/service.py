@@ -6,7 +6,10 @@ Compone `RemateRepository`/`LoteRepository`/`UserRepository` directo (nunca sus
 criterio "repositorio del vecino, no su service" que ya usan `HistoryService`/
 `LoteService` (ver ADR-019): la ownership acá no necesita `RemateService.get_owned_or_raise`
 porque `PostAuctionCase.rematador_id` ya es el owner del remate, denormalizado al crear el
-caso -- comparar contra `viewer.id` alcanza, sin resolver el remate para autorizar.
+caso -- comparar contra `viewer.id` alcanza, sin resolver el remate para autorizar. Pese
+al nombre de la columna (nunca renombrado, ver ADR-047), desde ese ADR es siempre la
+**empresa** dueña del remate, no el rematador-operador: la gestión de postventa quedó
+fuera del alcance del rol `rematador` acotado.
 
 `create_case_from_winner` es el único punto de entrada que no llega por HTTP: lo llama
 `PostAuctionEventDispatcher` (`realtime.py`) al reaccionar a `lote.winner_determined`
@@ -216,7 +219,7 @@ class PostAuctionService:
 
         return case
 
-    # --- Escritura (rematador dueño del caso, o admin) ----------------------------------
+    # --- Escritura (empresa dueña del caso, o admin) -------------------------------------
 
     async def change_status(
         self,
@@ -333,9 +336,9 @@ class PostAuctionService:
         page: int,
         page_size: int,
     ) -> tuple[list[PostAuctionCaseRematadorRead], int]:
-        if viewer.role not in (UserRole.REMATADOR, UserRole.ADMIN):
+        if viewer.role not in (UserRole.EMPRESA, UserRole.ADMIN):
             raise ForbiddenError(
-                "Solo un rematador o un administrador pueden ver ventas adjudicadas."
+                "Solo una empresa o un administrador pueden ver ventas adjudicadas."
             )
         offset = (page - 1) * page_size
         cases, total = await self._repository.list_for_rematador(

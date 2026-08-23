@@ -70,6 +70,16 @@ class LoteCreate(BaseModel, _LotePriceValidationMixin):
     base_price: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
     min_increment: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
     reserve_price: Decimal | None = Field(default=None, gt=0, max_digits=14, decimal_places=2)
+    # Reencolado preautorizado (ADR-048): si la empresa habilita esto, el rematador
+    # operador puede disparar `.../requeue-preset` con estas condiciones sin pedirle
+    # nada más -- no puede fijar un precio distinto al que la empresa dejó acá.
+    requeue_preset_enabled: bool = False
+    requeue_preset_base_price: Decimal | None = Field(
+        default=None, gt=0, max_digits=14, decimal_places=2
+    )
+    requeue_preset_min_increment: Decimal | None = Field(
+        default=None, gt=0, max_digits=14, decimal_places=2
+    )
 
     @field_validator("attributes")
     @classmethod
@@ -81,6 +91,13 @@ class LoteCreate(BaseModel, _LotePriceValidationMixin):
     @model_validator(mode="after")
     def _validate_prices(self) -> "LoteCreate":
         self._check_reserve_price(self.base_price, self.reserve_price)
+        if self.requeue_preset_enabled and (
+            self.requeue_preset_base_price is None or self.requeue_preset_min_increment is None
+        ):
+            raise ValueError(
+                "Para habilitar el reencolado preautorizado hace falta indicar "
+                "'requeue_preset_base_price' y 'requeue_preset_min_increment'."
+            )
         return self
 
 
@@ -101,6 +118,13 @@ class LoteUpdate(BaseModel, _LotePriceValidationMixin):
     base_price: Decimal | None = Field(default=None, gt=0, max_digits=14, decimal_places=2)
     min_increment: Decimal | None = Field(default=None, gt=0, max_digits=14, decimal_places=2)
     reserve_price: Decimal | None = Field(default=None, gt=0, max_digits=14, decimal_places=2)
+    requeue_preset_enabled: bool | None = None
+    requeue_preset_base_price: Decimal | None = Field(
+        default=None, gt=0, max_digits=14, decimal_places=2
+    )
+    requeue_preset_min_increment: Decimal | None = Field(
+        default=None, gt=0, max_digits=14, decimal_places=2
+    )
 
     @field_validator("attributes")
     @classmethod
@@ -117,6 +141,10 @@ class LoteUpdate(BaseModel, _LotePriceValidationMixin):
         fields_set = self.model_fields_set
         if "base_price" in fields_set or "reserve_price" in fields_set:
             self._check_reserve_price(self.base_price, self.reserve_price)
+        # La validación de "si requeue_preset_enabled, hacen falta ambos precios" se hace
+        # en LoteService.update contra el valor ya persistido (mismo criterio que
+        # reserve_price/base_price arriba): acá, a nivel de transporte, no se puede saber
+        # si un precio que falta en este PATCH ya estaba cargado de una edición anterior.
         return self
 
 
@@ -213,6 +241,9 @@ class LoteRead(BaseModel):
     # nunca fue reincorporado. Ver `Lote.round_number` y `LoteRoundRead` (historial de
     # rondas anteriores, `GET .../lotes/{lote_id}/rounds`).
     round_number: int
+    requeue_preset_enabled: bool
+    requeue_preset_base_price: Decimal | None
+    requeue_preset_min_increment: Decimal | None
     created_at: datetime
     updated_at: datetime
 

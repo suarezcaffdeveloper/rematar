@@ -42,7 +42,11 @@ interface AuthState {
   refreshToken: string | null;
   isHydrated: boolean;
   login: (payload: LoginPayload) => Promise<void>;
-  register: (payload: RegisterPayload) => Promise<void>;
+  /** Devuelve `pendingApproval: true` para empresa/rematador (`is_active=false` al
+   * registrarse, RF-03) -- en ese caso NO hay sesión iniciada, `RegisterPage` debe
+   * mostrar el estado de "pendiente de aprobación" en vez de navegar como si hubiera
+   * logueado. */
+  register: (payload: RegisterPayload) => Promise<{ pendingApproval: boolean }>;
   logout: () => void;
   refreshSession: () => Promise<string>;
   /** Mergea `patch` sobre el `user` actual -- para reflejar en el acto un cambio ya
@@ -73,12 +77,19 @@ export const useAuthStore = create<AuthState>()(
         },
 
         async register(payload) {
-          await registerRequest(payload);
+          const createdUser = await registerRequest(payload);
+          // Empresa/rematador nacen `is_active=false` (pendientes de aprobación de un
+          // admin, RF-03) -- intentar loguear ahora daría 401. Comprador sigue
+          // logueando de inmediato, como siempre.
+          if (!createdUser.is_active) {
+            return { pendingApproval: true };
+          }
           // El backend no devuelve tokens al registrar, solo el usuario creado -- se
           // encadena un login con la misma contraseña para no pedirle al usuario que
           // la vuelva a escribir. La contraseña no se guarda en ningún estado: vive
           // en el parámetro de esta función y se descarta apenas `login` termina.
           await get().login({ email: payload.email, password: payload.password });
+          return { pendingApproval: false };
         },
 
         logout() {

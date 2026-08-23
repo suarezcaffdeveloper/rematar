@@ -198,7 +198,7 @@ describe('ConsolaOperativaPage', () => {
     expect(screen.queryByText('Código de operador (mock)')).not.toBeInTheDocument();
   });
 
-  it('remate "live", con lote activo: muestra el lote, el control y los próximos lotes', () => {
+  it('remate "live", con lote activo: muestra el lote, el control, los próximos lotes y los simuladores', () => {
     mockLiveState({
       snapshot: makeSnapshot(),
       upcomingLotes: [makeLote({ id: 'lote-2', title: 'Vaquillona', status: 'pending' })],
@@ -209,9 +209,12 @@ describe('ConsolaOperativaPage', () => {
     expect(screen.getByText('Toro Angus')).toBeInTheDocument(); // ConsolaLotePanel
     expect(screen.getByText('Panel de control operativo')).toBeInTheDocument(); // ConsolaControlPanel
     expect(screen.getByText('Vaquillona')).toBeInTheDocument(); // ConsolaUpcomingLotesPanel
+    // Simuladores (Bots) vive en el panel del rematador operador, no en el de la
+    // empresa -- pedido explícito, herramienta de testeo temporal.
+    expect(screen.getByText('Simuladores (mock)')).toBeInTheDocument(); // ConsolaBotsPanel
   });
 
-  it('remate "live", viewer dueño del remate (empresa): oculta la botonera y muestra la analítica en su lugar', () => {
+  it('remate "live", viewer dueño del remate (empresa): oculta la botonera y los simuladores, muestra la analítica en su lugar', () => {
     useAuthMock.mockReturnValue({ user: { id: 'owner-1', role: 'empresa' } });
     mockLiveState({ snapshot: makeSnapshot() });
 
@@ -220,6 +223,7 @@ describe('ConsolaOperativaPage', () => {
     expect(screen.getByText('Toro Angus')).toBeInTheDocument(); // ConsolaLotePanel sigue visible
     expect(screen.queryByText('Panel de control operativo')).not.toBeInTheDocument(); // ConsolaControlPanel
     expect(screen.getByText('Analítica en tiempo real (mock)')).toBeInTheDocument(); // AnalyticsPanel
+    expect(screen.queryByText('Simuladores (mock)')).not.toBeInTheDocument(); // ConsolaBotsPanel
   });
 
   it('el historial de ofertas del sidebar queda siempre visible, sin pestaña', () => {

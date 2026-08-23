@@ -1,9 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { PlaceBidButton, type PlaceBidButtonProps } from './PlaceBidButton';
 import { formatCurrency } from '../../../shared/lib/format';
 import type { Lote } from '../../remates/types';
+
+// `PlaceBidButton` usa `useNavigate`/`useLocation` (visitante anónimo, ADR-049) --
+// necesita un Router alrededor incluso en los casos que no lo ejercitan.
+function renderButton(overrides: Partial<PlaceBidButtonProps> = {}) {
+  return render(
+    <MemoryRouter>
+      <PlaceBidButton {...makeProps(overrides)} />
+    </MemoryRouter>,
+  );
+}
 
 const { placeBidRequestMock, toastPushMock } = vi.hoisted(() => ({
   placeBidRequestMock: vi.fn(),
@@ -71,12 +82,12 @@ describe('PlaceBidButton', () => {
   });
 
   it('precarga el monto sugerido con el mínimo válido', () => {
-    render(<PlaceBidButton {...makeProps()} />);
+    renderButton();
     expect(screen.getByLabelText(/Tu oferta/)).toHaveValue('1000.00');
   });
 
   it('un monto por debajo del mínimo muestra error y deshabilita el envío', async () => {
-    render(<PlaceBidButton {...makeProps()} />);
+    renderButton();
     const input = screen.getByLabelText(/Tu oferta/);
     await userEvent.clear(input);
     await userEvent.type(input, '500');
@@ -87,7 +98,7 @@ describe('PlaceBidButton', () => {
 
   it('al ofertar un monto válido y aceptado, confirma con un toast de éxito', async () => {
     placeBidRequestMock.mockResolvedValueOnce(acceptedResult);
-    render(<PlaceBidButton {...makeProps()} />);
+    renderButton();
 
     await userEvent.click(screen.getByRole('button', { name: 'Ofertar' }));
 
@@ -108,7 +119,7 @@ describe('PlaceBidButton', () => {
       status: 'rejected',
       rejection_reason: 'El monto debe ser al menos 1050.00 (incremento mínimo no alcanzado).',
     });
-    render(<PlaceBidButton {...makeProps()} />);
+    renderButton();
 
     await userEvent.click(screen.getByRole('button', { name: 'Ofertar' }));
 
@@ -123,7 +134,7 @@ describe('PlaceBidButton', () => {
 
   it('si la llamada falla (red/HTTP), muestra un toast de error genérico', async () => {
     placeBidRequestMock.mockRejectedValueOnce(new Error('network down'));
-    render(<PlaceBidButton {...makeProps()} />);
+    renderButton();
 
     await userEvent.click(screen.getByRole('button', { name: 'Ofertar' }));
 
@@ -139,7 +150,7 @@ describe('PlaceBidButton', () => {
       rejection_reason: 'rechazada',
     });
     placeBidRequestMock.mockResolvedValueOnce(acceptedResult);
-    render(<PlaceBidButton {...makeProps()} />);
+    renderButton();
 
     await userEvent.click(screen.getByRole('button', { name: 'Ofertar' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Ofertar' })).toBeEnabled());
@@ -152,11 +163,7 @@ describe('PlaceBidButton', () => {
   });
 
   it('elegir una oferta sugerida completa el input, pero no manda la oferta', async () => {
-    render(
-      <PlaceBidButton
-        {...makeProps({ lote: makeLote({ base_price: '20000.00', min_increment: '2000.00' }) })}
-      />,
-    );
+    renderButton({ lote: makeLote({ base_price: '20000.00', min_increment: '2000.00' }) });
 
     await userEvent.click(screen.getByRole('button', { name: formatCurrency('24000.00', 'ARS') }));
 
@@ -165,18 +172,25 @@ describe('PlaceBidButton', () => {
   });
 
   it('no es comprador -- el formulario no se muestra, solo un botón deshabilitado', () => {
-    render(<PlaceBidButton {...makeProps({ viewerRole: 'rematador' })} />);
+    renderButton({ viewerRole: 'rematador' });
     expect(screen.getByRole('button', { name: 'Realizar oferta' })).toBeDisabled();
     expect(screen.queryByLabelText(/Tu oferta/)).not.toBeInTheDocument();
   });
 
   it('remate no vivo -- el formulario no se muestra', () => {
-    render(<PlaceBidButton {...makeProps({ remateStatus: 'paused' })} />);
+    renderButton({ remateStatus: 'paused' });
     expect(screen.getByRole('button', { name: 'Realizar oferta' })).toBeDisabled();
   });
 
   it('lote no abierto -- el formulario no se muestra', () => {
-    render(<PlaceBidButton {...makeProps({ lote: makeLote({ status: 'closed_sold' }) })} />);
+    renderButton({ lote: makeLote({ status: 'closed_sold' }) });
     expect(screen.getByRole('button', { name: 'Realizar oferta' })).toBeDisabled();
+  });
+
+  it('visitante anónimo (sin rol) -- muestra un llamado a iniciar sesión, no el mensaje de permisos', () => {
+    renderButton({ viewerRole: undefined });
+    expect(screen.getByRole('button', { name: 'Iniciá sesión para ofertar' })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Tu oferta/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Solo los compradores pueden ofertar en la sala.')).not.toBeInTheDocument();
   });
 });

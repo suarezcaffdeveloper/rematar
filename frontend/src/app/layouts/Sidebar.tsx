@@ -25,21 +25,26 @@ interface NavItem {
 }
 
 /**
- * Navegación por rol (Épica 9, Etapa 2 -- rediseño). `comprador`/`rematador` tienen su
- * dashboard real en `/` (`HomePage` ya rutea por rol, sin cambios); `admin` no tiene
- * dashboard propio, así que su único ítem apunta directo a `/admin` -- reemplaza el
- * link condicional que antes vivía suelto en el header (Épica 8.0).
+ * Navegación por rol (Épica 9, Etapa 2 -- rediseño; ampliada en ADR-047/ADR-048 con los
+ * roles `empresa`/`rematador` acotado). `comprador`/`empresa` tienen su dashboard real
+ * en `/` (`HomePage` ya rutea por rol, sin cambios); `admin` no tiene dashboard propio,
+ * así que su único ítem apunta directo a `/admin` -- reemplaza el link condicional que
+ * antes vivía suelto en el header (Épica 8.0). `empresa` hereda exactamente la
+ * navegación que antes tenía `rematador` (crear/gestionar remates es ahora su
+ * responsabilidad, ver ADR-047); `rematador` quedó sin remates propios que listar --
+ * su único destino es `/` (`OperatorClaimPage`, canjear un código de operador).
  */
 const NAV_ITEMS_BY_ROLE: Record<UserRole, NavItem[]> = {
   comprador: [
     { label: 'Remates', to: '/', icon: Gavel },
     { label: 'Mis compras', to: '/mis-compras', icon: ShoppingBag },
   ],
-  rematador: [
+  empresa: [
     { label: 'Mis remates', to: '/', icon: Gavel },
     { label: 'Ventas adjudicadas', to: '/ventas-adjudicadas', icon: Package },
     { label: 'Historial', to: '/historial', icon: History },
   ],
+  rematador: [{ label: 'Unirme a un remate', to: '/', icon: Gavel }],
   admin: [{ label: 'Panel de administrador', to: '/admin', icon: LayoutDashboard }],
 };
 

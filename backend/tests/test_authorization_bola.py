@@ -30,6 +30,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.postauction.models import PostAuctionCase, PostAuctionStatus
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -49,6 +50,8 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -104,10 +107,10 @@ async def _schedule_and_start(client: AsyncClient, token: str, remate_id: str) -
 
 async def test_other_rematador_cannot_start_foreign_remate(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email=f"owner{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"owner{uuid.uuid4()}@example.com", role="empresa"
     )
     attacker_token = await _register_and_login(
-        client, email=f"attacker{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"attacker{uuid.uuid4()}@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     await client.post(f"{REMATES_URL}/{remate['id']}/schedule", headers=_auth(owner_token))
@@ -120,10 +123,10 @@ async def test_other_rematador_cannot_start_foreign_remate(client: AsyncClient) 
 
 async def test_other_rematador_cannot_cancel_foreign_remate(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email=f"owner{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"owner{uuid.uuid4()}@example.com", role="empresa"
     )
     attacker_token = await _register_and_login(
-        client, email=f"attacker{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"attacker{uuid.uuid4()}@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     await _schedule_and_start_after_lote(client, owner_token, remate["id"])
@@ -146,10 +149,10 @@ async def _schedule_and_start_after_lote(client: AsyncClient, token: str, remate
 
 async def test_other_rematador_cannot_open_foreign_lote(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email=f"owner{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"owner{uuid.uuid4()}@example.com", role="empresa"
     )
     attacker_token = await _register_and_login(
-        client, email=f"attacker{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"attacker{uuid.uuid4()}@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     lote = await _create_lote(client, owner_token, remate["id"])
@@ -163,10 +166,10 @@ async def test_other_rematador_cannot_open_foreign_lote(client: AsyncClient) -> 
 
 async def test_other_rematador_cannot_cancel_foreign_lote(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email=f"owner{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"owner{uuid.uuid4()}@example.com", role="empresa"
     )
     attacker_token = await _register_and_login(
-        client, email=f"attacker{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"attacker{uuid.uuid4()}@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     lote = await _create_lote(client, owner_token, remate["id"])
@@ -195,7 +198,7 @@ async def test_lote_of_another_remate_is_not_reachable_by_swapping_remate_id(
     tiene que validar `lote.remate_id == remate_id` del path, no solo resolver el lote por
     su propio id."""
     owner_token = await _register_and_login(
-        client, email=f"owner{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"owner{uuid.uuid4()}@example.com", role="empresa"
     )
     remate_a = await _create_remate(client, owner_token, title="Remate A")
     remate_b = await _create_remate(client, owner_token, title="Remate B")
@@ -221,10 +224,10 @@ async def test_other_rematador_cannot_change_estado_of_foreign_case(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
     owner_token = await _register_and_login(
-        client, email=f"owner{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"owner{uuid.uuid4()}@example.com", role="empresa"
     )
     attacker_token = await _register_and_login(
-        client, email=f"attacker{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"attacker{uuid.uuid4()}@example.com", role="empresa"
     )
     buyer_token = await _register_and_login(
         client, email=f"buyer{uuid.uuid4()}@example.com", role="comprador"
@@ -262,7 +265,7 @@ async def test_bid_buyer_id_in_body_is_ignored_bid_is_always_current_user(
     client: AsyncClient,
 ) -> None:
     owner_token = await _register_and_login(
-        client, email=f"owner{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"owner{uuid.uuid4()}@example.com", role="empresa"
     )
     buyer_token = await _register_and_login(
         client, email=f"buyer{uuid.uuid4()}@example.com", role="comprador"
@@ -297,10 +300,10 @@ async def test_other_rematador_cannot_start_bot_simulation_of_foreign_remate(
     client: AsyncClient,
 ) -> None:
     owner_token = await _register_and_login(
-        client, email=f"owner{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"owner{uuid.uuid4()}@example.com", role="empresa"
     )
     attacker_token = await _register_and_login(
-        client, email=f"attacker{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"attacker{uuid.uuid4()}@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     # Programado (no DRAFT): así el 404 esperable de un borrador ajeno
@@ -319,10 +322,10 @@ async def test_other_rematador_cannot_set_bot_selection_of_foreign_remate(
     client: AsyncClient,
 ) -> None:
     owner_token = await _register_and_login(
-        client, email=f"owner{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"owner{uuid.uuid4()}@example.com", role="empresa"
     )
     attacker_token = await _register_and_login(
-        client, email=f"attacker{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"attacker{uuid.uuid4()}@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     await client.post(f"{REMATES_URL}/{remate['id']}/schedule", headers=_auth(owner_token))
@@ -340,7 +343,7 @@ async def test_other_rematador_cannot_set_bot_selection_of_foreign_remate(
 
 async def test_unauthenticated_cannot_start_remate(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email=f"owner{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"owner{uuid.uuid4()}@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     await client.post(f"{REMATES_URL}/{remate['id']}/schedule", headers=_auth(owner_token))

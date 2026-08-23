@@ -39,6 +39,7 @@ from app.main import create_app
 from app.websocket import close_codes
 from app.websocket.rate_limit import WSRateLimiter
 from app.websocket.rooms import ERROR_RATE_LIMITED
+from tests._role_test_helpers import activate_pending_account_sync
 
 WS_URL = "/api/v1/ws"
 REGISTER_URL = "/api/v1/auth/register"
@@ -93,6 +94,8 @@ def _register_and_login(client: TestClient, *, email: str, role: str = "comprado
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        activate_pending_account_sync(email)
     login = client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -100,7 +103,7 @@ def _register_and_login(client: TestClient, *, email: str, role: str = "comprado
 
 def _create_visible_remate(client: TestClient, *, suffix: str) -> str:
     owner_token = _register_and_login(
-        client, email=f"rl-room-owner-{suffix}@example.com", role="rematador"
+        client, email=f"rl-room-owner-{suffix}@example.com", role="empresa"
     )
     r = client.post(
         REMATES_URL,

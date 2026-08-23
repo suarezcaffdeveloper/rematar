@@ -32,6 +32,12 @@ export interface LoteFormValues {
   base_price: string;
   min_increment: string;
   reserve_price: string;
+  // Reencolado preautorizado (ADR-048): si la empresa lo habilita, el rematador
+  // operador puede "volver a rematar" este lote con estos valores exactos si queda
+  // desierto, sin tener que fijar él mismo un precio -- ver `ConsolaDesiertoLotesPanel`.
+  requeue_preset_enabled: boolean;
+  requeue_preset_base_price: string;
+  requeue_preset_min_increment: string;
 }
 
 export const DEFAULT_LOTE_FORM_VALUES: LoteFormValues = {
@@ -42,10 +48,24 @@ export const DEFAULT_LOTE_FORM_VALUES: LoteFormValues = {
   base_price: '',
   min_increment: '',
   reserve_price: '',
+  requeue_preset_enabled: false,
+  requeue_preset_base_price: '',
+  requeue_preset_min_increment: '',
 };
 
 export type LoteFormErrors = Partial<
-  Record<'lot_number' | 'title' | 'category' | 'description' | 'base_price' | 'min_increment' | 'reserve_price', string>
+  Record<
+    | 'lot_number'
+    | 'title'
+    | 'category'
+    | 'description'
+    | 'base_price'
+    | 'min_increment'
+    | 'reserve_price'
+    | 'requeue_preset_base_price'
+    | 'requeue_preset_min_increment',
+    string
+  >
 >;
 
 export function loteToFormValues(lote: Lote): LoteFormValues {
@@ -57,6 +77,9 @@ export function loteToFormValues(lote: Lote): LoteFormValues {
     base_price: lote.base_price,
     min_increment: lote.min_increment,
     reserve_price: lote.reserve_price ?? '',
+    requeue_preset_enabled: lote.requeue_preset_enabled ?? false,
+    requeue_preset_base_price: lote.requeue_preset_base_price ?? '',
+    requeue_preset_min_increment: lote.requeue_preset_min_increment ?? '',
   };
 }
 
@@ -92,6 +115,15 @@ export function validateLoteForm(values: LoteFormValues): LoteFormErrors {
     }
   }
 
+  if (values.requeue_preset_enabled) {
+    if (!isPositiveDecimal(values.requeue_preset_base_price)) {
+      errors.requeue_preset_base_price = 'Ingresá un precio inicial válido, mayor a 0.';
+    }
+    if (!isPositiveDecimal(values.requeue_preset_min_increment)) {
+      errors.requeue_preset_min_increment = 'Ingresá un incremento mínimo válido, mayor a 0.';
+    }
+  }
+
   return errors;
 }
 
@@ -104,5 +136,12 @@ export function buildLoteFormPayload(values: LoteFormValues): LoteFormPayload {
     base_price: values.base_price.trim(),
     min_increment: values.min_increment.trim(),
     reserve_price: values.reserve_price.trim() || null,
+    requeue_preset_enabled: values.requeue_preset_enabled,
+    requeue_preset_base_price: values.requeue_preset_enabled
+      ? values.requeue_preset_base_price.trim()
+      : null,
+    requeue_preset_min_increment: values.requeue_preset_enabled
+      ? values.requeue_preset_min_increment.trim()
+      : null,
   };
 }

@@ -13,7 +13,11 @@ vi.mock('../../features/auth/hooks', () => ({
   useAuthActions: useAuthActionsMock,
 }));
 
-function renderSidebar(role: 'comprador' | 'rematador' | 'admin', isOpen = false, onClose = vi.fn()) {
+function renderSidebar(
+  role: 'comprador' | 'empresa' | 'rematador' | 'admin',
+  isOpen = false,
+  onClose = vi.fn(),
+) {
   return render(
     <MemoryRouter>
       <Sidebar role={role} isOpen={isOpen} onClose={onClose} />
@@ -29,11 +33,17 @@ describe('Sidebar', () => {
     expect(screen.queryByRole('link', { name: 'Historial' })).not.toBeInTheDocument();
   });
 
-  it('para rematador, muestra sus tres secciones', () => {
-    renderSidebar('rematador');
+  it('para empresa, muestra sus tres secciones (ADR-047, hereda la navegación del ex-rematador)', () => {
+    renderSidebar('empresa');
     expect(screen.getAllByRole('link', { name: 'Mis remates' })[0]).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: 'Ventas adjudicadas' })[0]).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: 'Historial' })[0]).toBeInTheDocument();
+  });
+
+  it('para rematador (operador acotado, ADR-048), muestra únicamente "Unirme a un remate"', () => {
+    renderSidebar('rematador');
+    expect(screen.getAllByRole('link', { name: 'Unirme a un remate' })[0]).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Ventas adjudicadas' })).not.toBeInTheDocument();
   });
 
   it('para admin, muestra únicamente el panel de administración', () => {

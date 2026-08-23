@@ -195,7 +195,13 @@ export function ChatPanel({
           </div>
         )}
 
-        {isLoading ? (
+        {!currentUserId ? (
+          // Visitante anónimo (ADR-049): el chat sigue exigiendo sesión -- mensaje
+          // explícito, no el mismo texto de error que un fallo real de red/servidor.
+          <p className="p-4 text-center text-sm text-ink-faint">
+            Iniciá sesión para ver y participar del chat.
+          </p>
+        ) : isLoading ? (
           <div className="flex h-full items-center justify-center">
             <Spinner label="Cargando chat…" />
           </div>
@@ -231,8 +237,12 @@ export function ChatPanel({
         )}
       </div>
 
-      <TypingIndicator typingUsers={typingUsers} />
-      <ChatInput onSend={sendMessage} onTyping={notifyTyping} isSending={isSending} sendError={sendError} />
+      {currentUserId && (
+        <>
+          <TypingIndicator typingUsers={typingUsers} />
+          <ChatInput onSend={sendMessage} onTyping={notifyTyping} isSending={isSending} sendError={sendError} />
+        </>
+      )}
 
       <ConfirmModal
         isOpen={messageToDelete !== null}

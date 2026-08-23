@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { SalaBidPanel, type SalaBidPanelProps } from './SalaBidPanel';
 import type { Lote } from '../../remates/types';
 import type { OfertaSnapshotEntry } from '../types';
@@ -48,9 +49,19 @@ function makeProps(overrides: Partial<SalaBidPanelProps> = {}): SalaBidPanelProp
   };
 }
 
+// `SalaBidPanel` renderiza `PlaceBidButton`, que usa `useNavigate`/`useLocation`
+// (visitante anónimo, ADR-049) -- necesita un Router alrededor.
+function renderPanel(overrides: Partial<SalaBidPanelProps> = {}) {
+  return render(
+    <MemoryRouter>
+      <SalaBidPanel {...makeProps(overrides)} />
+    </MemoryRouter>,
+  );
+}
+
 describe('SalaBidPanel', () => {
   it('sin ofertas, la "oferta actual" es el precio inicial', () => {
-    render(<SalaBidPanel {...makeProps()} />);
+    renderPanel();
 
     expect(screen.getByText('Precio inicial')).toBeInTheDocument();
     expect(screen.getAllByText(/1[.,]?000/).length).toBeGreaterThanOrEqual(2);
@@ -65,20 +76,20 @@ describe('SalaBidPanel', () => {
       created_at: '2026-07-01T00:00:00Z',
     };
 
-    render(<SalaBidPanel {...makeProps({ winningOffer })} />);
+    renderPanel({ winningOffer });
 
     expect(screen.getByText('Oferta actual · Comprador verificado')).toBeInTheDocument();
     expect(screen.getByText(/1[.,]?500/)).toBeInTheDocument();
   });
 
   it('renderiza el formulario de oferta real (PlaceBidButton) -- comprador con lote abierto y remate en vivo lo ve habilitado', () => {
-    render(<SalaBidPanel {...makeProps()} />);
+    renderPanel();
 
     expect(screen.getByRole('button', { name: 'Ofertar' })).toBeEnabled();
   });
 
   it('sin cuenta regresiva (decisión visual confirmada -- el timer ya no se muestra en la Sala)', () => {
-    render(<SalaBidPanel {...makeProps({ lote: makeLote({ timer_ends_at: '2026-08-01T00:01:00Z' }) })} />);
+    renderPanel({ lote: makeLote({ timer_ends_at: '2026-08-01T00:01:00Z' }) });
 
     expect(screen.queryByRole('timer')).not.toBeInTheDocument();
   });

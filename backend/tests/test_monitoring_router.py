@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.modules.users.models import User, UserRole
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -31,6 +32,8 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
     }
     register = await client.post(REGISTER_URL, json=payload)
     assert register.status_code == 201, register.text
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -75,7 +78,7 @@ async def test_metrics_endpoint_requires_authentication(client: AsyncClient) -> 
 
 
 async def test_metrics_endpoint_returns_403_for_non_admin(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="monr1@example.com", role="rematador")
+    token = await _register_and_login(client, email="monr1@example.com", role="empresa")
     r = await client.get(METRICS_URL, headers=_auth(token))
     assert r.status_code == 403, r.text
     assert r.json()["error"]["code"] == "forbidden"

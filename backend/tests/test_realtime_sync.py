@@ -26,6 +26,7 @@ from app.modules.ofertas.events import OfertaAccepted
 from app.modules.remates.events import RemateScheduled, RemateStarted
 from app.modules.remates.lotes.events import LoteOpened
 from app.redis.pubsub import RedisPubSub
+from tests._role_test_helpers import activate_pending_account_sync
 
 WS_URL = "/api/v1/ws"
 REGISTER_URL = "/api/v1/auth/register"
@@ -56,6 +57,8 @@ def _register_and_login(client: TestClient, *, email: str, role: str = "comprado
         },
     )
     assert register.status_code == 201, register.text
+    if role in ("empresa", "rematador"):
+        activate_pending_account_sync(email)
     login = client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -73,7 +76,7 @@ def _create_visible_remate(client: TestClient, *, suffix: str) -> uuid.UUID:
     entrega (ADR-025) -- pero un UUID que no corresponde a ningún remate real ya no
     alcanza para unirse a una sala: hace falta un remate real y visible."""
     owner_token = _register_and_login(
-        client, email=f"sync-owner-{suffix}@example.com", role="rematador"
+        client, email=f"sync-owner-{suffix}@example.com", role="empresa"
     )
     remate = client.post(
         "/api/v1/remates",

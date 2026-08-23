@@ -16,6 +16,7 @@ from app.notifications.models import Notification
 from app.notify.service import NotificationService
 from app.postauction.models import PostAuctionCase, PostAuctionStatus
 from app.postauction.realtime import PostAuctionEventDispatcher
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -60,6 +61,8 @@ async def _register(client: AsyncClient, *, email: str, role: str) -> tuple[str,
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     token = login.json()["access_token"]
@@ -71,7 +74,7 @@ async def _setup_remate_and_lote(client: AsyncClient) -> tuple[uuid.UUID, uuid.U
     """Devuelve (remate_id, lote_id, buyer_id) reales -- `create_case_from_winner`
     resuelve estas tres filas antes de crear el caso, así que tienen que existir."""
     rematador_token, _ = await _register(
-        client, email=f"remat{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"remat{uuid.uuid4()}@example.com", role="empresa"
     )
     _, buyer_id = await _register(
         client, email=f"buyer{uuid.uuid4()}@example.com", role="comprador"
@@ -110,7 +113,7 @@ async def _setup_remate_lote_with_accepted_offer(
     en la base, que es lo que el cierre manual (`lote.closed`) tiene que poder resolver.
     Devuelve (remate_id, lote_id, buyer_id)."""
     rematador_token, _ = await _register(
-        client, email=f"remat{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"remat{uuid.uuid4()}@example.com", role="empresa"
     )
     buyer_token, buyer_id = await _register(
         client, email=f"buyer{uuid.uuid4()}@example.com", role="comprador"

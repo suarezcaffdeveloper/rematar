@@ -24,7 +24,7 @@ from app.modules.users.models import User, UserRole
 
 async def _make_user(db_session: AsyncSession, email: str) -> User:
     user = User(
-        email=email, hashed_password=hash_password("password123"), full_name="Test", role=UserRole.REMATADOR
+        email=email, hashed_password=hash_password("password123"), full_name="Test", role=UserRole.EMPRESA
     )
     db_session.add(user)
     await db_session.flush()

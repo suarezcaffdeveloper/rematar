@@ -14,12 +14,17 @@ válida durante un remate `LIVE`/`PAUSED`; `soft_delete` es una baja estructural
 solo en `DRAFT`/`SCHEDULED` — son operaciones distintas a propósito, mismo criterio que
 `Remate.cancel` vs. `Remate.soft_delete` en el Módulo 2.1).
 
-## Permisos (ver docs/15-modulo-lote.md y docs/16-motor-de-estados.md para el detalle)
+## Permisos (ver docs/15-modulo-lote.md, docs/16-motor-de-estados.md y ADR-047/ADR-048)
 
-- Crear/editar/eliminar/reordenar/abrir/cerrar/cancelar: exclusivamente el rematador
-  dueño del remate padre. No hay chequeo de rol explícito acá ni en el router: solo un
-  `rematador` puede ser dueño de un remate (se garantiza desde `RemateService.create`),
-  así que verificar ownership del remate ya alcanza.
+- Crear/editar/eliminar/reordenar: exclusivamente la empresa dueña del remate padre
+  (`get_owned_or_raise` vía `_get_owned_lote_or_raise`) — cambia estructura/precios, algo
+  que el rematador operador nunca puede tocar.
+- Abrir (`open`/`open_next`)/cerrar (`close`)/reencolar con precio preautorizado
+  (`requeue_preset`): la empresa dueña **o** el rematador asignado como operador
+  (`get_operator_or_raise` vía `_get_operator_lote_or_raise`) — son las acciones de la
+  Consola Operativa en vivo.
+- Cancelar (`cancel`)/reencolar con precio arbitrario (`requeue`): exclusivamente la
+  empresa dueña — son decisiones comerciales, no operativas.
 - Ver: dueño y admin ven cualquier lote de cualquier remate propio/todos; cualquier otro
   usuario solo ve lotes de remates que no estén en `DRAFT` — la visibilidad de un lote se
   deriva enteramente de la visibilidad de su remate (`RemateService._is_visible`,
@@ -133,7 +138,12 @@ class LoteService:
             )
 
     @staticmethod
-    def _mask_reserve_price(lote: Lote, remate: Remate, viewer: User) -> None:
+    def _mask_reserve_price(lote: Lote, remate: Remate, viewer: User | None) -> None:
+        # Visitante anónimo (ADR-049): nunca es dueño ni admin, mismo enmascarado que
+        # cualquier otro comprador que no sea el dueño del remate.
+        if viewer is None:
+            lote.reserve_price = None
+            return
         is_owner = remate.owner_id == viewer.id
         if viewer.role != UserRole.ADMIN and not is_owner:
             lote.reserve_price = None
@@ -165,6 +175,19 @@ class LoteService:
             raise NotFoundError("Lote no encontrado.")
         return remate, lote
 
+    async def _get_operator_lote_or_raise(
+        self, remate_id: uuid.UUID, lote_id: uuid.UUID, actor: User
+    ) -> tuple[Remate, Lote]:
+        """Hermana de `_get_owned_lote_or_raise`: mismo lock (`get_by_id_for_update`),
+        pero admite también al rematador asignado como operador del remate (ADR-048),
+        no solo a la empresa dueña. Usada por `open`/`open_next`/`close`/
+        `requeue_preset` -- las acciones de la Consola Operativa en vivo."""
+        remate = await self._remate_service.get_operator_or_raise(remate_id, actor)
+        lote = await self._repository.get_by_id_for_update(lote_id)
+        if lote is None or lote.remate_id != remate_id:
+            raise NotFoundError("Lote no encontrado.")
+        return remate, lote
+
     async def create(self, remate_id: uuid.UUID, owner: User, data: LoteCreate) -> Lote:
         remate = await self._remate_service.get_owned_or_raise(remate_id, owner)
         self._assert_structure_editable(remate)
@@ -185,6 +208,9 @@ class LoteService:
             base_price=data.base_price,
             min_increment=data.min_increment,
             reserve_price=data.reserve_price,
+            requeue_preset_enabled=data.requeue_preset_enabled,
+            requeue_preset_base_price=data.requeue_preset_base_price,
+            requeue_preset_min_increment=data.requeue_preset_min_increment,
         )
         self._repository.add(lote)
         # `lote.id` es un default client-side -- flush lo asigna sin comitear, para
@@ -208,7 +234,7 @@ class LoteService:
         return lote
 
     async def get_visible_or_raise(
-        self, remate_id: uuid.UUID, lote_id: uuid.UUID, viewer: User
+        self, remate_id: uuid.UUID, lote_id: uuid.UUID, viewer: User | None
     ) -> Lote:
         remate = await self._remate_service.get_visible_or_raise(remate_id, viewer)
         lote = await self._repository.get_by_id(lote_id)
@@ -218,7 +244,7 @@ class LoteService:
         return lote
 
     async def list_for_viewer(
-        self, *, remate_id: uuid.UUID, viewer: User, page: int, page_size: int
+        self, *, remate_id: uuid.UUID, viewer: User | None, page: int, page_size: int
     ) -> tuple[list[Lote], int]:
         remate = await self._remate_service.get_visible_or_raise(remate_id, viewer)
         offset = (page - 1) * page_size
@@ -247,6 +273,23 @@ class LoteService:
         reserve_price: Decimal | None = changes.get("reserve_price", lote.reserve_price)
         if base_price is not None and reserve_price is not None and reserve_price < base_price:
             raise BusinessRuleError("El precio de reserva no puede ser menor al precio base.")
+
+        requeue_preset_enabled = changes.get(
+            "requeue_preset_enabled", lote.requeue_preset_enabled
+        )
+        requeue_preset_base_price = changes.get(
+            "requeue_preset_base_price", lote.requeue_preset_base_price
+        )
+        requeue_preset_min_increment = changes.get(
+            "requeue_preset_min_increment", lote.requeue_preset_min_increment
+        )
+        if requeue_preset_enabled and (
+            requeue_preset_base_price is None or requeue_preset_min_increment is None
+        ):
+            raise BusinessRuleError(
+                "Para habilitar el reencolado preautorizado hace falta indicar "
+                "'requeue_preset_base_price' y 'requeue_preset_min_increment'."
+            )
 
         for field, value in changes.items():
             setattr(lote, field, value)
@@ -339,8 +382,8 @@ class LoteService:
                 "antes de abrir otro (RF-12)."
             )
 
-    async def open(self, remate_id: uuid.UUID, lote_id: uuid.UUID, owner: User) -> Lote:
-        remate, lote = await self._get_owned_lote_or_raise(remate_id, lote_id, owner)
+    async def open(self, remate_id: uuid.UUID, lote_id: uuid.UUID, actor: User) -> Lote:
+        remate, lote = await self._get_operator_lote_or_raise(remate_id, lote_id, actor)
         await self._assert_can_open(remate)
         assert_transition_allowed(lote.status, LoteStatus.OPEN)
 
@@ -351,7 +394,7 @@ class LoteService:
         # persiste junto con la apertura. `None` si el remate no configuró
         # `settings.lote_timer_seconds` -- comportamiento intacto.
         timer_started = TimerService.start_for_lote(lote, remate)
-        self._record_lote_action(lote, owner, remate_id, AuditAction.LOTE_OPENED)
+        self._record_lote_action(lote, actor, remate_id, AuditAction.LOTE_OPENED)
         await self._commit_or_raise_conflict(
             "Ya hay un lote abierto en este remate (conflicto de concurrencia)."
         )
@@ -368,8 +411,8 @@ class LoteService:
             await self._event_bus.publish(timer_started)
         return lote
 
-    async def open_next(self, remate_id: uuid.UUID, owner: User) -> Lote:
-        remate = await self._remate_service.get_owned_or_raise(remate_id, owner)
+    async def open_next(self, remate_id: uuid.UUID, actor: User) -> Lote:
+        remate = await self._remate_service.get_operator_or_raise(remate_id, actor)
         await self._assert_can_open(remate)
 
         lote = await self._repository.get_next_pending_lote(remate_id)
@@ -379,7 +422,7 @@ class LoteService:
         lote.status = LoteStatus.OPEN
         lote.opened_at = datetime.now(UTC)
         timer_started = TimerService.start_for_lote(lote, remate)
-        self._record_lote_action(lote, owner, remate_id, AuditAction.LOTE_OPENED)
+        self._record_lote_action(lote, actor, remate_id, AuditAction.LOTE_OPENED)
         await self._commit_or_raise_conflict(
             "Ya hay un lote abierto en este remate (conflicto de concurrencia)."
         )
@@ -400,11 +443,11 @@ class LoteService:
         self,
         remate_id: uuid.UUID,
         lote_id: uuid.UUID,
-        owner: User,
+        actor: User,
         outcome: LoteCloseOutcome,
         final_price: Decimal | None,
     ) -> Lote:
-        remate, lote = await self._get_owned_lote_or_raise(remate_id, lote_id, owner)
+        remate, lote = await self._get_operator_lote_or_raise(remate_id, lote_id, actor)
         if remate.status not in (RemateStatus.LIVE, RemateStatus.PAUSED):
             raise BusinessRuleError(
                 "Solo se puede cerrar un lote mientras el remate está en curso o "
@@ -417,9 +460,9 @@ class LoteService:
             remate_id,
             outcome,
             final_price,
-            actor_id=owner.id,
-            actor_name=owner.full_name,
-            actor_role=owner.role.value,
+            actor_id=actor.id,
+            actor_name=actor.full_name,
+            actor_role=actor.role.value,
             trigger="manual",
         )
         await self._repository.commit()
@@ -646,6 +689,89 @@ class LoteService:
                 "new_round": lote.round_number,
                 "new_display_order": lote.display_order,
                 "conditions_changed": bool(changes),
+            },
+        )
+        await self._repository.commit()
+        await self._repository.refresh(lote)
+        await self._event_bus.publish(
+            LoteRequeued(
+                remate_id=remate.id,
+                lote_id=lote.id,
+                lot_number=lote.lot_number,
+                display_order=lote.display_order,
+                round_number=lote.round_number,
+                base_price=lote.base_price,
+                min_increment=lote.min_increment,
+                reserve_price=lote.reserve_price,
+            )
+        )
+        return lote
+
+    async def requeue_preset(
+        self, remate_id: uuid.UUID, lote_id: uuid.UUID, actor: User
+    ) -> Lote:
+        """Reencolado preautorizado (ADR-048): igual que `requeue`, pero sin body -- usa
+        siempre `lote.requeue_preset_base_price`/`requeue_preset_min_increment`, nunca un
+        precio que mande el caller. Es la única vía de reencolado abierta al rematador
+        operador (no dueño): la empresa deja las condiciones cargadas de antemano
+        (`LoteUpdate.requeue_preset_*`) y el rematador, en vivo, solo confirma "volver a
+        rematar" sin poder cambiar el precio. La empresa dueña también puede usar este
+        endpoint (le ahorra repetir el precio a mano), pero para reencolar con un precio
+        distinto al preautorizado sigue estando `requeue()`, exclusivo de la empresa."""
+        remate, lote = await self._get_operator_lote_or_raise(remate_id, lote_id, actor)
+        if remate.status not in (RemateStatus.LIVE, RemateStatus.PAUSED):
+            raise BusinessRuleError(
+                "Solo se puede reincorporar un lote mientras el remate está en curso o "
+                "pausado.",
+                current_status=remate.status.value,
+            )
+        if not lote.requeue_preset_enabled:
+            raise BusinessRuleError(
+                "Este lote no tiene un reencolado preautorizado por la empresa."
+            )
+        assert_transition_allowed(lote.status, LoteStatus.PENDING)
+        assert lote.closed_at is not None  # invariante: todo CLOSED_UNSOLD tiene closed_at
+        assert lote.requeue_preset_base_price is not None
+        assert lote.requeue_preset_min_increment is not None
+
+        self._repository.add_round(
+            LoteRound(
+                lote_id=lote.id,
+                round_number=lote.round_number,
+                base_price=lote.base_price,
+                min_increment=lote.min_increment,
+                reserve_price=lote.reserve_price,
+                opened_at=lote.opened_at,
+                closed_at=lote.closed_at,
+                requeued_at=datetime.now(UTC),
+                requeued_by_id=actor.id,
+                requeued_by_name=actor.full_name,
+            )
+        )
+
+        previous_round = lote.round_number
+        lote.base_price = lote.requeue_preset_base_price
+        lote.min_increment = lote.requeue_preset_min_increment
+        lote.status = LoteStatus.PENDING
+        lote.final_price = None
+        lote.opened_at = None
+        lote.closed_at = None
+        lote.display_order = await self._repository.next_display_order(remate_id)
+        lote.round_number += 1
+
+        self._audit_repository.record(
+            actor_id=actor.id,
+            actor_name=actor.full_name,
+            actor_role=actor.role.value,
+            action=AuditAction.LOTE_REQUEUED,
+            resource_type="lote",
+            resource_id=lote.id,
+            remate_id=remate_id,
+            details={
+                "previous_round": previous_round,
+                "new_round": lote.round_number,
+                "new_display_order": lote.display_order,
+                "mode": "preset",
             },
         )
         await self._repository.commit()

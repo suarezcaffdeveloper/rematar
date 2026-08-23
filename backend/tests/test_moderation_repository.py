@@ -58,7 +58,7 @@ async def test_is_banned_false_by_default(db_session: AsyncSession) -> None:
 
 
 async def test_add_ban_makes_is_banned_true(db_session: AsyncSession) -> None:
-    rematador = await _create_user(db_session, role=UserRole.REMATADOR)
+    rematador = await _create_user(db_session, role=UserRole.EMPRESA)
     buyer = await _create_user(db_session)
     remate = await _create_remate(db_session, rematador)
     repository = ModerationRepository(db_session)
@@ -73,7 +73,7 @@ async def test_add_ban_makes_is_banned_true(db_session: AsyncSession) -> None:
 
 
 async def test_ban_is_unique_per_remate_and_user(db_session: AsyncSession) -> None:
-    rematador = await _create_user(db_session, role=UserRole.REMATADOR)
+    rematador = await _create_user(db_session, role=UserRole.EMPRESA)
     buyer = await _create_user(db_session)
     remate = await _create_remate(db_session, rematador)
     repository = ModerationRepository(db_session)
@@ -94,7 +94,7 @@ async def test_ban_is_unique_per_remate_and_user(db_session: AsyncSession) -> No
 
 
 async def test_pin_and_list_and_unpin_message(db_session: AsyncSession) -> None:
-    rematador = await _create_user(db_session, role=UserRole.REMATADOR)
+    rematador = await _create_user(db_session, role=UserRole.EMPRESA)
     buyer = await _create_user(db_session)
     remate = await _create_remate(db_session, rematador)
     message = await _create_message(db_session, remate, buyer)

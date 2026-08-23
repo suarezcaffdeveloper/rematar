@@ -15,6 +15,7 @@ import type {
   LoteListParams,
   LoteRequeuePayload,
   LoteRound,
+  OperatorCodeResponse,
   Remate,
   RemateFormPayload,
   RemateListParams,
@@ -170,6 +171,23 @@ export async function finishRemateRequest(remateId: string): Promise<Remate> {
 }
 
 /**
+ * Asignación de operador (ADR-048): la empresa dueña genera/regenera el código
+ * (`generateOperatorCodeRequest`, texto plano devuelto una única vez -- el backend nunca
+ * lo persiste así) y se lo comparte fuera de banda con un usuario `rematador`, que lo
+ * canjea (`claimOperatorRequest`) para quedar asignado como `Remate.rematador_id`.
+ * Regenerar revoca al operador anterior en la misma operación.
+ */
+export async function generateOperatorCodeRequest(remateId: string): Promise<OperatorCodeResponse> {
+  const { data } = await apiClient.post<OperatorCodeResponse>(`/remates/${remateId}/operator-code`);
+  return data;
+}
+
+export async function claimOperatorRequest(remateId: string, code: string): Promise<Remate> {
+  const { data } = await apiClient.post<Remate>(`/remates/${remateId}/claim-operator`, { code });
+  return data;
+}
+
+/**
  * Transiciones del motor de estados de `Lote` (Épica 2, Módulo 2.3,
  * `backend/app/modules/remates/lotes/router.py`) -- consumidas por la Consola Operativa
  * del Rematador (Épica 5, Módulo 5.2). `open`/`close` operan sobre un lote puntual;
@@ -207,6 +225,21 @@ export async function requeueLoteRequest(
   payload: LoteRequeuePayload = {},
 ): Promise<Lote> {
   const { data } = await apiClient.post<Lote>(`/remates/${remateId}/lotes/${loteId}/requeue`, payload);
+  return data;
+}
+
+/**
+ * Reencolado preautorizado (ADR-048): igual resultado que `requeueLoteRequest`, pero
+ * sin body -- siempre usa el precio/incremento que la empresa dejó cargado en el lote
+ * (`Lote.requeue_preset_*`), nunca uno que el caller intente mandar. Es la única vía de
+ * reencolado que el rematador operador (no dueño) puede usar; la empresa también puede
+ * llamarlo (le ahorra repetir el precio a mano), pero para un precio distinto sigue
+ * estando `requeueLoteRequest`, exclusivo de la empresa.
+ */
+export async function requeueLotePresetRequest(remateId: string, loteId: string): Promise<Lote> {
+  const { data } = await apiClient.post<Lote>(
+    `/remates/${remateId}/lotes/${loteId}/requeue-preset`,
+  );
   return data;
 }
 

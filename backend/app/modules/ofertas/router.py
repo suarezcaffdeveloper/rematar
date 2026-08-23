@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, Query, status
 from redis.asyncio import Redis
 
 from app.common.schemas import Page
-from app.modules.auth.dependencies import get_current_user
+from app.modules.auth.dependencies import get_current_user, get_current_user_optional
 from app.modules.ofertas.dependencies import get_auction_engine
 from app.modules.ofertas.engine import AuctionEngine
 from app.modules.ofertas.models import Oferta
@@ -67,12 +67,15 @@ async def place_bid(
 @router.get(
     "/leading",
     response_model=LeadingOfferRead,
-    summary="Monto de la oferta vigente del lote (null si todavía no hay ninguna)",
+    summary=(
+        "Monto de la oferta vigente del lote (null si todavía no hay ninguna) -- "
+        "visible también para un visitante anónimo, ADR-049"
+    ),
 )
 async def get_leading_offer(
     remate_id: uuid.UUID,
     lote_id: uuid.UUID,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User | None, Depends(get_current_user_optional)],
     engine: Annotated[AuctionEngine, Depends(get_auction_engine)],
 ) -> LeadingOfferRead:
     amount = await engine.get_leading_amount(remate_id, lote_id, current_user)

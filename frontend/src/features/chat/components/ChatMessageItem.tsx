@@ -15,6 +15,7 @@ import { PinIcon, TrashIcon } from './icons';
 const NON_OWN_NAME_CLASSES: Record<NonNullable<ChatMessage['author_role']>, string> = {
   comprador: 'text-ink-muted',
   rematador: 'text-sky-700',
+  empresa: 'text-emerald-700',
   admin: 'text-amber-700',
 };
 

@@ -1,4 +1,5 @@
 import { Menu } from 'lucide-react';
+import { useAuth } from '../../features/auth/hooks';
 import { NotificationBell } from '../../features/notifications/components/NotificationBell';
 import { Breadcrumb } from '../../shared/components/Breadcrumb';
 import { useBreadcrumbStore } from './breadcrumbStore';
@@ -18,6 +19,7 @@ export interface HeaderProps {
  */
 export function Header({ onOpenSidebar }: HeaderProps) {
   const items = useBreadcrumbStore((state) => state.items);
+  const { isAuthenticated } = useAuth();
 
   return (
     <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 sm:px-6">
@@ -33,7 +35,10 @@ export function Header({ onOpenSidebar }: HeaderProps) {
       <div className="min-w-0 flex-1">{items.length > 0 && <Breadcrumb items={items} />}</div>
 
       <div className="flex shrink-0 items-center gap-3">
-        <NotificationBell />
+        {/* Visitante anónimo (ADR-049): sin sesión no hay notificaciones que pedir --
+            si se montara igual, dispararía un 401 contra un endpoint autenticado apenas
+            entra a la página pública de un remate. */}
+        {isAuthenticated && <NotificationBell />}
       </div>
     </header>
   );

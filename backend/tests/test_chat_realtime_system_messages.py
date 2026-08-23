@@ -26,6 +26,7 @@ from app.modules.ofertas.events import OfertaAccepted
 from app.modules.remates.events import RemateFinished, RematePaused, RemateResumed, RemateStarted
 from app.modules.remates.lotes.events import LoteClosed, LoteOpened
 from app.redis.rate_limit import RedisRateLimiter
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -61,9 +62,10 @@ async def _create_remate(client: AsyncClient, email: str) -> uuid.UUID:
         "confirm_password": "password123",
         "full_name": "Test",
         "phone": "+5491122334455",
-        "role": "rematador",
+        "role": "empresa",
     }
     await client.post(REGISTER_URL, json=payload)
+    await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     token = login.json()["access_token"]

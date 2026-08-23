@@ -29,6 +29,7 @@ from app.modules.remates.repository import RemateRepository
 from app.modules.remates.service import RemateService
 from app.modules.users.models import User
 from app.redis.rate_limit import RedisRateLimiter
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -67,13 +68,15 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
         "role": role,
     }
     register = await client.post(REGISTER_URL, json=payload)
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return register.json()["id"], login.json()["access_token"]
 
 
 async def _owner(client: AsyncClient, email: str) -> tuple[str, str]:
-    return await _register_and_login(client, email=email, role="rematador")
+    return await _register_and_login(client, email=email, role="empresa")
 
 
 async def _buyer(client: AsyncClient, email: str) -> tuple[str, str]:
@@ -144,7 +147,7 @@ async def test_send_message_persists_and_denormalizes_author_fields(
     assert message.kind == ChatMessageKind.USER
     assert message.author_id == owner.id
     assert message.author_name == owner.full_name
-    assert message.author_role == "rematador"
+    assert message.author_role == "empresa"
     assert message.content == "Hola a todos"
 
     sent_events = [e for e in event_bus.published if isinstance(e, ChatMessageSent)]

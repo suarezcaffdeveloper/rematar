@@ -6,11 +6,17 @@ efectivo sin vivir dentro de `app/modules/remates/` -- gestión global reutiliza
 (`/bots`) y control por remate (`/remates/{remate_id}/bots/...`).
 
 Ownership: igual que `remates_router`, no hay `require_roles` en la mayoría de los
-endpoints -- la regla es "sos el dueño de este bot/remate en particular"
-(`BotProfileService.get_owned_or_raise`/`RemateService.get_owned_or_raise`), no "qué rol
-tenés". La excepción es crear un bot (`POST /bots`): un comprador no tiene ningún caso de
-uso legítimo para crear un bot propio, así que se exige el rol `rematador` desde el
-router, mismo criterio que `POST /remates`.
+endpoints -- la regla es "sos el dueño de este bot, o el dueño/operador del remate en
+particular" (`BotProfileService.get_owned_or_raise` para los perfiles;
+`RemateService.get_operator_or_raise` para las rutas bajo `/remates/{remate_id}/bots/...`,
+mismo criterio que ya usa `ConsolaControlPanel` -- admite tanto a la empresa dueña como al
+rematador asignado como operador, ADR-048), no "qué rol tenés". La excepción es crear un
+bot (`POST /bots`): un comprador no tiene ningún caso de uso legítimo para crear uno, así
+que se sigue exigiendo un rol desde el router (mismo criterio que `POST /remates`,
+ADR-047) -- pero acá el rol se abre a `empresa` y `rematador` (no solo `empresa`), pedido
+explícito para que el rematador operador pueda armar y correr sus propios simuladores al
+gestionar un remate en vivo, mientras este módulo exista (herramienta de testeo, se va a
+eliminar más adelante).
 """
 
 import uuid
@@ -39,7 +45,7 @@ router = APIRouter()
     "/bots",
     response_model=BotProfileRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_roles(UserRole.REMATADOR))],
+    dependencies=[Depends(require_roles(UserRole.EMPRESA, UserRole.REMATADOR))],
     summary="Crear un bot simulador de comprador",
 )
 async def create_bot(

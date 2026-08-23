@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from app.audit.models import AuditLogEntry
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -43,6 +44,8 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -134,7 +137,7 @@ async def _setup_desierto_lote(
 ) -> tuple[str, str, str]:
     """Rematador con un remate LIVE y un único lote `closed_unsold`. Devuelve (token,
     remate_id, lote_id)."""
-    token = await _register_and_login(client, email=email, role="rematador")
+    token = await _register_and_login(client, email=email, role="empresa")
     remate = await _create_remate(client, token)
     lote = await _create_lote(client, token, remate["id"], **lote_overrides)
     await _schedule(client, token, remate["id"])
@@ -174,7 +177,7 @@ async def test_requeue_preserves_lot_number_title_and_images(client: AsyncClient
 
 
 async def test_requeue_rejects_lote_that_is_not_closed_unsold(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rem-desierto3@example.com", role="rematador")
+    token = await _register_and_login(client, email="rem-desierto3@example.com", role="empresa")
     remate = await _create_remate(client, token)
     lote = await _create_lote(client, token, remate["id"])
     await _schedule(client, token, remate["id"])
@@ -186,7 +189,7 @@ async def test_requeue_rejects_lote_that_is_not_closed_unsold(client: AsyncClien
 
 
 async def test_requeue_rejects_closed_sold_lote(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rem-desierto4@example.com", role="rematador")
+    token = await _register_and_login(client, email="rem-desierto4@example.com", role="empresa")
     remate = await _create_remate(client, token)
     lote = await _create_lote(client, token, remate["id"])
     await _schedule(client, token, remate["id"])
@@ -211,7 +214,7 @@ async def test_requeue_requires_remate_live_or_paused(client: AsyncClient) -> No
 
 
 async def test_requeue_places_lote_at_end_of_current_queue(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rem-desierto6@example.com", role="rematador")
+    token = await _register_and_login(client, email="rem-desierto6@example.com", role="empresa")
     remate = await _create_remate(client, token)
     lote1 = await _create_lote(client, token, remate["id"], lot_number="1")
     lote2 = await _create_lote(client, token, remate["id"], lot_number="2")
@@ -235,7 +238,7 @@ async def test_requeue_places_lote_at_end_of_current_queue(client: AsyncClient) 
 async def test_requeue_multiple_desierto_lotes_preserves_reincorporation_order(
     client: AsyncClient,
 ) -> None:
-    token = await _register_and_login(client, email="rem-desierto7@example.com", role="rematador")
+    token = await _register_and_login(client, email="rem-desierto7@example.com", role="empresa")
     remate = await _create_remate(client, token)
     lote_numbers = {n: await _create_lote(client, token, remate["id"], lot_number=n) for n in ["2", "4", "5", "6", "7", "8"]}
     await _schedule(client, token, remate["id"])
@@ -335,7 +338,7 @@ async def test_rounds_endpoint_masks_reserve_price_for_non_owner(client: AsyncCl
 async def test_requeue_forbidden_for_non_owner_rematador(client: AsyncClient) -> None:
     token, remate_id, lote_id = await _setup_desierto_lote(client, "rem-desierto13@example.com")
     other_token = await _register_and_login(
-        client, email="rem-desierto13b@example.com", role="rematador"
+        client, email="rem-desierto13b@example.com", role="empresa"
     )
 
     response = await _requeue(client, other_token, remate_id, lote_id)

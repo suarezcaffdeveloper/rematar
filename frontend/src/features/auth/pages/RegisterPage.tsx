@@ -1,19 +1,20 @@
 import { type FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Eye, EyeOff, Gavel, Lock, Mail, Phone, User } from 'lucide-react';
+import { Building2, CheckCircle2, Eye, EyeOff, Gavel, Lock, Mail, Phone, User } from 'lucide-react';
 import { useAuthActions } from '../hooks';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Button } from '../../../shared/components/Button';
 import { Input } from '../../../shared/components/Input';
 import { Alert } from '../../../shared/components/Alert';
-import type { RegisterableRole } from '../types';
+import { ROLES_PENDING_APPROVAL, type RegisterableRole } from '../types';
 import { PasswordStrengthMeter } from '../components/PasswordStrengthMeter';
 import { RegisterShowcase } from '../components/RegisterShowcase';
 
 const ROLE_OPTIONS: { value: RegisterableRole; label: string; description: string; icon: typeof User }[] = [
   { value: 'comprador', label: 'Comprador', description: 'Quiero ofertar en remates', icon: User },
-  { value: 'rematador', label: 'Rematador', description: 'Quiero organizar remates', icon: Gavel },
+  { value: 'empresa', label: 'Empresa', description: 'Quiero organizar remates', icon: Building2 },
+  { value: 'rematador', label: 'Rematador', description: 'Quiero dirigir remates en vivo', icon: Gavel },
 ];
 
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
@@ -49,6 +50,7 @@ export function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isPendingApproval, setIsPendingApproval] = useState(false);
 
   const isFullNameValid = fullName.trim().length > 1;
   const isEmailValid = EMAIL_PATTERN.test(email);
@@ -66,7 +68,7 @@ export function RegisterPage() {
 
     setIsSubmitting(true);
     try {
-      await register({
+      const { pendingApproval } = await register({
         full_name: fullName,
         email,
         phone,
@@ -74,7 +76,11 @@ export function RegisterPage() {
         confirm_password: confirmPassword,
         role,
       });
-      navigate('/', { replace: true });
+      if (pendingApproval) {
+        setIsPendingApproval(true);
+      } else {
+        navigate('/', { replace: true });
+      }
     } catch (err) {
       setError(normalizeApiError(err).message);
     } finally {
@@ -101,142 +107,161 @@ export function RegisterPage() {
             <span className="text-lg font-bold tracking-tight text-brand-700">RematAR</span>
           </Link>
 
-          <h1 className="mt-6 text-3xl font-bold tracking-tight text-ink">Crear una cuenta</h1>
-          <p className="mt-3 text-base leading-relaxed text-ink-muted">
-            Unite a la plataforma de remates en tiempo real y comenzá a participar de
-            subastas de forma simple y segura.
-          </p>
+          {isPendingApproval ? (
+            <>
+              <h1 className="mt-6 text-3xl font-bold tracking-tight text-ink">Cuenta creada</h1>
+              <Alert variant="success" className="mt-4">
+                Tu cuenta como {role === 'empresa' ? 'empresa' : 'rematador'} quedó pendiente de
+                aprobación. Un administrador de RematAR la va a revisar y activar antes de que
+                puedas iniciar sesión -- te vamos a avisar por email apenas esté lista.
+              </Alert>
+            </>
+          ) : (
+            <>
+              <h1 className="mt-6 text-3xl font-bold tracking-tight text-ink">Crear una cuenta</h1>
+              <p className="mt-3 text-base leading-relaxed text-ink-muted">
+                Unite a la plataforma de remates en tiempo real y comenzá a participar de
+                subastas de forma simple y segura.
+              </p>
 
-          <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4" noValidate>
-            {error && <Alert variant="error">{error}</Alert>}
+              <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4" noValidate>
+                {error && <Alert variant="error">{error}</Alert>}
 
-            <Input
-              label="Nombre completo"
-              autoComplete="name"
-              required
-              icon={User}
-              className="py-2.5"
-              value={fullName}
-              onChange={(event) => setFullName(event.target.value)}
-              rightElement={
-                isFullNameValid ? <CheckCircle2 className="h-4 w-4 text-success-500" /> : undefined
-              }
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Teléfono"
-                type="tel"
-                autoComplete="tel"
-                required
-                icon={Phone}
-                className="py-2.5"
-                placeholder="+54 9 11 2345-6789"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                rightElement={isPhoneValid ? <CheckCircle2 className="h-4 w-4 text-success-500" /> : undefined}
-              />
-
-              <Input
-                label="Email"
-                type="email"
-                autoComplete="email"
-                required
-                icon={Mail}
-                className="py-2.5"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                rightElement={isEmailValid ? <CheckCircle2 className="h-4 w-4 text-success-500" /> : undefined}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
                 <Input
-                  label="Contraseña"
-                  type={isPasswordVisible ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  minLength={8}
+                  label="Nombre completo"
+                  autoComplete="name"
                   required
-                  icon={Lock}
+                  icon={User}
                   className="py-2.5"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
                   rightElement={
-                    <button
-                      type="button"
-                      onClick={() => setIsPasswordVisible((visible) => !visible)}
-                      className="text-ink-faint transition-colors hover:text-ink-muted"
-                      aria-label={isPasswordVisible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                    >
-                      {isPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+                    isFullNameValid ? <CheckCircle2 className="h-4 w-4 text-success-500" /> : undefined
                   }
                 />
-                <PasswordStrengthMeter password={password} />
-              </div>
 
-              <Input
-                label="Confirmar contraseña"
-                type={isPasswordVisible ? 'text' : 'password'}
-                autoComplete="new-password"
-                minLength={8}
-                required
-                icon={Lock}
-                className="py-2.5"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                error={passwordsMismatch ? 'Las contraseñas no coinciden.' : undefined}
-                rightElement={
-                  !passwordsMismatch && confirmPassword.length > 0 ? (
-                    <CheckCircle2 className="h-4 w-4 text-success-500" />
-                  ) : undefined
-                }
-              />
-            </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    label="Teléfono"
+                    type="tel"
+                    autoComplete="tel"
+                    required
+                    icon={Phone}
+                    className="py-2.5"
+                    placeholder="+54 9 11 2345-6789"
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    rightElement={isPhoneValid ? <CheckCircle2 className="h-4 w-4 text-success-500" /> : undefined}
+                  />
 
-            <fieldset className="flex flex-col gap-1.5">
-              <legend className="text-sm font-medium text-ink">Quiero registrarme como</legend>
-              <div className="grid grid-cols-2 gap-3">
-                {ROLE_OPTIONS.map((option) => {
-                  const isSelected = role === option.value;
-                  return (
-                    <label
-                      key={option.value}
-                      className={`flex cursor-pointer flex-col gap-0.5 rounded-lg border p-2 transition-all duration-200 ${
-                        isSelected
-                          ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-200'
-                          : 'border-line bg-white hover:border-brand-300 hover:bg-surface-subtle'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="role"
-                        value={option.value}
-                        checked={isSelected}
-                        onChange={() => setRole(option.value)}
-                        className="sr-only"
-                      />
-                      <span className="flex items-center gap-1.5">
-                        <option.icon
-                          aria-hidden="true"
-                          className={`h-3.5 w-3.5 shrink-0 ${isSelected ? 'text-brand-600' : 'text-ink-faint'}`}
-                        />
-                        <span className={`text-sm font-semibold ${isSelected ? 'text-brand-700' : 'text-ink'}`}>
-                          {option.label}
-                        </span>
-                      </span>
-                      <span className="text-xs text-ink-muted">{option.description}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
+                  <Input
+                    label="Email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    icon={Mail}
+                    className="py-2.5"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    rightElement={isEmailValid ? <CheckCircle2 className="h-4 w-4 text-success-500" /> : undefined}
+                  />
+                </div>
 
-            <Button type="submit" isLoading={isSubmitting} className="mt-2 w-full py-2.5 text-base">
-              Crear cuenta
-            </Button>
-          </form>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Input
+                      label="Contraseña"
+                      type={isPasswordVisible ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      minLength={8}
+                      required
+                      icon={Lock}
+                      className="py-2.5"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      rightElement={
+                        <button
+                          type="button"
+                          onClick={() => setIsPasswordVisible((visible) => !visible)}
+                          className="text-ink-faint transition-colors hover:text-ink-muted"
+                          aria-label={isPasswordVisible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        >
+                          {isPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      }
+                    />
+                    <PasswordStrengthMeter password={password} />
+                  </div>
+
+                  <Input
+                    label="Confirmar contraseña"
+                    type={isPasswordVisible ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    minLength={8}
+                    required
+                    icon={Lock}
+                    className="py-2.5"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    error={passwordsMismatch ? 'Las contraseñas no coinciden.' : undefined}
+                    rightElement={
+                      !passwordsMismatch && confirmPassword.length > 0 ? (
+                        <CheckCircle2 className="h-4 w-4 text-success-500" />
+                      ) : undefined
+                    }
+                  />
+                </div>
+
+                <fieldset className="flex flex-col gap-1.5">
+                  <legend className="text-sm font-medium text-ink">Quiero registrarme como</legend>
+                  <div className="grid grid-cols-3 gap-3">
+                    {ROLE_OPTIONS.map((option) => {
+                      const isSelected = role === option.value;
+                      return (
+                        <label
+                          key={option.value}
+                          className={`flex cursor-pointer flex-col gap-0.5 rounded-lg border p-2 transition-all duration-200 ${
+                            isSelected
+                              ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-200'
+                              : 'border-line bg-white hover:border-brand-300 hover:bg-surface-subtle'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="role"
+                            value={option.value}
+                            checked={isSelected}
+                            onChange={() => setRole(option.value)}
+                            className="sr-only"
+                          />
+                          <span className="flex items-center gap-1.5">
+                            <option.icon
+                              aria-hidden="true"
+                              className={`h-3.5 w-3.5 shrink-0 ${isSelected ? 'text-brand-600' : 'text-ink-faint'}`}
+                            />
+                            <span className={`text-sm font-semibold ${isSelected ? 'text-brand-700' : 'text-ink'}`}>
+                              {option.label}
+                            </span>
+                          </span>
+                          <span className="text-xs text-ink-muted">{option.description}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {ROLES_PENDING_APPROVAL.has(role) && (
+                    <p className="text-xs text-ink-muted">
+                      Esta cuenta queda pendiente de aprobación de un administrador antes de
+                      poder iniciar sesión.
+                    </p>
+                  )}
+                </fieldset>
+
+                <Button type="submit" isLoading={isSubmitting} className="mt-2 w-full py-2.5 text-base">
+                  Crear cuenta
+                </Button>
+              </form>
+            </>
+          )}
 
           <p className="mt-8 text-center text-sm text-ink-muted">
             ¿Ya tenés una cuenta?{' '}

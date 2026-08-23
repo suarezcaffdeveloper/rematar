@@ -21,6 +21,7 @@ from app.core.config import get_settings
 from app.core.security import hash_password
 from app.modules.remates.models import Remate, RemateStatus
 from app.modules.users.models import User, UserRole
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -43,6 +44,8 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -109,7 +112,7 @@ async def _create_lote(client: AsyncClient, token: str, remate_id: str, **overri
 
 
 async def test_owner_can_create_lote_in_draft_remate(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador1@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador1@example.com", role="empresa")
     remate = await _create_remate(client, token)
 
     lote = await _create_lote(client, token, remate["id"])
@@ -125,7 +128,7 @@ async def test_owner_can_create_lote_in_draft_remate(client: AsyncClient) -> Non
 
 async def test_comprador_cannot_create_lote(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador2@example.com", role="rematador"
+        client, email="rematador2@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token, starts_at="2027-06-01T10:00:00Z")
     await _schedule_remate(client, owner_token, remate["id"])
@@ -149,12 +152,12 @@ async def test_comprador_cannot_create_lote(client: AsyncClient) -> None:
 
 async def test_other_rematador_cannot_create_lote_in_foreign_draft(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador3@example.com", role="rematador"
+        client, email="rematador3@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
 
     other_token = await _register_and_login(
-        client, email="rematador4@example.com", role="rematador"
+        client, email="rematador4@example.com", role="empresa"
     )
     response = await client.post(
         _lotes_url(remate["id"]),
@@ -172,7 +175,7 @@ async def test_other_rematador_cannot_create_lote_in_foreign_draft(client: Async
 
 
 async def test_display_order_is_assigned_sequentially(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador5@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador5@example.com", role="empresa")
     remate = await _create_remate(client, token)
 
     first = await _create_lote(client, token, remate["id"], lot_number="1")
@@ -186,7 +189,7 @@ async def test_display_order_is_assigned_sequentially(client: AsyncClient) -> No
 
 
 async def test_reserve_price_below_base_price_is_rejected(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador6@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador6@example.com", role="empresa")
     remate = await _create_remate(client, token)
 
     response = await client.post(
@@ -205,7 +208,7 @@ async def test_reserve_price_below_base_price_is_rejected(client: AsyncClient) -
 
 
 async def test_base_price_must_be_positive(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador7@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador7@example.com", role="empresa")
     remate = await _create_remate(client, token)
 
     response = await client.post(
@@ -223,7 +226,7 @@ async def test_base_price_must_be_positive(client: AsyncClient) -> None:
 
 
 async def test_too_many_attributes_is_rejected(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador8@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador8@example.com", role="empresa")
     remate = await _create_remate(client, token)
 
     response = await client.post(
@@ -242,7 +245,7 @@ async def test_too_many_attributes_is_rejected(client: AsyncClient) -> None:
 
 
 async def test_duplicate_lot_number_in_same_remate_is_conflict(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador9@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador9@example.com", role="empresa")
     remate = await _create_remate(client, token)
     await _create_lote(client, token, remate["id"], lot_number="1")
 
@@ -261,7 +264,7 @@ async def test_duplicate_lot_number_in_same_remate_is_conflict(client: AsyncClie
 
 
 async def test_same_lot_number_allowed_across_different_remates(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador10@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador10@example.com", role="empresa")
     remate_a = await _create_remate(client, token, title="Remate A")
     remate_b = await _create_remate(client, token, title="Remate B")
 
@@ -275,7 +278,7 @@ async def test_same_lot_number_allowed_across_different_remates(client: AsyncCli
 
 
 async def test_owner_can_see_lote_of_own_draft(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador11@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador11@example.com", role="empresa")
     remate = await _create_remate(client, token)
     lote = await _create_lote(client, token, remate["id"], reserve_price="1200.00")
 
@@ -286,13 +289,13 @@ async def test_owner_can_see_lote_of_own_draft(client: AsyncClient) -> None:
 
 async def test_other_rematador_cannot_see_lote_of_foreign_draft(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador12@example.com", role="rematador"
+        client, email="rematador12@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     lote = await _create_lote(client, owner_token, remate["id"])
 
     other_token = await _register_and_login(
-        client, email="rematador13@example.com", role="rematador"
+        client, email="rematador13@example.com", role="empresa"
     )
     response = await client.get(
         f"{_lotes_url(remate['id'])}/{lote['id']}", headers=_auth(other_token)
@@ -304,7 +307,7 @@ async def test_admin_can_see_lote_of_any_draft(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador14@example.com", role="rematador"
+        client, email="rematador14@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     lote = await _create_lote(client, owner_token, remate["id"], reserve_price="1200.00")
@@ -321,7 +324,7 @@ async def test_comprador_sees_lote_of_scheduled_remate_with_reserve_price_hidden
     client: AsyncClient,
 ) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador15@example.com", role="rematador"
+        client, email="rematador15@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token, starts_at="2027-06-01T10:00:00Z")
     lote = await _create_lote(client, owner_token, remate["id"], reserve_price="1200.00")
@@ -339,7 +342,7 @@ async def test_comprador_sees_lote_of_scheduled_remate_with_reserve_price_hidden
 
 async def test_comprador_cannot_see_lote_of_draft_remate(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador16@example.com", role="rematador"
+        client, email="rematador16@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     lote = await _create_lote(client, owner_token, remate["id"])
@@ -355,7 +358,7 @@ async def test_comprador_cannot_see_lote_of_draft_remate(client: AsyncClient) ->
 
 async def test_list_lotes_masks_reserve_price_for_comprador(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador17@example.com", role="rematador"
+        client, email="rematador17@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token, starts_at="2027-06-01T10:00:00Z")
     await _create_lote(client, owner_token, remate["id"], reserve_price="1200.00")
@@ -375,7 +378,7 @@ async def test_list_lotes_masks_reserve_price_for_comprador(client: AsyncClient)
 
 
 async def test_owner_can_update_lote(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador18@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador18@example.com", role="empresa")
     remate = await _create_remate(client, token)
     lote = await _create_lote(client, token, remate["id"])
 
@@ -390,7 +393,7 @@ async def test_owner_can_update_lote(client: AsyncClient) -> None:
 
 async def test_non_owner_cannot_update_lote(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador19@example.com", role="rematador"
+        client, email="rematador19@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token, starts_at="2027-06-01T10:00:00Z")
     lote = await _create_lote(client, owner_token, remate["id"])
@@ -399,7 +402,7 @@ async def test_non_owner_cannot_update_lote(client: AsyncClient) -> None:
     await _schedule_remate(client, owner_token, remate["id"])
 
     other_token = await _register_and_login(
-        client, email="rematador20@example.com", role="rematador"
+        client, email="rematador20@example.com", role="empresa"
     )
     response = await client.patch(
         f"{_lotes_url(remate['id'])}/{lote['id']}",
@@ -412,7 +415,7 @@ async def test_non_owner_cannot_update_lote(client: AsyncClient) -> None:
 async def test_cannot_update_lote_once_remate_is_live(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    token = await _register_and_login(client, email="rematador21@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador21@example.com", role="empresa")
     remate = await _create_remate(client, token)
     lote = await _create_lote(client, token, remate["id"])
     await _force_remate_status(db_session, remate["id"], RemateStatus.LIVE)
@@ -428,7 +431,7 @@ async def test_cannot_update_lote_once_remate_is_live(
 async def test_cannot_create_lote_once_remate_is_live(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    token = await _register_and_login(client, email="rematador22@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador22@example.com", role="empresa")
     remate = await _create_remate(client, token)
     await _force_remate_status(db_session, remate["id"], RemateStatus.LIVE)
 
@@ -450,7 +453,7 @@ async def test_cannot_create_lote_once_remate_is_live(
 
 
 async def test_owner_can_delete_lote(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador23@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador23@example.com", role="empresa")
     remate = await _create_remate(client, token)
     lote = await _create_lote(client, token, remate["id"])
 
@@ -467,14 +470,14 @@ async def test_owner_can_delete_lote(client: AsyncClient) -> None:
 
 async def test_non_owner_cannot_delete_lote(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador24@example.com", role="rematador"
+        client, email="rematador24@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token, starts_at="2027-06-01T10:00:00Z")
     lote = await _create_lote(client, owner_token, remate["id"])
     await _schedule_remate(client, owner_token, remate["id"])
 
     other_token = await _register_and_login(
-        client, email="rematador25@example.com", role="rematador"
+        client, email="rematador25@example.com", role="empresa"
     )
     response = await client.delete(
         f"{_lotes_url(remate['id'])}/{lote['id']}", headers=_auth(other_token)
@@ -485,7 +488,7 @@ async def test_non_owner_cannot_delete_lote(client: AsyncClient) -> None:
 async def test_cannot_delete_lote_once_remate_is_live(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    token = await _register_and_login(client, email="rematador26@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador26@example.com", role="empresa")
     remate = await _create_remate(client, token)
     lote = await _create_lote(client, token, remate["id"])
     await _force_remate_status(db_session, remate["id"], RemateStatus.LIVE)
@@ -500,7 +503,7 @@ async def test_cannot_delete_lote_once_remate_is_live(
 
 
 async def test_owner_can_reorder_lotes(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador27@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador27@example.com", role="empresa")
     remate = await _create_remate(client, token)
     first = await _create_lote(client, token, remate["id"], lot_number="1")
     second = await _create_lote(client, token, remate["id"], lot_number="2")
@@ -518,7 +521,7 @@ async def test_owner_can_reorder_lotes(client: AsyncClient) -> None:
 
 
 async def test_reorder_rejects_incomplete_list(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador28@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador28@example.com", role="empresa")
     remate = await _create_remate(client, token)
     await _create_lote(client, token, remate["id"], lot_number="1")
     await _create_lote(client, token, remate["id"], lot_number="2")
@@ -534,14 +537,14 @@ async def test_reorder_rejects_incomplete_list(client: AsyncClient) -> None:
 
 async def test_non_owner_cannot_reorder(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador29@example.com", role="rematador"
+        client, email="rematador29@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token, starts_at="2027-06-01T10:00:00Z")
     lote = await _create_lote(client, owner_token, remate["id"])
     await _schedule_remate(client, owner_token, remate["id"])
 
     other_token = await _register_and_login(
-        client, email="rematador30@example.com", role="rematador"
+        client, email="rematador30@example.com", role="empresa"
     )
     response = await client.post(
         f"{_lotes_url(remate['id'])}/reorder",
@@ -555,7 +558,7 @@ async def test_non_owner_cannot_reorder(client: AsyncClient) -> None:
 
 
 async def test_create_lote_with_attributes_images_and_documents(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador31@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador31@example.com", role="empresa")
     remate = await _create_remate(client, token)
 
     lote = await _create_lote(
@@ -583,7 +586,7 @@ def _image_url(remate_id: str, lote_id: str) -> str:
 
 
 async def test_owner_can_upload_lote_image(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador32@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador32@example.com", role="empresa")
     remate = await _create_remate(client, token)
     lote = await _create_lote(client, token, remate["id"])
 
@@ -604,7 +607,7 @@ async def test_owner_can_upload_lote_image(client: AsyncClient) -> None:
 
 
 async def test_upload_rejects_unsupported_content_type(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador33@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador33@example.com", role="empresa")
     remate = await _create_remate(client, token)
     lote = await _create_lote(client, token, remate["id"])
 
@@ -619,7 +622,7 @@ async def test_upload_rejects_unsupported_content_type(client: AsyncClient) -> N
 
 
 async def test_upload_rejects_oversized_file(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador34@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador34@example.com", role="empresa")
     remate = await _create_remate(client, token)
     lote = await _create_lote(client, token, remate["id"])
 
@@ -636,14 +639,14 @@ async def test_upload_rejects_oversized_file(client: AsyncClient) -> None:
 
 async def test_non_owner_cannot_upload_lote_image(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador35@example.com", role="rematador"
+        client, email="rematador35@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token, starts_at="2027-06-01T10:00:00Z")
     lote = await _create_lote(client, owner_token, remate["id"])
     await _schedule_remate(client, owner_token, remate["id"])
 
     other_token = await _register_and_login(
-        client, email="rematador36@example.com", role="rematador"
+        client, email="rematador36@example.com", role="empresa"
     )
     response = await client.post(
         _image_url(remate["id"], lote["id"]),
@@ -656,7 +659,7 @@ async def test_non_owner_cannot_upload_lote_image(client: AsyncClient) -> None:
 async def test_cannot_upload_lote_image_once_remate_is_live(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    token = await _register_and_login(client, email="rematador37@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador37@example.com", role="empresa")
     remate = await _create_remate(client, token)
     lote = await _create_lote(client, token, remate["id"])
     await _force_remate_status(db_session, remate["id"], RemateStatus.LIVE)
@@ -670,7 +673,7 @@ async def test_cannot_upload_lote_image_once_remate_is_live(
 
 
 async def test_upload_lote_image_for_nonexistent_lote_returns_404(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador38@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador38@example.com", role="empresa")
     remate = await _create_remate(client, token)
 
     response = await client.post(

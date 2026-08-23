@@ -33,6 +33,7 @@ from app.snapshot.dependencies import get_snapshot_service
 from app.snapshot.messages import SNAPSHOT_UNAVAILABLE
 from app.websocket import close_codes
 from app.websocket.rooms import ERROR_ALREADY_IN_ROOM, ERROR_INVALID_ROOM_ID, ERROR_NOT_IN_ROOM
+from tests._role_test_helpers import activate_pending_account_sync
 
 WS_URL = "/api/v1/ws"
 REGISTER_URL = "/api/v1/auth/register"
@@ -88,6 +89,8 @@ def _register_and_login(client: TestClient, *, email: str, role: str = "comprado
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        activate_pending_account_sync(email)
     login = client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -106,7 +109,7 @@ def _create_visible_remate(client: TestClient, *, suffix: str) -> str:
     `_create_remate`) solo es visible para su dueño; programarlo alcanza para que
     cualquier comprador también pueda verlo, sin necesitar iniciarlo/abrir un lote."""
     owner_token = _register_and_login(
-        client, email=f"room-owner-{suffix}@example.com", role="rematador"
+        client, email=f"room-owner-{suffix}@example.com", role="empresa"
     )
     remate = _create_remate(client, owner_token)
     r = client.post(
@@ -216,7 +219,7 @@ async def test_auth_timeout_closes_connection(db_engine: AsyncEngine) -> None:
 
 
 async def test_any_authenticated_role_can_connect(ws_client: TestClient) -> None:
-    token = _register_and_login(ws_client, email="ws-rematador@example.com", role="rematador")
+    token = _register_and_login(ws_client, email="ws-rematador@example.com", role="empresa")
 
     with ws_client.websocket_connect(WS_URL) as websocket:
         websocket.send_json({"type": "auth", "token": token})
@@ -623,7 +626,7 @@ def _bid(client: TestClient, token: str, remate_id: str, lote_id: str, amount: s
 
 
 def _register_owner(client: TestClient, email: str) -> str:
-    return _register_and_login(client, email=email, role="rematador")
+    return _register_and_login(client, email=email, role="empresa")
 
 
 def _connect_join(client: TestClient, token: str, remate_id: str):
@@ -1189,3 +1192,86 @@ async def test_snapshot_connected_users_detail_present_for_owner_masked_for_buye
             buyer_ws.__exit__(None, None, None)
     finally:
         owner_ws.__exit__(None, None, None)
+
+
+# --- Visitante anónimo (ADR-049) -------------------------------------------------------
+
+
+async def test_anonymous_connection_receives_connected_message_without_token(
+    ws_client: TestClient,
+) -> None:
+    """Mandar `auth` sin `token` ya no cierra la conexión (antes de ADR-049, `token`
+    era obligatorio a nivel de schema) -- el Gateway igual confirma `connected`, con un
+    `user_id` sintético que no corresponde a ninguna fila de `users`."""
+    with ws_client.websocket_connect(WS_URL) as websocket:
+        websocket.send_json({"type": "auth"})
+        response = websocket.receive_json()
+
+    assert response["type"] == "connected"
+    # No lanza -- confirma que es un UUID válido, sin asumir nada más sobre su origen.
+    uuid.UUID(response["user_id"])
+
+
+async def test_anonymous_can_join_room_of_visible_remate_and_receives_snapshot(
+    ws_client: TestClient,
+) -> None:
+    """Mismo criterio de visibilidad que HTTP (`RemateService._is_visible` con
+    `viewer=None`): un remate SCHEDULED (no DRAFT) es visible para un visitante
+    anónimo, que puede unirse a su sala y recibir el snapshot -- "ver el remate en
+    vivo" sin sesión (ADR-049)."""
+    remate_id = _create_visible_remate(ws_client, suffix="anon-visible")
+    room_manager = ws_client.app.state.room_manager
+
+    with ws_client.websocket_connect(WS_URL) as websocket:
+        websocket.send_json({"type": "auth"})
+        websocket.receive_json()  # connected
+        websocket.send_json({"type": "join_room", "remate_id": remate_id})
+
+        joined = _receive_protocol_message(websocket)
+        assert joined["type"] == "room_joined"
+
+        snapshot = _receive_protocol_message(websocket)
+        assert snapshot["type"] == "snapshot"
+        assert snapshot["data"]["remate"]["id"] == remate_id
+        # Un anónimo nunca es privilegiado -- mismo enmascarado que cualquier
+        # comprador que no es dueño ni admin (ver `SnapshotService._is_privileged`).
+        assert snapshot["data"]["connected_users_detail"] is None
+        assert room_manager.connection_count(uuid.UUID(remate_id)) == 1
+
+
+async def test_anonymous_join_room_of_draft_remate_is_rejected_before_joining(
+    ws_client: TestClient,
+) -> None:
+    """Mismo criterio anti-enumeración que un usuario autenticado ajeno
+    (`test_join_room_for_draft_remate_of_another_owner_is_rejected_before_joining`):
+    un DRAFT no es visible para un anónimo tampoco, y la conexión nunca llega a ser
+    miembro de esa sala."""
+    owner_token = _register_owner(ws_client, "anon-draft-owner@example.com")
+    remate = _create_remate(ws_client, owner_token)  # queda en DRAFT, sin programar
+    room_manager = ws_client.app.state.room_manager
+
+    with ws_client.websocket_connect(WS_URL) as websocket:
+        websocket.send_json({"type": "auth"})
+        websocket.receive_json()  # connected
+        websocket.send_json({"type": "join_room", "remate_id": remate["id"]})
+
+        response = _receive_protocol_message(websocket)
+
+        assert response["type"] == "error"
+        assert response["code"] == SNAPSHOT_UNAVAILABLE
+        assert room_manager.connection_count(uuid.UUID(remate["id"])) == 0
+
+
+async def test_anonymous_invalid_token_still_rejected_not_downgraded_to_anonymous(
+    ws_client: TestClient,
+) -> None:
+    """Un `token` presente pero inválido sigue rechazándose exactamente igual que
+    antes -- nunca se degrada en silencio a "sin sesión" (ADR-049 solo cambia el caso
+    de `token` AUSENTE, no el de `token` inválido)."""
+    with ws_client.websocket_connect(WS_URL) as websocket:
+        websocket.send_json({"type": "auth", "token": "esto-no-es-un-jwt-valido"})
+        try:
+            websocket.receive_json()
+            raise AssertionError("se esperaba que la conexión se cerrara")
+        except WebSocketDisconnect as exc:
+            assert exc.code == close_codes.UNAUTHORIZED

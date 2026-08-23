@@ -31,6 +31,9 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
     timer_paused_remaining_seconds: null,
     timer_auto_close_enabled: true,
     round_number: 1,
+    requeue_preset_enabled: false,
+    requeue_preset_base_price: null,
+    requeue_preset_min_increment: null,
     created_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
@@ -38,7 +41,9 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
 
 describe('ConsolaDesiertoLotesPanel', () => {
   it('sin lotes desiertos, no renderiza nada (evita ruido en la interfaz)', () => {
-    const { container } = render(<ConsolaDesiertoLotesPanel remateId="remate-1" lotes={[]} />);
+    const { container } = render(
+      <ConsolaDesiertoLotesPanel remateId="remate-1" lotes={[]} currency="ARS" />,
+    );
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -46,6 +51,7 @@ describe('ConsolaDesiertoLotesPanel', () => {
     render(
       <ConsolaDesiertoLotesPanel
         remateId="remate-1"
+        currency="ARS"
         lotes={[
           makeLote({ id: 'lote-1', lot_number: '2', title: 'Sembradora Apache' }),
           makeLote({ id: 'lote-2', lot_number: '5', title: 'Tractor John Deere' }),
@@ -63,6 +69,7 @@ describe('ConsolaDesiertoLotesPanel', () => {
     render(
       <ConsolaDesiertoLotesPanel
         remateId="remate-1"
+        currency="ARS"
         lotes={[
           makeLote({ id: 'lote-1', lot_number: '2', title: 'Sembradora Apache' }),
           makeLote({ id: 'lote-2', lot_number: '5', title: 'Tractor John Deere' }),

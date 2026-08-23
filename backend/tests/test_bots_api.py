@@ -6,6 +6,7 @@ las tareas `asyncio` en segundo plano reaccionen.
 """
 
 from httpx import AsyncClient
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -28,17 +29,41 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
     }
     register = await client.post(REGISTER_URL, json=payload)
     assert register.status_code == 201, register.text
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return register.json()["id"], login.json()["access_token"]
 
 
 async def _rematador(client: AsyncClient, email: str) -> tuple[str, str]:
-    return await _register_and_login(client, email=email, role="rematador")
+    return await _register_and_login(client, email=email, role="empresa")
 
 
 async def _comprador(client: AsyncClient, email: str) -> tuple[str, str]:
     return await _register_and_login(client, email=email, role="comprador")
+
+
+async def _operador(client: AsyncClient, email: str) -> tuple[str, str]:
+    """A diferencia de `_rematador` (que registra rol `empresa`, dueña del remate), esto
+    registra el rol `rematador` real -- el operador acotado de ADR-047/048, sin acceso
+    comercial, que solo puede gestionar en vivo el remate que una empresa le asignó."""
+    return await _register_and_login(client, email=email, role="rematador")
+
+
+async def _generate_operator_code(client: AsyncClient, owner_token: str, remate_id: str) -> str:
+    r = await client.post(f"{REMATES_URL}/{remate_id}/operator-code", headers=_auth(owner_token))
+    assert r.status_code == 200, r.text
+    return r.json()["code"]
+
+
+async def _claim_operator(client: AsyncClient, operator_token: str, remate_id: str, code: str) -> None:
+    r = await client.post(
+        f"{REMATES_URL}/{remate_id}/claim-operator",
+        json={"code": code},
+        headers=_auth(operator_token),
+    )
+    assert r.status_code == 200, r.text
 
 
 def _bot_payload(**overrides) -> dict:
@@ -354,3 +379,61 @@ async def test_delete_bot_blocked_while_participating_in_active_simulation(
     assert r.status_code == 200, r.text
     r = await client.delete(f"{BOTS_URL}/{bot['id']}", headers=_auth(owner_token))
     assert r.status_code == 204, r.text
+
+
+# --- Rematador operador (herramienta de testeo temporal, no forma parte del sistema
+# original -- pedido explícito de que el rematador operador asignado pueda armar y correr
+# sus propios simuladores al gestionar un remate en vivo, sin ser el dueño) -----------------
+
+
+async def test_rematador_role_can_create_bots(client: AsyncClient) -> None:
+    _, operator_token = await _operador(client, "botapi-role1@example.com")
+    bot = await _create_bot(client, operator_token)
+    assert bot["display_name"] == "Bot Competitivo"
+
+
+async def test_assigned_operator_can_run_a_simulation_without_owning_the_remate(
+    client: AsyncClient,
+) -> None:
+    owner_id, owner_token = await _rematador(client, "botapi-op1-owner@example.com")
+    operator_id, operator_token = await _operador(client, "botapi-op1-operator@example.com")
+    assert operator_id != owner_id
+
+    remate = await _create_remate(client, owner_token)
+    code = await _generate_operator_code(client, owner_token, remate["id"])
+    await _claim_operator(client, operator_token, remate["id"], code)
+
+    # El operador arma su propio bot (`get_operator_or_raise` en `set_selection` -- no es
+    # dueño del remate, pero sí el operador asignado) y lo selecciona para este remate.
+    bot = await _create_bot(client, operator_token)
+    lote = await _create_lote(client, owner_token, remate["id"])
+
+    r = await client.put(
+        f"{REMATES_URL}/{remate['id']}/bots/selection",
+        json={"bot_profile_ids": [bot["id"]]},
+        headers=_auth(operator_token),
+    )
+    assert r.status_code == 204, r.text
+
+    await _start_remate_with_open_lote(client, owner_token, remate["id"], lote["id"])
+
+    r = await client.post(
+        f"{REMATES_URL}/{remate['id']}/bots/simulation/start", headers=_auth(operator_token)
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "running"
+
+    r = await client.post(
+        f"{REMATES_URL}/{remate['id']}/bots/simulation/stop", headers=_auth(operator_token)
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "stopped"
+
+
+async def test_unrelated_rematador_still_cannot_manage_the_simulation(client: AsyncClient) -> None:
+    _, owner_token = await _rematador(client, "botapi-op2-owner@example.com")
+    _, stranger_token = await _operador(client, "botapi-op2-stranger@example.com")
+    remate = await _create_remate(client, owner_token)  # queda en "draft", nunca asignado
+
+    r = await client.get(f"{REMATES_URL}/{remate['id']}/bots/roster", headers=_auth(stranger_token))
+    assert r.status_code == 404, r.text

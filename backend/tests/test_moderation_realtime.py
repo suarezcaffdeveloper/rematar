@@ -20,6 +20,7 @@ from app.modules.ofertas.events import OfertaRejected
 from app.notifications.models import Notification
 from app.websocket.manager import ConnectionManager
 from app.websocket.rooms import RoomManager
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -56,9 +57,10 @@ async def _setup_remate(client: AsyncClient) -> tuple[uuid.UUID, uuid.UUID]:
             "confirm_password": "password123",
             "full_name": "Test",
             "phone": "+5491122334455",
-            "role": "rematador",
+            "role": "empresa",
         },
     )
+    await activate_pending_account(rematador_email)
     login = await client.post(
         LOGIN_URL, data={"username": rematador_email, "password": "password123"}
     )

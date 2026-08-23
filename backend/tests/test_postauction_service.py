@@ -128,7 +128,7 @@ async def _build_case(
 ):
     rematador = await _create_user(
         db_session,
-        role=UserRole.REMATADOR,
+        role=UserRole.EMPRESA,
         email=f"r{uuid.uuid4()}@example.com",
         phone="+5491133445566",
     )
@@ -356,7 +356,7 @@ async def test_change_status_forbidden_for_other_rematador(db_session: AsyncSess
     event_bus = _RecordingEventBus()
     service, case, _, _ = await _build_case(db_session, event_bus)
     other_rematador = await _create_user(
-        db_session, role=UserRole.REMATADOR, email=f"other{uuid.uuid4()}@example.com"
+        db_session, role=UserRole.EMPRESA, email=f"other{uuid.uuid4()}@example.com"
     )
 
     with pytest.raises(ForbiddenError):

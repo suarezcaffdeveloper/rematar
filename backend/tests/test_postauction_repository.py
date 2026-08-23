@@ -80,7 +80,7 @@ async def test_get_by_lote_id_returns_none_when_no_case(db_session: AsyncSession
 
 
 async def test_list_for_rematador_filters_by_remate_and_search(db_session: AsyncSession) -> None:
-    rematador = await _create_user(db_session, role=UserRole.REMATADOR)
+    rematador = await _create_user(db_session, role=UserRole.EMPRESA)
     buyer = await _create_user(db_session, role=UserRole.COMPRADOR)
     remate = await _create_remate(db_session, rematador)
     lote_a = await _create_lote(db_session, remate, title="Toro Angus", lot_number="1")
@@ -103,8 +103,8 @@ async def test_list_for_rematador_filters_by_remate_and_search(db_session: Async
 
 
 async def test_list_for_rematador_scopes_to_owner(db_session: AsyncSession) -> None:
-    rematador_a = await _create_user(db_session, role=UserRole.REMATADOR)
-    rematador_b = await _create_user(db_session, role=UserRole.REMATADOR)
+    rematador_a = await _create_user(db_session, role=UserRole.EMPRESA)
+    rematador_b = await _create_user(db_session, role=UserRole.EMPRESA)
     buyer = await _create_user(db_session, role=UserRole.COMPRADOR)
     remate_a = await _create_remate(db_session, rematador_a)
     lote_a = await _create_lote(db_session, remate_a, title="Lote A", lot_number="1")
@@ -119,7 +119,7 @@ async def test_list_for_rematador_scopes_to_owner(db_session: AsyncSession) -> N
 
 
 async def test_list_for_buyer_scopes_to_buyer(db_session: AsyncSession) -> None:
-    rematador = await _create_user(db_session, role=UserRole.REMATADOR)
+    rematador = await _create_user(db_session, role=UserRole.EMPRESA)
     buyer_a = await _create_user(db_session, role=UserRole.COMPRADOR)
     buyer_b = await _create_user(db_session, role=UserRole.COMPRADOR)
     remate = await _create_remate(db_session, rematador)

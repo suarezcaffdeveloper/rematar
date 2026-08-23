@@ -113,7 +113,10 @@ class AuthService:
         if user is None or not password_valid:
             raise UnauthorizedError("Email o contraseña incorrectos.")
         if not user.is_active:
-            raise UnauthorizedError("La cuenta está suspendida.")
+            raise UnauthorizedError(
+                "La cuenta todavía no está activa. Si te registraste como empresa o "
+                "rematador, está pendiente de aprobación por el equipo de RematAR."
+            )
         return user
 
     async def issue_tokens(self, user: User) -> Token:
@@ -161,7 +164,7 @@ class AuthService:
 
         user = await self._user_repository.get_by_id(stored.user_id)
         if user is None or not user.is_active:
-            raise UnauthorizedError("Cuenta inexistente o suspendida.")
+            raise UnauthorizedError("Cuenta inexistente o inactiva.")
 
         # Rotación: se revoca el token usado antes de emitir uno nuevo. Si alguna vez se
         # presenta este mismo `jti` de nuevo, es señal de reuso de un token ya consumido
@@ -213,7 +216,7 @@ class AuthService:
         user_id = uuid.UUID(payload["sub"])
         user = await self._user_repository.get_by_id(user_id)
         if user is None or not user.is_active:
-            raise UnauthorizedError("Cuenta inexistente o suspendida.")
+            raise UnauthorizedError("Cuenta inexistente o inactiva.")
         return user
 
     async def get_current_session_from_access_token(
@@ -243,7 +246,7 @@ class AuthService:
         user_id = uuid.UUID(payload["sub"])
         user = await self._user_repository.get_by_id(user_id)
         if user is None or not user.is_active:
-            raise UnauthorizedError("Cuenta inexistente o suspendida.")
+            raise UnauthorizedError("Cuenta inexistente o inactiva.")
 
         session_id_raw = payload.get("sid")
         if session_id_raw is None:
@@ -327,7 +330,7 @@ class AuthService:
 
         user = await self._user_repository.get_by_id(stored.user_id)
         if user is None or not user.is_active:
-            raise UnauthorizedError("Cuenta inexistente o suspendida.")
+            raise UnauthorizedError("Cuenta inexistente o inactiva.")
 
         return stored, user
 

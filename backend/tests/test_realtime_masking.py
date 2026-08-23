@@ -35,6 +35,7 @@ from app.modules.remates.events import RemateStarted
 from app.modules.remates.lotes.events import LoteRequeued
 from app.modules.users.models import User, UserRole
 from app.redis.pubsub import RedisPubSub
+from tests._role_test_helpers import activate_pending_account_sync
 
 WS_URL = "/api/v1/ws"
 REGISTER_URL = "/api/v1/auth/register"
@@ -72,6 +73,8 @@ def _register_and_login(
         },
     )
     assert register.status_code == 201, register.text
+    if role in ("empresa", "rematador"):
+        activate_pending_account_sync(email)
     login = client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return register.json()["id"], login.json()["access_token"]
@@ -159,7 +162,7 @@ async def test_bystander_buyer_does_not_receive_real_buyer_id_of_oferta_accepted
     ws_client: TestClient, event_bus: RedisEventBus
 ) -> None:
     _, owner_token = _register_and_login(
-        ws_client, email="mask-owner1@example.com", role="rematador"
+        ws_client, email="mask-owner1@example.com", role="empresa"
     )
     remate_id = _create_remate(ws_client, owner_token)
 
@@ -195,7 +198,7 @@ async def test_buyer_still_sees_their_own_buyer_id_in_oferta_accepted(
     UI del comprador ("tu oferta fue aceptada"): un comprador siempre puede saber que
     UNA oferta puntual es la suya -- lo que no puede es conocer la identidad de otro."""
     _, owner_token = _register_and_login(
-        ws_client, email="mask-owner2@example.com", role="rematador"
+        ws_client, email="mask-owner2@example.com", role="empresa"
     )
     remate_id = _create_remate(ws_client, owner_token)
 
@@ -221,7 +224,7 @@ async def test_owner_rematador_still_receives_real_buyer_id_of_oferta_accepted(
     ws_client: TestClient, event_bus: RedisEventBus
 ) -> None:
     _, owner_token = _register_and_login(
-        ws_client, email="mask-owner3@example.com", role="rematador"
+        ws_client, email="mask-owner3@example.com", role="empresa"
     )
     remate_id = _create_remate(ws_client, owner_token)
     owner_ws = _connect_join(ws_client, owner_token, remate_id)
@@ -246,7 +249,7 @@ async def test_admin_still_receives_real_buyer_id_of_oferta_accepted(
     ws_client: TestClient, event_bus: RedisEventBus, db_session: AsyncSession
 ) -> None:
     _, owner_token = _register_and_login(
-        ws_client, email="mask-owner4@example.com", role="rematador"
+        ws_client, email="mask-owner4@example.com", role="empresa"
     )
     remate_id = _create_remate(ws_client, owner_token)
     admin_token = await _create_admin_and_login(
@@ -278,7 +281,7 @@ async def test_bystander_buyer_does_not_receive_real_reserve_price_of_lote_reque
     ws_client: TestClient, event_bus: RedisEventBus
 ) -> None:
     _, owner_token = _register_and_login(
-        ws_client, email="mask-owner5@example.com", role="rematador"
+        ws_client, email="mask-owner5@example.com", role="empresa"
     )
     remate_id = _create_remate(ws_client, owner_token)
 
@@ -311,7 +314,7 @@ async def test_owner_rematador_still_receives_real_reserve_price_of_lote_requeue
     ws_client: TestClient, event_bus: RedisEventBus
 ) -> None:
     _, owner_token = _register_and_login(
-        ws_client, email="mask-owner6@example.com", role="rematador"
+        ws_client, email="mask-owner6@example.com", role="empresa"
     )
     remate_id = _create_remate(ws_client, owner_token)
     owner_ws = _connect_join(ws_client, owner_token, remate_id)
@@ -341,7 +344,7 @@ async def test_common_buyer_never_receives_moderation_invalid_bid_threshold_even
     ws_client: TestClient, event_bus: RedisEventBus
 ) -> None:
     _, owner_token = _register_and_login(
-        ws_client, email="mask-owner7@example.com", role="rematador"
+        ws_client, email="mask-owner7@example.com", role="empresa"
     )
     remate_id = _create_remate(ws_client, owner_token)
 
@@ -375,12 +378,12 @@ async def test_another_rematador_who_is_not_the_owner_never_receives_the_event_e
     comprador -- misma regla de privilegio (`is_privileged_viewer`: dueño o admin, el
     rol `rematador` por sí solo no alcanza), sin necesidad de ningún caso especial."""
     _, owner_token = _register_and_login(
-        ws_client, email="mask-owner8@example.com", role="rematador"
+        ws_client, email="mask-owner8@example.com", role="empresa"
     )
     remate_id = _create_remate(ws_client, owner_token)
 
     _, other_rematador_token = _register_and_login(
-        ws_client, email="mask-other-rematador8@example.com", role="rematador"
+        ws_client, email="mask-other-rematador8@example.com", role="empresa"
     )
     other_ws = _connect_join(ws_client, other_rematador_token, remate_id)
     try:
@@ -403,7 +406,7 @@ async def test_owner_rematador_receives_moderation_invalid_bid_threshold_event(
     ws_client: TestClient, event_bus: RedisEventBus
 ) -> None:
     _, owner_token = _register_and_login(
-        ws_client, email="mask-owner9@example.com", role="rematador"
+        ws_client, email="mask-owner9@example.com", role="empresa"
     )
     remate_id = _create_remate(ws_client, owner_token)
     owner_ws = _connect_join(ws_client, owner_token, remate_id)
@@ -435,7 +438,7 @@ async def test_public_event_still_reaches_every_room_member_unmasked(
     tiene que seguir llegando exactamente igual, a TODOS los miembros de la sala, dueño
     o no."""
     _, owner_token = _register_and_login(
-        ws_client, email="mask-owner10@example.com", role="rematador"
+        ws_client, email="mask-owner10@example.com", role="empresa"
     )
     remate_id = _create_remate(ws_client, owner_token)
     _, buyer_token = _register_and_login(ws_client, email="mask-buyer10@example.com")

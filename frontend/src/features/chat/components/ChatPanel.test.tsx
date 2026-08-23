@@ -56,13 +56,17 @@ function defaultResult(overrides: Partial<UseChatMessagesResult> = {}): UseChatM
   };
 }
 
-function renderPanel(overrides: Partial<UseChatMessagesResult> = {}, canModerate = false) {
+function renderPanel(
+  overrides: Partial<UseChatMessagesResult> = {},
+  canModerate = false,
+  currentUserId: string | undefined = 'user-1',
+) {
   useChatMessagesMock.mockReturnValue(defaultResult(overrides));
   return render(
     <ChatPanel
       remateId="remate-1"
       subscribeToRealtime={() => () => {}}
-      currentUserId="user-1"
+      currentUserId={currentUserId}
       connectedUsers={3}
       canModerate={canModerate}
     />,
@@ -78,6 +82,25 @@ describe('ChatPanel', () => {
   it('ante un error de historial, muestra el mensaje de error', () => {
     renderPanel({ error: { status: 500, code: 'http_error', message: 'Error.' } });
     expect(screen.getByText('No se pudo cargar el chat.')).toBeInTheDocument();
+  });
+
+  it('visitante anónimo (ADR-049): pide iniciar sesión, sin mostrar el input ni el error genérico', () => {
+    // No usa `renderPanel`: sus parámetros por default reasignan `undefined` explícito
+    // (comportamiento estándar de JS para parámetros default) -- acá el `undefined` es
+    // el valor real que hay que probar, así que se renderiza directo.
+    useChatMessagesMock.mockReturnValue(defaultResult());
+    render(
+      <ChatPanel
+        remateId="remate-1"
+        subscribeToRealtime={() => () => {}}
+        currentUserId={undefined}
+        connectedUsers={3}
+        canModerate={false}
+      />,
+    );
+    expect(screen.getByText('Iniciá sesión para ver y participar del chat.')).toBeInTheDocument();
+    expect(screen.queryByText('No se pudo cargar el chat.')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/mensaje/i)).not.toBeInTheDocument();
   });
 
   it('sin mensajes, muestra el estado vacío', () => {

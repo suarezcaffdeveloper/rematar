@@ -51,12 +51,15 @@ export interface RubroItem {
 }
 
 export const RUBROS: RubroItem[] = [
-  { label: 'Hacienda y ganadería', photo: STOCK_PHOTOS.ganado },
-  { label: 'Maquinaria agrícola', photo: STOCK_PHOTOS.maquinariaAgricola },
   { label: 'Inmuebles', photo: STOCK_PHOTOS.inmuebles },
-  { label: 'Vehículos', photo: STOCK_PHOTOS.vehiculos },
-  { label: 'Maquinaria pesada', photo: STOCK_PHOTOS.maquinariaPesada },
-  { label: 'Antigüedades y coleccionables', photo: STOCK_PHOTOS.antiguedades },
+  { label: 'Automotores y vehículos', photo: STOCK_PHOTOS.vehiculos },
+  { label: 'Maquinaria pesada y agrícola', photo: STOCK_PHOTOS.maquinariaPesada },
+  { label: 'Hacienda y ganadería', photo: STOCK_PHOTOS.ganado },
+  { label: 'Arte - Antigüedades - Coleccionables', photo: STOCK_PHOTOS.antiguedades },
+  { label: 'Joyas - Relojería - Numismática', photo: STOCK_PHOTOS.joyas },
+  { label: 'Tecnología - Electrodomésticos - Hogar', photo: STOCK_PHOTOS.tecnologia },
+  { label: 'Náutica y aviación', photo: STOCK_PHOTOS.nautica },
+  { label: 'Lotes de mercadería e indumentaria', photo: STOCK_PHOTOS.indumentaria },
 ];
 
 export interface BenefitItem {
@@ -120,26 +123,44 @@ export const SYSTEM_SCREENS: SystemScreen[] = [
   {
     key: 'remate-lotes',
     title: 'Detalle del remate',
-    description: 'Toda la información del evento y sus lotes antes de entrar a la sala.',
+    description: 'Toda la información del evento, descripción y catálogo de lotes antes de entrar a la sala.',
     image: '/screenshots/remate-detalle-lotes.png',
   },
   {
     key: 'sala',
     title: 'Sala en vivo',
-    description: 'Oferta actual, tiempo restante y chat del remate, todo en la misma pantalla.',
+    description: 'Oferta actual, tiempo restante, puja rápida y chat del remate en tiempo real.',
     image: '/screenshots/sala-en-vivo.png',
-  },
-  {
-    key: 'seguimiento',
-    title: 'Seguimiento de mi compra',
-    description: 'El comprador sigue el proceso post-remate paso a paso, de la adjudicación a la entrega.',
-    image: '/screenshots/seguimiento-compra.png',
   },
   {
     key: 'panel-rematador',
     title: 'Panel del rematador',
-    description: 'Mis remates: estado, lotes y accesos rápidos para administrar cada evento.',
+    description: 'Mis remates: estado, creación, métricas globales y accesos rápidos a cada evento.',
     image: '/screenshots/panel-rematador.png',
+  },
+  {
+    key: 'consola-rematador',
+    title: 'Consola del rematador',
+    description: 'El martillero modera y conduce el remate en vivo: temporizador, pujas y compradores en directo.',
+    image: '/screenshots/consola-rematador.png',
+  },
+  {
+    key: 'historial-remate',
+    title: 'Historial y resultados',
+    description: 'Resumen ejecutivo, valor adjudicado, métricas clave y resultado lote por lote al finalizar el remate.',
+    image: '/screenshots/historial-remate.png',
+  },
+  {
+    key: 'ventas-adjudicadas',
+    title: 'Ventas adjudicadas',
+    description: 'Seguimiento y gestión post-remate del martillero: contacto, cobro y entrega de cada lote vendido.',
+    image: '/screenshots/ventas-adjudicadas.png',
+  },
+  {
+    key: 'seguimiento',
+    title: 'Seguimiento de mi compra',
+    description: 'El comprador sigue el progreso post-remate paso a paso, desde la adjudicación y pago hasta la entrega.',
+    image: '/screenshots/seguimiento-compra.png',
   },
 ];
 

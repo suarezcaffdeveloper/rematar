@@ -21,6 +21,8 @@ class AuditAction:
     REMATE_SETTINGS_CHANGED = "remate.settings_changed"
     REMATE_DELETED = "remate.deleted"
     REMATE_STATUS_CHANGED = "remate.status_changed"
+    REMATE_OPERATOR_CODE_GENERATED = "remate.operator_code_generated"
+    REMATE_OPERATOR_CLAIMED = "remate.operator_claimed"
 
     LOTE_CREATED = "lote.created"
     LOTE_UPDATED = "lote.updated"

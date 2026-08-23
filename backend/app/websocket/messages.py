@@ -27,10 +27,14 @@ class WSMessage(BaseModel):
 
 
 class AuthMessage(WSMessage):
-    """Primer mensaje esperado tras abrir la conexión (ADR-006)."""
+    """Primer mensaje esperado tras abrir la conexión (ADR-006). `token` es opcional
+    desde ADR-049 (visitante anónimo): sin él, la conexión sigue -- solo puede mirar,
+    nunca ofertar ni accionar nada de dominio -- en vez de cerrarse. Un `token` presente
+    pero inválido/expirado se sigue rechazando exactamente igual que antes (ver
+    `app/websocket/auth.py::authenticate_connection`)."""
 
     type: Literal["auth"] = "auth"
-    token: str
+    token: str | None = None
 
 
 class ConnectedMessage(WSMessage):

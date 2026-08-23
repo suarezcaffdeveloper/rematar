@@ -10,6 +10,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.postauction.models import PostAuctionCase, PostAuctionStatus
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -29,6 +30,8 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -51,7 +54,7 @@ async def _setup_case(
     caso post-remate directo en la base (el disparo automático vía evento se prueba en
     `test_postauction_realtime.py`)."""
     rematador_token = await _register_and_login(
-        client, email=f"remat{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"remat{uuid.uuid4()}@example.com", role="empresa"
     )
     buyer_token = await _register_and_login(
         client, email=f"buyer{uuid.uuid4()}@example.com", role="comprador"
@@ -117,7 +120,7 @@ async def test_other_rematador_cannot_see_venta_detail(
 ) -> None:
     _, _, case = await _setup_case(client, db_session)
     other_token = await _register_and_login(
-        client, email=f"other{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"other{uuid.uuid4()}@example.com", role="empresa"
     )
 
     response = await client.get(

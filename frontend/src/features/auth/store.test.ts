@@ -64,7 +64,7 @@ describe('useAuthStore', () => {
     apiMocks.loginRequest.mockResolvedValue(TOKENS);
     apiMocks.fetchCurrentUserRequest.mockResolvedValue(USER);
 
-    await useAuthStore.getState().register({
+    const result = await useAuthStore.getState().register({
       email: USER.email,
       password: 'secret123',
       confirm_password: 'secret123',
@@ -73,11 +73,31 @@ describe('useAuthStore', () => {
       role: 'comprador',
     });
 
+    expect(result).toEqual({ pendingApproval: false });
     expect(apiMocks.loginRequest).toHaveBeenCalledWith({
       email: USER.email,
       password: 'secret123',
     });
     expect(useAuthStore.getState().user).toEqual(USER);
+  });
+
+  it('register no encadena login para empresa/rematador pendientes de aprobación (is_active=false)', async () => {
+    const PENDING_EMPRESA = { ...USER, role: 'empresa' as const, is_active: false };
+    apiMocks.registerRequest.mockResolvedValue(PENDING_EMPRESA);
+
+    const result = await useAuthStore.getState().register({
+      email: USER.email,
+      password: 'secret123',
+      confirm_password: 'secret123',
+      full_name: USER.full_name,
+      phone: '+5491100000000',
+      role: 'empresa',
+    });
+
+    expect(result).toEqual({ pendingApproval: true });
+    expect(apiMocks.loginRequest).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().accessToken).toBeNull();
+    expect(useAuthStore.getState().user).toBeNull();
   });
 
   it('logout limpia el estado local incluso si la llamada al backend falla', async () => {

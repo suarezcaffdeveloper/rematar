@@ -39,7 +39,7 @@ export function PhotoFrame({ photo, className, label, rounded = 'rounded-3xl' }:
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-slate-900/50 via-slate-900/0 to-transparent" />
       {label && (
-        <span className="absolute bottom-4 left-4 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-700 shadow-sm backdrop-blur">
+        <span className="absolute bottom-3 left-3 right-3 rounded-xl bg-white/95 px-2.5 py-1.5 text-xs font-semibold leading-tight text-slate-800 shadow-sm backdrop-blur line-clamp-2">
           {label}
         </span>
       )}

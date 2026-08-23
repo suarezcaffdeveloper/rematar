@@ -24,6 +24,7 @@ identificó como no cubierto todavía:
 import uuid
 
 from fastapi.testclient import TestClient
+from tests._role_test_helpers import activate_pending_account_sync
 
 WS_URL = "/api/v1/ws"
 REGISTER_URL = "/api/v1/auth/register"
@@ -47,6 +48,8 @@ def _register_and_login(client: TestClient, *, email: str, role: str = "comprado
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        activate_pending_account_sync(email)
     login = client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -83,7 +86,7 @@ async def test_full_normal_websocket_flow_login_through_disconnect(
     """login -> auth WS -> join_room autorizado -> snapshot -> evento realtime (una
     oferta real) -> chat -> leave_room -> disconnect, todo en un único flujo
     encadenado -- ninguna suite anterior de las Fases 1-5 los prueba juntos."""
-    owner_token = _register_and_login(ws_client, email="e2e-owner@example.com", role="rematador")
+    owner_token = _register_and_login(ws_client, email="e2e-owner@example.com", role="empresa")
     remate = ws_client.post(
         REMATES_URL,
         json={
@@ -181,7 +184,7 @@ async def test_join_room_message_with_spoofed_identity_fields_is_ignored(
     (la conexión ya autenticada), confirmado leyendo el propio evento de presencia que
     se publica."""
     owner_token = _register_and_login(
-        ws_client, email="e2e-spoof-owner@example.com", role="rematador"
+        ws_client, email="e2e-spoof-owner@example.com", role="empresa"
     )
     remate = ws_client.post(
         REMATES_URL,

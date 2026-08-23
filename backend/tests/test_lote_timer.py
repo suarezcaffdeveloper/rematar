@@ -20,6 +20,7 @@ from app.core.config import get_settings
 from app.events.base import DomainEvent
 from app.modules.remates.lotes.models import Lote
 from app.timer.scheduler import TimerExpiryScheduler
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -68,6 +69,8 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -109,7 +112,7 @@ async def _setup_open_lote_with_timer(
 ) -> tuple[str, str, str]:
     """Rematador con un remate LIVE (timer configurado) y un lote OPEN. Devuelve
     (owner_token, remate_id, lote_id)."""
-    owner_token = await _register_and_login(client, email=owner_email, role="rematador")
+    owner_token = await _register_and_login(client, email=owner_email, role="empresa")
     remate = await _create_remate(
         client,
         owner_token,
@@ -187,7 +190,7 @@ async def test_opening_a_lote_starts_the_timer_when_configured(client: AsyncClie
 
 
 async def test_opening_a_lote_without_timer_configured_leaves_it_null(client: AsyncClient) -> None:
-    owner_token = await _register_and_login(client, email="timer-owner2@example.com", role="rematador")
+    owner_token = await _register_and_login(client, email="timer-owner2@example.com", role="empresa")
     remate = await _create_remate(client, owner_token)  # sin settings.lote_timer_seconds
     lote = await _create_lote(client, owner_token, remate["id"])
     await client.post(f"{REMATES_URL}/{remate['id']}/schedule", headers=_auth(owner_token))
@@ -343,7 +346,7 @@ async def test_non_owner_cannot_control_timer(client: AsyncClient) -> None:
         client, "timer-owner11@example.com", lote_timer_seconds=300
     )
     other_rematador = await _register_and_login(
-        client, email="timer-other11@example.com", role="rematador"
+        client, email="timer-other11@example.com", role="empresa"
     )
     response = await client.post(_timer_url(remate_id, lote_id, "pause"), headers=_auth(other_rematador))
     assert response.status_code == 403

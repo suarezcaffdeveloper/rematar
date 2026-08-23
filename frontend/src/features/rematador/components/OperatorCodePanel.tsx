@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { useState } from 'react';
 import { Check, Copy, KeyRound, RefreshCcw } from 'lucide-react';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Badge } from '../../../shared/components/Badge';
@@ -12,17 +12,16 @@ export interface OperatorCodePanelProps {
   remate: Remate;
 }
 
-interface CopyFieldProps {
+interface InlineCopyFieldProps {
   label: string;
   value: string;
   successMessage: string;
-  monospace?: boolean;
 }
 
-/** Un dato copiable con su propio botón -- ID de remate y código de operador comparten
- * la misma interacción (copiar al portapapeles, ícono que confirma un instante), así
- * que se resuelve una sola vez acá en vez de duplicar el manejo de estado. */
-function CopyField({ label, value, successMessage, monospace }: CopyFieldProps) {
+/** Un dato copiable inline -- ID de remate y código de operador comparten la misma
+ * interacción (copiar al portapapeles, ícono que confirma un instante), así que se
+ * resuelve una sola vez acá en vez de duplicar el manejo de estado. */
+function InlineCopyField({ label, value, successMessage }: InlineCopyFieldProps) {
   const [justCopied, setJustCopied] = useState(false);
 
   async function handleCopy() {
@@ -38,39 +37,29 @@ function CopyField({ label, value, successMessage, monospace }: CopyFieldProps) 
   }
 
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border border-brand-200 bg-white px-3 py-2.5">
-      <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">{label}</span>
-      <div className="flex items-center justify-between gap-2">
-        <code className={monospace ? 'truncate text-lg font-bold tracking-widest text-brand-700' : 'truncate text-sm font-semibold text-ink'}>
-          {value}
-        </code>
-        <Button
-          variant="ghost"
-          className="!shrink-0 !gap-1.5 !px-2 !py-1 text-xs"
-          onClick={() => void handleCopy()}
-        >
-          {justCopied ? (
-            <Check aria-hidden="true" className="h-3.5 w-3.5 text-success-600" />
-          ) : (
-            <Copy aria-hidden="true" className="h-3.5 w-3.5" />
-          )}
-          {justCopied ? 'Copiado' : 'Copiar'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function EmptyCopyField({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex items-center rounded-lg border border-dashed border-brand-300 bg-white/60 px-3 py-2.5 text-sm text-ink-faint">
-      {children}
+    <div className="flex items-center gap-2">
+      <span className="text-[11px] text-ink-faint">{label}</span>
+      <code className="rounded-md border border-line bg-surface-subtle px-2 py-0.5 text-[13px] font-semibold text-ink">
+        {value}
+      </code>
+      <button
+        type="button"
+        onClick={() => void handleCopy()}
+        aria-label={`Copiar ${label.toLowerCase()}`}
+        className="rounded p-1 text-ink-faint transition-colors hover:text-ink-muted"
+      >
+        {justCopied ? (
+          <Check aria-hidden="true" className="h-3.5 w-3.5 text-success-600" />
+        ) : (
+          <Copy aria-hidden="true" className="h-3.5 w-3.5" />
+        )}
+      </button>
     </div>
   );
 }
 
 /**
- * Tarjeta "Datos para el rematador" (ADR-048), visible solo para la empresa dueña del
+ * Franja "Datos para el rematador" (ADR-048), visible solo para la empresa dueña del
  * remate -- pensada para ser lo primero que ve al entrar a gestionarlo (ver
  * `ConsolaOperativaPage`, se renderiza antes que cualquier otra cosa, incluso mientras
  * el remate todavía no está en vivo): reúne los dos datos que el rematador necesita para
@@ -80,6 +69,12 @@ function EmptyCopyField({ children }: { children: ReactNode }) {
  * mostraba en ningún lado de la Consola Operativa -- la única forma de conseguirlo era
  * copiarlo de la URL, y encima el código vivía en un panel angosto al final de la
  * página, lejos de donde la empresa mira primero.
+ *
+ * Retexturizada a una franja fina con separador (`border-b border-line`), sin card ni
+ * fondo de color -- mismo criterio "sin card, solo un separador" que ya usan
+ * `ConsolaHeader` y `ConsolaLotePanel` en esta misma página; la card punteada original
+ * ocupaba ~230px siempre expandida y competía visualmente con el título del remate
+ * justo debajo.
  *
  * El código se muestra en texto plano una única vez (`generateOperatorCodeRequest`, el
  * backend nunca lo persiste así) -- si se pierde, la única opción es regenerarlo, lo
@@ -116,38 +111,39 @@ export function OperatorCodePanel({ remate }: OperatorCodePanelProps) {
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border-2 border-dashed border-brand-300 bg-brand-50/60 p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-brand-700">
-            <KeyRound aria-hidden="true" className="h-4 w-4" />
-            Datos para el rematador
-          </h2>
-          <p className="mt-1 max-w-md text-sm text-ink-muted">
-            Compartí estos dos datos con la persona que va a operar este remate en vivo --
-            los va a necesitar para entrar en "Unirme como operador".
-          </p>
+    <div className="flex flex-col gap-2.5 border-b border-line pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <KeyRound aria-hidden="true" className="h-3.5 w-3.5 text-brand-600" />
+          <span className="text-xs font-semibold text-ink-muted">Datos para el rematador</span>
         </div>
         {rematadorId && <Badge variant="success">Operador asignado</Badge>}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <CopyField label="ID del remate" value={remate.id} successMessage="ID del remate copiado." />
+      <div className="flex flex-wrap items-center gap-x-7 gap-y-2">
+        <InlineCopyField label="ID del remate" value={remate.id} successMessage="ID del remate copiado." />
+
+        <span aria-hidden="true" className="hidden h-4 w-px bg-line sm:block" />
 
         {lastCode ? (
-          <CopyField
-            label="Código de operador"
-            value={lastCode}
-            successMessage="Código copiado."
-            monospace
-          />
+          <InlineCopyField label="Código de operador" value={lastCode} successMessage="Código copiado." />
         ) : (
-          <EmptyCopyField>
+          <span className="text-sm italic text-ink-faint">
             {rematadorId
               ? 'Ya hay un rematador asignado -- regenerá el código para reasignarlo a otra persona.'
               : 'Todavía no generaste un código de operador.'}
-          </EmptyCopyField>
+          </span>
         )}
+
+        <Button
+          variant="ghost"
+          className="ml-auto !gap-1.5 !px-2 !py-1 text-xs"
+          onClick={handleGenerateClick}
+          isLoading={isGenerating}
+        >
+          <RefreshCcw aria-hidden="true" className="h-3.5 w-3.5" />
+          {rematadorId || lastCode ? 'Regenerar código' : 'Generar código'}
+        </Button>
       </div>
 
       {lastCode && (
@@ -156,16 +152,6 @@ export function OperatorCodePanel({ remate }: OperatorCodePanelProps) {
           copialo ahora.
         </p>
       )}
-
-      <Button
-        variant="secondary"
-        className="w-fit !gap-1.5"
-        onClick={handleGenerateClick}
-        isLoading={isGenerating}
-      >
-        <RefreshCcw aria-hidden="true" className="h-3.5 w-3.5" />
-        {rematadorId || lastCode ? 'Regenerar código' : 'Generar código'}
-      </Button>
 
       <ConfirmModal
         isOpen={confirmRegenerate}

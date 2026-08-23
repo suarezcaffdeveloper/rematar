@@ -7,6 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.chat.models import ChatMessage, ChatMessageKind
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -29,6 +30,8 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -41,7 +44,7 @@ async def _user_id(client: AsyncClient, token: str) -> uuid.UUID:
 
 async def _setup_remate(client: AsyncClient) -> tuple[str, str, uuid.UUID, uuid.UUID]:
     rematador_token = await _register_and_login(
-        client, email=f"remat{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"remat{uuid.uuid4()}@example.com", role="empresa"
     )
     buyer_token = await _register_and_login(
         client, email=f"buyer{uuid.uuid4()}@example.com", role="comprador"
@@ -92,7 +95,7 @@ async def test_owner_can_kick_a_buyer(client: AsyncClient) -> None:
 async def test_non_owner_cannot_kick(client: AsyncClient) -> None:
     _, _, remate_id, buyer_id = await _setup_remate(client)
     other_token = await _register_and_login(
-        client, email=f"other{uuid.uuid4()}@example.com", role="rematador"
+        client, email=f"other{uuid.uuid4()}@example.com", role="empresa"
     )
 
     response = await client.post(

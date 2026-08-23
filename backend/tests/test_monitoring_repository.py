@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.chat.models import ChatMessage
 from app.modules.ofertas.models import Oferta
 from app.monitoring.repository import MonitoringRepository
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -32,13 +33,15 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
     }
     register = await client.post(REGISTER_URL, json=payload)
     assert register.status_code == 201, register.text
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return register.json()["id"], login.json()["access_token"]
 
 
 async def _owner(client: AsyncClient, email: str) -> tuple[str, str]:
-    return await _register_and_login(client, email=email, role="rematador")
+    return await _register_and_login(client, email=email, role="empresa")
 
 
 async def _buyer(client: AsyncClient, email: str) -> tuple[str, str]:

@@ -74,7 +74,15 @@ export function useChatMessages(
   // --- Historial inicial ---------------------------------------------------------------
 
   useEffect(() => {
-    if (!remateId) return;
+    // Visitante anónimo (ADR-049): el chat sigue exigiendo sesión (no forma parte del
+    // alcance de "ver el remate en vivo sin loguearse") -- sin `currentUserId` ni
+    // siquiera se intenta el pedido, para no disparar un 401 contra un endpoint
+    // autenticado (que además dispara, en `apiClient`, un intento de refresh de sesión
+    // y un logout innecesarios, ver `shared/api/client.ts`).
+    if (!remateId || !currentUserId) {
+      setIsLoading(false);
+      return;
+    }
     let cancelled = false;
     setIsLoading(true);
     setError(null);
@@ -93,7 +101,7 @@ export function useChatMessages(
     return () => {
       cancelled = true;
     };
-  }, [remateId]);
+  }, [remateId, currentUserId]);
 
   // --- Eventos en vivo -------------------------------------------------------------------
 

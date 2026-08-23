@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, Lightbulb } from 'lucide-react';
 import { normalizeApiError } from '../../../shared/api/errors';
@@ -7,6 +7,7 @@ import { Button } from '../../../shared/components/Button';
 import { Input } from '../../../shared/components/Input';
 import { Modal } from '../../../shared/components/Modal';
 import { Select } from '../../../shared/components/Select';
+import { Switch } from '../../../shared/components/Switch';
 import { Textarea } from '../../../shared/components/Textarea';
 import { useToastStore } from '../../../shared/toast/toastStore';
 import {
@@ -69,6 +70,7 @@ export function LoteFormModal({ isOpen, onClose, remateId, lote, onSaved }: Lote
   const [activeAction, setActiveAction] = useState<'save' | 'save-and-new' | null>(null);
   const prefersReducedMotion = useReducedMotion();
   const lotNumberInputRef = useRef<HTMLInputElement>(null);
+  const requeuePresetSwitchId = useId();
 
   useEffect(() => {
     if (!isOpen) return;
@@ -301,6 +303,40 @@ export function LoteFormModal({ isOpen, onClose, remateId, lote, onSaved }: Lote
             <p className="-mt-2 text-xs text-ink-faint">
               El precio de reserva nunca se muestra a los compradores -- solo lo ves vos.
             </p>
+          </FormSection>
+
+          <FormSection title="Reencolado si queda desierto">
+            <Switch
+              id={requeuePresetSwitchId}
+              label="Preautorizar reencolado"
+              description='Si este lote no recibe ofertas, el rematador que esté operando el remate va a poder volver a rematarlo con este precio, sin que vos tengas que estar presente en ese momento.'
+              checked={values.requeue_preset_enabled}
+              onChange={(checked) => setField('requeue_preset_enabled', checked)}
+            />
+            {values.requeue_preset_enabled && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Input
+                  label="Precio inicial de la nueva ronda"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={values.requeue_preset_base_price}
+                  onChange={(event) => setField('requeue_preset_base_price', event.target.value)}
+                  error={errors.requeue_preset_base_price}
+                  required
+                />
+                <Input
+                  label="Incremento mínimo de la nueva ronda"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={values.requeue_preset_min_increment}
+                  onChange={(event) => setField('requeue_preset_min_increment', event.target.value)}
+                  error={errors.requeue_preset_min_increment}
+                  required
+                />
+              </div>
+            )}
           </FormSection>
 
           <FormSection title="Imágenes">

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.moderation.models import RemateBan
 from app.moderation.schemas import ERROR_BANNED_FROM_ROOM
+from tests._role_test_helpers import activate_pending_account_sync
 
 WS_URL = "/api/v1/ws"
 REGISTER_URL = "/api/v1/auth/register"
@@ -30,6 +31,8 @@ def _register_and_login(client: TestClient, *, email: str, role: str = "comprado
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        activate_pending_account_sync(email)
     login = client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -44,7 +47,7 @@ async def test_banned_buyer_cannot_join_the_room(
     ws_client: TestClient, db_session: AsyncSession
 ) -> None:
     rematador_token = _register_and_login(
-        ws_client, email=f"remat{uuid.uuid4()}@example.com", role="rematador"
+        ws_client, email=f"remat{uuid.uuid4()}@example.com", role="empresa"
     )
     buyer_token = _register_and_login(
         ws_client, email=f"buyer{uuid.uuid4()}@example.com", role="comprador"
@@ -79,7 +82,7 @@ async def test_non_banned_buyer_can_join_the_same_remate(
     ws_client: TestClient, db_session: AsyncSession
 ) -> None:
     rematador_token = _register_and_login(
-        ws_client, email=f"remat{uuid.uuid4()}@example.com", role="rematador"
+        ws_client, email=f"remat{uuid.uuid4()}@example.com", role="empresa"
     )
     other_buyer_token = _register_and_login(
         ws_client, email=f"buyer{uuid.uuid4()}@example.com", role="comprador"

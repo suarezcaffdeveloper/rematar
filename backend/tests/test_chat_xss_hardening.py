@@ -33,6 +33,7 @@ from app.modules.chat.schemas import ChatMessageCreate
 from app.modules.chat.text import sanitize_chat_text
 from app.modules.users.models import User, UserRole
 from app.redis.rate_limit import RedisRateLimiter
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -56,13 +57,15 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str = "c
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
 
 
 async def _owner(client: AsyncClient, email: str) -> str:
-    return await _register_and_login(client, email=email, role="rematador")
+    return await _register_and_login(client, email=email, role="empresa")
 
 
 async def _create_and_schedule_remate(client: AsyncClient, token: str) -> dict:
@@ -209,7 +212,7 @@ async def test_authored_message_always_reflects_the_authenticated_caller(
     data = r.json()
     assert data["author_id"] == me.json()["id"]
     assert data["author_name"] == me.json()["full_name"]
-    assert data["author_role"] == "rematador"
+    assert data["author_role"] == "empresa"
 
 
 # --- TEST 8: room/remate spoofing -------------------------------------------------------

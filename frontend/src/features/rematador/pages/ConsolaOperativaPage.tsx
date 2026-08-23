@@ -114,9 +114,18 @@ function ConsolaSkeleton() {
  *
  * `ConsolaControlPanel` ("la botonera") queda exclusivo del rematador operador asignado
  * -- oculto para la empresa dueña (`isOwner`, mismo chequeo `user?.id === remate.owner_id`
- * que ya usaban `OperatorCodePanel`/`AnalyticsPanel`/`ConsolaBotsPanel`), que en su lugar
- * ve la analítica. Cuando se oculta, el subgrid de esa fila colapsa a una sola columna
- * para que `ConsolaLotePanel` ocupe todo el ancho en vez de dejar un hueco de 360px.
+ * que ya usaban `OperatorCodePanel`/`AnalyticsPanel`), que en su lugar ve la analítica.
+ * Cuando se oculta, el subgrid de esa fila colapsa a una sola columna para que
+ * `ConsolaLotePanel` ocupe todo el ancho en vez de dejar un hueco de 360px.
+ *
+ * `ConsolaBotsPanel` ("Simuladores") vive en el panel del rematador operador (mismo
+ * chequeo `!isOwner`), no en el de la empresa -- pedido explícito: es una herramienta de
+ * testeo temporal para probar el remate en vivo mientras se gestiona, no algo que tenga
+ * sentido mostrarle a la empresa dueña. El backend se actualizó en conjunto
+ * (`BotSimulationService` usa `get_operator_or_raise`, no `get_owned_or_raise`, y
+ * `POST /bots` acepta `empresa` o `rematador` -- ver `bots/router.py`/`bots/service.py`)
+ * para que el rematador operador asignado pueda de verdad seleccionar/iniciar bots, no
+ * solo la empresa dueña.
  *
  * `OperatorCodePanel` ("Datos para el rematador") se renderiza antes que cualquier otra
  * cosa en la página -- fuera de los dos branches de `isOperational`, no dentro de
@@ -312,14 +321,13 @@ export function ConsolaOperativaPage() {
             </div>
           )}
 
-          {/* Simuladores (módulo de Bots Simuladores) -- pedido explícito: no forma
-           * parte del sistema original, es una herramienta de prueba para el equipo, así
-           * que va al final de la página, después de la analítica, en vez de mezclada
-           * con los paneles operativos reales (Próximos lotes/Lotes desiertos) que sí
-           * son parte del producto. Oculto para el rematador operador, mismo motivo que
-           * la analítica -- crear/gestionar bots es exclusivo de `empresa` en el backend
-           * (`require_roles(UserRole.EMPRESA)`, ver ADR-047). */}
-          {isOwner && <ConsolaBotsPanel remateId={remate.id} />}
+          {/* Simuladores (módulo de Bots Simuladores) -- pedido explícito: herramienta de
+           * testeo temporal (se va a eliminar más adelante), pensada para probarse desde
+           * el panel del rematador operador mientras gestiona el remate, no desde el de
+           * la empresa. Va al final de la página, después de la analítica de la empresa,
+           * en vez de mezclada con los paneles operativos reales (Próximos lotes/Lotes
+           * desiertos) que sí son parte del producto. */}
+          {!isOwner && <ConsolaBotsPanel remateId={remate.id} />}
         </>
       )}
     </div>

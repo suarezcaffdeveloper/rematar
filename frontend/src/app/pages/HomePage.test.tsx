@@ -19,6 +19,9 @@ vi.mock('../../features/remates/pages/CompradorDashboardPage', () => ({
 vi.mock('../../features/rematador/pages/RematadorDashboardPage', () => ({
   RematadorDashboardPage: () => <p>Dashboard del rematador</p>,
 }));
+vi.mock('../../features/rematador/pages/OperatorClaimPage', () => ({
+  OperatorClaimPage: () => <p>Unirme como operador</p>,
+}));
 
 describe('HomePage', () => {
   it('para un comprador, renderiza el dashboard real de remates', () => {
@@ -29,13 +32,22 @@ describe('HomePage', () => {
     expect(screen.getByText('Dashboard del comprador')).toBeInTheDocument();
   });
 
-  it('para un rematador, renderiza su propio dashboard (Épica 5.1)', () => {
-    useAuthMock.mockReturnValue({ user: { full_name: 'Beto', role: 'rematador' } });
+  it('para una empresa, renderiza el dashboard de remates propios (ADR-047)', () => {
+    useAuthMock.mockReturnValue({ user: { full_name: 'Beto', role: 'empresa' } });
 
     renderHomePage();
 
     expect(screen.getByText('Dashboard del rematador')).toBeInTheDocument();
     expect(screen.queryByText('Bienvenido, Beto')).not.toBeInTheDocument();
+  });
+
+  it('para un rematador, renderiza la pantalla de canje de código de operador (ADR-048)', () => {
+    useAuthMock.mockReturnValue({ user: { full_name: 'Dana', role: 'rematador' } });
+
+    renderHomePage();
+
+    expect(screen.getByText('Unirme como operador')).toBeInTheDocument();
+    expect(screen.queryByText('Bienvenido, Dana')).not.toBeInTheDocument();
   });
 
   it('para un admin, muestra un link real al panel de administrador', () => {

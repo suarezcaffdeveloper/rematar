@@ -14,7 +14,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.modules.auth.dependencies import get_current_user
+from app.modules.auth.dependencies import get_current_user_optional
 from app.modules.users.models import User
 from app.presence.dependencies import get_presence_service
 from app.presence.service import PresenceService
@@ -28,11 +28,14 @@ router = APIRouter()
 @router.get(
     "/remates/{remate_id}/snapshot",
     response_model=RemateStateSnapshot,
-    summary="Estado completo y actual de un remate (RF-16), sin esperar eventos",
+    summary=(
+        "Estado completo y actual de un remate (RF-16), sin esperar eventos -- "
+        "visible también para un visitante anónimo, ADR-049"
+    ),
 )
 async def get_remate_snapshot(
     remate_id: uuid.UUID,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User | None, Depends(get_current_user_optional)],
     service: Annotated[SnapshotService, Depends(get_snapshot_service)],
     presence_service: Annotated[PresenceService, Depends(get_presence_service)],
 ) -> RemateStateSnapshot:

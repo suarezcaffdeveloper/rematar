@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.security import hash_password
 from app.modules.users.models import User, UserRole
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -33,6 +34,8 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -69,7 +72,7 @@ async def _create_remate(client: AsyncClient, token: str, **overrides) -> dict:
 
 
 async def test_rematador_can_create_remate_in_draft(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador1@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador1@example.com", role="empresa")
 
     remate = await _create_remate(client, token)
 
@@ -103,7 +106,7 @@ async def test_admin_cannot_create_remate(client: AsyncClient, db_session: Async
 
 
 async def test_create_rejects_ends_at_before_starts_at(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador2@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador2@example.com", role="empresa")
 
     response = await client.post(
         REMATES_URL,
@@ -122,7 +125,7 @@ async def test_create_rejects_ends_at_before_starts_at(client: AsyncClient) -> N
 
 
 async def test_owner_can_see_own_draft(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador3@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador3@example.com", role="empresa")
     remate = await _create_remate(client, token)
 
     response = await client.get(f"{REMATES_URL}/{remate['id']}", headers=_auth(token))
@@ -131,12 +134,12 @@ async def test_owner_can_see_own_draft(client: AsyncClient) -> None:
 
 async def test_other_rematador_cannot_see_foreign_draft(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador4@example.com", role="rematador"
+        client, email="rematador4@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
 
     other_token = await _register_and_login(
-        client, email="rematador5@example.com", role="rematador"
+        client, email="rematador5@example.com", role="empresa"
     )
     response = await client.get(f"{REMATES_URL}/{remate['id']}", headers=_auth(other_token))
     assert response.status_code == 404
@@ -144,7 +147,7 @@ async def test_other_rematador_cannot_see_foreign_draft(client: AsyncClient) -> 
 
 async def test_comprador_cannot_see_foreign_draft(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador6@example.com", role="rematador"
+        client, email="rematador6@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
 
@@ -157,7 +160,7 @@ async def test_comprador_cannot_see_foreign_draft(client: AsyncClient) -> None:
 
 async def test_admin_can_see_any_draft(client: AsyncClient, db_session: AsyncSession) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador7@example.com", role="rematador"
+        client, email="rematador7@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
 
@@ -168,7 +171,7 @@ async def test_admin_can_see_any_draft(client: AsyncClient, db_session: AsyncSes
 
 async def test_comprador_sees_scheduled_but_not_draft_in_listing(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador8@example.com", role="rematador"
+        client, email="rematador8@example.com", role="empresa"
     )
     await _create_remate(client, owner_token, title="Sigue en borrador")
     scheduled = await _create_remate(
@@ -193,7 +196,7 @@ async def test_comprador_sees_scheduled_but_not_draft_in_listing(client: AsyncCl
 
 
 async def test_owner_can_update_draft(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador9@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador9@example.com", role="empresa")
     remate = await _create_remate(client, token)
 
     response = await client.patch(
@@ -205,7 +208,7 @@ async def test_owner_can_update_draft(client: AsyncClient) -> None:
 
 async def test_non_owner_cannot_update(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador10@example.com", role="rematador"
+        client, email="rematador10@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token, starts_at="2027-06-01T10:00:00Z")
     schedule_response = await client.post(
@@ -214,7 +217,7 @@ async def test_non_owner_cannot_update(client: AsyncClient) -> None:
     assert schedule_response.status_code == 200
 
     other_token = await _register_and_login(
-        client, email="rematador11@example.com", role="rematador"
+        client, email="rematador11@example.com", role="empresa"
     )
     response = await client.patch(
         f"{REMATES_URL}/{remate['id']}", json={"title": "Intento ajeno"}, headers=_auth(other_token)
@@ -226,7 +229,7 @@ async def test_non_owner_cannot_update(client: AsyncClient) -> None:
 
 
 async def test_schedule_requires_starts_at(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador12@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador12@example.com", role="empresa")
     remate = await _create_remate(client, token)
 
     response = await client.post(f"{REMATES_URL}/{remate['id']}/schedule", headers=_auth(token))
@@ -234,7 +237,7 @@ async def test_schedule_requires_starts_at(client: AsyncClient) -> None:
 
 
 async def test_schedule_requires_future_starts_at(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador13@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador13@example.com", role="empresa")
     remate = await _create_remate(client, token, starts_at="2020-01-01T10:00:00Z")
 
     response = await client.post(f"{REMATES_URL}/{remate['id']}/schedule", headers=_auth(token))
@@ -242,7 +245,7 @@ async def test_schedule_requires_future_starts_at(client: AsyncClient) -> None:
 
 
 async def test_schedule_success_changes_status(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador14@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador14@example.com", role="empresa")
     remate = await _create_remate(client, token, starts_at="2027-06-01T10:00:00Z")
 
     response = await client.post(f"{REMATES_URL}/{remate['id']}/schedule", headers=_auth(token))
@@ -254,7 +257,7 @@ async def test_schedule_success_changes_status(client: AsyncClient) -> None:
 
 
 async def test_cancel_requires_reason(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador15@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador15@example.com", role="empresa")
     remate = await _create_remate(client, token)
 
     response = await client.post(
@@ -264,7 +267,7 @@ async def test_cancel_requires_reason(client: AsyncClient) -> None:
 
 
 async def test_cancel_sets_status_and_reason(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador16@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador16@example.com", role="empresa")
     remate = await _create_remate(client, token)
 
     response = await client.post(
@@ -280,7 +283,7 @@ async def test_cancel_sets_status_and_reason(client: AsyncClient) -> None:
 
 
 async def test_cannot_update_after_cancelled(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador17@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador17@example.com", role="empresa")
     remate = await _create_remate(client, token)
     await client.post(
         f"{REMATES_URL}/{remate['id']}/cancel",
@@ -298,7 +301,7 @@ async def test_cannot_update_after_cancelled(client: AsyncClient) -> None:
 
 
 async def test_delete_draft_is_soft_delete(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador18@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador18@example.com", role="empresa")
     remate = await _create_remate(client, token)
 
     delete_response = await client.delete(f"{REMATES_URL}/{remate['id']}", headers=_auth(token))
@@ -309,7 +312,7 @@ async def test_delete_draft_is_soft_delete(client: AsyncClient) -> None:
 
 
 async def test_cannot_delete_scheduled_remate(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador19@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador19@example.com", role="empresa")
     remate = await _create_remate(client, token, starts_at="2027-06-01T10:00:00Z")
     await client.post(f"{REMATES_URL}/{remate['id']}/schedule", headers=_auth(token))
 
@@ -325,7 +328,7 @@ async def test_cannot_delete_scheduled_remate(client: AsyncClient) -> None:
 async def test_rematador_can_upload_cover_image_before_the_remate_exists(
     client: AsyncClient,
 ) -> None:
-    token = await _register_and_login(client, email="rematador20@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador20@example.com", role="empresa")
 
     response = await client.post(
         f"{REMATES_URL}/cover-image",
@@ -346,7 +349,7 @@ async def test_rematador_can_upload_cover_image_before_the_remate_exists(
 async def test_uploaded_cover_image_url_can_be_used_to_create_the_remate(
     client: AsyncClient,
 ) -> None:
-    token = await _register_and_login(client, email="rematador21@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador21@example.com", role="empresa")
 
     upload = await client.post(
         f"{REMATES_URL}/cover-image",
@@ -374,7 +377,7 @@ async def test_comprador_cannot_upload_cover_image(client: AsyncClient) -> None:
 
 
 async def test_cover_image_upload_rejects_unsupported_content_type(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador22@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador22@example.com", role="empresa")
 
     response = await client.post(
         f"{REMATES_URL}/cover-image",
@@ -387,7 +390,7 @@ async def test_cover_image_upload_rejects_unsupported_content_type(client: Async
 
 
 async def test_cover_image_upload_rejects_oversized_file(client: AsyncClient) -> None:
-    token = await _register_and_login(client, email="rematador23@example.com", role="rematador")
+    token = await _register_and_login(client, email="rematador23@example.com", role="empresa")
 
     oversized = b"0" * (5 * 1024 * 1024 + 1)
     response = await client.post(
@@ -401,8 +404,8 @@ async def test_cover_image_upload_rejects_oversized_file(client: AsyncClient) ->
 
 
 async def test_two_rematadores_get_different_cover_image_namespaces(client: AsyncClient) -> None:
-    token_a = await _register_and_login(client, email="rematador24@example.com", role="rematador")
-    token_b = await _register_and_login(client, email="rematador25@example.com", role="rematador")
+    token_a = await _register_and_login(client, email="rematador24@example.com", role="empresa")
+    token_b = await _register_and_login(client, email="rematador25@example.com", role="empresa")
 
     response_a = await client.post(
         f"{REMATES_URL}/cover-image",

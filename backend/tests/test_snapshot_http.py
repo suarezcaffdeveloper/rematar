@@ -6,6 +6,7 @@ docs/23-snapshot-service.md y ADR-026.
 """
 
 from httpx import AsyncClient
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -28,6 +29,8 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -70,7 +73,7 @@ async def _start_and_open(client: AsyncClient, token: str, remate_id: str, lote_
 
 
 async def test_snapshot_endpoint_returns_full_state_for_owner(client: AsyncClient) -> None:
-    owner_token = await _register_and_login(client, email="snaphttp1@example.com", role="rematador")
+    owner_token = await _register_and_login(client, email="snaphttp1@example.com", role="empresa")
     remate = await _create_remate(client, owner_token)
     lote = await _create_lote(client, owner_token, remate["id"])
     await _start_and_open(client, owner_token, remate["id"], lote["id"])
@@ -88,7 +91,7 @@ async def test_snapshot_endpoint_returns_full_state_for_owner(client: AsyncClien
 
 
 async def test_snapshot_endpoint_masks_reserve_price_for_non_owner(client: AsyncClient) -> None:
-    owner_token = await _register_and_login(client, email="snaphttp2@example.com", role="rematador")
+    owner_token = await _register_and_login(client, email="snaphttp2@example.com", role="empresa")
     buyer_token = await _register_and_login(
         client, email="snaphttp2-buyer@example.com", role="comprador"
     )
@@ -105,7 +108,7 @@ async def test_snapshot_endpoint_masks_reserve_price_for_non_owner(client: Async
 async def test_snapshot_endpoint_returns_404_for_draft_remate_seen_by_a_stranger(
     client: AsyncClient,
 ) -> None:
-    owner_token = await _register_and_login(client, email="snaphttp3@example.com", role="rematador")
+    owner_token = await _register_and_login(client, email="snaphttp3@example.com", role="empresa")
     stranger_token = await _register_and_login(
         client, email="snaphttp3-stranger@example.com", role="comprador"
     )
@@ -117,11 +120,44 @@ async def test_snapshot_endpoint_returns_404_for_draft_remate_seen_by_a_stranger
     assert r.json()["error"]["code"] == "not_found"
 
 
-async def test_snapshot_endpoint_requires_authentication(client: AsyncClient) -> None:
-    owner_token = await _register_and_login(client, email="snaphttp4@example.com", role="rematador")
-    remate = await _create_remate(client, owner_token)
+async def test_snapshot_endpoint_anonymous_gets_404_for_draft_remate(client: AsyncClient) -> None:
+    """ADR-049: un visitante sin sesión es tratado igual que cualquier otro que no es
+    dueño ni admin -- un remate en DRAFT le da 404, no 401 (mismo criterio
+    anti-enumeración de `test_snapshot_endpoint_returns_404_for_draft_remate_seen_by_a_stranger`)."""
+    owner_token = await _register_and_login(client, email="snaphttp4@example.com", role="empresa")
+    remate = await _create_remate(client, owner_token)  # queda en DRAFT
 
     r = await client.get(f"{REMATES_URL}/{remate['id']}/snapshot")
+
+    assert r.status_code == 404, r.text
+
+
+async def test_snapshot_endpoint_anonymous_sees_non_draft_remate_with_reserve_price_masked(
+    client: AsyncClient,
+) -> None:
+    """ADR-049: un remate visible (no DRAFT) sí se puede consultar sin sesión -- con el
+    mismo enmascarado de `reserve_price` que ya aplica a cualquier viewer no privilegiado."""
+    owner_token = await _register_and_login(client, email="snaphttp4b@example.com", role="empresa")
+    remate = await _create_remate(client, owner_token)
+    lote = await _create_lote(client, owner_token, remate["id"])
+    await _start_and_open(client, owner_token, remate["id"], lote["id"])
+
+    r = await client.get(f"{REMATES_URL}/{remate['id']}/snapshot")
+
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["active_lote"]["reserve_price"] is None
+    assert data["connected_users_detail"] is None
+
+
+async def test_snapshot_endpoint_invalid_token_still_returns_401(client: AsyncClient) -> None:
+    owner_token = await _register_and_login(client, email="snaphttp4c@example.com", role="empresa")
+    remate = await _create_remate(client, owner_token)
+
+    r = await client.get(
+        f"{REMATES_URL}/{remate['id']}/snapshot",
+        headers={"Authorization": "Bearer this-is-not-a-valid-token"},
+    )
 
     assert r.status_code == 401, r.text
 
@@ -131,7 +167,7 @@ async def test_snapshot_endpoint_same_shape_as_ws_snapshot_message(client: Async
     con el mismo `RemateStateSnapshot`, sin importar el transporte -- acá se confirma
     que la respuesta HTTP trae exactamente las mismas claves de nivel superior que
     `SnapshotMessage.data` sobre WebSocket (ver test_websocket_gateway.py)."""
-    owner_token = await _register_and_login(client, email="snaphttp5@example.com", role="rematador")
+    owner_token = await _register_and_login(client, email="snaphttp5@example.com", role="empresa")
     remate = await _create_remate(client, owner_token)
 
     r = await client.get(f"{REMATES_URL}/{remate['id']}/snapshot", headers=_auth(owner_token))

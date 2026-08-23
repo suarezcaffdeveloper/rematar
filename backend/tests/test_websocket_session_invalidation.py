@@ -39,6 +39,7 @@ from app.modules.auth.security import create_password_reset_token
 from app.modules.users.models import User, UserRole
 from app.redis.pubsub import RedisPubSub
 from app.websocket import close_codes
+from tests._role_test_helpers import activate_pending_account_sync
 
 WS_URL = "/api/v1/ws"
 REGISTER_URL = "/api/v1/auth/register"
@@ -68,6 +69,8 @@ def _register_and_login(
         },
     )
     assert register.status_code == 201, register.text
+    if role in ("empresa", "rematador"):
+        activate_pending_account_sync(email)
     login = client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     body = login.json()
@@ -106,7 +109,7 @@ async def _create_admin_and_login(
 
 
 def _create_visible_remate(client: TestClient, *, suffix: str) -> str:
-    owner_token, _ = _register_and_login(client, email=f"fase3-owner-{suffix}@example.com", role="rematador")
+    owner_token, _ = _register_and_login(client, email=f"fase3-owner-{suffix}@example.com", role="empresa")
     remate = client.post(
         REMATES_URL,
         json={

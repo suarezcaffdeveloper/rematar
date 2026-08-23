@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.modules.chat.models import ChatMessage, ChatMessageKind
 from app.modules.chat.repository import ChatMessageRepository
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -29,9 +30,10 @@ async def _owner_token(client: AsyncClient, email: str) -> str:
         "confirm_password": "password123",
         "full_name": "Test",
         "phone": "+5491122334455",
-        "role": "rematador",
+        "role": "empresa",
     }
     await client.post(REGISTER_URL, json=payload)
+    await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]

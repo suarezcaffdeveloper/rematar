@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Button } from '../../../shared/components/Button';
 import { Input } from '../../../shared/components/Input';
@@ -59,10 +60,16 @@ export function PlaceBidButton({
     if (!touched) setAmount(minimumAmount);
   }, [minimumAmount, touched]);
 
+  const navigate = useNavigate();
+  const location = useLocation();
   const isLoteOpen = lote.status === 'open';
   const isRemateLive = remateStatus === 'live';
   const isComprador = viewerRole === 'comprador';
   const canBid = isLoteOpen && isRemateLive && isComprador;
+  // Visitante anónimo (ADR-049): distinto de "sos rematador/empresa/admin mirando tu
+  // propia sala" -- acá el problema no es el rol, es no tener sesión, así que la acción
+  // es "iniciar sesión", no un mensaje de permisos.
+  const isAnonymous = viewerRole === undefined;
 
   const trimmedAmount = amount.trim();
   const validationError = !isPositiveDecimal(trimmedAmount)
@@ -109,6 +116,22 @@ export function PlaceBidButton({
   function handleSelectSuggestion(suggestedAmount: string) {
     setTouched(true);
     setAmount(suggestedAmount);
+  }
+
+  if (isAnonymous) {
+    return (
+      <div className="flex flex-col gap-2">
+        <Button
+          className="w-full py-2.5 text-sm"
+          onClick={() => navigate('/login', { state: { from: location } })}
+        >
+          Iniciá sesión para ofertar
+        </Button>
+        <p className="text-center text-xs text-ink-faint">
+          Podés seguir mirando el remate en vivo sin loguearte -- para ofertar hace falta una cuenta.
+        </p>
+      </div>
+    );
   }
 
   if (!canBid) {

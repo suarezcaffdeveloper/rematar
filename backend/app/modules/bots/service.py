@@ -153,8 +153,12 @@ class BotSimulationService:
         self._runner_registry = runner_registry
         self._event_bus = event_bus
 
-    async def get_roster(self, remate_id: uuid.UUID, owner: User) -> list[BotRosterEntry]:
-        await self._remate_service.get_owned_or_raise(remate_id, owner)
+    async def get_roster(self, remate_id: uuid.UUID, actor: User) -> list[BotRosterEntry]:
+        # `get_operator_or_raise` (no `get_owned_or_raise`): admite tanto a la empresa
+        # dueña como al rematador asignado como operador (ADR-048) -- pedido explícito
+        # para que el rematador pueda armar y correr sus propios simuladores al
+        # gestionar un remate en vivo, mientras este módulo exista.
+        await self._remate_service.get_operator_or_raise(remate_id, actor)
         roster = await self._selection_repository.list_roster(remate_id)
         return [
             BotRosterEntry(
@@ -167,9 +171,9 @@ class BotSimulationService:
         ]
 
     async def set_selection(
-        self, remate_id: uuid.UUID, owner: User, bot_profile_ids: list[uuid.UUID]
+        self, remate_id: uuid.UUID, actor: User, bot_profile_ids: list[uuid.UUID]
     ) -> None:
-        await self._remate_service.get_owned_or_raise(remate_id, owner)
+        await self._remate_service.get_operator_or_raise(remate_id, actor)
 
         run = await self._run_repository.get_by_remate_id(remate_id)
         if run is not None and run.status != BotSimulationStatus.STOPPED:
@@ -181,19 +185,19 @@ class BotSimulationService:
         for bot_profile_id in bot_profile_ids:
             profile = await self._profile_repository.get_by_id(bot_profile_id)
             if profile is None or (
-                owner.role != UserRole.ADMIN and profile.created_by_id != owner.id
+                actor.role != UserRole.ADMIN and profile.created_by_id != actor.id
             ):
                 raise NotFoundError("Bot no encontrado.")
 
         await self._selection_repository.replace_selection(remate_id, bot_profile_ids)
         await self._selection_repository.commit()
 
-    async def get_run(self, remate_id: uuid.UUID, owner: User) -> BotSimulationRun | None:
-        await self._remate_service.get_owned_or_raise(remate_id, owner)
+    async def get_run(self, remate_id: uuid.UUID, actor: User) -> BotSimulationRun | None:
+        await self._remate_service.get_operator_or_raise(remate_id, actor)
         return await self._run_repository.get_by_remate_id(remate_id)
 
-    async def start(self, remate_id: uuid.UUID, owner: User) -> BotSimulationRun:
-        await self._remate_service.get_owned_or_raise(remate_id, owner)
+    async def start(self, remate_id: uuid.UUID, actor: User) -> BotSimulationRun:
+        await self._remate_service.get_operator_or_raise(remate_id, actor)
         run = await self._get_or_create_run_for_update(remate_id)
 
         if run.status == BotSimulationStatus.RUNNING:
@@ -201,7 +205,7 @@ class BotSimulationService:
 
         run.status = BotSimulationStatus.RUNNING
         run.started_at = datetime.now(UTC)
-        run.started_by_id = owner.id
+        run.started_by_id = actor.id
         run.stop_reason = None
         await self._run_repository.commit()
         await self._run_repository.refresh(run)
@@ -211,8 +215,8 @@ class BotSimulationService:
         await self._event_bus.publish(BotSimulationStarted(remate_id=remate_id))
         return run
 
-    async def pause(self, remate_id: uuid.UUID, owner: User) -> BotSimulationRun:
-        await self._remate_service.get_owned_or_raise(remate_id, owner)
+    async def pause(self, remate_id: uuid.UUID, actor: User) -> BotSimulationRun:
+        await self._remate_service.get_operator_or_raise(remate_id, actor)
         run = await self._run_repository.get_by_remate_id_for_update(remate_id)
         if run is None:
             raise NotFoundError("La simulación de este remate todavía no fue iniciada.")
@@ -228,8 +232,8 @@ class BotSimulationService:
         await self._event_bus.publish(BotSimulationPaused(remate_id=remate_id))
         return run
 
-    async def stop(self, remate_id: uuid.UUID, owner: User) -> BotSimulationRun:
-        await self._remate_service.get_owned_or_raise(remate_id, owner)
+    async def stop(self, remate_id: uuid.UUID, actor: User) -> BotSimulationRun:
+        await self._remate_service.get_operator_or_raise(remate_id, actor)
         run = await self._run_repository.get_by_remate_id_for_update(remate_id)
         if run is None:
             raise NotFoundError("La simulación de este remate todavía no fue iniciada.")

@@ -58,7 +58,7 @@ class SnapshotService:
         # criterio permisivo que `cache: RedisCache | None`.
         self._bot_identity_resolver = bot_identity_resolver or BotIdentityResolver(db)
 
-    async def assert_visible(self, remate_id: uuid.UUID, viewer: User) -> None:
+    async def assert_visible(self, remate_id: uuid.UUID, viewer: User | None) -> None:
         """Levanta `NotFoundError` (mismo criterio anti-enumeración que `build`, no
         distingue "no existe" de "existe pero no es tuyo") si `remate_id` no existe o
         no es visible para `viewer` -- sin construir ningún snapshot.
@@ -78,7 +78,7 @@ class SnapshotService:
     async def build(
         self,
         remate_id: uuid.UUID,
-        viewer: User,
+        viewer: User | None,
         *,
         connected_users: int = 0,
         connected_users_detail: list[ConnectedUserSummary] | None = None,
@@ -111,7 +111,7 @@ class SnapshotService:
         logger.info(
             "snapshot_built",
             remate_id=str(remate_id),
-            viewer_id=str(viewer.id),
+            viewer_id=str(viewer.id) if viewer is not None else None,
             has_active_lote=snapshot.active_lote is not None,
             recent_offers_count=len(snapshot.recent_offers),
             connected_users=connected_users,
@@ -232,12 +232,14 @@ class SnapshotService:
     # --- Enmascarado (depende del viewer, nunca se cachea enmascarado) ----------------
 
     @staticmethod
-    def _is_privileged(remate: Remate, viewer: User) -> bool:
+    def _is_privileged(remate: Remate, viewer: User | None) -> bool:
         """Mismo criterio que `RemateService._is_visible`/`LoteService._mask_reserve_price`
         (dueño del remate o administrador) -- se reimplementa acá (no se importa el
         método privado de `LoteService`) para no depender de un detalle interno de otro
         módulo; es la misma regla de una línea en los tres lugares, documentada en
-        ADR-026 sección D."""
+        ADR-026 sección D. Un visitante anónimo (ADR-049) nunca es privilegiado."""
+        if viewer is None:
+            return False
         return viewer.role == UserRole.ADMIN or viewer.id == remate.owner_id
 
     @staticmethod

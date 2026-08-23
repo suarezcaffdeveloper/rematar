@@ -31,6 +31,7 @@ from app.modules.chat.models import ChatMessage
 from app.modules.ofertas.models import Oferta, OfertaStatus
 from app.modules.users.models import User, UserRole
 from app.redis.rate_limit import RedisRateLimiter
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -65,10 +66,11 @@ async def _rematador(client: AsyncClient, email: str) -> tuple[str, str]:
         "confirm_password": "password123",
         "full_name": "Test",
         "phone": "+5491122334455",
-        "role": "rematador",
+        "role": "empresa",
     }
     r = await client.post(REGISTER_URL, json=payload)
     assert r.status_code == 201, r.text
+    await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return r.json()["id"], login.json()["access_token"]

@@ -140,11 +140,11 @@ export class WebSocketClient {
   }
 
   private openSocket(): void {
+    // Visitante anónimo (ADR-049): `token` puede ser `null` -- ya no es motivo para no
+    // abrir la conexión, solo cambia qué se manda en el mensaje `auth` de más abajo. El
+    // backend acepta `token` ausente como "mirar sin sesión", nunca ofertar ni accionar
+    // nada de dominio (eso lo sigue rechazando cada endpoint HTTP que lo requiera).
     const token = this.getToken();
-    if (!token) {
-      this.setStatus('closed');
-      return;
-    }
 
     this.setStatus(this.reconnectAttempts > 0 ? 'reconnecting' : 'connecting');
     const socket = this.createSocket(this.url);

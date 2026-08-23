@@ -20,6 +20,7 @@ from app.modules.bots.runner import BotRunnerRegistry
 from app.modules.remates.events import RemateFinished
 from app.modules.remates.lotes.events import LoteOpened
 from app.redis.rate_limit import RedisRateLimiter
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -54,11 +55,12 @@ async def _setup_open_lote(client: AsyncClient, email: str) -> tuple[str, str, s
         "confirm_password": "password123",
         "full_name": "Test",
         "phone": "+5491122334455",
-        "role": "rematador",
+        "role": "empresa",
     }
     r = await client.post(REGISTER_URL, json=payload)
     assert r.status_code == 201, r.text
     owner_id = r.json()["id"]
+    await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     owner_token = login.json()["access_token"]
 

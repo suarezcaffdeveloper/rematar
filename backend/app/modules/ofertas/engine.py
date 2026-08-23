@@ -306,7 +306,7 @@ class AuctionEngine:
         return oferta
 
     async def get_leading_amount(
-        self, remate_id: uuid.UUID, lote_id: uuid.UUID, viewer: User
+        self, remate_id: uuid.UUID, lote_id: uuid.UUID, viewer: User | None
     ) -> Decimal | None:
         await self._remate_service.get_visible_or_raise(remate_id, viewer)
         lote = await self._lote_repository.get_by_id(lote_id)

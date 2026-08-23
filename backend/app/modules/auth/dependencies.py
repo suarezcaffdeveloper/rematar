@@ -37,6 +37,12 @@ _settings = get_settings()
 # `tokenUrl` es solo lo que Swagger UI usa para el botón "Authorize" (RNF: documentación
 # automática usable) — no es la única forma de loguearse, es la ruta real del endpoint.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{_settings.API_V1_PREFIX}/auth/login")
+# `auto_error=False`: no levanta 401 si no viene ningún token -- es lo que permite
+# distinguir "sin sesión" (visitante anónimo, ver ADR-049) de "sesión inválida" en
+# `get_current_user_optional`, algo que `oauth2_scheme` de arriba no puede hacer.
+oauth2_scheme_optional = OAuth2PasswordBearer(
+    tokenUrl=f"{_settings.API_V1_PREFIX}/auth/login", auto_error=False
+)
 
 
 def get_refresh_token_repository(
@@ -89,6 +95,19 @@ async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> User:
+    return await auth_service.get_current_user_from_access_token(token)
+
+
+async def get_current_user_optional(
+    token: Annotated[str | None, Depends(oauth2_scheme_optional)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> User | None:
+    """Visitante anónimo (ADR-049): `None` si no se mandó ningún token. Un token
+    presente pero inválido/expirado sigue levantando `UnauthorizedError` (401) igual que
+    `get_current_user` -- nunca se degrada en silencio a "anónimo", para no enmascarar
+    una sesión rota como si el usuario simplemente no se hubiera logueado."""
+    if token is None:
+        return None
     return await auth_service.get_current_user_from_access_token(token)
 
 

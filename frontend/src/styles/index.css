@@ -130,6 +130,21 @@ body {
   animation: price-flash 600ms ease-out;
 }
 
+@keyframes fade-in-subtitle {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fade-in-subtitle {
+  animation: fade-in-subtitle 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /*
  * Accesibilidad (Épica 9, Etapa 7 -- rediseño, accesibilidad final): respeta
  * `prefers-reduced-motion`, el ajuste de sistema operativo para usuarios sensibles al

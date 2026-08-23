@@ -37,10 +37,16 @@ async def authenticate_connection(
     *,
     timeout_seconds: float,
     max_message_bytes: int,
-) -> tuple[User, uuid.UUID | None] | None:
+) -> tuple[User | None, uuid.UUID | None] | None:
     """Espera el primer mensaje con un timeout, lo valida como `AuthMessage`, y
     resuelve el usuario (+ `session_id`, Fase 3). Devuelve `None` (habiendo cerrado la
     conexión con el código correspondiente) si cualquier paso falla — nunca lanza.
+
+    ADR-049 (visitante anónimo): `message.token is None` ya no es una falla -- devuelve
+    `(None, None)`, la misma forma que "usuario autenticado sin sesión puntual", así el
+    resto del Gateway no necesita distinguir "anónimo" de "autenticado sin `sid`" en
+    ningún otro lugar más que acá. Un token que SÍ vino pero es inválido/expirado sigue
+    rechazándose exactamente igual que antes -- nunca se degrada en silencio a anónimo.
 
     Fase 4 de remediación del WebSocket Security Audit: `max_message_bytes` protege este
     primer mensaje igual que `_handle_message` protege los siguientes (ver
@@ -70,9 +76,13 @@ async def authenticate_connection(
         await safe_close(
             websocket,
             code=close_codes.INVALID_MESSAGE,
-            reason="Se esperaba {'type': 'auth', 'token': '...'} como primer mensaje.",
+            reason="Se esperaba {'type': 'auth', ...} como primer mensaje.",
         )
         return None
+
+    if message.token is None:
+        logger.info("ws_authenticated_anonymous")
+        return None, None
 
     try:
         user, session_id = await auth_service.get_current_session_from_access_token(

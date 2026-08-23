@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.modules.users.models import User, UserRole
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -38,6 +39,8 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
     }
     register = await client.post(REGISTER_URL, json=payload)
     assert register.status_code == 201, register.text
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     body = login.json()
@@ -45,7 +48,7 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
 
 
 async def _owner(client: AsyncClient, email: str) -> tuple[str, str, str]:
-    return await _register_and_login(client, email=email, role="rematador")
+    return await _register_and_login(client, email=email, role="empresa")
 
 
 async def _buyer(client: AsyncClient, email: str) -> tuple[str, str, str]:
@@ -324,7 +327,7 @@ async def test_global_audit_log_filters_by_actor_id(
 async def test_global_audit_log_search_matches_actor_name(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    await _register_and_login(client, email="audr10@example.com", role="rematador")
+    await _register_and_login(client, email="audr10@example.com", role="empresa")
     admin_token = await _make_admin_and_login(client, db_session, "audr10-admin@example.com")
 
     page = await _audit_global(client, admin_token, search="nonexistent-name-xyz")

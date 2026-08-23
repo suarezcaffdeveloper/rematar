@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.modules.users.models import User, UserRole
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -41,6 +42,8 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -115,7 +118,7 @@ async def _setup_open_lote(
     client: AsyncClient, owner_email: str, **lote_overrides
 ) -> tuple[str, str, str]:
     """Rematador con un remate LIVE y un lote OPEN. Devuelve (owner_token, remate_id, lote_id)."""
-    owner_token = await _register_and_login(client, email=owner_email, role="rematador")
+    owner_token = await _register_and_login(client, email=owner_email, role="empresa")
     remate = await _create_remate(client, owner_token)
     lote = await _create_lote(client, owner_token, remate["id"], **lote_overrides)
     schedule = await client.post(
@@ -270,7 +273,7 @@ async def test_two_concurrent_bids_are_serialized_by_the_row_lock(client: AsyncC
 async def test_rematador_cannot_bid(client: AsyncClient) -> None:
     _owner_token, remate_id, lote_id = await _setup_open_lote(client, "rematador5@example.com")
     other_rematador = await _register_and_login(
-        client, email="rematador5b@example.com", role="rematador"
+        client, email="rematador5b@example.com", role="empresa"
     )
 
     response = await _bid(client, other_rematador, remate_id, lote_id, "1000.00")
@@ -313,7 +316,7 @@ async def test_suspended_comprador_cannot_bid(
 
 async def test_bid_on_draft_remate_returns_404(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador8@example.com", role="rematador"
+        client, email="rematador8@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     lote = await _create_lote(client, owner_token, remate["id"])
@@ -327,7 +330,7 @@ async def test_bid_on_draft_remate_returns_404(client: AsyncClient) -> None:
 
 async def test_bid_on_lote_from_another_remate_returns_404(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador9@example.com", role="rematador"
+        client, email="rematador9@example.com", role="empresa"
     )
     remate_a = await _create_remate(client, owner_token, title="Remate A")
     await _create_lote(client, owner_token, remate_a["id"])
@@ -354,7 +357,7 @@ async def test_bid_on_lote_from_another_remate_returns_404(client: AsyncClient) 
 
 async def test_bid_when_remate_not_started_rejected(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador10@example.com", role="rematador"
+        client, email="rematador10@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     lote = await _create_lote(client, owner_token, remate["id"])
@@ -414,7 +417,7 @@ async def test_bid_when_remate_finished_rejected(client: AsyncClient) -> None:
 
 async def test_bid_on_pending_lote_rejected(client: AsyncClient) -> None:
     owner_token = await _register_and_login(
-        client, email="rematador12@example.com", role="rematador"
+        client, email="rematador12@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     lote = await _create_lote(client, owner_token, remate["id"])
@@ -579,7 +582,7 @@ async def test_comprador_cannot_list_history(client: AsyncClient) -> None:
 async def test_non_owner_rematador_cannot_list_history(client: AsyncClient) -> None:
     _owner_token, remate_id, lote_id = await _setup_open_lote(client, "rematador22@example.com")
     other_rematador = await _register_and_login(
-        client, email="rematador22b@example.com", role="rematador"
+        client, email="rematador22b@example.com", role="empresa"
     )
 
     response = await client.get(_ofertas_url(remate_id, lote_id), headers=_auth(other_rematador))
@@ -597,7 +600,7 @@ async def test_same_client_token_reused_across_different_lotes_does_not_cross_co
     A como si fuera el resultado de ofertar en B -- eso dejaría al comprador creyendo
     que ofertó en B cuando en realidad no se registró ninguna oferta ahí."""
     owner_token = await _register_and_login(
-        client, email="rematador-crosslote@example.com", role="rematador"
+        client, email="rematador-crosslote@example.com", role="empresa"
     )
     remate = await _create_remate(client, owner_token)
     remate_id = remate["id"]

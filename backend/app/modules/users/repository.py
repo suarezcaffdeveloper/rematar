@@ -42,11 +42,23 @@ class UserRepository:
         result = await self._db.execute(select(User).where(User.email == email))
         return result.scalar_one_or_none()
 
-    async def list_all(self, *, offset: int, limit: int) -> tuple[list[User], int]:
+    async def list_all(
+        self, *, offset: int, limit: int, pending_only: bool = False
+    ) -> tuple[list[User], int]:
+        query = select(User)
+        count_query = select(func.count()).select_from(User)
+        if pending_only:
+            # Cuentas empresa/rematador recién registradas, todavía sin aprobar (RF-03) --
+            # mismo campo `is_active` que usa la suspensión, sin un estado separado (ver
+            # `ROLES_PENDING_APPROVAL` en `schemas.py`). Le ahorra al admin tener que
+            # pasear por todas las páginas para encontrar las que necesitan revisión.
+            query = query.where(User.is_active.is_(False))
+            count_query = count_query.where(User.is_active.is_(False))
+
         items_result = await self._db.execute(
-            select(User).order_by(User.created_at.desc()).offset(offset).limit(limit)
+            query.order_by(User.created_at.desc()).offset(offset).limit(limit)
         )
-        count_result = await self._db.execute(select(func.count()).select_from(User))
+        count_result = await self._db.execute(count_query)
         total = count_result.scalar_one()
         return list(items_result.scalars().all()), total
 

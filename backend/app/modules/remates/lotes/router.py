@@ -1,9 +1,11 @@
 """Endpoints del recurso `Lote`, anidados bajo `/remates/{remate_id}/lotes` (montado en
 `app/modules/remates/router.py`).
 
-Ningún endpoint acá tiene `require_roles`: la autorización de escritura pasa por
-ownership del remate padre (`LoteService` llama a `RemateService.get_owned_or_raise`), y
-solo un `rematador` puede ser dueño de un remate — ver docs/15-modulo-lote.md.
+Ningún endpoint acá tiene `require_roles`: la autorización pasa por ownership/operación
+del remate padre (`LoteService` llama a `RemateService.get_owned_or_raise` para lo
+estructural/comercial, o `get_operator_or_raise` para `open`/`open_next`/`close`/
+`requeue-preset`, ver ADR-048) — solo una `empresa` puede ser dueña de un remate, ver
+docs/15-modulo-lote.md.
 
 `/reorder` y `/next` se declaran antes de `/{lote_id}` para que Starlette no intente
 matchear esos segmentos como un `lote_id` (los path operations se resuelven en el orden
@@ -25,7 +27,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 
 from app.common.schemas import Page
-from app.modules.auth.dependencies import get_current_user
+from app.modules.auth.dependencies import get_current_user, get_current_user_optional
 from app.modules.ofertas.router import router as ofertas_router
 from app.modules.remates.lotes.dependencies import get_lote_service
 from app.modules.remates.lotes.models import Lote, LoteRound
@@ -66,11 +68,11 @@ async def create_lote(
 @router.get(
     "",
     response_model=Page[LoteRead],
-    summary="Listar lotes de un remate visible para el usuario actual",
+    summary="Listar lotes de un remate visible para el usuario actual (o anónimo, ADR-049)",
 )
 async def list_lotes(
     remate_id: uuid.UUID,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User | None, Depends(get_current_user_optional)],
     service: Annotated[LoteService, Depends(get_lote_service)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -111,12 +113,12 @@ async def open_next_lote(
 @router.get(
     "/{lote_id}",
     response_model=LoteRead,
-    summary="Detalle de un lote (404 si no es visible para el usuario actual)",
+    summary="Detalle de un lote (404 si no es visible para el usuario actual, o anónimo -- ADR-049)",
 )
 async def get_lote(
     remate_id: uuid.UUID,
     lote_id: uuid.UUID,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User | None, Depends(get_current_user_optional)],
     service: Annotated[LoteService, Depends(get_lote_service)],
 ) -> Lote:
     return await service.get_visible_or_raise(remate_id, lote_id, current_user)
@@ -226,6 +228,23 @@ async def requeue_lote(
     service: Annotated[LoteService, Depends(get_lote_service)],
 ) -> Lote:
     return await service.requeue(remate_id, lote_id, current_user, data)
+
+
+@router.post(
+    "/{lote_id}/requeue-preset",
+    response_model=LoteRead,
+    summary=(
+        "Reincorporar un lote desierto con el precio preautorizado por la empresa "
+        "(ADR-048) -- accesible también para el rematador operador, no solo la empresa"
+    ),
+)
+async def requeue_lote_preset(
+    remate_id: uuid.UUID,
+    lote_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[LoteService, Depends(get_lote_service)],
+) -> Lote:
+    return await service.requeue_preset(remate_id, lote_id, current_user)
 
 
 @router.get(

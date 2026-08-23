@@ -16,6 +16,7 @@ from redis.asyncio import Redis
 
 from app.core.config import get_settings
 from app.redis.pubsub import RedisPubSub
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -42,6 +43,8 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -97,7 +100,7 @@ async def _open_lote(client: AsyncClient, token: str, remate_id: str, lote_id: s
 async def _setup_scheduled_remate_with_lote(
     client: AsyncClient, email: str
 ) -> tuple[str, str, str]:
-    token = await _register_and_login(client, email=email, role="rematador")
+    token = await _register_and_login(client, email=email, role="empresa")
     remate = await _create_remate(client, token)
     lote = await _create_lote(client, token, remate["id"])
     await _schedule(client, token, remate["id"])
@@ -168,7 +171,7 @@ class _SubscribedChannel:
 
 async def test_remate_created_publishes_event(client: AsyncClient) -> None:
     token = await _register_and_login(
-        client, email="rematador-ev1@example.com", role="rematador"
+        client, email="rematador-ev1@example.com", role="empresa"
     )
 
     raw_client = Redis.from_url(get_settings().REDIS_URL, decode_responses=True)
@@ -195,7 +198,7 @@ async def test_remate_created_publishes_event(client: AsyncClient) -> None:
 
 async def test_remate_scheduled_publishes_event(client: AsyncClient) -> None:
     token = await _register_and_login(
-        client, email="rematador-ev2@example.com", role="rematador"
+        client, email="rematador-ev2@example.com", role="empresa"
     )
     remate = await _create_remate(client, token)
 
@@ -256,7 +259,7 @@ async def test_remate_finished_manually_publishes_event(client: AsyncClient) -> 
 
 async def test_remate_cancelled_publishes_event(client: AsyncClient) -> None:
     token = await _register_and_login(
-        client, email="rematador-ev6@example.com", role="rematador"
+        client, email="rematador-ev6@example.com", role="empresa"
     )
     remate = await _create_remate(client, token)
 

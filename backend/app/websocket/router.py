@@ -200,14 +200,24 @@ async def websocket_gateway(
         return  # ya se cerró la conexión con el código correspondiente (ver auth.py)
     user, session_id = auth_result
 
+    # ADR-049 (visitante anónimo): `user` es `None` para una conexión sin token. El
+    # resto de este archivo sigue necesitando ALGÚN id de conexión (registro en
+    # `ConnectionManager`, sala, presencia, rate limiting) -- se genera uno sintético,
+    # nunca ligado a ninguna fila de `users`, exactamente para esta conexión puntual. La
+    # autorización de negocio real (`assert_visible`/`build`, más abajo) sigue usando
+    # `user` tal cual (`None` incluido), nunca este id sintético.
+    connection_user_id = user.id if user is not None else uuid.uuid4()
+
     # Fase 4: límite de conexiones simultáneas por usuario -- se rechaza la conexión
     # NUEVA, sin tocar las ya existentes (ver docstring de `user_connection_limit_exceeded`
     # para por qué no hace falta un lock acá: ningún `await` entre este chequeo y
-    # `manager.register` más abajo).
+    # `manager.register` más abajo). Para un anónimo, `connection_user_id` es distinto en
+    # cada conexión -- este gauge en particular no lo alcanza (ver ADR-049, "riesgos
+    # conocidos"); el límite por IP de conexiones nuevas (arriba) sigue aplicando igual.
     if user_connection_limit_exceeded(
-        manager, user.id, max_connections=settings.WS_MAX_CONNECTIONS_PER_USER
+        manager, connection_user_id, max_connections=settings.WS_MAX_CONNECTIONS_PER_USER
     ):
-        logger.warning("ws_user_connection_limit_exceeded", user_id=str(user.id))
+        logger.warning("ws_user_connection_limit_exceeded", user_id=str(connection_user_id))
         await safe_close(
             websocket,
             code=close_codes.RATE_LIMITED,
@@ -216,12 +226,17 @@ async def websocket_gateway(
         return
 
     context = ConnectionContext(
-        connection_id=uuid.uuid4(), user_id=user.id, session_id=session_id, websocket=websocket
+        connection_id=uuid.uuid4(),
+        user_id=connection_user_id,
+        session_id=session_id,
+        websocket=websocket,
     )
     await manager.register(context)
     try:
         await websocket.send_text(
-            ConnectedMessage(connection_id=context.connection_id, user_id=user.id).model_dump_json()
+            ConnectedMessage(
+                connection_id=context.connection_id, user_id=connection_user_id
+            ).model_dump_json()
         )
         await _run_connection_loop(
             websocket,
@@ -251,7 +266,7 @@ async def _run_connection_loop(
     snapshot_service: SnapshotService,
     moderation_service: ModerationService,
     rate_limiter: WSRateLimiter,
-    user: User,
+    user: User | None,
 ) -> None:
     """Alterna entre esperar un mensaje del cliente y, si no llega nada dentro del
     intervalo de heartbeat, enviar un `ping`. Si no hay `pong` dentro del timeout
@@ -326,7 +341,7 @@ async def _handle_message(
     moderation_service: ModerationService,
     rate_limiter: WSRateLimiter,
     settings: Settings,
-    user: User,
+    user: User | None,
 ) -> bool:
     """Despacha por `type`: `pong` (heartbeat), `join_room`/`leave_room` (salas,
     Módulo 3.4). Cualquier otro tipo (incluido cualquier protocolo futuro, por ejemplo
@@ -341,7 +356,9 @@ async def _handle_message(
     ya se cerró (el llamador, `_run_connection_loop`, debe dejar de leer)."""
     if len(raw_message.encode("utf-8")) > settings.WS_MAX_MESSAGE_BYTES:
         logger.warning(
-            "ws_message_too_large", connection_id=str(context.connection_id), user_id=str(user.id)
+            "ws_message_too_large",
+            connection_id=str(context.connection_id),
+            user_id=str(context.user_id),
         )
         await safe_close(
             websocket, code=close_codes.MESSAGE_TOO_LARGE, reason="Mensaje demasiado grande."
@@ -358,7 +375,7 @@ async def _handle_message(
         logger.warning(
             "ws_message_rate_limited",
             connection_id=str(context.connection_id),
-            user_id=str(user.id),
+            user_id=str(context.user_id),
         )
         await safe_close(
             websocket,
@@ -400,7 +417,7 @@ async def _handle_join_room(
     moderation_service: ModerationService,
     rate_limiter: WSRateLimiter,
     settings: Settings,
-    user: User,
+    user: User | None,
 ) -> None:
     try:
         join_message = JoinRoomMessage.model_validate_json(raw_message)
@@ -426,7 +443,11 @@ async def _handle_join_room(
         )
         return
 
-    if await moderation_service.is_banned(join_message.remate_id, user.id):
+    # `context.user_id` (no `user.id`): para un visitante anónimo es un id sintético que
+    # nunca va a coincidir con ninguna fila de moderación -- esto es, a propósito, lo que
+    # hace que la moderación de invitados quede fuera de alcance por ahora (ADR-049): ni
+    # bypassea nada (la consulta corre igual) ni requiere una rama especial acá.
+    if await moderation_service.is_banned(join_message.remate_id, context.user_id):
         await websocket.send_text(
             ErrorMessage(
                 code=ERROR_BANNED_FROM_ROOM,
@@ -456,7 +477,7 @@ async def _handle_join_room(
         return
 
     joined = await presence_service.join_room(
-        join_message.remate_id, context.connection_id, user.id
+        join_message.remate_id, context.connection_id, context.user_id
     )
     if not joined:
         await websocket.send_text(
@@ -479,7 +500,7 @@ async def _send_snapshot(
     websocket: WebSocket,
     snapshot_service: SnapshotService,
     remate_id: uuid.UUID,
-    user: User,
+    user: User | None,
     presence_service: PresenceService,
 ) -> None:
     """Se manda una única vez, justo después de confirmar el `join_room` (Épica 3,

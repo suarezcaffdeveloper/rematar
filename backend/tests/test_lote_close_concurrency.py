@@ -26,6 +26,7 @@ import asyncio
 from decimal import Decimal
 
 from httpx import AsyncClient
+from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -56,6 +57,8 @@ async def _register_and_login(client: AsyncClient, *, email: str, role: str) -> 
             "role": role,
         },
     )
+    if role in ("empresa", "rematador"):
+        await activate_pending_account(email)
     login = await client.post(LOGIN_URL, data={"username": email, "password": "password123"})
     assert login.status_code == 200, login.text
     return login.json()["access_token"]
@@ -88,7 +91,7 @@ async def _create_lote(client: AsyncClient, token: str, remate_id: str, **overri
 
 
 async def _setup_open_lote(client: AsyncClient, owner_email: str) -> tuple[str, str, str]:
-    owner_token = await _register_and_login(client, email=owner_email, role="rematador")
+    owner_token = await _register_and_login(client, email=owner_email, role="empresa")
     remate = await _create_remate(client, owner_token)
     lote = await _create_lote(client, owner_token, remate["id"])
     await client.post(f"{REMATES_URL}/{remate['id']}/schedule", headers=_auth(owner_token))

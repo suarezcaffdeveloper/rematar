@@ -107,11 +107,26 @@ class RemateCoverImageUploadResponse(BaseModel):
     url: str
 
 
+class RemateOperatorCodeResponse(BaseModel):
+    """Respuesta de `POST /remates/{id}/operator-code` -- el código se devuelve en texto
+    plano una única vez (no se persiste así, ver `Remate.operator_code_hash`); si la
+    empresa lo pierde, la única opción es regenerarlo (lo que revoca al operador
+    asignado actual)."""
+
+    code: str
+    generated_at: datetime
+
+
+class RemateOperatorClaimRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=32)
+
+
 class RemateRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     owner_id: uuid.UUID
+    rematador_id: uuid.UUID | None
     title: str
     description: str | None
     category: RemateCategory

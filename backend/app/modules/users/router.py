@@ -78,8 +78,12 @@ async def list_users(
     service: Annotated[UserService, Depends(get_user_service)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
+    pending_only: bool = Query(
+        default=False,
+        description="Solo cuentas empresa/rematador todavía sin aprobar (is_active=false).",
+    ),
 ) -> Page[UserRead]:
-    users, total = await service.list_users(page=page, page_size=page_size)
+    users, total = await service.list_users(page=page, page_size=page_size, pending_only=pending_only)
     return Page[UserRead](items=list(users), total=total, page=page, page_size=page_size)
 
 
