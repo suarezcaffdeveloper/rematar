@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -9,9 +9,10 @@ import type { Lote, Remate } from '../../remates/types';
 import type { UseLiveRemateStateResult } from '../../sala/hooks';
 import type { RemateStateSnapshot } from '../../sala/types';
 
-const { navigateMock, useLiveRemateStateMock } = vi.hoisted(() => ({
+const { navigateMock, useLiveRemateStateMock, useAuthMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   useLiveRemateStateMock: vi.fn(),
+  useAuthMock: vi.fn(),
 }));
 
 vi.mock('react-router-dom', async () => {
@@ -24,6 +25,23 @@ vi.mock('react-router-dom', async () => {
 });
 
 vi.mock('../../sala/hooks', () => ({ useLiveRemateState: useLiveRemateStateMock }));
+vi.mock('../../auth/hooks', () => ({ useAuth: useAuthMock }));
+
+// Paneles exclusivos del dueño (empresa) -- antes de este archivo nunca se ejercitaban
+// (ningún test mockeaba `useAuth` con un `user.id` igual al `owner_id` del remate), así
+// que no tienen fetch/websocket propios que mockear acá. Se reemplazan por un stub
+// liviano: lo que interesa en este archivo es la composición de `ConsolaOperativaPage`
+// (qué se muestra u oculta según el rol), no el contenido interno de estos paneles, que
+// ya tiene su propia cobertura (`AnalyticsPanel.test.tsx`, etc.).
+vi.mock('../../analytics/components/AnalyticsPanel', () => ({
+  AnalyticsPanel: () => <div>Analítica en tiempo real (mock)</div>,
+}));
+vi.mock('../../bots/components/ConsolaBotsPanel', () => ({
+  ConsolaBotsPanel: () => <div>Simuladores (mock)</div>,
+}));
+vi.mock('../components/OperatorCodePanel', () => ({
+  OperatorCodePanel: () => <div>Código de operador (mock)</div>,
+}));
 
 function makeRemate(overrides: Partial<Remate> = {}): Remate {
   return {
@@ -115,6 +133,14 @@ function renderPage() {
 }
 
 describe('ConsolaOperativaPage', () => {
+  beforeEach(() => {
+    // Viewer sin sesión "propietaria" del remate por default (mismo comportamiento que
+    // tenían estos tests antes de mockear `useAuth`, con el store real sin usuario
+    // logueado) -- el rematador operador es el caso por defecto de casi todos los tests
+    // de este archivo; el caso "empresa dueña" se mockea aparte, más abajo.
+    useAuthMock.mockReturnValue({ user: undefined });
+  });
+
   it('mientras carga, muestra esqueletos', () => {
     mockLiveState({ snapshot: null, isLoading: true });
     const { container } = renderPage();
@@ -153,6 +179,25 @@ describe('ConsolaOperativaPage', () => {
     expect(screen.getByText('Ver resumen')).toBeInTheDocument();
   });
 
+  it('remate "scheduled", viewer dueño: ya muestra "Datos para el rematador" aunque todavía no esté en vivo', () => {
+    useAuthMock.mockReturnValue({ user: { id: 'owner-1', role: 'empresa' } });
+    mockLiveState({ snapshot: makeSnapshot({ remate: makeRemate({ status: 'scheduled' }), active_lote: null }) });
+
+    renderPage();
+
+    expect(screen.getByText('Código de operador (mock)')).toBeInTheDocument(); // OperatorCodePanel
+    expect(screen.getByText('Esta consola es para remates en vivo')).toBeInTheDocument();
+  });
+
+  it('remate "finished", viewer dueño: ya no muestra "Datos para el rematador"', () => {
+    useAuthMock.mockReturnValue({ user: { id: 'owner-1', role: 'empresa' } });
+    mockLiveState({ snapshot: makeSnapshot({ remate: makeRemate({ status: 'finished' }), active_lote: null }) });
+
+    renderPage();
+
+    expect(screen.queryByText('Código de operador (mock)')).not.toBeInTheDocument();
+  });
+
   it('remate "live", con lote activo: muestra el lote, el control y los próximos lotes', () => {
     mockLiveState({
       snapshot: makeSnapshot(),
@@ -164,6 +209,17 @@ describe('ConsolaOperativaPage', () => {
     expect(screen.getByText('Toro Angus')).toBeInTheDocument(); // ConsolaLotePanel
     expect(screen.getByText('Panel de control operativo')).toBeInTheDocument(); // ConsolaControlPanel
     expect(screen.getByText('Vaquillona')).toBeInTheDocument(); // ConsolaUpcomingLotesPanel
+  });
+
+  it('remate "live", viewer dueño del remate (empresa): oculta la botonera y muestra la analítica en su lugar', () => {
+    useAuthMock.mockReturnValue({ user: { id: 'owner-1', role: 'empresa' } });
+    mockLiveState({ snapshot: makeSnapshot() });
+
+    renderPage();
+
+    expect(screen.getByText('Toro Angus')).toBeInTheDocument(); // ConsolaLotePanel sigue visible
+    expect(screen.queryByText('Panel de control operativo')).not.toBeInTheDocument(); // ConsolaControlPanel
+    expect(screen.getByText('Analítica en tiempo real (mock)')).toBeInTheDocument(); // AnalyticsPanel
   });
 
   it('el historial de ofertas del sidebar queda siempre visible, sin pestaña', () => {

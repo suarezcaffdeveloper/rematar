@@ -14,7 +14,17 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, mo
 
 from app.modules.users.models import UserRole
 
-PUBLICLY_REGISTERABLE_ROLES = {UserRole.REMATADOR, UserRole.COMPRADOR}
+# En condiciones normales, empresa y rematador se auto-registran pero quedan pendientes
+# de aprobación (`is_active=False` al crear, ver `UserService.register`) -- para que no
+# cualquiera pueda organizar o dirigir remates sin que un admin lo valide antes.
+# Comprador queda activo de inmediato, no organiza ni dirige nada.
+#
+# TODO: `ROLES_PENDING_APPROVAL` queda vacío de forma temporal (ambos roles activos de
+# inmediato al registrarse) para poder crear cuentas de los 4 tipos de usuario y testear
+# sus vistas/flujos sin depender de un admin que apruebe cada una -- reactivar la
+# aprobación de `{UserRole.EMPRESA, UserRole.REMATADOR}` antes de salir a producción real.
+PUBLICLY_REGISTERABLE_ROLES = {UserRole.EMPRESA, UserRole.REMATADOR, UserRole.COMPRADOR}
+ROLES_PENDING_APPROVAL: set[UserRole] = set()
 
 # Formato tipo E.164 (dígitos, `+` opcional al inicio, hasta 15 dígitos según el estándar
 # ITU): no es un requisito arbitrario, es lo que después va a esperar la API de WhatsApp
@@ -36,8 +46,8 @@ class UserCreate(BaseModel):
     def role_must_be_publicly_registerable(cls, value: UserRole) -> UserRole:
         if value not in PUBLICLY_REGISTERABLE_ROLES:
             raise ValueError(
-                "El rol debe ser 'rematador' o 'comprador'. Las cuentas de "
-                "administrador no se crean por registro público."
+                "El rol debe ser 'empresa', 'rematador' o 'comprador'. Las cuentas "
+                "de administrador no se crean por registro público."
             )
         return value
 

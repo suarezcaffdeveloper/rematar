@@ -43,6 +43,12 @@ export interface RemateSettings {
 export interface Remate {
   id: string;
   owner_id: string;
+  // `null`/`undefined` hasta que un usuario `rematador` canjea un código de operador
+  // (ADR-048, ver `generateOperatorCodeRequest`/`claimOperatorRequest` en `api.ts`).
+  // Opcional a nivel de tipo (aunque el backend siempre lo manda) para no romper los
+  // fixtures de prueba ya existentes que arman un `Remate` a mano sin este campo --
+  // mismo criterio pragmático que el resto de este archivo ("mantenido a mano").
+  rematador_id?: string | null;
   title: string;
   description: string | null;
   category: RemateCategory;
@@ -66,6 +72,7 @@ export interface RemateListParams {
   category?: RemateCategory;
   status?: RemateStatus;
   owner_id?: string;
+  rematador_id?: string;
 }
 
 /**
@@ -146,6 +153,15 @@ export interface Lote {
   // nunca fue reincorporado a la cola. Ver `LoteRound` (historial de rondas
   // anteriores, `GET .../lotes/{id}/rounds`).
   round_number: number;
+  // Reencolado preautorizado (ADR-048): si está habilitado, cualquiera con acceso a la
+  // Consola Operativa (empresa dueña o rematador operador) puede disparar
+  // `requeueLotePresetRequest` con este precio/incremento exactos cuando el lote quede
+  // `closed_unsold`, sin que el rematador pueda elegir otro monto. Opcionales a nivel de
+  // tipo (aunque el backend siempre los manda) por el mismo motivo que
+  // `Remate.rematador_id` -- no romper los fixtures de prueba existentes.
+  requeue_preset_enabled?: boolean;
+  requeue_preset_base_price?: string | null;
+  requeue_preset_min_increment?: string | null;
   created_at: string;
 }
 
@@ -211,4 +227,14 @@ export interface LoteFormPayload {
   base_price: string;
   min_increment: string;
   reserve_price?: string | null;
+  requeue_preset_enabled?: boolean;
+  requeue_preset_base_price?: string | null;
+  requeue_preset_min_increment?: string | null;
+}
+
+/** Respuesta de `POST /remates/{id}/operator-code` -- el código se muestra una única
+ * vez, nunca se vuelve a poder consultar (ADR-048). */
+export interface OperatorCodeResponse {
+  code: string;
+  generated_at: string;
 }

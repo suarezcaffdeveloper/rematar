@@ -114,6 +114,17 @@ export function LoginPage() {
               Registrate
             </Link>
           </p>
+
+          {/* Visitante anónimo (ADR-049): el listado, el detalle de un remate y su sala
+              en vivo ya aceptan un viewer sin sesión -- este link es el único punto de
+              entrada explícito a esa vista (ofertar y chatear siguen exigiendo login,
+              ver `PlaceBidButton`/`ChatPanel`). */}
+          <p className="mt-2 text-center text-sm text-ink-muted">
+            ¿Solo querés mirar?{' '}
+            <Link to="/remates" className="font-semibold text-brand-600 hover:underline">
+              Ver remates sin iniciar sesión
+            </Link>
+          </p>
         </motion.div>
       </div>
 

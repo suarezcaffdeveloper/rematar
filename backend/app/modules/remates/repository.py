@@ -28,20 +28,33 @@ class RemateRepository:
     async def list_for_viewer(
         self,
         *,
-        viewer: User,
+        viewer: User | None,
         offset: int,
         limit: int,
         category: RemateCategory | None = None,
         status: RemateStatus | None = None,
         owner_id: uuid.UUID | None = None,
+        rematador_id: uuid.UUID | None = None,
     ) -> tuple[list[Remate], int]:
         stmt = select(Remate).where(Remate.deleted_at.is_(None))
 
-        if viewer.role != UserRole.ADMIN:
-            # Ve sus propios remates en cualquier estado, y los de cualquiera mientras
-            # no estén en borrador. Ver docs/14-modulo-remate.md, sección "Visibilidad".
+        if viewer is None:
+            # Visitante anónimo (ADR-049): nunca ve borradores, no tiene remates
+            # "propios" que ver en cualquier estado.
+            stmt = stmt.where(Remate.status != RemateStatus.DRAFT)
+        elif viewer.role != UserRole.ADMIN:
+            # Ve sus propios remates en cualquier estado, los que tiene asignados como
+            # operador en cualquier estado (la empresa puede generar el código de
+            # operador desde `draft`, ver `OperatorCodePanel`, así que un rematador
+            # recién asignado tiene que poder ver ESE remate aunque siga en borrador), y
+            # los de cualquiera mientras no estén en borrador. Ver
+            # docs/14-modulo-remate.md, sección "Visibilidad".
             stmt = stmt.where(
-                or_(Remate.owner_id == viewer.id, Remate.status != RemateStatus.DRAFT)
+                or_(
+                    Remate.owner_id == viewer.id,
+                    Remate.rematador_id == viewer.id,
+                    Remate.status != RemateStatus.DRAFT,
+                )
             )
 
         if category is not None:
@@ -50,6 +63,12 @@ class RemateRepository:
             stmt = stmt.where(Remate.status == status)
         if owner_id is not None:
             stmt = stmt.where(Remate.owner_id == owner_id)
+        if rematador_id is not None:
+            # "Mi remate actual" del rematador (panel de rol, Fase 1) -- combinado con el
+            # `Remate.rematador_id == viewer.id` de la cláusula de visibilidad de arriba,
+            # un rematador consultando su propio id nunca se queda sin ver el remate que
+            # tiene asignado, sea cual sea su estado.
+            stmt = stmt.where(Remate.rematador_id == rematador_id)
 
         total = (
             await self._db.execute(select(func.count()).select_from(stmt.subquery()))
@@ -58,6 +77,20 @@ class RemateRepository:
         stmt = stmt.order_by(Remate.created_at.desc()).offset(offset).limit(limit)
         items = (await self._db.execute(stmt)).scalars().all()
         return list(items), total
+
+    async def get_active_operator_assignment(self, rematador_id: uuid.UUID) -> Remate | None:
+        """El remate (si hay alguno) donde `rematador_id` es el operador asignado y que
+        todavía no terminó -- usado para la regla de "un rematador solo puede operar un
+        remate a la vez" en `RemateService.claim_operator`. `finished`/`cancelled` no
+        cuentan como activos: un remate ya terminado no bloquea aceptar un código nuevo,
+        aunque `Remate.rematador_id` no se limpie solo al llegar a esos estados."""
+        stmt = select(Remate).where(
+            Remate.deleted_at.is_(None),
+            Remate.rematador_id == rematador_id,
+            Remate.status.notin_([RemateStatus.FINISHED, RemateStatus.CANCELLED]),
+        )
+        result = await self._db.execute(stmt)
+        return result.scalars().first()
 
     def add(self, remate: Remate) -> None:
         self._db.add(remate)

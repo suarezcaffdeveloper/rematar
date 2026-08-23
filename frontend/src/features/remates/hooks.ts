@@ -40,15 +40,28 @@ export interface UseRematesParams {
    * exactamente lo mismo que traía antes (todo lo visible para el usuario actual, sin
    * filtrar por dueño) -- parámetro opcional, retrocompatible. */
   ownerId?: string;
+  /** `rematador_id` de `GET /remates` (panel "mi remate actual" del rol `rematador`,
+   * Fase 1) -- filtra al remate donde ese usuario es el operador asignado
+   * (`Remate.rematador_id`), en cualquier estado no borrador (mismo criterio que
+   * `ownerId`: el propio operador asignado siempre lo ve, `RemateService._is_visible`). */
+  rematadorId?: string;
 }
 
 /** Trae TODAS las páginas de `GET /remates` visibles para el usuario actual (hasta el
- * tope), opcionalmente acotadas a un `owner_id` puntual. */
-async function fetchAllRemates(ownerId: string | undefined): Promise<Remate[]> {
+ * tope), opcionalmente acotadas a un `owner_id`/`rematador_id` puntual. */
+async function fetchAllRemates(
+  ownerId: string | undefined,
+  rematadorId: string | undefined,
+): Promise<Remate[]> {
   const collected: Remate[] = [];
   let page = 1;
   while (collected.length < MAX_REMATES) {
-    const result = await fetchRematesRequest({ page, page_size: PAGE_SIZE, owner_id: ownerId });
+    const result = await fetchRematesRequest({
+      page,
+      page_size: PAGE_SIZE,
+      owner_id: ownerId,
+      rematador_id: rematadorId,
+    });
     collected.push(...result.items);
     const gotFullPage = result.items.length === PAGE_SIZE;
     const moreRemain = collected.length < result.total;
@@ -59,13 +72,17 @@ async function fetchAllRemates(ownerId: string | undefined): Promise<Remate[]> {
 }
 
 export function useRemates(params: UseRematesParams = {}): UseRematesResult {
-  const { ownerId } = params;
+  const { ownerId, rematadorId } = params;
   const {
     data: remates,
     isLoading,
     error,
     reload,
-  } = useAsyncResource<Remate[]>(() => fetchAllRemates(ownerId), [ownerId], []);
+  } = useAsyncResource<Remate[]>(
+    () => fetchAllRemates(ownerId, rematadorId),
+    [ownerId, rematadorId],
+    [],
+  );
 
   return { remates, isLoading, error, reload };
 }

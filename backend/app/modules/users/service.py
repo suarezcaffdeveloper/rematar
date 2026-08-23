@@ -17,7 +17,7 @@ from app.modules.auth.events import SessionInvalidated
 from app.modules.users import media_storage
 from app.modules.users.models import User, UserRole
 from app.modules.users.repository import UserRepository
-from app.modules.users.schemas import UserCreate
+from app.modules.users.schemas import ROLES_PENDING_APPROVAL, UserCreate
 
 
 class UserService:
@@ -43,6 +43,13 @@ class UserService:
             full_name=data.full_name,
             phone=data.phone,
             role=data.role,
+            # En condiciones normales, empresa/rematador quedan pendientes de aprobación
+            # de un admin (RF-03, `PATCH /users/{id}/status`) antes de poder loguearse --
+            # ver `ROLES_PENDING_APPROVAL`. Ahora mismo esa lista está vacía (temporal,
+            # mientras se testean las 4 vistas de rol sin depender de un admin, ver el
+            # TODO en `schemas.py`), así que todos los roles autoregistrables usan el
+            # default de la columna (activo).
+            is_active=data.role not in ROLES_PENDING_APPROVAL,
         )
         self._repository.add(user)
         await self._repository.commit()
@@ -101,9 +108,13 @@ class UserService:
             )
         return user
 
-    async def list_users(self, *, page: int, page_size: int) -> tuple[list[User], int]:
+    async def list_users(
+        self, *, page: int, page_size: int, pending_only: bool = False
+    ) -> tuple[list[User], int]:
         offset = (page - 1) * page_size
-        return await self._repository.list_all(offset=offset, limit=page_size)
+        return await self._repository.list_all(
+            offset=offset, limit=page_size, pending_only=pending_only
+        )
 
     async def upload_avatar_image(
         self, user: User, upload: UploadFile, settings: Settings, request_base_url: str

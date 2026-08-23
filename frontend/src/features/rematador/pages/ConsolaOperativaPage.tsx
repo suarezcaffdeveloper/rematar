@@ -21,6 +21,7 @@ import { ConsolaHeader } from '../components/ConsolaHeader';
 import { ConsolaLotePanel } from '../components/ConsolaLotePanel';
 import { ConsolaSidebar } from '../components/ConsolaSidebar';
 import { ConsolaUpcomingLotesPanel } from '../components/ConsolaUpcomingLotesPanel';
+import { OperatorCodePanel } from '../components/OperatorCodePanel';
 
 const NOT_OPERATIONAL_MESSAGES: Partial<Record<RemateStatus, string>> = {
   draft: 'El remate todavía está en borrador. Programalo desde el dashboard antes de operarlo acá.',
@@ -110,6 +111,20 @@ function ConsolaSkeleton() {
  * panel de control (`ConsolaControlPanel`) mantiene su agrupación en cards a propósito
  * -- ahí sí tiene sentido: cada card separa acciones por zona de riesgo real (gestión de
  * lote / controles de remate / zona crítica), no es "más cards" sin motivo.
+ *
+ * `ConsolaControlPanel` ("la botonera") queda exclusivo del rematador operador asignado
+ * -- oculto para la empresa dueña (`isOwner`, mismo chequeo `user?.id === remate.owner_id`
+ * que ya usaban `OperatorCodePanel`/`AnalyticsPanel`/`ConsolaBotsPanel`), que en su lugar
+ * ve la analítica. Cuando se oculta, el subgrid de esa fila colapsa a una sola columna
+ * para que `ConsolaLotePanel` ocupe todo el ancho en vez de dejar un hueco de 360px.
+ *
+ * `OperatorCodePanel` ("Datos para el rematador") se renderiza antes que cualquier otra
+ * cosa en la página -- fuera de los dos branches de `isOperational`, no dentro de
+ * ninguno -- para que sea lo primero que ve la empresa dueña al entrar (`showOperatorCodePanel`),
+ * incluso mientras el remate todavía está en borrador/programado, cuando el resto de la
+ * página solo muestra el `EmptyState` de "esta consola es para remates en vivo": la idea
+ * es que pueda dejar el operador asignado con anticipación, no recién una vez que ya
+ * arrancó el remate en vivo.
  */
 export function ConsolaOperativaPage() {
   const { remateId } = useParams<{ remateId: string }>();
@@ -186,9 +201,24 @@ export function ConsolaOperativaPage() {
     connected_users: connectedUsers,
   } = snapshot;
   const currency = remate.settings.currency;
+  // Gestionar el remate en vivo (la "botonera" de `ConsolaControlPanel`) queda exclusivo
+  // del rematador operador asignado -- la empresa dueña ya no opera desde acá, aunque el
+  // backend (`get_operator_or_raise`, ADR-048) todavía se lo permitiría si llamara a los
+  // endpoints directamente. A cambio, la empresa es la única que ve la analítica más
+  // abajo (mismo chequeo, ya existía).
+  const isOwner = user?.id === remate.owner_id;
+  // "Datos para el rematador" (ID + código de operador) es lo primero que tiene que ver
+  // la empresa dueña al entrar acá -- antes vivía como un panel angosto al final de la
+  // página, solo mientras el remate ya estaba en vivo/pausado, así que no había forma de
+  // dejar el operador armado con anticipación. Se excluyen `finished`/`cancelled`:
+  // generar o compartir un código para un remate que ya terminó no tiene ninguna acción
+  // útil detrás.
+  const showOperatorCodePanel = isOwner && remate.status !== 'finished' && remate.status !== 'cancelled';
 
   return (
     <div className="flex flex-col gap-4 font-display">
+      {showOperatorCodePanel && <OperatorCodePanel remate={remate} />}
+
       {!isOperational ? (
         <>
           <ConsolaHeader remate={remate} connectedUsers={connectedUsers} connectionStatus={connectionStatus} />
@@ -218,19 +248,21 @@ export function ConsolaOperativaPage() {
             </div>
 
             <div className="flex flex-col gap-4 xl:col-start-1 xl:row-start-2">
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+              <div className={isOwner ? 'grid grid-cols-1 gap-4' : 'grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]'}>
                 <div className="min-w-0">
                   <ConsolaLotePanel activeLote={activeLote} currency={currency} hasUpcomingLotes={hasUpcomingLotes} />
                 </div>
 
-                <ConsolaControlPanel
-                  remate={remate}
-                  activeLote={activeLote}
-                  winningOffer={winningOffer}
-                  recentOffers={recentOffers}
-                  selectedLoteId={selectedLoteId}
-                  hasUpcomingLotes={hasUpcomingLotes}
-                />
+                {!isOwner && (
+                  <ConsolaControlPanel
+                    remate={remate}
+                    activeLote={activeLote}
+                    winningOffer={winningOffer}
+                    recentOffers={recentOffers}
+                    selectedLoteId={selectedLoteId}
+                    hasUpcomingLotes={hasUpcomingLotes}
+                  />
+                )}
               </div>
 
               <div className="flex flex-col gap-3">
@@ -246,7 +278,7 @@ export function ConsolaOperativaPage() {
                 />
               </div>
 
-              <ConsolaDesiertoLotesPanel remateId={remate.id} lotes={desiertoLotes} />
+              <ConsolaDesiertoLotesPanel remateId={remate.id} lotes={desiertoLotes} currency={currency} />
             </div>
 
             <div className="xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:self-stretch">
@@ -265,17 +297,29 @@ export function ConsolaOperativaPage() {
           {/* Analítica secundaria (pedido explícito: "no debe competir visualmente con
            * la operación del remate") -- mismo `AnalyticsPanel` de siempre (que ya trae
            * su propio encabezado "Analítica en tiempo real"), sin tocar su interior,
-           * solo envuelto con menos peso visual que el resto de la consola. */}
-          <div className="rounded-xl border border-line bg-surface-subtle/60 p-4 opacity-90">
-            <AnalyticsPanel remateId={remate.id} subscribeToRealtime={subscribeToRealtime} currency={currency} />
-          </div>
+           * solo envuelto con menos peso visual que el resto de la consola.
+           *
+           * Oculta para el rematador operador (ADR-048): `AnalyticsService.build` es
+           * owner-only en el backend (`_is_privileged`, sin excepción para el operador
+           * asignado -- es información comercial de la empresa, no algo que haga falta
+           * para correr el remate en vivo), así que mostrársela a un rematador que no es
+           * dueño solo renderiza un error 403 sin ninguna acción posible. Mismo criterio
+           * que la tarjeta "Datos para el rematador" al principio de la página: no
+           * mostrar una sección que va a fallar. */}
+          {isOwner && (
+            <div className="rounded-xl border border-line bg-surface-subtle/60 p-4 opacity-90">
+              <AnalyticsPanel remateId={remate.id} subscribeToRealtime={subscribeToRealtime} currency={currency} />
+            </div>
+          )}
 
           {/* Simuladores (módulo de Bots Simuladores) -- pedido explícito: no forma
            * parte del sistema original, es una herramienta de prueba para el equipo, así
            * que va al final de la página, después de la analítica, en vez de mezclada
            * con los paneles operativos reales (Próximos lotes/Lotes desiertos) que sí
-           * son parte del producto. */}
-          <ConsolaBotsPanel remateId={remate.id} />
+           * son parte del producto. Oculto para el rematador operador, mismo motivo que
+           * la analítica -- crear/gestionar bots es exclusivo de `empresa` en el backend
+           * (`require_roles(UserRole.EMPRESA)`, ver ADR-047). */}
+          {isOwner && <ConsolaBotsPanel remateId={remate.id} />}
         </>
       )}
     </div>

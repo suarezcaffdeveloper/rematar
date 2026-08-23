@@ -13,6 +13,10 @@ function renderAt(path: string) {
         <Route element={<RequireAuth />}>
           <Route path="/" element={<p>Dashboard autenticado</p>} />
           <Route path="/protegida" element={<p>Contenido protegido</p>} />
+          <Route path="/remates" element={<p>Listado público de remates</p>} />
+          <Route path="/remates/:remateId" element={<p>Detalle público del remate</p>} />
+          <Route path="/remates/:remateId/sala" element={<p>Sala del remate</p>} />
+          <Route path="/remates/:remateId/gestionar" element={<p>Consola operativa</p>} />
         </Route>
         <Route path="/login" element={<p>Pantalla de login</p>} />
       </Routes>
@@ -63,5 +67,40 @@ describe('RequireAuth', () => {
     renderAt('/');
 
     expect(screen.getByText('Dashboard autenticado')).toBeInTheDocument();
+  });
+
+  it('deja pasar el listado público de remates sin sesión ("ver como invitado", ADR-049)', () => {
+    useAuthMock.mockReturnValue({ isAuthenticated: false, isHydrated: true });
+
+    renderAt('/remates');
+
+    expect(screen.getByText('Listado público de remates')).toBeInTheDocument();
+    expect(screen.queryByText('Pantalla de login')).not.toBeInTheDocument();
+  });
+
+  it('deja pasar el detalle público de un remate sin sesión (ADR-049)', () => {
+    useAuthMock.mockReturnValue({ isAuthenticated: false, isHydrated: true });
+
+    renderAt('/remates/abc123');
+
+    expect(screen.getByText('Detalle público del remate')).toBeInTheDocument();
+    expect(screen.queryByText('Pantalla de login')).not.toBeInTheDocument();
+  });
+
+  it('deja pasar la sala en vivo de un remate sin sesión (WebSocket anónimo, ADR-049)', () => {
+    useAuthMock.mockReturnValue({ isAuthenticated: false, isHydrated: true });
+
+    renderAt('/remates/abc123/sala');
+
+    expect(screen.getByText('Sala del remate')).toBeInTheDocument();
+    expect(screen.queryByText('Pantalla de login')).not.toBeInTheDocument();
+  });
+
+  it('sigue exigiendo sesión para cualquier otra sub-ruta de gestión de un remate', () => {
+    useAuthMock.mockReturnValue({ isAuthenticated: false, isHydrated: true });
+
+    renderAt('/remates/abc123/gestionar');
+
+    expect(screen.getByText('Pantalla de login')).toBeInTheDocument();
   });
 });

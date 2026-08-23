@@ -31,17 +31,35 @@ dejan constancia vía `AuditLogRepository.record` (ver docs/36 y ADR-039), **ant
 `commit()` que ya existe en cada método -- misma transacción, nunca vía el Event Bus
 (best-effort, podría perderse).
 
-## Permisos (ver docs/14-modulo-remate.md para el detalle completo)
+## Permisos (ver docs/14-modulo-remate.md y ADR-047/ADR-048 para el detalle completo)
 
-- Crear: solo rol `rematador` (aplicado en el router vía `require_roles`).
+- Crear: solo rol `empresa` (aplicado en el router vía `require_roles`).
 - Ver: dueño y admin ven cualquier estado; cualquier otro usuario solo ve remates que no
   estén en `DRAFT`. Un borrador ajeno devuelve 404, no 403 — no se confirma su
   existencia a quien no debería ni saber que existe.
-- Modificar/programar/cancelar/eliminar/iniciar/pausar/reanudar/finalizar: exclusivamente
-  el rematador dueño. El admin puede *ver* todo pero no puede escribir — así lo pide el
-  enunciado de este módulo.
+- Crear/programar/cancelar/iniciar/editar/eliminar/gestionar lotes y postventa:
+  exclusivamente la empresa dueña (`get_owned_or_raise`). El admin puede *ver* todo pero
+  no puede escribir — así lo pide el enunciado de este módulo.
+- Pausar/reanudar/finalizar (acciones de la Consola Operativa en vivo): la empresa dueña
+  **o** el rematador asignado como operador (`get_operator_or_raise`, ver ADR-048). La
+  empresa nunca pierde la capacidad de operar su propio remate.
+
+## Asignación de operador (ADR-048)
+
+Una empresa genera un código de un solo hash (`generate_operator_code`) que comparte
+fuera de banda con un usuario `rematador`; ese rematador lo canjea (`claim_operator`)
+para quedar asignado como `Remate.rematador_id`. Regenerar el código revoca al operador
+anterior en la misma operación. El código nunca se persiste en texto plano.
+
+Un rematador solo puede tener un remate activo (no `finished`/`cancelled`) asignado a la
+vez -- `claim_operator` rechaza el canje si ya está operando otro (ver
+`RemateRepository.get_active_operator_assignment`). Sostiene el panel "mi remate actual"
+del Home del rematador (Fase 1): al ser 1:1, alcanza con pedir
+`GET /remates?rematador_id=<mi_id>` y esperar a lo sumo un resultado activo.
 """
 
+import hashlib
+import secrets
 import uuid
 from datetime import UTC, datetime
 
@@ -68,6 +86,16 @@ from app.modules.remates.repository import RemateRepository
 from app.modules.remates.schemas import RemateCreate, RemateUpdate
 from app.modules.remates.state_machine import assert_transition_allowed
 from app.modules.users.models import User, UserRole
+
+# Sin 0/O/1/I (ambiguos al leerlos/tipearlos en voz alta el día del remate). No es un
+# secreto de alto valor sujeto a fuerza bruta offline -- por eso alcanza un hash rápido
+# (sha256) en vez de algo tipo argon2, a diferencia de una contraseña.
+_OPERATOR_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+_OPERATOR_CODE_LENGTH = 8
+
+
+def _hash_operator_code(code: str) -> str:
+    return hashlib.sha256(code.strip().upper().encode("utf-8")).hexdigest()
 
 
 class RemateService:
@@ -152,14 +180,25 @@ class RemateService:
         )
 
     @staticmethod
-    def _is_visible(remate: Remate, viewer: User) -> bool:
+    def _is_visible(remate: Remate, viewer: User | None) -> bool:
+        # Visitante anónimo (ADR-049): mismo trato que "cualquier otro usuario que no es
+        # dueño ni admin" -- ve cualquier remate que no esté en DRAFT. Nunca puede ser
+        # dueño ni admin, así que alcanza con saltear esas dos ramas.
+        if viewer is None:
+            return remate.status != RemateStatus.DRAFT
         if viewer.role == UserRole.ADMIN:
             return True
         if remate.owner_id == viewer.id:
             return True
+        # Mismo criterio que el dueño para el rematador asignado como operador (ADR-048)
+        # -- la empresa puede generar el código desde `draft` (ver `OperatorCodePanel`),
+        # así que un rematador recién asignado tiene que poder ver ESE remate aunque
+        # siga en borrador. Mismo ajuste que `RemateRepository.list_for_viewer`.
+        if remate.rematador_id == viewer.id:
+            return True
         return remate.status != RemateStatus.DRAFT
 
-    async def get_visible_or_raise(self, remate_id: uuid.UUID, viewer: User) -> Remate:
+    async def get_visible_or_raise(self, remate_id: uuid.UUID, viewer: User | None) -> Remate:
         remate = await self._repository.get_by_id(remate_id)
         if remate is None or not self._is_visible(remate, viewer):
             raise NotFoundError("Remate no encontrado.")
@@ -171,15 +210,87 @@ class RemateService:
             raise ForbiddenError("Solo el propietario puede modificar este remate.")
         return remate
 
+    async def get_operator_or_raise(self, remate_id: uuid.UUID, actor: User) -> Remate:
+        """Como `get_owned_or_raise`, pero también admite al rematador asignado como
+        operador (`Remate.rematador_id`) -- para las acciones de la Consola Operativa en
+        vivo que el árbitro puede ejecutar sin ser dueño del remate (ADR-048)."""
+        remate = await self.get_visible_or_raise(remate_id, actor)
+        if remate.owner_id != actor.id and remate.rematador_id != actor.id:
+            raise ForbiddenError(
+                "Solo el propietario o el rematador asignado pueden operar este remate."
+            )
+        return remate
+
+    async def generate_operator_code(self, remate_id: uuid.UUID, owner: User) -> tuple[Remate, str]:
+        """Genera (o regenera) el código que la empresa comparte con un rematador para
+        que pueda operar este remate en vivo. Regenerar revoca al operador actual
+        (limpia `rematador_id`) en la misma operación, para no dejar una ventana en la
+        que dos códigos distintos sirvan a la vez."""
+        remate = await self.get_owned_or_raise(remate_id, owner)
+        code = "".join(secrets.choice(_OPERATOR_CODE_ALPHABET) for _ in range(_OPERATOR_CODE_LENGTH))
+        remate.operator_code_hash = _hash_operator_code(code)
+        remate.operator_code_generated_at = datetime.now(UTC)
+        remate.rematador_id = None
+        self._audit_repository.record(
+            actor_id=owner.id,
+            actor_name=owner.full_name,
+            actor_role=owner.role.value,
+            action=AuditAction.REMATE_OPERATOR_CODE_GENERATED,
+            resource_type="remate",
+            resource_id=remate.id,
+            remate_id=remate.id,
+        )
+        await self._repository.commit()
+        await self._repository.refresh(remate)
+        return remate, code
+
+    async def claim_operator(self, remate_id: uuid.UUID, rematador: User, code: str) -> Remate:
+        """Un usuario `rematador` canjea el código que le dio la empresa para quedar
+        asignado como operador de este remate. Busca por id directo, sin pasar por
+        `get_visible_or_raise`: el código en sí es la credencial (mismo criterio que un
+        token de reset de contraseña) -- un rematador no necesita visibilidad previa del
+        remate para reclamarlo con un código válido."""
+        remate = await self._repository.get_by_id(remate_id)
+        if remate is None or remate.operator_code_hash is None:
+            raise NotFoundError("Remate no encontrado o sin código de operador generado.")
+        if not secrets.compare_digest(remate.operator_code_hash, _hash_operator_code(code)):
+            raise ForbiddenError("Código de operador inválido.")
+
+        # Un rematador solo puede operar un remate a la vez (panel "mi remate actual",
+        # Fase 1) -- sin este chequeo, nada le impedía canjear códigos de varios remates
+        # en simultáneo. Reclamar el mismo remate de nuevo (ej. después de que la empresa
+        # regeneró el código para el mismo operador) no cuenta como conflicto.
+        existing_assignment = await self._repository.get_active_operator_assignment(rematador.id)
+        if existing_assignment is not None and existing_assignment.id != remate.id:
+            raise BusinessRuleError(
+                "Ya estás operando otro remate. Salí de esa consola antes de unirte a uno nuevo.",
+                current_remate_id=str(existing_assignment.id),
+            )
+
+        remate.rematador_id = rematador.id
+        self._audit_repository.record(
+            actor_id=rematador.id,
+            actor_name=rematador.full_name,
+            actor_role=rematador.role.value,
+            action=AuditAction.REMATE_OPERATOR_CLAIMED,
+            resource_type="remate",
+            resource_id=remate.id,
+            remate_id=remate.id,
+        )
+        await self._repository.commit()
+        await self._repository.refresh(remate)
+        return remate
+
     async def list_for_viewer(
         self,
         *,
-        viewer: User,
+        viewer: User | None,
         page: int,
         page_size: int,
         category: RemateCategory | None = None,
         status: RemateStatus | None = None,
         owner_id: uuid.UUID | None = None,
+        rematador_id: uuid.UUID | None = None,
     ) -> tuple[list[Remate], int]:
         offset = (page - 1) * page_size
         return await self._repository.list_for_viewer(
@@ -189,6 +300,7 @@ class RemateService:
             category=category,
             status=status,
             owner_id=owner_id,
+            rematador_id=rematador_id,
         )
 
     async def update(self, remate_id: uuid.UUID, owner: User, data: RemateUpdate) -> Remate:
@@ -317,32 +429,32 @@ class RemateService:
         await self._event_bus.publish(RemateStarted(remate_id=remate.id))
         return remate
 
-    async def pause(self, remate_id: uuid.UUID, owner: User) -> Remate:
-        remate = await self.get_owned_or_raise(remate_id, owner)
+    async def pause(self, remate_id: uuid.UUID, actor: User) -> Remate:
+        remate = await self.get_operator_or_raise(remate_id, actor)
         assert_transition_allowed(remate.status, RemateStatus.PAUSED)
         previous_status = remate.status
 
         remate.status = RemateStatus.PAUSED
-        self._record_status_change(remate, owner, previous_status, trigger="manual")
+        self._record_status_change(remate, actor, previous_status, trigger="manual")
         await self._repository.commit()
         await self._repository.refresh(remate)
         await self._event_bus.publish(RematePaused(remate_id=remate.id))
         return remate
 
-    async def resume(self, remate_id: uuid.UUID, owner: User) -> Remate:
-        remate = await self.get_owned_or_raise(remate_id, owner)
+    async def resume(self, remate_id: uuid.UUID, actor: User) -> Remate:
+        remate = await self.get_operator_or_raise(remate_id, actor)
         assert_transition_allowed(remate.status, RemateStatus.LIVE)
         previous_status = remate.status
 
         remate.status = RemateStatus.LIVE
-        self._record_status_change(remate, owner, previous_status, trigger="manual")
+        self._record_status_change(remate, actor, previous_status, trigger="manual")
         await self._repository.commit()
         await self._repository.refresh(remate)
         await self._event_bus.publish(RemateResumed(remate_id=remate.id))
         return remate
 
-    async def finish(self, remate_id: uuid.UUID, owner: User) -> Remate:
-        remate = await self.get_owned_or_raise(remate_id, owner)
+    async def finish(self, remate_id: uuid.UUID, actor: User) -> Remate:
+        remate = await self.get_operator_or_raise(remate_id, actor)
         assert_transition_allowed(remate.status, RemateStatus.FINISHED)
         previous_status = remate.status
 
@@ -353,7 +465,7 @@ class RemateService:
 
         remate.status = RemateStatus.FINISHED
         remate.finished_at = datetime.now(UTC)
-        self._record_status_change(remate, owner, previous_status, trigger="manual")
+        self._record_status_change(remate, actor, previous_status, trigger="manual")
         await self._repository.commit()
         await self._repository.refresh(remate)
         await self._event_bus.publish(RemateFinished(remate_id=remate.id, triggered_by="manual"))

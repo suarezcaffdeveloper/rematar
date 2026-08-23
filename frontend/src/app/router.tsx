@@ -32,6 +32,7 @@ import { MisComprasPage } from '../features/postauction/pages/MisComprasPage';
 import { VentaAdjudicadaDetailPage } from '../features/postauction/pages/VentaAdjudicadaDetailPage';
 import { VentasAdjudicadasPage } from '../features/postauction/pages/VentasAdjudicadasPage';
 import { ProfilePage } from '../features/profile/pages/ProfilePage';
+import { CompradorDashboardPage } from '../features/remates/pages/CompradorDashboardPage';
 import { SalaPage } from '../features/sala/pages/SalaPage';
 import { HomePage } from './pages/HomePage';
 import { PreviewSalaPage } from './pages/PreviewSalaPage';
@@ -69,6 +70,14 @@ export const router = createBrowserRouter([
             element: <AppLayout />,
             children: [
               { index: true, element: <HomePage /> },
+              // Listado público de remates, alcanzable sin sesión (ADR-049) -- punto de
+              // entrada para "ver como invitado" desde `LoginPage` (el índice `/` no
+              // sirve para esto: para un visitante anónimo muestra la landing de
+              // marketing, ver `RequireAuth`). Reusa `CompradorDashboardPage` tal cual
+              // (agnóstica de rol/auth, ver su propio docstring) en vez de duplicar la
+              // grilla de remates -- el mismo `GET /remates` que ya consume ya acepta un
+              // viewer sin token (`get_current_user_optional`).
+              { path: '/remates', element: <CompradorDashboardPage /> },
               // Detalle del remate (Épica 4.4) -- cualquier rol autenticado puede
               // navegar acá; el backend decide qué remate es visible para quién
               // (RemateService.get_visible_or_raise), no esta ruta.
@@ -105,9 +114,9 @@ export const router = createBrowserRouter([
                 element: <LoteHistoryDetailPage />,
               },
               // Gestión Post-Remate (Épica 7, Módulo 7.5) -- mismo criterio sin
-              // RequireRole que /historial: el backend decide (rematador dueño del
-              // caso o admin para "ventas adjudicadas"; comprador dueño para "mis
-              // compras"), ver docs/41-gestion-post-remate.md.
+              // RequireRole que /historial: el backend decide (empresa dueña del
+              // caso o admin para "ventas adjudicadas", ADR-047; comprador dueño para
+              // "mis compras"), ver docs/41-gestion-post-remate.md.
               { path: '/ventas-adjudicadas', element: <VentasAdjudicadasPage /> },
               { path: '/ventas-adjudicadas/:caseId', element: <VentaAdjudicadaDetailPage /> },
               { path: '/mis-compras', element: <MisComprasPage /> },
@@ -121,11 +130,12 @@ export const router = createBrowserRouter([
                 children: [{ path: '/admin', element: <AdminAuditLogPage /> }],
               },
               // Gestión global de bots simuladores (módulo de Bots Simuladores) --
-              // solo el rematador puede crear/administrar sus propios simuladores; la
-              // selección/control por remate vive en ConsolaBotsPanel, dentro de
+              // solo la empresa puede crear/administrar sus propios simuladores para
+              // probar sus remates antes de salir en vivo (ADR-047); la selección/
+              // control por remate vive en ConsolaBotsPanel, dentro de
               // /remates/:remateId/gestionar, sin ruta propia.
               {
-                element: <RequireRole allowedRoles={['rematador']} />,
+                element: <RequireRole allowedRoles={['empresa']} />,
                 children: [{ path: '/simuladores', element: <BotProfilesPage /> }],
               },
             ],

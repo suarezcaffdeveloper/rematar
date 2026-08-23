@@ -1,12 +1,14 @@
 """Endpoints del recurso `Remate`.
 
-`POST /` exige rol `rematador` (nadie más puede crear un remate). El resto de los
-endpoints no filtra por rol sino por *ownership*: un rematador que no es dueño de un
-remate se trata igual que un comprador frente a ese remate puntual (ver
-`RemateService._is_visible` / `get_owned_or_raise`). Por eso no hay `require_roles` en
-`GET`, `PATCH`, `schedule`, `cancel`, `start`, `pause`, `resume`, `finish` ni `DELETE` —
-la regla no es "qué rol tenés" sino "sos el dueño de este remate en particular", y esa
-regla la aplica el servicio, no el router.
+`POST /` exige rol `empresa` (nadie más puede crear un remate — ver ADR-047: `empresa`
+es el dueño comercial del remate, `rematador` quedó acotado a operar en vivo el remate
+que una empresa le asignó por código). El resto de los endpoints no filtra por rol sino
+por *ownership*: una empresa que no es dueña de un remate se trata igual que un
+comprador frente a ese remate puntual (ver `RemateService._is_visible` /
+`get_owned_or_raise`). Por eso no hay `require_roles` en `GET`, `PATCH`, `schedule`,
+`cancel`, `start`, `pause`, `resume`, `finish` ni `DELETE` — la regla no es "qué rol
+tenés" sino "sos el dueño (o, para pause/resume/finish, también el operador asignado) de
+este remate en particular", y esa regla la aplica el servicio, no el router.
 
 `start`/`pause`/`resume`/`finish` son del motor de estados (Épica 2, Módulo 2.3, ver
 docs/16-motor-de-estados.md); no llevan lógica propia acá, cada uno delega enteramente
@@ -20,7 +22,7 @@ from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 
 from app.common.schemas import Page
 from app.core.config import Settings, get_settings
-from app.modules.auth.dependencies import get_current_user, require_roles
+from app.modules.auth.dependencies import get_current_user, get_current_user_optional, require_roles
 from app.modules.remates.dependencies import get_remate_service
 from app.modules.remates.lotes.router import router as lotes_router
 from app.modules.remates.models import Remate, RemateCategory, RemateStatus
@@ -28,6 +30,8 @@ from app.modules.remates.schemas import (
     RemateCancelRequest,
     RemateCoverImageUploadResponse,
     RemateCreate,
+    RemateOperatorClaimRequest,
+    RemateOperatorCodeResponse,
     RemateRead,
     RemateUpdate,
 )
@@ -45,7 +49,7 @@ router.include_router(lotes_router, prefix="/{remate_id}/lotes", tags=["lotes"])
     "",
     response_model=RemateRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_roles(UserRole.REMATADOR))],
+    dependencies=[Depends(require_roles(UserRole.EMPRESA))],
     summary="Crear un remate en borrador (RF-04)",
 )
 async def create_remate(
@@ -60,7 +64,7 @@ async def create_remate(
     "/cover-image",
     response_model=RemateCoverImageUploadResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_roles(UserRole.REMATADOR))],
+    dependencies=[Depends(require_roles(UserRole.EMPRESA))],
     summary="Subir la imagen de portada de un remate (refinamiento visual, item 6)",
 )
 async def upload_remate_cover_image(
@@ -80,16 +84,17 @@ async def upload_remate_cover_image(
 @router.get(
     "",
     response_model=Page[RemateRead],
-    summary="Listar remates visibles para el usuario actual",
+    summary="Listar remates visibles para el usuario actual (o para un visitante anónimo, ADR-049)",
 )
 async def list_remates(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User | None, Depends(get_current_user_optional)],
     service: Annotated[RemateService, Depends(get_remate_service)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     category: RemateCategory | None = None,
     status_: RemateStatus | None = Query(default=None, alias="status"),  # noqa: B008
     owner_id: uuid.UUID | None = None,
+    rematador_id: uuid.UUID | None = None,
 ) -> Page[RemateRead]:
     items, total = await service.list_for_viewer(
         viewer=current_user,
@@ -98,6 +103,7 @@ async def list_remates(
         category=category,
         status=status_,
         owner_id=owner_id,
+        rematador_id=rematador_id,
     )
     return Page[RemateRead](items=list(items), total=total, page=page, page_size=page_size)
 
@@ -105,11 +111,14 @@ async def list_remates(
 @router.get(
     "/{remate_id}",
     response_model=RemateRead,
-    summary="Detalle de un remate (404 si no es visible para el usuario actual)",
+    summary=(
+        "Detalle de un remate (404 si no es visible para el usuario actual, o para un "
+        "visitante anónimo -- ADR-049)"
+    ),
 )
 async def get_remate(
     remate_id: uuid.UUID,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User | None, Depends(get_current_user_optional)],
     service: Annotated[RemateService, Depends(get_remate_service)],
 ) -> Remate:
     return await service.get_visible_or_raise(remate_id, current_user)
@@ -206,6 +215,35 @@ async def finish_remate(
     service: Annotated[RemateService, Depends(get_remate_service)],
 ) -> Remate:
     return await service.finish(remate_id, current_user)
+
+
+@router.post(
+    "/{remate_id}/operator-code",
+    response_model=RemateOperatorCodeResponse,
+    summary="Generar/regenerar el código de operador de un remate propio (ADR-048)",
+)
+async def generate_operator_code(
+    remate_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[RemateService, Depends(get_remate_service)],
+) -> RemateOperatorCodeResponse:
+    remate, code = await service.generate_operator_code(remate_id, current_user)
+    return RemateOperatorCodeResponse(code=code, generated_at=remate.operator_code_generated_at)
+
+
+@router.post(
+    "/{remate_id}/claim-operator",
+    response_model=RemateRead,
+    dependencies=[Depends(require_roles(UserRole.REMATADOR))],
+    summary="Canjear un código de operador y quedar asignado a este remate (ADR-048)",
+)
+async def claim_operator(
+    remate_id: uuid.UUID,
+    data: RemateOperatorClaimRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[RemateService, Depends(get_remate_service)],
+) -> Remate:
+    return await service.claim_operator(remate_id, current_user, data.code)
 
 
 @router.delete(
