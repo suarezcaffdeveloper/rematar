@@ -76,6 +76,11 @@ class Lote(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
             name="reserve_price_gte_base_price",
         ),
         CheckConstraint("final_price IS NULL OR final_price > 0", name="final_price_positive"),
+        CheckConstraint(
+            "requeue_preset_enabled = false OR "
+            "(requeue_preset_base_price IS NOT NULL AND requeue_preset_min_increment IS NOT NULL)",
+            name="requeue_preset_requires_price",
+        ),
         # Único por remate entre lotes vivos (ADR-015): dos rematadores distintos, o el
         # mismo rematador en otro remate, pueden reutilizar el mismo número de catálogo.
         Index(
@@ -201,6 +206,18 @@ class Lote(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     # (un lote que se vende o se cancela en su única ronda no genera ninguna fila en
     # `lote_rounds`).
     round_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    # Reencolado preautorizado por la empresa (ver ADR-048): si está habilitado, el
+    # rematador asignado como operador (que no puede fijar precios) puede disparar
+    # `POST .../requeue-preset` para volver a rematar este lote con estas condiciones
+    # exactas cuando quede `CLOSED_UNSOLD`, sin intervención de la empresa en el momento.
+    # El endpoint de reencolado con precio arbitrario (`.../requeue`) sigue existiendo
+    # sin cambios y queda exclusivo de la empresa dueña.
+    requeue_preset_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    requeue_preset_base_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    requeue_preset_min_increment: Mapped[Decimal | None] = mapped_column(
+        Numeric(14, 2), nullable=True
+    )
 
     def __repr__(self) -> str:
         return (
