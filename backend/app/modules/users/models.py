@@ -15,11 +15,21 @@ from app.db.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class UserRole(str, enum.Enum):
-    """Exactamente estos tres roles (RF-02). Ver docs/02-roles-y-casos-de-uso.md."""
+    """Ver docs/02-roles-y-casos-de-uso.md y docs/adr/ADR-047-redefinicion-de-roles-empresa-rematador.md.
+
+    `EMPRESA` es el dueño comercial del remate (crea, publica, fija precios, gestiona
+    postventa) -- lo que hacía `REMATADOR` antes de ADR-047. `REMATADOR` quedó acotado a
+    operar en vivo el remate que una empresa le asignó (ver `Remate.rematador_id`), sin
+    ningún acceso a la parte comercial. No se renombra el valor del enum porque Postgres
+    no permite renombrar un valor de enum atómicamente; en su lugar se migraron los datos
+    de todas las cuentas rematador existentes a `EMPRESA` y se le dio a `REMATADOR` un
+    significado nuevo y más angosto hacia adelante.
+    """
 
     ADMIN = "admin"
     REMATADOR = "rematador"
     COMPRADOR = "comprador"
+    EMPRESA = "empresa"
 
 
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):

@@ -98,6 +98,26 @@ class Remate(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         index=True,
     )
 
+    # Operador en vivo asignado por la empresa dueña (ver ADR-048). A diferencia de
+    # `owner_id`, es SET NULL: si el usuario rematador desaparece, el remate no debería
+    # quedar bloqueado -- la empresa simplemente vuelve a generar un código y asigna a
+    # otro. Un rematador nunca puede ser `owner_id` (eso ahora es exclusivo de `empresa`).
+    rematador_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # Nunca se persiste el código en texto plano (mismo criterio que una contraseña,
+    # aunque acá alcanza con un hash rápido -- no es un secreto de alto valor sujeto a
+    # ataques de fuerza bruta offline, es un código corto que la empresa comparte una
+    # vez con el rematador). Regenerar el código sobreescribe este hash y limpia
+    # `rematador_id` en la misma operación (ver `RemateService.generate_operator_code`).
+    operator_code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    operator_code_generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     category: Mapped[RemateCategory] = mapped_column(
