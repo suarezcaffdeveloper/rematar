@@ -88,6 +88,15 @@ Próximos pasos sugeridos cuando se retome (no probados todavía):
   en el mismo servicio de Railway/Render, para aislar si el problema es de la app o de
   cómo estas dos plataformas evalúan el healthcheck en este proyecto puntual.
 
+En curso al 2026-08-24: se prueba el segundo punto de la lista de arriba (dual-stack).
+`docker-entrypoint.sh` ahora lee `UVICORN_HOST` (default `0.0.0.0`, sin cambios de
+comportamiento en Render ni en el docker-compose local) — en Railway se prueba con
+`UVICORN_HOST=::` como variable de servicio. También se agregó `backend/railway.json`
+(config-as-code: `healthcheckPath`, `healthcheckTimeout`, restart policy) para que la
+configuración del servicio quede versionada en vez de vivir solo en el dashboard. Falta
+correr el deploy y ver si esto lo destraba — actualizar esta sección con el resultado
+antes de asumir que sigue igual.
+
 ## Qué NO es roadmap, es explícitamente fuera de alcance del proyecto
 
 - Reemplazar el contacto manual post-remate (pago/entrega) por un flujo transaccional
