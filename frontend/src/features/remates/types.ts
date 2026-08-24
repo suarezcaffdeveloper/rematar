@@ -19,13 +19,13 @@ export type VisibleRemateStatus = Exclude<RemateStatus, 'draft'>;
 export type RemateCategory =
   | 'inmuebles'
   | 'vehiculos'
-  | 'maquinaria_agricola'
+  | 'maquinaria_pesada_y_agricola'
   | 'hacienda'
-  | 'arte_y_antiguedades'
-  | 'electronica'
-  | 'mobiliario'
-  | 'indumentaria'
-  | 'otros';
+  | 'arte_antiguedades_y_coleccionables'
+  | 'joyas_relojeria_y_numismatica'
+  | 'tecnologia_electrodomesticos_y_hogar'
+  | 'nautica_y_aviacion'
+  | 'mercaderia_e_indumentaria';
 
 /** `RemateSettings` -- `backend/app/modules/remates/schemas.py`. `currency` (formatear
  * precios) y, desde Épica 8 ("cuenta regresiva y cierre automático"), los tres campos

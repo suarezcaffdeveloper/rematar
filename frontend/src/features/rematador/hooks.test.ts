@@ -108,7 +108,7 @@ function makeRemate(overrides: Partial<Remate> = {}): Remate {
     owner_id: 'owner-1',
     title: 'Remate',
     description: null,
-    category: 'otros',
+    category: 'mercaderia_e_indumentaria',
     cover_image_url: null,
     location: null,
     starts_at: '2026-07-18T10:00:00Z',

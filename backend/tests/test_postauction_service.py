@@ -15,6 +15,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.repository import AuditLogRepository
+from app.core.config import get_settings
 from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
 from app.core.security import hash_password
 from app.modules.remates.lotes.models import Lote
@@ -78,6 +79,7 @@ def _make_service(
         # notificación (más abajo) pasan su propio `NotificationService` con un canal
         # falso.
         notification_service or NotificationService([]),
+        get_settings(),
     )
 
 

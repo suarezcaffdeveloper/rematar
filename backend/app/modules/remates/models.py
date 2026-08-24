@@ -41,18 +41,19 @@ class RemateStatus(str, enum.Enum):
 
 
 class RemateCategory(str, enum.Enum):
-    """Conjunto inicial de categorías (ver ADR-013). `OTROS` es el catch-all deliberado
-    para no forzar una clasificación forzada cuando ninguna categoría encaja bien."""
+    """Categorías alineadas con los rubros exhibidos en la landing pública (ver ADR-013).
+    Los nombres de los miembros reflejan agrupaciones amplias de mercado; los valores se
+    mantienen en snake_case para consistencia con URLs y JSON histórico."""
 
     INMUEBLES = "inmuebles"
     VEHICULOS = "vehiculos"
-    MAQUINARIA_AGRICOLA = "maquinaria_agricola"
+    MAQUINARIA_PESADA_Y_AGRICOLA = "maquinaria_pesada_y_agricola"
     HACIENDA = "hacienda"
-    ARTE_Y_ANTIGUEDADES = "arte_y_antiguedades"
-    ELECTRONICA = "electronica"
-    MOBILIARIO = "mobiliario"
-    INDUMENTARIA = "indumentaria"
-    OTROS = "otros"
+    ARTE_ANTIGUEDADES_Y_COLECCIONABLES = "arte_antiguedades_y_coleccionables"
+    JOYAS_RELOJERIA_Y_NUMISMATICA = "joyas_relojeria_y_numismatica"
+    TECNOLOGIA_ELECTRODOMESTICOS_Y_HOGAR = "tecnologia_electrodomesticos_y_hogar"
+    NAUTICA_Y_AVIACION = "nautica_y_aviacion"
+    MERCADERIA_E_INDUMENTARIA = "mercaderia_e_indumentaria"
 
 
 # Valor por defecto de `Remate.settings` (ver ADR-012). Vive acá, no en schemas.py, para

@@ -17,8 +17,14 @@ function isPubliclyViewablePath(pathname: string): boolean {
 
 /**
  * Envuelve un grupo de rutas (`app/router.tsx`) que exigen sesión iniciada. Redirige a
- * `/login` guardando la ruta original en `location.state.from`, para que `LoginPage`
- * pueda volver ahí después de autenticar en vez de mandar siempre a la home.
+ * `/login` sin guardar la ruta original: `LoginPage` siempre vuelve a `/` después de
+ * autenticar (que ya reparte por rol, ver `HomePage`), nunca a la ruta que se estaba
+ * intentando visitar. Antes se guardaba en `location.state.from` para volver ahí, pero
+ * esa ruta queda pegada a la ENTRADA del historial de `/login`, no a la sesión: si un
+ * usuario quedaba deslogueado en una ruta específica (p.ej. `/remates/:id/gestionar`,
+ * que no tiene `RequireRole`) y otro usuario con OTRO rol se logueaba después en la
+ * misma pestaña, terminaba viendo el panel del primero. Ver el docstring de
+ * `LoginPage`.
  *
  * Espera a `isHydrated` antes de decidir: `useAuthStore` persiste en `localStorage` y
  * rehidrata de forma asíncrona (ver docstring de `features/auth/store.ts`) -- sin este
@@ -55,12 +61,12 @@ export function RequireAuth() {
 
   if (!isAuthenticated) {
     if (location.pathname === '/') {
-      return <LandingPage />;
+      return <Navigate to="/remates" replace />;
     }
     if (isPubliclyViewablePath(location.pathname)) {
       return <Outlet />;
     }
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return <Outlet />;

@@ -10,7 +10,7 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
     display_order: 0,
     title: 'Lote genérico',
     description: null,
-    category: 'otros',
+    category: 'mercaderia_e_indumentaria',
     attributes: {},
     images: [],
     quantity: 1,

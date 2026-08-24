@@ -25,8 +25,11 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
+from fastapi import UploadFile
+
 from app.audit.actions import AuditAction
 from app.audit.repository import AuditLogRepository
+from app.core.config import Settings
 from app.core.exceptions import ForbiddenError, NotFoundError
 from app.events.bus import EventBus
 from app.modules.remates.lotes.repository import LoteRepository
@@ -36,14 +39,22 @@ from app.modules.users.repository import UserRepository
 from app.notifications.repository import NotificationRepository
 from app.notify.context import LoteAdjudicadoContext
 from app.notify.service import NotificationService
+from app.postauction import media_storage
 from app.postauction.events import PostAuctionCaseCreated, PostAuctionStatusChanged
-from app.postauction.models import PostAuctionCase, PostAuctionStatus, PostAuctionTimelineEntry
+from app.postauction.models import (
+    PostAuctionCase,
+    PostAuctionDocument,
+    PostAuctionDocumentType,
+    PostAuctionStatus,
+    PostAuctionTimelineEntry,
+)
 from app.postauction.repository import PostAuctionRepository
 from app.postauction.schemas import (
     PostAuctionCaseDetail,
     PostAuctionCaseRead,
     PostAuctionCaseRematadorDetail,
     PostAuctionCaseRematadorRead,
+    PostAuctionDocumentRead,
     TimelineEntryRead,
 )
 from app.postauction.state_machine import STATUS_MILESTONE_FIELD, assert_transition_allowed
@@ -71,6 +82,7 @@ class PostAuctionService:
         notification_repository: NotificationRepository,
         event_bus: EventBus,
         notification_service: NotificationService,
+        settings: Settings,
     ) -> None:
         self._repository = repository
         self._remate_repository = remate_repository
@@ -80,6 +92,7 @@ class PostAuctionService:
         self._notification_repository = notification_repository
         self._event_bus = event_bus
         self._notification_service = notification_service
+        self._settings = settings
 
     # --- Creación automática (disparada por `realtime.py`, no por HTTP) -----------------
 
@@ -324,6 +337,103 @@ class PostAuctionService:
         await self._repository.refresh(case)
         return case
 
+    async def upload_document(
+        self,
+        case_id: uuid.UUID,
+        actor: User,
+        *,
+        document_type: PostAuctionDocumentType,
+        upload: UploadFile,
+        request_base_url: str,
+    ) -> PostAuctionCase:
+        """Adjunta un documento (comprobante, factura, guía de envío, etc.) a una venta
+        adjudicada -- mismo control de ownership que `change_status`/`add_note` (empresa
+        dueña del caso, o admin). El archivo se guarda en disco antes de tocar la base
+        (`media_storage.save_postauction_document`); si la validación de Content-Type/
+        tamaño falla, no queda ningún registro huérfano."""
+        case = await self._get_owned_case_or_raise(case_id, actor)
+        saved = await media_storage.save_postauction_document(
+            case.id, upload, self._settings, request_base_url
+        )
+
+        document = PostAuctionDocument(
+            case_id=case.id,
+            document_type=document_type,
+            filename=saved.filename,
+            original_filename=upload.filename or saved.filename,
+            content_type=upload.content_type or "application/octet-stream",
+            file_size=saved.file_size,
+            url=saved.url,
+            uploaded_by_id=actor.id,
+        )
+        self._repository.add_document(document)
+
+        self._audit_repository.record(
+            actor_id=actor.id,
+            actor_name=actor.full_name,
+            actor_role=actor.role.value,
+            action=AuditAction.POSTAUCTION_DOCUMENT_UPLOADED,
+            resource_type="postauction_case",
+            resource_id=case.id,
+            remate_id=case.remate_id,
+            details={"filename": document.original_filename, "document_type": document_type.value},
+        )
+        self._repository.add_timeline_entry(
+            PostAuctionTimelineEntry(
+                case_id=case.id,
+                occurred_at=datetime.now(UTC),
+                actor_id=actor.id,
+                actor_name=actor.full_name,
+                actor_role=actor.role.value,
+                action="document_uploaded",
+                previous_status=None,
+                new_status=None,
+                details={"filename": document.original_filename, "document_type": document_type.value},
+            )
+        )
+        await self._repository.commit()
+        await self._repository.refresh(case)
+        return case
+
+    async def delete_document(
+        self, case_id: uuid.UUID, document_id: uuid.UUID, actor: User
+    ) -> PostAuctionCase:
+        case = await self._get_owned_case_or_raise(case_id, actor)
+        document = await self._repository.get_document(case.id, document_id)
+        if document is None:
+            raise NotFoundError("Documento no encontrado.")
+
+        filename, original_filename = document.filename, document.original_filename
+        await self._repository.delete_document(document)
+
+        self._audit_repository.record(
+            actor_id=actor.id,
+            actor_name=actor.full_name,
+            actor_role=actor.role.value,
+            action=AuditAction.POSTAUCTION_DOCUMENT_DELETED,
+            resource_type="postauction_case",
+            resource_id=case.id,
+            remate_id=case.remate_id,
+            details={"filename": original_filename},
+        )
+        self._repository.add_timeline_entry(
+            PostAuctionTimelineEntry(
+                case_id=case.id,
+                occurred_at=datetime.now(UTC),
+                actor_id=actor.id,
+                actor_name=actor.full_name,
+                actor_role=actor.role.value,
+                action="document_deleted",
+                previous_status=None,
+                new_status=None,
+                details={"filename": original_filename},
+            )
+        )
+        await self._repository.commit()
+        await self._repository.refresh(case)
+        media_storage.delete_postauction_document_file(case.id, filename, self._settings)
+        return case
+
     # --- Lectura -------------------------------------------------------------------------
 
     async def list_for_rematador(
@@ -447,17 +557,21 @@ class PostAuctionService:
     async def _to_detail(self, case: PostAuctionCase) -> PostAuctionCaseDetail:
         read = await self._build_read(case)
         timeline = await self._repository.list_timeline(case.id)
+        documents = await self._repository.list_documents(case.id)
         return PostAuctionCaseDetail(
             **read.model_dump(),
             timeline=[TimelineEntryRead.model_validate(entry) for entry in timeline],
+            documents=[PostAuctionDocumentRead.model_validate(doc) for doc in documents],
         )
 
     async def _to_rematador_detail(self, case: PostAuctionCase) -> PostAuctionCaseRematadorDetail:
         read = await self._build_rematador_read(case)
         timeline = await self._repository.list_timeline(case.id)
+        documents = await self._repository.list_documents(case.id)
         return PostAuctionCaseRematadorDetail(
             **read.model_dump(),
             timeline=[TimelineEntryRead.model_validate(entry) for entry in timeline],
+            documents=[PostAuctionDocumentRead.model_validate(doc) for doc in documents],
         )
 
 

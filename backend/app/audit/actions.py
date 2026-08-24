@@ -47,6 +47,8 @@ class AuditAction:
     POSTAUCTION_CASE_CREATED = "postauction.case_created"
     POSTAUCTION_STATUS_CHANGED = "postauction.status_changed"
     POSTAUCTION_NOTE_ADDED = "postauction.note_added"
+    POSTAUCTION_DOCUMENT_UPLOADED = "postauction.document_uploaded"
+    POSTAUCTION_DOCUMENT_DELETED = "postauction.document_deleted"
 
     MODERATION_USER_KICKED = "moderacion.usuario_expulsado"
     MODERATION_USER_MUTED = "moderacion.usuario_silenciado"

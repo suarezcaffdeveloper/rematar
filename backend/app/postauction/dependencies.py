@@ -4,6 +4,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.repository import AuditLogRepository
+from app.core.config import Settings, get_settings
 from app.db.session import get_db
 from app.events.bus import EventBus
 from app.events.dependencies import get_event_bus
@@ -38,6 +39,7 @@ def get_postauction_service(
     event_bus: Annotated[EventBus, Depends(get_event_bus)],
     notification_service: Annotated[NotificationService, Depends(get_notification_service)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> PostAuctionService:
     return PostAuctionService(
         repository,
@@ -48,4 +50,5 @@ def get_postauction_service(
         notification_repository,
         event_bus,
         notification_service,
+        settings,
     )

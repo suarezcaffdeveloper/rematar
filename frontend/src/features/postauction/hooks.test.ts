@@ -44,7 +44,7 @@ function makeCase(overrides: Partial<PostAuctionCase> = {}): PostAuctionCase {
 }
 
 function makeDetail(overrides: Partial<PostAuctionCaseDetail> = {}): PostAuctionCaseDetail {
-  return { ...makeCase(), timeline: [], ...overrides };
+  return { ...makeCase(), timeline: [], documents: [], ...overrides };
 }
 
 beforeEach(() => {

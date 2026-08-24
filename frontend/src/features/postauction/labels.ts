@@ -5,7 +5,7 @@
  * calcular "qué estados siguientes ofrecer" y para el indicador visual de progreso.
  */
 
-import type { PostAuctionStatus } from './types';
+import type { PostAuctionDocumentType, PostAuctionStatus } from './types';
 
 export const STATUS_ORDER: PostAuctionStatus[] = [
   'adjudicado',
@@ -55,8 +55,21 @@ const ACTION_LABELS: Record<string, string> = {
   note_added: 'Observación agregada',
   notification_sent: 'Notificación enviada',
   notification_failed: 'Error al enviar notificación',
+  document_uploaded: 'Documento adjuntado',
+  document_deleted: 'Documento eliminado',
 };
 
 export function describeTimelineAction(action: string): string {
   return ACTION_LABELS[action] ?? action;
 }
+
+export const DOCUMENT_TYPE_LABELS: Record<PostAuctionDocumentType, string> = {
+  otro: 'Otro',
+  recibo: 'Recibo',
+  factura: 'Factura',
+  ticket: 'Ticket',
+  comprobante: 'Comprobante de pago',
+  contrato: 'Contrato',
+  guia_envio: 'Guía de envío',
+  documento_entrega: 'Documento de entrega',
+};

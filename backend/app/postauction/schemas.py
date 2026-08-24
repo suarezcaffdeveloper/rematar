@@ -16,7 +16,21 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.common.schemas import Page
-from app.postauction.models import PostAuctionStatus
+from app.postauction.models import PostAuctionDocumentType, PostAuctionStatus
+
+
+class PostAuctionDocumentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    document_type: PostAuctionDocumentType
+    filename: str
+    original_filename: str
+    content_type: str
+    file_size: int
+    url: str
+    uploaded_by_id: uuid.UUID | None
+    created_at: datetime
 
 
 class PostAuctionCaseRead(BaseModel):
@@ -63,6 +77,7 @@ class TimelineEntryRead(BaseModel):
 
 class PostAuctionCaseDetail(PostAuctionCaseRead):
     timeline: list[TimelineEntryRead]
+    documents: list[PostAuctionDocumentRead]
 
 
 class PostAuctionCaseRematadorRead(PostAuctionCaseRead):
@@ -82,6 +97,7 @@ class PostAuctionCaseRematadorRead(PostAuctionCaseRead):
 
 class PostAuctionCaseRematadorDetail(PostAuctionCaseRematadorRead):
     timeline: list[TimelineEntryRead]
+    documents: list[PostAuctionDocumentRead]
 
 
 class StatusChangeRequest(BaseModel):
@@ -108,6 +124,7 @@ __all__ = [
     "PostAuctionCaseDetail",
     "PostAuctionCaseRematadorRead",
     "PostAuctionCaseRematadorDetail",
+    "PostAuctionDocumentRead",
     "TimelineEntryRead",
     "StatusChangeRequest",
     "NoteCreateRequest",

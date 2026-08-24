@@ -41,7 +41,7 @@ describe('ActiveLotePanel', () => {
   it('muestra número de lote, categoría, título y descripción', () => {
     render(<ActiveLotePanel {...makeProps()} />);
 
-    expect(screen.getByText('Lote 1 · Hacienda')).toBeInTheDocument();
+    expect(screen.getByText('Lote 1 · Hacienda y ganadería')).toBeInTheDocument();
     expect(screen.getByText('Toro Angus')).toBeInTheDocument();
     expect(screen.getByText('Toro reproductor de pedigrí.')).toBeInTheDocument();
   });

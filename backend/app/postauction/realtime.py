@@ -42,6 +42,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.audit.repository import AuditLogRepository
+from app.core.config import get_settings
 from app.events.bus import EventBus
 from app.modules.ofertas.repository import OfertaRepository
 from app.modules.remates.lotes.repository import LoteRepository
@@ -138,6 +139,7 @@ class PostAuctionEventDispatcher:
                     NotificationRepository(db),
                     self._event_bus,
                     self._notification_service,
+                    get_settings(),
                 )
                 await service.create_case_from_winner(
                     remate_id=remate_id,

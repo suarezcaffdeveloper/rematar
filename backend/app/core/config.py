@@ -160,6 +160,13 @@ class Settings(BaseSettings):
     MEDIA_URL_PREFIX: str = "/static"
     MAX_IMAGE_UPLOAD_BYTES: int = 5 * 1024 * 1024
     ALLOWED_IMAGE_CONTENT_TYPES: list[str] = ["image/jpeg", "image/png", "image/webp"]
+    MAX_DOCUMENT_UPLOAD_BYTES: int = 10 * 1024 * 1024
+    ALLOWED_DOCUMENT_CONTENT_TYPES: list[str] = [
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    ]
 
     # --- Chat del Remate (Épica 6, Módulo 6.4) ---
     # Ver docs/34-chat-del-remate.md y ADR-037.

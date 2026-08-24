@@ -21,6 +21,7 @@ import {
   Users,
   Workflow,
   Zap,
+  Briefcase,
   type LucideIcon,
 } from 'lucide-react';
 import { STOCK_PHOTOS, type StockPhoto } from '../../shared/media/stockPhotos';
@@ -68,15 +69,22 @@ export interface BenefitItem {
   description: string;
 }
 
+export const EMPRESA_BENEFITS: BenefitItem[] = [
+  { icon: Layers, title: 'Gestión de remates y lotes', description: 'Creá remates, cargá el catálogo de lotes con imágenes y precios base, y organizá cada evento desde cero.' },
+  { icon: Users, title: 'Asignación de rematadores', description: 'Designá operadores para cada remate y controlá quién conduce el evento en vivo.' },
+  { icon: BarChart3, title: 'Panel de administración', description: 'Visualizá resultados globales, adjudicaciones, ventas post-remate y métricas de tus eventos.' },
+  { icon: Boxes, title: 'Control de inventario', description: 'Administrá la documentación, fotos y estado de cada lote hasta su venta final.' },
+  { icon: ShieldCheck, title: 'Aprobaciones y seguridad', description: 'Validá participantes, auditá acciones y mantené el control sobre qué usuarios ingresan a cada evento.' },
+  { icon: Zap, title: 'Resultados en tiempo real', description: 'Seguí cada puja, lote adjudicado y comprador ganador sin salir del panel de la empresa.' },
+];
+
 export const REMATADOR_BENEFITS: BenefitItem[] = [
-  { icon: Gavel, title: 'Panel profesional', description: 'Una consola pensada para conducir un remate en vivo, no un panel de administración genérico.' },
-  { icon: Layers, title: 'Gestión de lotes', description: 'Cargá, ordená y editá lotes antes de salir en vivo, con todo listo para el día del remate.' },
+  { icon: Gavel, title: 'Consola operativa en vivo', description: 'Una interfaz pensada exclusivamente para conducir el remate: lote actual, pujas y compradores al instante.' },
   { icon: Timer, title: 'Control del temporizador', description: 'Manejá el tiempo de cada lote en tiempo real, con extensiones y pausas bajo tu control.' },
   { icon: Shield, title: 'Moderación', description: 'Silenciá, expulsá o advertí participantes sin salir de la consola operativa.' },
   { icon: Users, title: 'Control de compradores', description: 'Visibilidad completa de quién está participando y cómo está ofertando cada uno.' },
   { icon: Zap, title: 'Oferta ganadora en vivo', description: 'La puja más alta se actualiza al instante para todos los presentes en la sala.' },
   { icon: MessageSquare, title: 'Chat integrado', description: 'Comunicate con los compradores sin depender de herramientas externas.' },
-  { icon: BarChart3, title: 'Analytics en vivo', description: 'Métricas del remate mientras sucede: participación, ritmo de ofertas, adjudicaciones.' },
 ];
 
 export const COMPRADOR_BENEFITS: BenefitItem[] = [
@@ -95,12 +103,13 @@ export interface TimelineStep {
 }
 
 export const TIMELINE_STEPS: TimelineStep[] = [
-  { number: 1, title: 'El administrador crea un remate', description: 'Define fecha, condiciones y reglas del evento.' },
+  { number: 1, title: 'La empresa crea el remate', description: 'Define fecha, condiciones y reglas del evento.' },
   { number: 2, title: 'Carga los lotes', description: 'Suma imágenes, descripciones y precios base a cada lote.' },
-  { number: 3, title: 'Los compradores ingresan', description: 'Acceden a la sala del remate y ven los lotes disponibles.' },
-  { number: 4, title: 'Comienzan las ofertas', description: 'Cada puja se refleja al instante para todos los participantes.' },
-  { number: 5, title: 'El rematador administra el remate en vivo', description: 'Controla tiempos, modera y conduce cada lote desde la consola.' },
-  { number: 6, title: 'Se adjudica el lote', description: 'La oferta ganadora queda registrada y el proceso post-remate comienza.' },
+  { number: 3, title: 'Asigna al rematador', description: 'La empresa designa el operador que conducirá el evento en vivo.' },
+  { number: 4, title: 'El rematador inicia el remate', description: 'Accede con sus credenciales a la consola operativa y abre la sala del remate.' },
+  { number: 5, title: 'Los compradores ingresan', description: 'Acceden a la sala del remate y ven los lotes disponibles.' },
+  { number: 6, title: 'El rematador conduce el remate en vivo', description: 'Controla tiempos, modera y conduce cada lote desde la consola.' },
+  { number: 7, title: 'Se adjudica el lote', description: 'La oferta ganadora queda registrada y el proceso post-remate comienza.' },
 ];
 
 export interface SystemScreen {

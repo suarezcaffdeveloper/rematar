@@ -58,8 +58,31 @@ export interface TimelineEntry {
   note: string | null;
 }
 
+export type PostAuctionDocumentType =
+  | 'otro'
+  | 'recibo'
+  | 'factura'
+  | 'ticket'
+  | 'comprobante'
+  | 'contrato'
+  | 'guia_envio'
+  | 'documento_entrega';
+
+export interface PostAuctionDocument {
+  id: string;
+  document_type: PostAuctionDocumentType;
+  filename: string;
+  original_filename: string;
+  content_type: string;
+  file_size: number;
+  url: string;
+  uploaded_by_id: string | null;
+  created_at: string;
+}
+
 export interface PostAuctionCaseDetail extends PostAuctionCase {
   timeline: TimelineEntry[];
+  documents: PostAuctionDocument[];
 }
 
 export interface PostAuctionListFilters {

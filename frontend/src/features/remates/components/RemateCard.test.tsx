@@ -23,7 +23,7 @@ const REMATE: Remate = {
   owner_id: 'owner-1',
   title: 'Remate de maquinaria agrícola',
   description: null,
-  category: 'maquinaria_agricola',
+  category: 'maquinaria_pesada_y_agricola',
   cover_image_url: null,
   location: 'Rosario, Santa Fe',
   starts_at: '2026-08-01T14:30:00Z',
@@ -56,7 +56,7 @@ describe('RemateCard', () => {
     renderCard();
 
     expect(screen.getByText('Remate de maquinaria agrícola')).toBeInTheDocument();
-    expect(screen.getByText('Maquinaria agrícola')).toBeInTheDocument();
+    expect(screen.getByText('Maquinaria pesada y agrícola')).toBeInTheDocument();
     expect(screen.getByText('Programado')).toBeInTheDocument();
     expect(screen.getByText('Rosario, Santa Fe')).toBeInTheDocument();
     expect(screen.getByText('3 lotes')).toBeInTheDocument();

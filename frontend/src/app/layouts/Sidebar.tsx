@@ -34,6 +34,8 @@ interface NavItem {
  * responsabilidad, ver ADR-047); `rematador` quedó sin remates propios que listar --
  * su único destino es `/` (`OperatorClaimPage`, canjear un código de operador).
  */
+const PUBLIC_NAV_ITEMS: NavItem[] = [{ label: 'Todos los remates', to: '/remates', icon: Gavel }];
+
 const NAV_ITEMS_BY_ROLE: Record<UserRole, NavItem[]> = {
   comprador: [
     { label: 'Remates', to: '/', icon: Gavel },
@@ -137,17 +139,25 @@ function SidebarContent({
 }) {
   const { user } = useAuth();
   const { logout } = useAuthActions();
-  const items = role ? NAV_ITEMS_BY_ROLE[role] : [];
+  const items = role ? NAV_ITEMS_BY_ROLE[role] : PUBLIC_NAV_ITEMS;
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <Link to="/" onClick={onNavigate} className="flex h-16 shrink-0 items-center px-3">
+      <Link to={user ? '/' : '/remates'} onClick={onNavigate} className="flex h-16 shrink-0 items-center px-3">
         <SidebarLogo compact={compact} />
       </Link>
       <nav aria-label="Navegación principal" className="flex-1 space-y-1 px-3 py-2">
         {items.map(({ label, to, icon }) => (
-          <NavItemLink key={to} to={to} end={to === '/'} icon={icon} label={label} onNavigate={onNavigate} compact={compact} />
+          <NavItemLink
+            key={role ? `${role}-${to}` : to}
+            to={to}
+            end={to === '/'}
+            icon={icon}
+            label={label}
+            onNavigate={onNavigate}
+            compact={compact}
+          />
         ))}
       </nav>
 

@@ -17,7 +17,7 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
     display_order: 0,
     title: 'Sembradora Apache',
     description: null,
-    category: 'maquinaria_agricola',
+    category: 'maquinaria_pesada_y_agricola',
     attributes: {},
     images: [],
     quantity: 1,

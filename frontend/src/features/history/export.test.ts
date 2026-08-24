@@ -257,7 +257,7 @@ describe('exportRemateHistoryToExcel', () => {
     });
 
     expect(labels.get('Nombre')).toBe('Remate de hacienda');
-    expect(labels.get('Categoría')).toBe('Hacienda');
+    expect(labels.get('Categoría')).toBe('Hacienda y ganadería');
     expect(labels.get('Ubicación')).toBe('Rosario, Santa Fe');
     expect(labels.get('Valor total adjudicado')).toBe(1200);
     expect(labels.get('Total de lotes')).toBe(1);

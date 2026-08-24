@@ -6,7 +6,7 @@ import { Button } from '../../../shared/components/Button';
 import { Card } from '../../../shared/components/Card';
 import { Skeleton } from '../../../shared/components/Skeleton';
 import { BuyerCard } from '../components/BuyerCard';
-import { DocumentationPlaceholder } from '../components/DocumentationPlaceholder';
+import { DocumentationCard } from '../components/DocumentationCard';
 import { LastObservationCard } from '../components/LastObservationCard';
 import { LoteInfoCard } from '../components/LoteInfoCard';
 import { NoteForm } from '../components/NoteForm';
@@ -108,7 +108,7 @@ export function VentaAdjudicadaDetailPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <LoteInfoCard data={data} />
-        <DocumentationPlaceholder />
+        <DocumentationCard caseId={data.id} documents={data.documents} onChanged={reload} />
       </div>
 
       <div id="actividad" className="flex flex-col gap-2 scroll-mt-4">

@@ -33,6 +33,19 @@ from app.db.base_class import Base
 from app.db.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 
+class PostAuctionDocumentType(str, enum.Enum):
+    """Tipos de documento que una empresa puede adjuntar a una venta adjudicada."""
+
+    OTRO = "otro"
+    RECIBO = "recibo"
+    FACTURA = "factura"
+    TICKET = "ticket"
+    COMPROBANTE = "comprobante"
+    CONTRATO = "contrato"
+    GUIA_ENVIO = "guia_envio"
+    DOCUMENTO_ENTREGA = "documento_entrega"
+
+
 class PostAuctionStatus(str, enum.Enum):
     """Flujo lineal del Módulo 7.5 -- ver `state_machine.py` para las transiciones
     permitidas (hacia adelante únicamente, con saltos permitidos)."""
@@ -112,6 +125,43 @@ class PostAuctionCase(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     def __repr__(self) -> str:
         return f"<PostAuctionCase id={self.id} lote_id={self.lote_id} status={self.status.value}>"
+
+
+class PostAuctionDocument(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "postauction_documents"
+    __table_args__ = (
+        Index("ix_postauction_documents_case_id", "case_id"),
+        Index("ix_postauction_documents_created_at", "created_at"),
+    )
+
+    case_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("postauction_cases.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    document_type: Mapped[PostAuctionDocumentType] = mapped_column(
+        Enum(
+            PostAuctionDocumentType,
+            name="postauction_document_type",
+            native_enum=True,
+            values_callable=_enum_values,
+        ),
+        nullable=False,
+        default=PostAuctionDocumentType.OTRO,
+    )
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    file_size: Mapped[int] = mapped_column(Numeric(12, 0), nullable=False)
+    url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    uploaded_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    def __repr__(self) -> str:
+        return f"<PostAuctionDocument id={self.id} case_id={self.case_id} filename={self.filename!r}>"
 
 
 class PostAuctionTimelineEntry(UUIDPrimaryKeyMixin, Base):

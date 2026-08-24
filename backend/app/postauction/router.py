@@ -9,13 +9,13 @@ usuario a través de remates arbitrarios, no un sub-recurso de un remate puntual
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 
 from app.common.schemas import Page
 from app.modules.auth.dependencies import get_current_user
 from app.modules.users.models import User
 from app.postauction.dependencies import get_postauction_service
-from app.postauction.models import PostAuctionStatus
+from app.postauction.models import PostAuctionDocumentType, PostAuctionStatus
 from app.postauction.schemas import (
     NoteCreateRequest,
     PostAuctionCaseDetail,
@@ -104,6 +104,44 @@ async def add_nota_venta(
     service: Annotated[PostAuctionService, Depends(get_postauction_service)],
 ) -> PostAuctionCaseRematadorDetail:
     await service.add_note(case_id, current_user, data.note)
+    return await service.get_detail_for_rematador(case_id, current_user)
+
+
+@router.post(
+    "/postauction/ventas/{case_id}/documentos",
+    response_model=PostAuctionCaseRematadorDetail,
+    summary="Adjuntar un documento a una venta adjudicada -- dueño o admin",
+)
+async def upload_documento_venta(
+    case_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[PostAuctionService, Depends(get_postauction_service)],
+    file: Annotated[UploadFile, File()],
+    document_type: Annotated[PostAuctionDocumentType, Form()] = PostAuctionDocumentType.OTRO,
+) -> PostAuctionCaseRematadorDetail:
+    await service.upload_document(
+        case_id,
+        current_user,
+        document_type=document_type,
+        upload=file,
+        request_base_url=str(request.base_url),
+    )
+    return await service.get_detail_for_rematador(case_id, current_user)
+
+
+@router.delete(
+    "/postauction/ventas/{case_id}/documentos/{document_id}",
+    response_model=PostAuctionCaseRematadorDetail,
+    summary="Eliminar un documento adjunto a una venta adjudicada -- dueño o admin",
+)
+async def delete_documento_venta(
+    case_id: uuid.UUID,
+    document_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[PostAuctionService, Depends(get_postauction_service)],
+) -> PostAuctionCaseRematadorDetail:
+    await service.delete_document(case_id, document_id, current_user)
     return await service.get_detail_for_rematador(case_id, current_user)
 
 

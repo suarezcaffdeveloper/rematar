@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Gavel } from 'lucide-react';
 import { useAuthActions } from '../hooks';
@@ -9,24 +9,30 @@ import { Input } from '../../../shared/components/Input';
 import { Alert } from '../../../shared/components/Alert';
 import { LoginShowcase } from '../components/LoginShowcase';
 
-interface LocationState {
-  from?: { pathname: string };
-}
-
 /**
  * Pantalla de login (rediseño visual -- ver conversación de diseño): dos columnas a
  * pantalla completa en vez de la tarjeta centrada genérica que comparten el resto de
  * las pantallas de auth (`/register` la sigue usando, ver `AuthLayout`). La lógica de
  * autenticación es exactamente la misma que antes (`useAuthActions().login`,
- * `normalizeApiError`, redirect a `state.from` o `/`) -- sólo cambió el marcado
- * alrededor.
+ * `normalizeApiError`) -- sólo cambió el marcado alrededor.
+ *
+ * Redirect fijo a `/` (nunca `location.state.from`): `/` es la ruta `index` de
+ * `AppLayout` (`HomePage`) y ya reparte por rol (comprador/empresa/rematador/admin,
+ * ver su propio docstring). Antes se volvía a `state.from` cuando `RequireAuth`
+ * redirigía acá guardando la ruta que se intentaba visitar -- pero esa ruta quedaba
+ * pegada a la ENTRADA del historial de `/login`, no a la sesión: si el Usuario A
+ * (rematador) quedaba deslogueado estando en `/remates/:id/gestionar`, `RequireAuth`
+ * fijaba `state.from` a esa ruta; si el Usuario B se logueaba después en la misma
+ * pestaña, terminaba en la consola operativa de un remate ajeno con un rol que no le
+ * corresponde (esa ruta no tiene `RequireRole`, el backend rechaza las acciones pero
+ * ya mostró el panel equivocado). `/` siempre es correcto para cualquier rol, así que
+ * ya no hace falta el caso especial.
  *
  * "¿Olvidaste tu contraseña?" navega a `/forgot-password` (RNF-11).
  */
 export function LoginPage() {
   const { login } = useAuthActions();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -39,8 +45,7 @@ export function LoginPage() {
     setIsSubmitting(true);
     try {
       await login({ email, password });
-      const state = location.state as LocationState | null;
-      navigate(state?.from?.pathname ?? '/', { replace: true });
+      navigate('/', { replace: true });
     } catch (err) {
       setError(normalizeApiError(err).message);
     } finally {

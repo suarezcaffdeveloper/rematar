@@ -5,10 +5,12 @@
 
 import uuid
 from decimal import Decimal
+from pathlib import Path
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.postauction.models import PostAuctionCase, PostAuctionStatus
 from tests._role_test_helpers import activate_pending_account
 
@@ -188,6 +190,141 @@ async def test_add_nota_does_not_change_status(
     assert body["notes"] == "Pidió factura A"
 
 
+# --- Documentos (rematador) -------------------------------------------------------------
+
+
+def _documentos_url(case_id: uuid.UUID) -> str:
+    return f"{POSTAUCTION_URL}/ventas/{case_id}/documentos"
+
+
+async def test_owner_can_upload_document(client: AsyncClient, db_session: AsyncSession) -> None:
+    rematador_token, _, case = await _setup_case(client, db_session)
+
+    response = await client.post(
+        _documentos_url(case.id),
+        data={"document_type": "factura"},
+        files={"file": ("factura.pdf", b"contenido-de-prueba", "application/pdf")},
+        headers=_auth(rematador_token),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert len(body["documents"]) == 1
+    document = body["documents"][0]
+    assert document["document_type"] == "factura"
+    assert document["original_filename"] == "factura.pdf"
+    assert document["content_type"] == "application/pdf"
+    assert f"/static/postauction/{case.id}/" in document["url"]
+    assert body["timeline"][-1]["action"] == "document_uploaded"
+
+    relative_path = document["url"].split("/static/", 1)[1]
+    saved_file = Path(get_settings().MEDIA_ROOT) / relative_path
+    assert saved_file.read_bytes() == b"contenido-de-prueba"
+
+
+async def test_upload_document_defaults_to_otro_type(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    rematador_token, _, case = await _setup_case(client, db_session)
+
+    response = await client.post(
+        _documentos_url(case.id),
+        files={"file": ("comprobante.jpg", b"contenido", "image/jpeg")},
+        headers=_auth(rematador_token),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["documents"][0]["document_type"] == "otro"
+
+
+async def test_upload_document_rejects_unsupported_content_type(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    rematador_token, _, case = await _setup_case(client, db_session)
+
+    response = await client.post(
+        _documentos_url(case.id),
+        files={"file": ("archivo.txt", b"no es un documento admitido", "text/plain")},
+        headers=_auth(rematador_token),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "business_rule_violation"
+
+
+async def test_upload_document_rejects_oversized_file(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    rematador_token, _, case = await _setup_case(client, db_session)
+
+    oversized = b"0" * (10 * 1024 * 1024 + 1)
+    response = await client.post(
+        _documentos_url(case.id),
+        files={"file": ("grande.pdf", oversized, "application/pdf")},
+        headers=_auth(rematador_token),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "business_rule_violation"
+
+
+async def test_non_owner_cannot_upload_document(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, _, case = await _setup_case(client, db_session)
+    other_token = await _register_and_login(
+        client, email=f"other{uuid.uuid4()}@example.com", role="empresa"
+    )
+
+    response = await client.post(
+        _documentos_url(case.id),
+        files={"file": ("factura.pdf", b"contenido", "application/pdf")},
+        headers=_auth(other_token),
+    )
+    assert response.status_code == 403
+
+
+async def test_buyer_cannot_upload_document(client: AsyncClient, db_session: AsyncSession) -> None:
+    _, buyer_token, case = await _setup_case(client, db_session)
+
+    response = await client.post(
+        _documentos_url(case.id),
+        files={"file": ("factura.pdf", b"contenido", "application/pdf")},
+        headers=_auth(buyer_token),
+    )
+    assert response.status_code == 403
+
+
+async def test_owner_can_delete_document(client: AsyncClient, db_session: AsyncSession) -> None:
+    rematador_token, _, case = await _setup_case(client, db_session)
+    upload = await client.post(
+        _documentos_url(case.id),
+        files={"file": ("factura.pdf", b"contenido", "application/pdf")},
+        headers=_auth(rematador_token),
+    )
+    document_id = upload.json()["documents"][0]["id"]
+
+    response = await client.delete(
+        f"{_documentos_url(case.id)}/{document_id}", headers=_auth(rematador_token)
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["documents"] == []
+    assert body["timeline"][-1]["action"] == "document_deleted"
+
+
+async def test_delete_unknown_document_returns_404(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    rematador_token, _, case = await _setup_case(client, db_session)
+
+    response = await client.delete(
+        f"{_documentos_url(case.id)}/{uuid.uuid4()}", headers=_auth(rematador_token)
+    )
+    assert response.status_code == 404
+
+
 # --- Mis compras (comprador) -----------------------------------------------------------
 
 
@@ -199,6 +336,24 @@ async def test_buyer_sees_own_compra(client: AsyncClient, db_session: AsyncSessi
     body = response.json()
     assert body["total"] == 1
     assert body["items"][0]["id"] == str(case.id)
+
+
+async def test_buyer_sees_documents_uploaded_by_rematador(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    rematador_token, buyer_token, case = await _setup_case(client, db_session)
+    await client.post(
+        _documentos_url(case.id),
+        data={"document_type": "factura"},
+        files={"file": ("factura.pdf", b"contenido", "application/pdf")},
+        headers=_auth(rematador_token),
+    )
+
+    response = await client.get(
+        f"{POSTAUCTION_URL}/mis-compras/{case.id}", headers=_auth(buyer_token)
+    )
+    assert response.status_code == 200, response.text
+    assert len(response.json()["documents"]) == 1
 
 
 async def test_other_buyer_cannot_see_compra_detail(

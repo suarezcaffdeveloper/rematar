@@ -32,7 +32,7 @@ describe('RemateHistoryHeader', () => {
 
     expect(screen.getByRole('heading', { name: 'Remate de hacienda' })).toBeInTheDocument();
     expect(screen.getByText('Finalizado')).toBeInTheDocument();
-    expect(screen.getByText('Hacienda')).toBeInTheDocument();
+    expect(screen.getByText('Hacienda y ganadería')).toBeInTheDocument();
     expect(screen.getByText('Rosario, Santa Fe')).toBeInTheDocument();
   });
 

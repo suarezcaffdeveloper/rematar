@@ -17,6 +17,7 @@ from app.modules.remates.lotes.models import Lote
 from app.modules.users.models import User
 from app.postauction.models import (
     PostAuctionCase,
+    PostAuctionDocument,
     PostAuctionStatus,
     PostAuctionTimelineEntry,
 )
@@ -106,6 +107,28 @@ class PostAuctionRepository:
         stmt = stmt.order_by(PostAuctionCase.created_at.desc()).offset(offset).limit(limit)
         items = (await self._db.execute(stmt)).scalars().all()
         return list(items), total
+
+    def add_document(self, document: PostAuctionDocument) -> None:
+        self._db.add(document)
+
+    async def get_document(
+        self, case_id: uuid.UUID, document_id: uuid.UUID
+    ) -> PostAuctionDocument | None:
+        stmt = select(PostAuctionDocument).where(
+            PostAuctionDocument.id == document_id, PostAuctionDocument.case_id == case_id
+        )
+        return (await self._db.execute(stmt)).scalar_one_or_none()
+
+    async def list_documents(self, case_id: uuid.UUID) -> list[PostAuctionDocument]:
+        stmt = (
+            select(PostAuctionDocument)
+            .where(PostAuctionDocument.case_id == case_id)
+            .order_by(PostAuctionDocument.created_at.asc())
+        )
+        return list((await self._db.execute(stmt)).scalars().all())
+
+    async def delete_document(self, document: PostAuctionDocument) -> None:
+        await self._db.delete(document)
 
     def add_timeline_entry(self, entry: PostAuctionTimelineEntry) -> None:
         self._db.add(entry)

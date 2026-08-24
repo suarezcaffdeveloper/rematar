@@ -2,7 +2,13 @@ import clsx from 'clsx';
 import { Badge } from '../../../shared/components/Badge';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { formatDateTime } from '../../../shared/lib/format';
-import { GavelIcon, MailIcon, MessageSquareIcon, RefreshIcon } from '../../remates/components/icons';
+import {
+  FileTextIcon,
+  GavelIcon,
+  MailIcon,
+  MessageSquareIcon,
+  RefreshIcon,
+} from '../../remates/components/icons';
 import { describeTimelineAction, STATUS_LABELS } from '../labels';
 import type { TimelineEntry } from '../types';
 
@@ -12,6 +18,8 @@ const ACTION_BADGE_VARIANTS: Record<string, 'brand' | 'success' | 'danger' | 'ne
   note_added: 'neutral',
   notification_sent: 'success',
   notification_failed: 'danger',
+  document_uploaded: 'brand',
+  document_deleted: 'neutral',
 };
 
 const ACTION_DOT_CLASSES: Record<string, string> = {
@@ -20,6 +28,8 @@ const ACTION_DOT_CLASSES: Record<string, string> = {
   note_added: 'bg-slate-100 text-slate-500 ring-slate-200',
   notification_sent: 'bg-success-50 text-success-600 ring-success-200',
   notification_failed: 'bg-danger-50 text-danger-600 ring-danger-200',
+  document_uploaded: 'bg-brand-50 text-brand-600 ring-brand-200',
+  document_deleted: 'bg-slate-100 text-slate-500 ring-slate-200',
 };
 
 const ACTION_ICONS: Record<string, typeof GavelIcon> = {
@@ -28,6 +38,8 @@ const ACTION_ICONS: Record<string, typeof GavelIcon> = {
   note_added: MessageSquareIcon,
   notification_sent: MailIcon,
   notification_failed: MailIcon,
+  document_uploaded: FileTextIcon,
+  document_deleted: FileTextIcon,
 };
 
 export interface TimelineProps {
@@ -45,7 +57,7 @@ export function Timeline({ entries }: TimelineProps) {
   }
 
   return (
-    <ol className="flex flex-col">
+    <ol className="flex max-h-[30rem] flex-col overflow-y-auto pr-1">
       {entries.map((entry, index) => {
         const Icon = ACTION_ICONS[entry.action] ?? MessageSquareIcon;
         const isLast = index === entries.length - 1;

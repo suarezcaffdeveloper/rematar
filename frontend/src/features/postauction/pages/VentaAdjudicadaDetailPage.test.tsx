@@ -60,6 +60,7 @@ function makeDetail(overrides: Partial<PostAuctionCaseDetail> = {}): PostAuction
         note: 'El comprador ya me quiere pagar esta re loco',
       },
     ],
+    documents: [],
     ...overrides,
   };
 }

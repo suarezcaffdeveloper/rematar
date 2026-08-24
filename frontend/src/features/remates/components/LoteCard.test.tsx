@@ -12,7 +12,7 @@ function makeLote(overrides: Partial<Lote>): Lote {
     display_order: 0,
     title: 'Tractor John Deere',
     description: 'Tractor en excelente estado, motor revisado.',
-    category: 'maquinaria_agricola',
+    category: 'maquinaria_pesada_y_agricola',
     attributes: {},
     images: [],
     quantity: 1,

@@ -1,0 +1,75 @@
+---
+html.security.audit.missing-integrity.missing-integrity
+MisCompras\code.html lines 7-7
+This tag is missing an 'integrity' subresource integrity attribute. The 'integrity' attribute allows for the browser to verify that externally hosted files (for example from a CDN) are delivered without unexpected manipulation. Without this attribute, if an attacker can modify the externally hosted resource, this could lead to XSS and other types of attacks. To prevent this, include the base64-encoded cryptographic hash of the resource (file) youΓÇÖre telling the browser to fetch in the 'integrity' attribute for all externally hosted files.
+severity: WARNING
+---
+dockerfile.security.missing-user-entrypoint.missing-user-entrypoint
+backend\Dockerfile lines 26-26
+By not specifying a USER, a program in the container may run as 'root'. This is a security hazard. If an attacker can control a process running as root, they may have control over the container. Ensure that the last USER in a Dockerfile is a USER other than 'root'.
+severity: ERROR
+---
+dockerfile.security.missing-user.missing-user
+backend\Dockerfile lines 27-27
+By not specifying a USER, a program in the container may run as 'root'. This is a security hazard. If an attacker can control a process running as root, they may have control over the container. Ensure that the last USER in a Dockerfile is a USER other than 'root'.
+severity: ERROR
+---
+python.flask.security.xss.audit.direct-use-of-jinja2.direct-use-of-jinja2
+backend\app\email\renderer.py lines 16-19
+Detected direct use of jinja2. If not done properly, this may bypass HTML escaping which opens up the application to cross-site scripting (XSS) vulnerabilities. Prefer using the Flask method 'render_template()' and templates with a '.html' extension in order to prevent XSS.
+severity: WARNING
+---
+python.flask.security.xss.audit.direct-use-of-jinja2.direct-use-of-jinja2
+backend\app\email\renderer.py lines 23-23
+Detected direct use of jinja2. If not done properly, this may bypass HTML escaping which opens up the application to cross-site scripting (XSS) vulnerabilities. Prefer using the Flask method 'render_template()' and templates with a '.html' extension in order to prevent XSS.
+severity: WARNING
+---
+dockerfile.security.missing-user.missing-user
+frontend\Dockerfile lines 21-21
+By not specifying a USER, a program in the container may run as 'root'. This is a security hazard. If an attacker can control a process running as root, they may have control over the container. Ensure that the last USER in a Dockerfile is a USER other than 'root'.
+severity: ERROR
+---
+javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket
+frontend\src\shared\config\env.test.ts lines 5-5
+Insecure WebSocket Detected. WebSocket Secure (wss) should be used for all WebSocket connections.
+severity: ERROR
+---
+javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket
+frontend\src\shared\websocket\client.test.ts lines 45-45
+Insecure WebSocket Detected. WebSocket Secure (wss) should be used for all WebSocket connections.
+severity: ERROR
+---
+javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket
+frontend\src\shared\websocket\client.ts lines 36-36
+Insecure WebSocket Detected. WebSocket Secure (wss) should be used for all WebSocket connections.
+severity: ERROR
+---
+html.security.audit.missing-integrity.missing-integrity
+frontend\stitch_live_auctioneer_dashboard (1)\code.html lines 5-5
+This tag is missing an 'integrity' subresource integrity attribute. The 'integrity' attribute allows for the browser to verify that externally hosted files (for example from a CDN) are delivered without unexpected manipulation. Without this attribute, if an attacker can modify the externally hosted resource, this could lead to XSS and other types of attacks. To prevent this, include the base64-encoded cryptographic hash of the resource (file) youΓÇÖre telling the browser to fetch in the 'integrity' attribute for all externally hosted files.
+severity: WARNING
+---
+html.security.audit.missing-integrity.missing-integrity
+frontend\stitch_live_auctioneer_dashboard_compradorinremate(2)\code.html lines 5-5
+This tag is missing an 'integrity' subresource integrity attribute. The 'integrity' attribute allows for the browser to verify that externally hosted files (for example from a CDN) are delivered without unexpected manipulation. Without this attribute, if an attacker can modify the externally hosted resource, this could lead to XSS and other types of attacks. To prevent this, include the base64-encoded cryptographic hash of the resource (file) youΓÇÖre telling the browser to fetch in the 'integrity' attribute for all externally hosted files.
+severity: WARNING
+---
+python.flask.security.xss.audit.direct-use-of-jinja2.direct-use-of-jinja2
+loadtest\loadtest\charting.py lines 29-32
+Detected direct use of jinja2. If not done properly, this may bypass HTML escaping which opens up the application to cross-site scripting (XSS) vulnerabilities. Prefer using the Flask method 'render_template()' and templates with a '.html' extension in order to prevent XSS.
+severity: WARNING
+---
+python.flask.security.xss.audit.direct-use-of-jinja2.direct-use-of-jinja2
+loadtest\loadtest\compare.py lines 92-96
+Detected direct use of jinja2. If not done properly, this may bypass HTML escaping which opens up the application to cross-site scripting (XSS) vulnerabilities. Prefer using the Flask method 'render_template()' and templates with a '.html' extension in order to prevent XSS.
+severity: WARNING
+---
+python.flask.security.xss.audit.direct-use-of-jinja2.direct-use-of-jinja2
+loadtest\loadtest\report.py lines 209-214
+Detected direct use of jinja2. If not done properly, this may bypass HTML escaping which opens up the application to cross-site scripting (XSS) vulnerabilities. Prefer using the Flask method 'render_template()' and templates with a '.html' extension in order to prevent XSS.
+severity: WARNING
+=== ERRORS ===
+Syntax error at line backend\app\email\templates\password_reset.html:1:
+ `{% extends "_layout.html" %}
+{% block title %}Recuper├í tu contrase├▒a - RematAR{% endblock %}
+{% block content %}` was unexpected

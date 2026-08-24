@@ -105,3 +105,13 @@ export function formatDuration(ms: number): string {
   }
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
+
+/** `"340 KB"`/`"2.4 MB"` a partir de un tamaño en bytes -- documentos adjuntos de una
+ * venta adjudicada (Épica 7, Módulo 7.5). Sin decimales por debajo de 1 MB (los KB de un
+ * PDF/imagen chica no aportan precisión útil), un decimal a partir de ahí. */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${Math.round(kb)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}

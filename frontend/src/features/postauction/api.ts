@@ -8,6 +8,7 @@ import type { Page } from '../../shared/api/types';
 import type {
   PostAuctionCase,
   PostAuctionCaseDetail,
+  PostAuctionDocumentType,
   PostAuctionListFilters,
   StatusChangeRequest,
 } from './types';
@@ -54,6 +55,43 @@ export async function addVentaNotaRequest(
   const { data } = await apiClient.post<PostAuctionCaseDetail>(
     `/postauction/ventas/${caseId}/notas`,
     { note },
+  );
+  return data;
+}
+
+/** Sube un documento adjunto a una venta adjudicada -- devuelve el caso completo (con el
+ * documento nuevo ya en `documents` y una entrada de timeline), mismo criterio de "la
+ * mutación devuelve el detalle entero" que `changeVentaEstadoRequest`/`addVentaNotaRequest`,
+ * así el llamador no necesita un segundo pedido para refrescar la pantalla. */
+export async function uploadVentaDocumentoRequest(
+  caseId: string,
+  file: File,
+  documentType: PostAuctionDocumentType,
+  onProgress?: (percent: number) => void,
+): Promise<PostAuctionCaseDetail> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('document_type', documentType);
+  const { data } = await apiClient.post<PostAuctionCaseDetail>(
+    `/postauction/ventas/${caseId}/documentos`,
+    formData,
+    {
+      onUploadProgress: (event) => {
+        if (onProgress && event.total) {
+          onProgress(Math.round((event.loaded / event.total) * 100));
+        }
+      },
+    },
+  );
+  return data;
+}
+
+export async function deleteVentaDocumentoRequest(
+  caseId: string,
+  documentId: string,
+): Promise<PostAuctionCaseDetail> {
+  const { data } = await apiClient.delete<PostAuctionCaseDetail>(
+    `/postauction/ventas/${caseId}/documentos/${documentId}`,
   );
   return data;
 }

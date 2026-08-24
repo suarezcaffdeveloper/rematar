@@ -51,26 +51,26 @@ export const ALL_STATUS_OPTIONS: RemateStatus[] = ['draft', ...VISIBLE_STATUS_OP
 
 export const CATEGORY_LABELS: Record<RemateCategory, string> = {
   inmuebles: 'Inmuebles',
-  vehiculos: 'Vehículos',
-  maquinaria_agricola: 'Maquinaria agrícola',
-  hacienda: 'Hacienda',
-  arte_y_antiguedades: 'Arte y antigüedades',
-  electronica: 'Electrónica',
-  mobiliario: 'Mobiliario',
-  indumentaria: 'Indumentaria',
-  otros: 'Otros',
+  vehiculos: 'Automotores y vehículos',
+  maquinaria_pesada_y_agricola: 'Maquinaria pesada y agrícola',
+  hacienda: 'Hacienda y ganadería',
+  arte_antiguedades_y_coleccionables: 'Arte - Antigüedades - Coleccionables',
+  joyas_relojeria_y_numismatica: 'Joyas - Relojería - Numismática',
+  tecnologia_electrodomesticos_y_hogar: 'Tecnología - Electrodomésticos - Hogar',
+  nautica_y_aviacion: 'Náutica y aviación',
+  mercaderia_e_indumentaria: 'Lotes de mercadería e indumentaria',
 };
 
 export const CATEGORY_OPTIONS: RemateCategory[] = [
   'inmuebles',
   'vehiculos',
-  'maquinaria_agricola',
+  'maquinaria_pesada_y_agricola',
   'hacienda',
-  'arte_y_antiguedades',
-  'electronica',
-  'mobiliario',
-  'indumentaria',
-  'otros',
+  'arte_antiguedades_y_coleccionables',
+  'joyas_relojeria_y_numismatica',
+  'tecnologia_electrodomesticos_y_hogar',
+  'nautica_y_aviacion',
+  'mercaderia_e_indumentaria',
 ];
 
 export const LOTE_STATUS_LABELS: Record<LoteStatus, string> = {

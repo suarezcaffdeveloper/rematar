@@ -48,7 +48,9 @@ export function AuditLogView({ scope }: AuditLogViewProps) {
         </div>
       ) : (
         <>
-          <AuditLogTimeline entries={data?.items ?? []} />
+          <div className="max-h-[30rem] overflow-y-auto pr-1">
+            <AuditLogTimeline entries={data?.items ?? []} />
+          </div>
 
           {data && data.total > PAGE_SIZE && (
             <div className="flex items-center justify-between border-t border-slate-200 pt-3">

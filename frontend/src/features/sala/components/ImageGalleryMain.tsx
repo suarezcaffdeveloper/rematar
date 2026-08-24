@@ -91,7 +91,16 @@ export function ImageGalleryMain({
        * entero a la posición seleccionada -- transición suave al pasar de foto,
        * pedido explícito en vez del corte abrupto que había antes. La regla global
        * de `prefers-reduced-motion` (`styles/index.css`) ya recorta esta transición
-       * a 0 para quien lo prefiere, sin lógica extra acá. */}
+       * a 0 para quien lo prefiere, sin lógica extra acá.
+       *
+       * `object-contain` en vez de `object-cover` en cada `<img>`: las fotos que
+       * suben rematadores/empresas no vienen todas en 16:9 (el aspect ratio del
+       * contenedor), y recortar para llenar el marco cortaba el techo/piso de fotos
+       * verticales -- acá siempre se ve la foto completa, con el `bg-slate-100` del
+       * contenedor de afuera como relleno neutro (letterbox) en vez de robar imagen.
+       * Las miniaturas (`ImageGalleryThumbnails`) siguen en `object-cover` a propósito:
+       * son solo puntos de navegación pequeños, no necesitan mostrar el encuadre
+       * completo. */}
       <div
         className="flex h-full w-full transition-transform duration-300 ease-out"
         style={{ transform: `translateX(-${selectedIndex * 100}%)` }}
@@ -102,7 +111,7 @@ export function ImageGalleryMain({
             src={image.url}
             alt={index === selectedIndex ? (image.caption ?? alt) : ''}
             aria-hidden={index !== selectedIndex}
-            className="h-full w-full shrink-0 object-cover"
+            className="h-full w-full shrink-0 object-contain"
           />
         ))}
       </div>

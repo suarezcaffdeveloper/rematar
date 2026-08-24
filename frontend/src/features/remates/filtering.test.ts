@@ -8,7 +8,7 @@ function makeRemate(overrides: Partial<Remate>): Remate {
     owner_id: 'owner-1',
     title: 'Remate genérico',
     description: null,
-    category: 'otros',
+    category: 'mercaderia_e_indumentaria',
     cover_image_url: null,
     location: null,
     starts_at: null,
@@ -28,7 +28,7 @@ const REMATES: Remate[] = [
   makeRemate({
     id: 'a',
     title: 'Subasta de maquinaria agrícola',
-    category: 'maquinaria_agricola',
+    category: 'maquinaria_pesada_y_agricola',
     status: 'scheduled',
     starts_at: '2026-08-01T10:00:00Z',
     created_at: '2026-07-01T00:00:00Z',
@@ -44,7 +44,7 @@ const REMATES: Remate[] = [
   makeRemate({
     id: 'c',
     title: 'Antigüedades y arte colonial',
-    category: 'arte_y_antiguedades',
+    category: 'arte_antiguedades_y_coleccionables',
     status: 'finished',
     starts_at: '2026-06-01T10:00:00Z',
     created_at: '2026-06-15T00:00:00Z',
@@ -52,7 +52,7 @@ const REMATES: Remate[] = [
   makeRemate({
     id: 'd',
     title: 'Otro remate sin fecha programada',
-    category: 'otros',
+    category: 'mercaderia_e_indumentaria',
     status: 'cancelled',
     starts_at: null,
     created_at: '2026-05-01T00:00:00Z',

@@ -31,3 +31,6 @@ loadtest/.cache/
 loadtest/results/
 
 semgrep-results.json
+
+# Grabaciones de pantalla locales -- no son fuente, exceden el limite de tamaño de GitHub
+frontend/videos_rematar/

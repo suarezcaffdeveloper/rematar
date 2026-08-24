@@ -10,7 +10,7 @@ import { TechStackSection } from '../components/TechStackSection';
 import { FeaturesSection } from '../components/FeaturesSection';
 import { CTASection } from '../components/CTASection';
 import { LandingFooter } from '../components/LandingFooter';
-import { REMATADOR_BENEFITS, COMPRADOR_BENEFITS } from '../data';
+import { EMPRESA_BENEFITS, REMATADOR_BENEFITS, COMPRADOR_BENEFITS } from '../data';
 
 /**
  * Landing pública de RematAR (portfolio) -- servida en la ruta "/" únicamente para
@@ -26,11 +26,20 @@ export function LandingPage() {
         <HeroSection />
         <WhatIsSection />
         <BenefitsSection
+          eyebrow="Para empresas"
+          title="Administrá tus remates, lotes y resultados"
+          description="El backoffice de la empresa: creá eventos, cargá catálogos, asigná rematadores y seguí adjudicaciones y ventas post-remate."
+          benefits={EMPRESA_BENEFITS}
+          visual={<RematadorConsoleMockup />}
+        />
+        <BenefitsSection
           eyebrow="Para rematadores"
-          title="Todo el control de tu remate, en un solo lugar"
-          description="Una consola pensada para conducir un evento en vivo: lotes, tiempo, moderación y compradores, sin perder el ritmo del remate."
+          title="Conducí el remate en vivo"
+          description="Accedé con tus credenciales directo a la consola operativa, conducí el evento en tiempo real y terminá tu trabajo al cerrar."
           benefits={REMATADOR_BENEFITS}
           visual={<RematadorConsoleMockup />}
+          reverse
+          className="bg-slate-50"
         />
         <BenefitsSection
           eyebrow="Para compradores"
@@ -38,8 +47,6 @@ export function LandingPage() {
           description="Todo lo que un comprador necesita para seguir un remate y ofertar con confianza, desde cualquier dispositivo."
           benefits={COMPRADOR_BENEFITS}
           visual={<CompradorSalaMockup />}
-          reverse
-          className="bg-slate-50"
         />
         <HowItWorksSection />
         <ScreenshotsSection />

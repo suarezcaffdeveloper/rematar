@@ -50,14 +50,12 @@ describe('RequireAuth', () => {
     expect(screen.getByText('Contenido protegido')).toBeInTheDocument();
   });
 
-  it('muestra la landing pública en "/" si no hay sesión, en vez de redirigir a /login', () => {
+  it('redirige a /remates en "/" si no hay sesión, para mostrar el listado público de remates', () => {
     useAuthMock.mockReturnValue({ isAuthenticated: false, isHydrated: true });
 
     renderAt('/');
 
-    expect(
-      screen.getByRole('heading', { name: /la nueva generación de remates en tiempo real/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Listado público de remates')).toBeInTheDocument();
     expect(screen.queryByText('Pantalla de login')).not.toBeInTheDocument();
   });
 

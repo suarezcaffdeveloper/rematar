@@ -39,7 +39,7 @@ describe('FinishedRemateCard', () => {
   it('muestra título, categoría y KPIs resumidos', () => {
     renderCard();
     expect(screen.getByText('Remate de hacienda')).toBeInTheDocument();
-    expect(screen.getByText('Hacienda')).toBeInTheDocument();
+    expect(screen.getByText('Hacienda y ganadería')).toBeInTheDocument();
     expect(screen.getByText('2/3')).toBeInTheDocument();
     expect(screen.getByText('67% vendidos')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument(); // compradores
