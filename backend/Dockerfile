@@ -28,9 +28,21 @@ RUN pip install -e . \
     && useradd --create-home --shell /usr/sbin/nologin appuser \
     && chown -R appuser:appuser /app
 
-USER appuser
-
 EXPOSE 10000
+
+# Sin `USER appuser` acá a propósito (a diferencia de antes): un volumen persistente
+# montado en runtime (ej. el Volume de Railway en MEDIA_ROOT, agregado para que las
+# imágenes de remates/lotes sobrevivan a un redeploy) llega con SU PROPIO dueño --
+# típicamente root -- que pisa por completo cualquier `chown` hecho en esta imagen en
+# build time, sin importar lo que diga acá. Si el contenedor arrancara ya como
+# `appuser` (este `USER` de antes), jamás podría escribir ahí -- exactamente el bug que
+# rompió la carga de imágenes de lote después de crear el volumen (`PermissionError`
+# sin manejar, ver el docstring de `_cors_headers_for_unhandled_error` en
+# `app/core/exceptions.py` para por qué eso encima se veía como un error de CORS en el
+# navegador). La solución movió el drop de privilegios a `docker-entrypoint.sh`, que
+# ahora arranca como root -- necesario para poder `chown` el volumen recién montado
+# después de que Railway/Render lo pisan -- y recién ahí baja a `appuser` con
+# `runuser` para el proceso de verdad expuesto a la red (uvicorn).
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
 # Sin CMD a propósito: docker-entrypoint.sh arranca uvicorn él mismo cuando no

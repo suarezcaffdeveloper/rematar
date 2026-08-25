@@ -26,6 +26,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.core.config import get_settings
 from app.redis.metrics import RedisMetricsRecorder
 
 logger = structlog.get_logger(__name__)
@@ -127,6 +128,30 @@ def _serialize_validation_errors(errors: list[dict]) -> list[dict]:
     return sanitized
 
 
+def _cors_headers_for_unhandled_error(request: Request) -> dict[str, str]:
+    """Replica a mano el `Access-Control-Allow-*` que `CORSMiddleware` (`app/main.py`)
+    le agregaría a cualquier otra respuesta -- necesario ACÁ porque una excepción sin
+    manejar nunca pasa por ese middleware.
+
+    Detalle no obvio de Starlette: un handler registrado para la clase `Exception` (el
+    de más abajo, `handle_unexpected_error`) no lo usa `ExceptionMiddleware` como al
+    resto de los handlers de esta función -- Starlette lo saca aparte y se lo pasa a
+    `ServerErrorMiddleware`, que es el middleware MÁS externo de toda la pila (envuelve
+    a `CORSMiddleware`, no al revés). Una respuesta armada ahí sale directo al cliente
+    sin pasar nunca por `CORSMiddleware`, así que le falta el encabezado
+    `Access-Control-Allow-Origin` -- el navegador, al no encontrarlo, reporta la
+    request entera como "bloqueada por CORS" en vez de mostrar el 500 real. Esto pasa
+    con CUALQUIER excepción no controlada (un bug real, no solo un caso de negocio
+    esperable) -- se descubrió con un `PermissionError` al escribir una imagen de lote
+    contra un volumen de Railway recién montado (dueño root, proceso corriendo como
+    usuario sin privilegios), pero aplica a cualquier otra igual.
+    """
+    origin = request.headers.get("origin")
+    if origin and origin in get_settings().CORS_ORIGINS:
+        return {"Access-Control-Allow-Origin": origin, "Access-Control-Allow-Credentials": "true"}
+    return {}
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
@@ -175,4 +200,5 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "Ocurrió un error inesperado. Fue registrado para su revisión.",
                 {"incident_id": incident_id},
             ),
+            headers=_cors_headers_for_unhandled_error(request),
         )
