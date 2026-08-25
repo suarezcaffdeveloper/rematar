@@ -86,6 +86,13 @@ export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighte
   const isEditableStructure = remate.status === 'draft' || remate.status === 'scheduled';
   const isCancellable =
     remate.status === 'draft' || remate.status === 'scheduled' || remate.status === 'live' || remate.status === 'paused';
+  // `draft` (nunca se publicó, no hay nada que auditar) o `cancelled` (ya es terminal;
+  // su motivo de cancelación queda asentado aparte, en el log de auditoría, borrar el
+  // remate no lo hace desaparecer) -- ver `RemateService.soft_delete` para por qué
+  // `finished` queda deliberadamente afuera: ese estado sí tiene resultados de venta
+  // reales que dependen de poder resolver el remate por id (`HistoryService`), y
+  // borrarlo dejaría "Ver resumen" con un 404 permanente.
+  const isDeletable = remate.status === 'draft' || remate.status === 'cancelled';
   const isPreparing = remate.status === 'draft' || remate.status === 'scheduled';
   const isOperating = remate.status === 'live' || remate.status === 'paused';
   const isTerminal = remate.status === 'finished' || remate.status === 'cancelled';
@@ -115,9 +122,13 @@ export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighte
   }
 
   async function handleDelete() {
-    await deleteRemateRequest(remate.id);
-    useToastStore.getState().push('success', 'El remate se eliminó.');
-    onChanged();
+    try {
+      await deleteRemateRequest(remate.id);
+      useToastStore.getState().push('success', 'El remate se eliminó.');
+      onChanged();
+    } catch (err) {
+      useToastStore.getState().push('error', normalizeApiError(err).message);
+    }
   }
 
   async function handleStart() {
@@ -185,7 +196,7 @@ export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighte
               {
                 label: 'Eliminar',
                 onSelect: () => setIsDeleteModalOpen(true),
-                disabled: !isDraft,
+                disabled: !isDeletable,
                 variant: 'danger',
               },
             ]}

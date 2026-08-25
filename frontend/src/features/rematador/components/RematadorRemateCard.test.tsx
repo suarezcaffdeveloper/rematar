@@ -205,7 +205,7 @@ describe('RematadorRemateCard', () => {
       expect(onChanged).toHaveBeenCalledTimes(1);
     });
 
-    it('"live"/"finished": Editar y Eliminar deshabilitados', async () => {
+    it('"finished": Editar, Eliminar y Cancelar deshabilitados -- borrarlo dejaría "Ver resumen" sin acceso a su historial', async () => {
       useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
       renderCard(makeRemate({ status: 'finished', title: 'Remate finalizado' }));
 
@@ -213,6 +213,17 @@ describe('RematadorRemateCard', () => {
 
       expect(screen.getByRole('menuitem', { name: 'Editar' })).toBeDisabled();
       expect(screen.getByRole('menuitem', { name: 'Eliminar' })).toBeDisabled();
+      expect(screen.getByRole('menuitem', { name: 'Cancelar remate' })).toBeDisabled();
+    });
+
+    it('"cancelled": Eliminar habilitado -- ya es terminal, su motivo de cancelación queda en el log de auditoría aparte', async () => {
+      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
+      renderCard(makeRemate({ status: 'cancelled', title: 'Remate cancelado' }));
+
+      await userEvent.click(screen.getByRole('button', { name: 'Más acciones para Remate cancelado' }));
+
+      expect(screen.getByRole('menuitem', { name: 'Eliminar' })).toBeEnabled();
+      expect(screen.getByRole('menuitem', { name: 'Editar' })).toBeDisabled();
       expect(screen.getByRole('menuitem', { name: 'Cancelar remate' })).toBeDisabled();
     });
 
@@ -253,6 +264,26 @@ describe('RematadorRemateCard', () => {
 
       await waitFor(() => expect(apiMocks.deleteRemateRequest).toHaveBeenCalledWith('remate-7'));
       expect(onChanged).toHaveBeenCalledTimes(1);
+    });
+
+    it('"Eliminar" muestra un toast de error si el backend lo rechaza, sin reventar en silencio', async () => {
+      apiMocks.deleteRemateRequest.mockRejectedValue({
+        isAxiosError: true,
+        response: {
+          status: 422,
+          data: { error: { code: 'business_rule_violation', message: 'No se puede eliminar.' } },
+        },
+      });
+      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
+      const onChanged = vi.fn();
+      renderCard(makeRemate({ id: 'remate-8', status: 'cancelled', title: 'Remate cancelado a eliminar' }), onChanged);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Más acciones para Remate cancelado a eliminar' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Eliminar' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Eliminar' }));
+
+      await waitFor(() => expect(toastPushMock).toHaveBeenCalledWith('error', 'No se puede eliminar.'));
+      expect(onChanged).not.toHaveBeenCalled();
     });
   });
 

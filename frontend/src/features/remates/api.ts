@@ -30,9 +30,11 @@ export async function fetchRematesRequest(params: RemateListParams): Promise<Pag
  * CRUD de `Remate` (Épica 2, Módulo 2.1, `backend/app/modules/remates/router.py`) --
  * consumido por la Gestión de Remates y Lotes (Épica 5, Módulo 5.3). `update` solo
  * funciona con el remate en `draft`/`scheduled` (`RemateService.update`, 422 en
- * cualquier otro estado); `deleteRemateRequest` solo con `draft` exacto (422 si no,
- * sugiriendo `cancelar` en su lugar) -- ambas reglas ya las valida el backend, el
- * frontend las refleja deshabilitando la acción correspondiente antes de intentarla.
+ * cualquier otro estado); `deleteRemateRequest` solo con `draft`/`cancelled` (422 si
+ * no, sugiriendo `cancelar` en su lugar para uno programado o en curso --
+ * `finished` queda deliberadamente afuera de ambos, ver `RemateService.soft_delete`)
+ * -- todas estas reglas ya las valida el backend, el frontend las refleja
+ * deshabilitando la acción correspondiente antes de intentarla.
  */
 export async function createRemateRequest(payload: RemateFormPayload): Promise<Remate> {
   const { data } = await apiClient.post<Remate>('/remates', payload);

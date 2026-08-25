@@ -249,7 +249,7 @@ async def claim_operator(
 @router.delete(
     "/{remate_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Eliminar (soft delete) un remate propio en borrador",
+    summary="Eliminar (soft delete) un remate propio en borrador o cancelado",
 )
 async def delete_remate(
     remate_id: uuid.UUID,

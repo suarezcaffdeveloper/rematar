@@ -320,6 +320,22 @@ async def test_cannot_delete_scheduled_remate(client: AsyncClient) -> None:
     assert response.status_code == 422
 
 
+async def test_can_delete_cancelled_remate(client: AsyncClient) -> None:
+    token = await _register_and_login(client, email="rematador19b@example.com", role="empresa")
+    remate = await _create_remate(client, token)
+    await client.post(
+        f"{REMATES_URL}/{remate['id']}/cancel",
+        json={"reason": "Ya no hace falta."},
+        headers=_auth(token),
+    )
+
+    delete_response = await client.delete(f"{REMATES_URL}/{remate['id']}", headers=_auth(token))
+    assert delete_response.status_code == 204
+
+    get_response = await client.get(f"{REMATES_URL}/{remate['id']}", headers=_auth(token))
+    assert get_response.status_code == 404
+
+
 # --- Subida de imagen de portada (refinamiento visual, item 6) ---------------------
 # Sin `{remate_id}` en el path: se sube ANTES de crear el remate, desde el mismo modal
 # de creación -- ver `RemateService.upload_cover_image`.

@@ -394,10 +394,22 @@ class RemateService:
 
     async def soft_delete(self, remate_id: uuid.UUID, owner: User) -> None:
         remate = await self.get_owned_or_raise(remate_id, owner)
-        if remate.status != RemateStatus.DRAFT:
+        # DRAFT: nunca llegó a publicarse, no hay nada que auditar más allá de su
+        # creación. CANCELLED: ya es terminal y su cancelación (motivo, fecha) quedó
+        # asentada en `AuditLogRepository` en su momento -- borrar el remate en sí no
+        # hace desaparecer ese registro de auditoría, ver `docs/36`. Deliberadamente
+        # NO incluye FINISHED: ese estado sí tiene resultados de venta reales (quién
+        # ganó cada lote, a qué precio) que dependen de poder resolver el remate por id
+        # (`HistoryService._get_finished_remate_or_raise`, vía
+        # `RemateRepository.get_by_id`, que ya filtra `deleted_at`) -- eliminarlo dejaría
+        # "Ver resumen" con un 404 permanente, sin ninguna vía de la interfaz para
+        # deshacerlo. Para un remate finalizado que ya no hace falta ver, no hay
+        # operación equivalente hoy (decisión de producto, no una limitación técnica).
+        if remate.status not in (RemateStatus.DRAFT, RemateStatus.CANCELLED):
             raise BusinessRuleError(
-                "Solo se puede eliminar un remate en borrador; para uno programado o "
-                "posterior, cancelalo (conserva el motivo para auditoría).",
+                "Solo se puede eliminar un remate en borrador o cancelado; para uno "
+                "programado o en curso, cancelalo primero (conserva el motivo para "
+                "auditoría).",
                 current_status=remate.status.value,
             )
         remate.deleted_at = datetime.now(UTC)
