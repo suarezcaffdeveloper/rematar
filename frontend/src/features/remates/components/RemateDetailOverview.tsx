@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, Info } from 'lucide-react';
 import { Badge } from '../../../shared/components/Badge';
@@ -9,6 +9,7 @@ import { CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_LABELS } from '../labels
 import type { Lote, Remate } from '../types';
 import { CalendarIcon, PinIcon } from './icons';
 import { LotesCollagePlaceholder } from './LotesCollagePlaceholder';
+import { RemateNotLiveDialog } from './RemateNotLiveDialog';
 
 export interface RemateDetailOverviewProps {
   remate: Remate;
@@ -44,6 +45,21 @@ function DetailRow({ icon, label, children }: { icon: ReactNode; label: string; 
  */
 export function RemateDetailOverview({ remate, lotes = [], onEnterRoom }: RemateDetailOverviewProps) {
   const prefersReducedMotion = useReducedMotion();
+  const [isNotLiveDialogOpen, setIsNotLiveDialogOpen] = useState(false);
+
+  // `paused` entra igual que `live`: la Sala ya sabe mostrar ese estado (mismo criterio
+  // que `SalaHeader`), no hace falta interceptarlo acá. `finished`/`cancelled` tampoco
+  // se interceptan -- son remates que ya pasaron, no "todavía no en vivo", y la Sala ya
+  // tiene su propio manejo para ese caso (ver `SalaPage`).
+  const isNotYetLive = remate.status === 'draft' || remate.status === 'scheduled';
+
+  function handleEnterClick() {
+    if (isNotYetLive) {
+      setIsNotLiveDialogOpen(true);
+      return;
+    }
+    onEnterRoom();
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -76,7 +92,7 @@ export function RemateDetailOverview({ remate, lotes = [], onEnterRoom }: Remate
                 whileHover={prefersReducedMotion ? undefined : { scale: 1.02, y: -2 }}
                 whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
               >
-                <Button variant="hero" onClick={onEnterRoom} className="shadow-lg shadow-slate-900/30">
+                <Button variant="hero" onClick={handleEnterClick} className="shadow-lg shadow-slate-900/30">
                   Entrar al remate
                   <ArrowRight aria-hidden="true" className="h-4 w-4" />
                 </Button>
@@ -114,6 +130,12 @@ export function RemateDetailOverview({ remate, lotes = [], onEnterRoom }: Remate
           </dl>
         </div>
       </div>
+
+      <RemateNotLiveDialog
+        isOpen={isNotLiveDialogOpen}
+        onClose={() => setIsNotLiveDialogOpen(false)}
+        startsAt={remate.starts_at}
+      />
     </div>
   );
 }

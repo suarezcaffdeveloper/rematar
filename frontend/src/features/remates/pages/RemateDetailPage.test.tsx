@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { RemateDetailPage } from './RemateDetailPage';
@@ -176,9 +176,9 @@ describe('RemateDetailPage', () => {
     expect(reloadLotes).toHaveBeenCalledTimes(1);
   });
 
-  it('"Entrar al remate" navega a la sala placeholder de ESE remate', async () => {
+  it('"Entrar al remate" en un remate "live" navega directo a la sala', async () => {
     useRemateDetailMock.mockReturnValue({
-      remate: makeRemate(),
+      remate: makeRemate({ status: 'live' }),
       isLoading: false,
       error: null,
       reload: vi.fn(),
@@ -189,5 +189,33 @@ describe('RemateDetailPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Entrar al remate' }));
     expect(navigateMock).toHaveBeenCalledWith('/remates/remate-1/sala');
+  });
+
+  it('"Entrar al remate" en un remate "scheduled" muestra el cartel de "todavía no empezó" en vez de navegar', async () => {
+    useRemateDetailMock.mockReturnValue({
+      remate: makeRemate({ status: 'scheduled', starts_at: '2026-09-01T14:00:00Z' }),
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+    useLotesMock.mockReturnValue({ lotes: [], total: 0, isLoading: false, error: null, reload: vi.fn() });
+
+    renderPage();
+    // `navigateMock` es compartido entre los tests de este archivo (sin `beforeEach`
+    // que lo limpie) -- lo que importa acá es que NO se sume un llamado nuevo a la
+    // sala de ESTE remate, no que el mock esté "virgen".
+    const callsBeforeClick = navigateMock.mock.calls.length;
+    await userEvent.click(screen.getByRole('button', { name: 'Entrar al remate' }));
+
+    expect(navigateMock.mock.calls.length).toBe(callsBeforeClick);
+    expect(screen.getByRole('heading', { name: 'Todavía no empezó' })).toBeInTheDocument();
+    expect(screen.getByText(/todavía no está en vivo/i)).toBeInTheDocument();
+
+    // "Continuar" solo cierra el cartel -- se queda en el Detalle, sin navegar.
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Todavía no empezó' })).not.toBeInTheDocument(),
+    );
+    expect(navigateMock.mock.calls.length).toBe(callsBeforeClick);
   });
 });
