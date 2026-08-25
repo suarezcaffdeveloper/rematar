@@ -40,9 +40,10 @@ describe('Sidebar', () => {
     expect(screen.getAllByRole('link', { name: 'Historial' })[0]).toBeInTheDocument();
   });
 
-  it('para rematador (operador acotado, ADR-048), muestra únicamente "Unirme a un remate"', () => {
+  it('para rematador (operador acotado, ADR-048), muestra "Unirme a un remate" y "Simuladores"', () => {
     renderSidebar('rematador');
     expect(screen.getAllByRole('link', { name: 'Unirme a un remate' })[0]).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Simuladores' })[0]).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Ventas adjudicadas' })).not.toBeInTheDocument();
   });
 

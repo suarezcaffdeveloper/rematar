@@ -5,10 +5,10 @@ import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
 import { formatDateTime } from '../../../shared/lib/format';
-import { useConnectedUsersCount, useLoteCount } from '../hooks';
+import { useConnectedUsersCount, useLoteCount, useLoteCoverImages } from '../hooks';
 import { CATEGORY_LABELS } from '../labels';
 import type { Remate } from '../types';
-import { CoverPlaceholder } from './CoverPlaceholder';
+import { LotesCollagePlaceholder } from './LotesCollagePlaceholder';
 import { BoxIcon, CalendarIcon, PinIcon, UsersIcon } from './icons';
 
 const GAP_PX = 16;
@@ -148,7 +148,7 @@ export function LiveRemateCarousel({ remates }: LiveRemateCarouselProps) {
               connectedUsers={connectedUsers}
               prefersReducedMotion={Boolean(prefersReducedMotion)}
               onSelect={() => goToPos(i)}
-              onNavigate={() => navigate(`/remates/${remate.id}`)}
+              onNavigate={() => navigate(`/remates/${remate.id}/sala`)}
             />
           ))}
         </motion.div>
@@ -225,6 +225,12 @@ function LiveSlide({
   onSelect,
   onNavigate,
 }: LiveSlideProps) {
+  // Mismo respaldo que `RemateCard`: sin `cover_image_url` propio, un collage con la
+  // primera imagen de hasta 4 lotes en vez del degradé genérico -- antes esta pieza
+  // caía directo a `CoverPlaceholder` sin intentarlo, por eso remates sin portada
+  // propia parecían "sin imagen" acá aunque sí se veían con foto en la grilla de abajo.
+  const loteCoverImages = useLoteCoverImages(remate.id);
+
   const badge = (
     <div className="absolute left-3 top-3">
       <Badge variant="success">En vivo</Badge>
@@ -244,7 +250,7 @@ function LiveSlide({
             {remate.cover_image_url ? (
               <img src={remate.cover_image_url} alt="" className="h-full w-full object-cover" />
             ) : (
-              <CoverPlaceholder className="h-full w-full" />
+              <LotesCollagePlaceholder images={loteCoverImages ?? []} className="h-full w-full" />
             )}
             {badge}
           </div>
@@ -294,7 +300,7 @@ function LiveSlide({
               className="absolute bottom-3 right-3 w-fit gap-1.5 sm:bottom-5 sm:right-5"
               onClick={onNavigate}
             >
-              Ir al remate
+              Entrar a la sala
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Button>
           </div>
@@ -309,7 +315,7 @@ function LiveSlide({
           {remate.cover_image_url ? (
             <img src={remate.cover_image_url} alt="" className="h-full w-full object-cover" />
           ) : (
-            <CoverPlaceholder className="h-full w-full" />
+            <LotesCollagePlaceholder images={loteCoverImages ?? []} className="h-full w-full" />
           )}
           {badge}
         </button>

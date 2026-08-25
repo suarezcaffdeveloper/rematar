@@ -101,4 +101,21 @@ describe('RequireAuth', () => {
 
     expect(screen.getByText('Pantalla de login')).toBeInTheDocument();
   });
+
+  it('un logout explícito en "/" va a /login, no al listado público de remates (ADR-049 no aplica acá)', () => {
+    useAuthMock.mockReturnValue({ isAuthenticated: false, isHydrated: true, justLoggedOut: true });
+
+    renderAt('/');
+
+    expect(screen.getByText('Pantalla de login')).toBeInTheDocument();
+    expect(screen.queryByText('Listado público de remates')).not.toBeInTheDocument();
+  });
+
+  it('un logout explícito en una ruta públicamente visible también va a /login, no se queda como invitado', () => {
+    useAuthMock.mockReturnValue({ isAuthenticated: false, isHydrated: true, justLoggedOut: true });
+
+    renderAt('/remates/abc123/sala');
+
+    expect(screen.getByText('Pantalla de login')).toBeInTheDocument();
+  });
 });

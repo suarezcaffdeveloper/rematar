@@ -41,6 +41,19 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   isHydrated: boolean;
+  /** `true` justo después de un `logout()` explícito (botón "Cerrar sesión"), hasta que
+   * `RequireAuth` lo consume. Existe porque `Sidebar` no puede simplemente navegar a
+   * `/login` tras cerrar sesión: `createBrowserRouter` resuelve `navigate(...)` como una
+   * transición de baja prioridad, y el cambio de `isAuthenticated` (una actualización
+   * normal) hace que `RequireAuth` vuelva a renderizar con la ruta vieja ("/") antes de
+   * que esa transición termine -- su propio `<Navigate to="/remates">` (visitante
+   * anónimo, ADR-049) se dispara después y gana la carrera, pisando la navegación a
+   * `/login`. Este flag mueve la decisión de destino a `RequireAuth` (donde ya se decide
+   * el resto del ruteo por sesión) en vez de competir con él desde afuera. No se
+   * persiste (no está en `partialize`): una recarga de página o una pestaña nueva
+   * siempre arrancan en `false`, así que solo afecta la transición inmediatamente
+   * posterior a tocar "Cerrar sesión" dentro de la misma sesión de la SPA. */
+  justLoggedOut: boolean;
   login: (payload: LoginPayload) => Promise<void>;
   /** Devuelve `pendingApproval: true` para empresa/rematador (`is_active=false` al
    * registrarse, RF-03) -- en ese caso NO hay sesión iniciada, `RegisterPage` debe
@@ -53,6 +66,11 @@ interface AuthState {
    * confirmado por el backend (ej. `avatar_url` tras `PATCH /users/me`, ver
    * `features/profile`) sin depender de un refetch. No-op si no hay sesión. */
   updateUser: (patch: Partial<User>) => void;
+  /** Consumida por `RequireAuth` apenas usa `justLoggedOut` para elegir destino -- para
+   * que una visita anónima posterior a "/" en la misma pestaña (ej. volver atrás con el
+   * navegador) vuelva a comportarse como cualquier visitante sin sesión (ADR-049), no
+   * como si acabara de cerrar sesión. */
+  clearJustLoggedOut: () => void;
 }
 
 // Ver el comentario de arriba: capturado para que `onRehydrateStorage` pueda marcar
@@ -68,8 +86,10 @@ export const useAuthStore = create<AuthState>()(
         accessToken: null,
         refreshToken: null,
         isHydrated: false,
+        justLoggedOut: false,
 
         async login(payload) {
+          set({ justLoggedOut: false });
           const tokens = await loginRequest(payload);
           set({ accessToken: tokens.access_token, refreshToken: tokens.refresh_token });
           const user = await fetchCurrentUserRequest();
@@ -94,7 +114,7 @@ export const useAuthStore = create<AuthState>()(
 
         logout() {
           const { refreshToken } = get();
-          set({ user: null, accessToken: null, refreshToken: null });
+          set({ user: null, accessToken: null, refreshToken: null, justLoggedOut: true });
           if (refreshToken) {
             // Best-effort: el estado local ya se limpió. Si el logout en el servidor
             // falla (token ya vencido/revocado, red caída), no cambia nada del lado
@@ -107,6 +127,10 @@ export const useAuthStore = create<AuthState>()(
           const current = get().user;
           if (!current) return;
           set({ user: { ...current, ...patch } });
+        },
+
+        clearJustLoggedOut() {
+          set({ justLoggedOut: false });
         },
 
         async refreshSession() {

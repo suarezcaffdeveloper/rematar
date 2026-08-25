@@ -45,9 +45,33 @@ function isPubliclyViewablePath(pathname: string): boolean {
  * "/" sin ningún cambio (sigue siendo la ruta `index` de `AppLayout`) -- por eso todos
  * los `navigate('/')` ya existentes en la app (botones "volver al inicio") no se ven
  * afectados.
+ *
+ * Excepción a todo lo anterior: `justLoggedOut` (`features/auth/store.ts`). Un cierre de
+ * sesión explícito (botón "Cerrar sesión") siempre termina en `/login`, sin importar en
+ * qué ruta estaba parado -- ni "/" ni ninguna de las rutas públicamente visibles de
+ * arriba. Esta decisión vive ACÁ (no en un `navigate('/login')` imperativo desde
+ * `Sidebar`) a propósito: `createBrowserRouter` resuelve `navigate(...)` como una
+ * transición de baja prioridad, así que un `navigate` disparado desde afuera justo antes
+ * de cerrar sesión pierde la carrera contra el `<Navigate>` que este mismo componente
+ * dispararía por su cuenta al ver `isAuthenticated=false` en "/" -- terminaba pisado por
+ * el visitante-anónimo de ADR-049 (bug real, visto en pruebas manuales). Con la decisión
+ * tomada acá mismo, en el único lugar que ya resuelve el resto del ruteo por sesión, no
+ * hay dos navegaciones compitiendo.
+ *
+ * El flag se apaga recién en el próximo `login()` (ver `features/auth/store.ts`), NO acá
+ * con un `useEffect` propio: un efecto que lo apagara en cuanto este componente lo lee
+ * dispara un segundo render con `justLoggedOut=false` ANTES de que la transición de ruta
+ * a `/login` (disparada por el `<Navigate>` de arriba, también asincrónica) termine de
+ * aplicarse -- ese segundo render vuelve a caer en la rama de "/" y pisa el redirect con
+ * `/remates` otra vez (mismo bug de fondo, solo que un paso más adelante). No se
+ * persiste (no está en `partialize`) -- una pestaña nueva o un refresh siempre arrancan
+ * en `false`, así que como mucho queda "pegado" en `true` hasta el próximo login dentro
+ * de la misma pestaña (ej. si el usuario vuelve atrás con el navegador justo después de
+ * cerrar sesión) -- riesgo aceptado, mucho más barato que la alternativa de reintroducir
+ * una segunda transición compitiendo.
  */
 export function RequireAuth() {
-  const { isAuthenticated, isHydrated } = useAuth();
+  const { isAuthenticated, isHydrated, justLoggedOut } = useAuth();
   const location = useLocation();
 
   if (!isHydrated) {
@@ -59,6 +83,9 @@ export function RequireAuth() {
   }
 
   if (!isAuthenticated) {
+    if (justLoggedOut) {
+      return <Navigate to="/login" replace />;
+    }
     if (location.pathname === '/') {
       return <Navigate to="/remates" replace />;
     }

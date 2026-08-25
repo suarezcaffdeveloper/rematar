@@ -156,12 +156,18 @@ export function LoteCard({ lote, currency }: LoteCardProps) {
             canExpand && 'cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500',
           )}
         >
-          <div className="group relative aspect-video w-full shrink-0 overflow-hidden bg-surface-subtle sm:aspect-square sm:w-48">
+          <div className="group relative aspect-video w-full shrink-0 overflow-hidden bg-slate-100 sm:aspect-square sm:w-48">
             {mainImage ? (
+              // `object-contain`, no `object-cover`: mismo criterio que
+              // `ImageGalleryMain` (Sala) -- las fotos que suben rematadores/empresas no
+              // vienen todas en el aspect ratio de esta card, y recortar para llenar el
+              // marco cortaba el techo/piso de fotos verticales. Acá siempre se ve la
+              // foto completa tal como se cargó, con el `bg-slate-100` de afuera como
+              // relleno neutro (letterbox) en vez de robar imagen.
               <img
                 src={mainImage.url}
                 alt={mainImage.caption ?? ''}
-                className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+                className="h-full w-full object-contain transition-transform duration-500 ease-out group-hover:scale-105"
               />
             ) : (
               <CoverPlaceholder className="h-full w-full" icon={<BoxIcon className="h-8 w-8 text-brand-300" />} />

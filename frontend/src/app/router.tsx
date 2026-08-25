@@ -130,12 +130,14 @@ export const router = createBrowserRouter([
                 children: [{ path: '/admin', element: <AdminAuditLogPage /> }],
               },
               // Gestión global de bots simuladores (módulo de Bots Simuladores) --
-              // solo la empresa puede crear/administrar sus propios simuladores para
-              // probar sus remates antes de salir en vivo (ADR-047); la selección/
-              // control por remate vive en ConsolaBotsPanel, dentro de
-              // /remates/:remateId/gestionar, sin ruta propia.
+              // la empresa y el rematador operador pueden crear/administrar simuladores
+              // para probar remates antes de salir en vivo (mismos roles que ya admite
+              // el backend, ver `require_roles(EMPRESA, REMATADOR)` en
+              // `modules/bots/router.py`); la selección/control por remate vive en
+              // ConsolaBotsPanel, dentro de /remates/:remateId/gestionar, sin ruta
+              // propia.
               {
-                element: <RequireRole allowedRoles={['empresa']} />,
+                element: <RequireRole allowedRoles={['empresa', 'rematador']} />,
                 children: [{ path: '/simuladores', element: <BotProfilesPage /> }],
               },
             ],

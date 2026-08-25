@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-import { Gavel, History, LayoutDashboard, LogOut, Package, ShoppingBag, type LucideIcon } from 'lucide-react';
+import { Bot, Gavel, History, LayoutDashboard, LogOut, Package, ShoppingBag, type LucideIcon } from 'lucide-react';
 import clsx from 'clsx';
 import logoRematar from '../../assets/brand/logo-rematar.png';
 import { useAuth, useAuthActions } from '../../features/auth/hooks';
@@ -46,7 +46,10 @@ const NAV_ITEMS_BY_ROLE: Record<UserRole, NavItem[]> = {
     { label: 'Ventas adjudicadas', to: '/ventas-adjudicadas', icon: Package },
     { label: 'Historial', to: '/historial', icon: History },
   ],
-  rematador: [{ label: 'Unirme a un remate', to: '/', icon: Gavel }],
+  rematador: [
+    { label: 'Unirme a un remate', to: '/', icon: Gavel },
+    { label: 'Simuladores', to: '/simuladores', icon: Bot },
+  ],
   admin: [{ label: 'Panel de administrador', to: '/admin', icon: LayoutDashboard }],
 };
 
@@ -203,6 +206,11 @@ function SidebarContent({
         onCancel={() => setIsLogoutConfirmOpen(false)}
         onConfirm={() => {
           setIsLogoutConfirmOpen(false);
+          // Sin `navigate` acá: `RequireAuth` es quien decide el destino post-logout
+          // (flag `justLoggedOut`, ver su docstring) -- un `navigate('/login')`
+          // imperativo disparado desde acá compite con el `<Navigate>` que
+          // `RequireAuth` puede disparar por su cuenta al ver la sesión recién cerrada,
+          // y `createBrowserRouter` no garantiza que gane el que se llamó primero.
           logout();
         }}
       />

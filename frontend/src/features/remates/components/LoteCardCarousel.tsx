@@ -70,7 +70,13 @@ export function LoteCardCarousel({ images, alt }: LoteCardCarouselProps) {
        * todas las imágenes en fila, `translateX` mueve el track entero a la posición
        * seleccionada en vez de reemplazar el `<img>` de golpe (pedido explícito de
        * pulido visual). `prefers-reduced-motion` (`styles/index.css`) recorta la
-       * transición a 0 sin lógica extra acá. */}
+       * transición a 0 sin lógica extra acá.
+       *
+       * `object-contain` en vez de `object-cover` en cada `<img>`, mismo criterio que
+       * `features/sala/components/ImageGalleryMain.tsx`: las fotos no vienen todas en
+       * 16:9 (el aspect ratio del contenedor), y recortar para llenar el marco cortaba
+       * el techo/piso de fotos verticales -- acá siempre se ve la foto completa, con el
+       * `bg-slate-100` del contenedor de afuera como relleno neutro (letterbox). */}
       <div
         className="flex h-full w-full transition-transform duration-300 ease-out"
         style={{ transform: `translateX(-${selectedIndex * 100}%)` }}
@@ -81,7 +87,7 @@ export function LoteCardCarousel({ images, alt }: LoteCardCarouselProps) {
             src={image.url}
             alt={index === selectedIndex ? (image.caption ?? alt) : ''}
             aria-hidden={index !== selectedIndex}
-            className="h-full w-full shrink-0 object-cover"
+            className="h-full w-full shrink-0 object-contain"
           />
         ))}
       </div>

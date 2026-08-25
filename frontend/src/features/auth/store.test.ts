@@ -110,6 +110,25 @@ describe('useAuthStore', () => {
     expect(state.user).toBeNull();
     expect(state.accessToken).toBeNull();
     expect(state.refreshToken).toBeNull();
+    expect(state.justLoggedOut).toBe(true);
+  });
+
+  it('clearJustLoggedOut apaga el flag que RequireAuth consume para mandar a /login tras un logout', () => {
+    useAuthStore.setState({ justLoggedOut: true });
+
+    useAuthStore.getState().clearJustLoggedOut();
+
+    expect(useAuthStore.getState().justLoggedOut).toBe(false);
+  });
+
+  it('login apaga justLoggedOut de una sesión anterior', async () => {
+    useAuthStore.setState({ justLoggedOut: true });
+    apiMocks.loginRequest.mockResolvedValue({ access_token: 'a', refresh_token: 'r' });
+    apiMocks.fetchCurrentUserRequest.mockResolvedValue(USER);
+
+    await useAuthStore.getState().login({ email: 'x@x.com', password: 'x' });
+
+    expect(useAuthStore.getState().justLoggedOut).toBe(false);
   });
 
   it('refreshSession actualiza ambos tokens y devuelve el access token nuevo', async () => {
