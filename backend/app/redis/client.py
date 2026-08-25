@@ -21,5 +21,23 @@ from app.core.config import Settings
 
 def build_redis_client(settings: Settings) -> Redis:
     """Construye el cliente compartido. No conecta todavía: `redis-py` abre el socket
-    de forma perezosa, recién en el primer comando real (ver ADR-021, sección B)."""
-    return Redis.from_url(settings.REDIS_URL, decode_responses=True)
+    de forma perezosa, recién en el primer comando real (ver ADR-021, sección B).
+
+    `socket_connect_timeout`/`socket_timeout`: sin esto, `redis-py` no acota en absoluto
+    cuánto puede tardar en conectar o responder -- si `REDIS_URL` apunta a algo
+    inalcanzable (host mal configurado, firewall que dropea paquetes en vez de
+    rechazarlos), un `await` sobre este cliente cuelga indefinidamente en vez de fallar.
+    Para casos best-effort como `RedisMetricsRecorder` (ver `RequestContextMiddleware`,
+    que ya envuelve esas llamadas en `except Exception` asumiendo que fallan rápido) eso
+    convierte cualquier request -- incluido `/health` -- en un cuelgue silencioso: la app
+    ya logueó "request_completed" (el log ocurre antes de esperar la métrica) pero la
+    respuesta HTTP real no se termina de mandar hasta que ese await resuelve, así que un
+    healthcheck externo la ve como "service unavailable" mientras el log de la app dice
+    200. 5s es generoso para una llamada a un Redis en la misma región/red privada.
+    """
+    return Redis.from_url(
+        settings.REDIS_URL,
+        decode_responses=True,
+        socket_connect_timeout=5,
+        socket_timeout=5,
+    )

@@ -88,14 +88,35 @@ Próximos pasos sugeridos cuando se retome (no probados todavía):
   en el mismo servicio de Railway/Render, para aislar si el problema es de la app o de
   cómo estas dos plataformas evalúan el healthcheck en este proyecto puntual.
 
-En curso al 2026-08-24: se prueba el segundo punto de la lista de arriba (dual-stack).
-`docker-entrypoint.sh` ahora lee `UVICORN_HOST` (default `0.0.0.0`, sin cambios de
-comportamiento en Render ni en el docker-compose local) — en Railway se prueba con
-`UVICORN_HOST=::` como variable de servicio. También se agregó `backend/railway.json`
-(config-as-code: `healthcheckPath`, `healthcheckTimeout`, restart policy) para que la
-configuración del servicio quede versionada en vez de vivir solo en el dashboard. Falta
-correr el deploy y ver si esto lo destraba — actualizar esta sección con el resultado
-antes de asumir que sigue igual.
+2026-08-24, dual-stack (probado, no era esto): se agregó `UVICORN_HOST` a
+`docker-entrypoint.sh` y se probó `UVICORN_HOST=::` en Railway. El log de arranque
+confirmó `Uvicorn running on http://[::]:8080` (dual-stack, puerto correcto) y el
+healthcheck siguió fallando igual, las 11 reintentos de la ventana de 5 minutos. Esto
+descarta la hipótesis IPv6 -- se deja la variable en el código (default `0.0.0.0`, sin
+efecto en Render/local) por si sirve para otra cosa más adelante, pero no se vuelve a
+probar por esta razón.
+
+2026-08-24, causa real encontrada y corregida: `RequestContextMiddleware`
+(`app/core/middleware.py`) loguea `request_completed` (con `status_code=200`) **antes**
+de esperar `RedisMetricsRecorder.record_timing` (la métrica de `avg_api_response_ms`,
+Módulo 8.1) — pero con `BaseHTTPMiddleware` la respuesta HTTP real no se termina de
+escribir en el socket hasta que `dispatch()` retorna. `build_redis_client`
+(`app/redis/client.py`) construía el cliente sin `socket_connect_timeout` ni
+`socket_timeout`, así que si `REDIS_URL` no es alcanzable (o tarda) en producción, ese
+`await` cuelga sin límite: la app ya "logueó" 200, pero el healthcheck externo (con su
+propio timeout) nunca recibe la respuesta y la marca "service unavailable" — exactamente
+lo que se veía en los logs de Railway y Render, y por qué pasaba igual en ambas
+plataformas (es un bug de la app, no de ninguna de las dos). No era específico de
+`/health`: todos los endpoints pagaban este mismo costo oculto.
+
+Fix: `build_redis_client` ahora pasa `socket_connect_timeout=5, socket_timeout=5`
+(acota cualquier operación contra Redis en vez de dejarla sin límite), y
+`RequestContextMiddleware` ya no espera la métrica in-line -- la dispara con
+`asyncio.create_task` (fire-and-forget real, no solo "no rompe el request" vía
+`except Exception`, que no alcanza contra un cuelgue). Reproducido en local: un
+`redis.exceptions.TimeoutError` real (conexión vieja del pool tras reiniciar el
+contenedor de Redis) quedó logueado como advertencia y `/health` igual respondió 200 en
+18ms. Falta confirmar que esto destraba el deploy real en Railway.
 
 ## Qué NO es roadmap, es explícitamente fuera de alcance del proyecto
 

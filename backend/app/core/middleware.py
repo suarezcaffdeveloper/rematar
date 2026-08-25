@@ -25,6 +25,7 @@ que `EventBus.publish`, ADR-022). El logging existente (`request_completed`) no 
 un bit.
 """
 
+import asyncio
 import time
 import uuid
 
@@ -57,7 +58,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         response.headers[REQUEST_ID_HEADER] = request_id
         logger.info("request_completed", status_code=response.status_code, duration_ms=duration_ms)
-        await self._record_metric(request, duration_ms)
+        # Fire-and-forget: con `BaseHTTPMiddleware`, la respuesta no se termina de
+        # escribir en el socket hasta que `dispatch` retorna -- un `await` acá adentro
+        # (aunque esté en un try/except) demora la respuesta real hasta que Redis
+        # conteste, no solo hasta que la app decida seguir. Para un healthcheck externo
+        # con timeout propio eso puede ser la diferencia entre 200 y "service
+        # unavailable" aunque la app ya haya terminado de procesar el request.
+        asyncio.create_task(self._record_metric(request, duration_ms))
 
         return response
 
