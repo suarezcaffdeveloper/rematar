@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Bot, Gavel, History, LayoutDashboard, LogOut, Package, ShoppingBag, type LucideIcon } from 'lucide-react';
 import clsx from 'clsx';
 import logoRematar from '../../assets/brand/logo-rematar.png';
@@ -142,6 +142,7 @@ function SidebarContent({
 }) {
   const { user } = useAuth();
   const { logout } = useAuthActions();
+  const navigate = useNavigate();
   const items = role ? NAV_ITEMS_BY_ROLE[role] : PUBLIC_NAV_ITEMS;
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
@@ -206,12 +207,15 @@ function SidebarContent({
         onCancel={() => setIsLogoutConfirmOpen(false)}
         onConfirm={() => {
           setIsLogoutConfirmOpen(false);
-          // Sin `navigate` acá: `RequireAuth` es quien decide el destino post-logout
-          // (flag `justLoggedOut`, ver su docstring) -- un `navigate('/login')`
-          // imperativo disparado desde acá compite con el `<Navigate>` que
-          // `RequireAuth` puede disparar por su cuenta al ver la sesión recién cerrada,
-          // y `createBrowserRouter` no garantiza que gane el que se llamó primero.
+          // Un cierre de sesión explícito siempre termina en `/login`, sin importar la
+          // ruta en la que estaba parado -- a diferencia de un visitante anónimo
+          // orgánico, `RequireAuth` ya no compite acá: "/" renderiza `LandingPage` en el
+          // lugar (sin `<Navigate>`) y el resto de rutas públicas (`/remates/*`) tampoco
+          // navegan por su cuenta, así que este `navigate` es la única navegación en
+          // juego (ver el docstring de `RequireAuth` para el detalle de por qué esto
+          // antes competía y ya no).
           logout();
+          navigate('/login');
         }}
       />
     </div>

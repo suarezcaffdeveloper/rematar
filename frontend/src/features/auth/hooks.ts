@@ -16,7 +16,6 @@ export function useAuth() {
       user: state.user,
       isAuthenticated: Boolean(state.accessToken),
       isHydrated: state.isHydrated,
-      justLoggedOut: state.justLoggedOut,
     })),
   );
 }
@@ -28,7 +27,6 @@ export function useAuthActions() {
       register: state.register,
       logout: state.logout,
       updateUser: state.updateUser,
-      clearJustLoggedOut: state.clearJustLoggedOut,
     })),
   );
 }

@@ -50,12 +50,15 @@ describe('RequireAuth', () => {
     expect(screen.getByText('Contenido protegido')).toBeInTheDocument();
   });
 
-  it('redirige a /remates en "/" si no hay sesión, para mostrar el listado público de remates', () => {
+  it('muestra la landing pública en "/" si no hay sesión, en vez de redirigir', () => {
     useAuthMock.mockReturnValue({ isAuthenticated: false, isHydrated: true });
 
     renderAt('/');
 
-    expect(screen.getByText('Listado público de remates')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: /la nueva generación de remates en tiempo real/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Listado público de remates')).not.toBeInTheDocument();
     expect(screen.queryByText('Pantalla de login')).not.toBeInTheDocument();
   });
 
@@ -98,23 +101,6 @@ describe('RequireAuth', () => {
     useAuthMock.mockReturnValue({ isAuthenticated: false, isHydrated: true });
 
     renderAt('/remates/abc123/gestionar');
-
-    expect(screen.getByText('Pantalla de login')).toBeInTheDocument();
-  });
-
-  it('un logout explícito en "/" va a /login, no al listado público de remates (ADR-049 no aplica acá)', () => {
-    useAuthMock.mockReturnValue({ isAuthenticated: false, isHydrated: true, justLoggedOut: true });
-
-    renderAt('/');
-
-    expect(screen.getByText('Pantalla de login')).toBeInTheDocument();
-    expect(screen.queryByText('Listado público de remates')).not.toBeInTheDocument();
-  });
-
-  it('un logout explícito en una ruta públicamente visible también va a /login, no se queda como invitado', () => {
-    useAuthMock.mockReturnValue({ isAuthenticated: false, isHydrated: true, justLoggedOut: true });
-
-    renderAt('/remates/abc123/sala');
 
     expect(screen.getByText('Pantalla de login')).toBeInTheDocument();
   });
