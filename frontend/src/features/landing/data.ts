@@ -21,7 +21,6 @@ import {
   Users,
   Workflow,
   Zap,
-  Briefcase,
   type LucideIcon,
 } from 'lucide-react';
 import { STOCK_PHOTOS, type StockPhoto } from '../../shared/media/stockPhotos';

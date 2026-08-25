@@ -1,7 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../features/auth/hooks';
 import { Spinner } from '../components/Spinner';
-import { LandingPage } from '../../features/landing/pages/LandingPage';
 
 // Visitante anónimo (ADR-049): el listado público de remates (`/remates`, punto de
 // entrada de "ver como invitado" desde `LoginPage`), el detalle público de un remate
