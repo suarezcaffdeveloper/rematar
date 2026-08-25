@@ -143,11 +143,16 @@ enteramente de transporte:
 1. Se suscribe por **patrón** (`psubscribe("events.*")`) sobre el cliente Redis
    compartido — un único suscriptor para todos los remates, no uno por sala (ver
    ADR-025, sección B, para por qué).
-2. Itera `pubsub.listen()` **secuencialmente**: procesa un mensaje, espera que termine
-   de despacharse, recién ahí pasa al siguiente. Esto no es una limitación de
-   rendimiento accidental — es lo que garantiza que el consumer nunca tenga dos envíos
-   en simultáneo hacia la misma conexión (ver ADR-025, sección C, y "Cómo se garantiza
-   que llega a la sala correcta" más abajo).
+2. Sondea `pubsub.get_message(timeout=...)` en un bucle, **secuencialmente**: procesa
+   un mensaje, espera que termine de despacharse, recién ahí pasa al siguiente. Esto no
+   es una limitación de rendimiento accidental — es lo que garantiza que el consumer
+   nunca tenga dos envíos en simultáneo hacia la misma conexión (ver ADR-025, sección C,
+   y "Cómo se garantiza que llega a la sala correcta" más abajo). No usa
+   `async for message in pubsub.listen()` a propósito: esa lectura bloqueante no tiene
+   timeout propio, así que hereda el `socket_timeout` de la conexión Redis compartida
+   (`app/redis/client.py`, 5s, pensado para acotar comandos normales) y una ventana idle
+   de más de 5s sin publicaciones nuevas se veía como una desconexión real — reproducido
+   en producción, ver `docs/13-mvp-y-roadmap.md`.
 3. Si la suscripción falla o se cae en medio de la escucha, reintenta con backoff
    exponencial (`REALTIME_CONSUMER_RETRY_BASE_SECONDS` → `REALTIME_CONSUMER_RETRY_MAX_SECONDS`,
    configurables), reseteando el contador de intentos cada vez que una reconexión tiene

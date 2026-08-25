@@ -41,7 +41,7 @@ class Dispatcher(Protocol):
 class EventConsumer:
     """Una única tarea de fondo por proceso, arrancada desde el `lifespan` de
     `app/main.py` (mismo patrón que `ConnectionManager`/`RoomManager`). Procesa los
-    mensajes de a uno (`async for` secuencial, sin `asyncio.gather`) a propósito: es lo
+    mensajes de a uno (bucle secuencial, sin `asyncio.gather`) a propósito: es lo
     que garantiza que nunca haya dos `websocket.send_text()` concurrentes disparados
     por este consumidor hacia la misma conexión — ver ADR-025, sección C, para el
     análisis completo de por qué eso alcanza sin tocar `app/websocket/`."""
@@ -54,12 +54,14 @@ class EventConsumer:
         pattern: str = DEFAULT_PATTERN,
         retry_base_seconds: float = 1.0,
         retry_max_seconds: float = 30.0,
+        poll_timeout_seconds: float = 30.0,
     ) -> None:
         self._redis = redis
         self._dispatcher = dispatcher
         self._pattern = pattern
         self._retry_base_seconds = retry_base_seconds
         self._retry_max_seconds = retry_max_seconds
+        self._poll_timeout_seconds = poll_timeout_seconds
         self._task: asyncio.Task[None] | None = None
         self._attempt = 0
 
@@ -102,8 +104,25 @@ class EventConsumer:
             # `retry_base_seconds` en vez de seguir escalando indefinidamente.
             self._attempt = 0
             logger.info("realtime_consumer_subscribed", pattern=self._pattern)
-            async for message in pubsub.listen():
-                if message["type"] != "pmessage":
+            # `get_message(timeout=...)` en vez de `async for message in pubsub.listen()`:
+            # `listen()` pide una lectura bloqueante *sin* timeout propio (`block=True`),
+            # así que `redis-py` cae al `socket_timeout` de la conexión compartida
+            # (`app/redis/client.py`, 5s) -- pensado para acotar comandos normales de
+            # request/response, no una espera legítima de varios segundos u horas sin
+            # publicaciones nuevas. El resultado: cada ventana idle de más de 5s se veía
+            # como un `redis.exceptions.TimeoutError` real (conexión "perdida"), y este
+            # consumidor reconectaba en bucle contra Redis sin que hubiera ningún problema
+            # de red -- reproducido en producción (Railway + Upstash) como
+            # `realtime_consumer_connection_lost` repetido cada pocos segundos en los seis
+            # consumidores que arranca `app/main.py`, todos comparten `app.state.redis`.
+            # `get_message` con un `timeout` explícito no tiene ese problema: `redis-py`
+            # atrapa el `TimeoutError` de esa lectura puntual y devuelve `None` en vez de
+            # propagarlo (ver `redis/asyncio/connection.py::read_response`), así que una
+            # ventana sin mensajes es indistinguible de "nada nuevo todavía" -- ya no de
+            # una desconexión real.
+            while True:
+                message = await pubsub.get_message(timeout=self._poll_timeout_seconds)
+                if message is None or message["type"] != "pmessage":
                     continue
                 try:
                     await self._dispatcher.dispatch(message["data"])

@@ -118,6 +118,36 @@ Fix: `build_redis_client` ahora pasa `socket_connect_timeout=5, socket_timeout=5
 contenedor de Redis) quedó logueado como advertencia y `/health` igual respondió 200 en
 18ms. Falta confirmar que esto destraba el deploy real en Railway.
 
+2026-08-25, mismo fix rompió a `EventConsumer` (efecto colateral, no descubierto hasta
+ver logs reales de Railway con Redis gestionado -- Upstash): los 6 `EventConsumer` que
+arranca `app/main.py` comparten `app.state.redis`, y todos escuchan con
+`async for message in pubsub.listen()`. Esa lectura bloqueante no pasa timeout propio
+(`block=True`), así que `redis-py` cae al `socket_timeout` de la conexión (los 5s que se
+acaban de agregar arriba) -- pensados para acotar un comando de request/response, no una
+espera legítima de minutos sin pujas nuevas. Resultado: cada ventana idle de más de 5s
+producía un `redis.exceptions.TimeoutError` real, logueado como
+`realtime_consumer_connection_lost`, y el consumer reconectaba (`psubscribe` de nuevo)
+sin que hubiera ningún problema de red -- visible en los logs de Railway como ese evento
+repitiéndose cada pocos segundos en los seis consumidores, contra un Redis (Upstash) que
+sí estaba sano. No se había visto en local porque el Redis de `docker-compose.yml` no
+tiene el límite de comandos/conexiones concurrentes de un plan gestionado gratuito, así
+que el ruido de reconexión no se traduce ahí en errores adicionales.
+
+Fix: `EventConsumer._listen_once` (`app/realtime/consumer.py`) ahora sondea con
+`pubsub.get_message(timeout=...)` en un bucle en vez de `pubsub.listen()`. Con un
+`timeout` explícito, `redis-py` atrapa el `TimeoutError` de esa lectura puntual y
+devuelve `None` (ver `redis/asyncio/connection.py::read_response`) en vez de
+propagarlo -- una ventana sin mensajes queda indistinguible de "nada nuevo todavía", ya
+no de una desconexión. Tests en `tests/test_realtime_consumer.py` actualizados al mismo
+contrato (el fake pasa de implementar `listen()` a `get_message()`), los 6 casos
+existentes siguen pasando sin cambiar su intención. Falta confirmar en el deploy real de
+Railway si esto (sumado al fix del healthcheck de arriba) termina de destrabarlo, o si
+el reconnect-storm contra Upstash venía además agotando algún límite de la cuenta
+(comandos/día, conexiones concurrentes) que dejaba otras operaciones de Redis
+(rate limiting, sesiones) fallando en cascada -- revisar el dashboard de Upstash
+("Usage"/"Rate limiting") en el próximo intento de deploy antes de asumir que ya está
+resuelto del todo.
+
 ## Qué NO es roadmap, es explícitamente fuera de alcance del proyecto
 
 - Reemplazar el contacto manual post-remate (pago/entrega) por un flujo transaccional

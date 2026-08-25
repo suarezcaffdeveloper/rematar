@@ -34,12 +34,18 @@ class _FakePubSub:
             raise ConnectionError("Redis no disponible")
         self.psubscribed_to.append(pattern)
 
-    async def listen(self):
-        for message in self._messages:
-            yield message
+    async def get_message(self, timeout: float):
+        """Simula `PubSub.get_message(timeout=...)`: entrega los mensajes preparados de
+        a uno; agotados, levanta la desconexión simulada (si corresponde) o devuelve
+        `None` repetidamente -- igual que el `redis-py` real cuando la ventana de
+        `timeout` pasa sin publicaciones nuevas (se queda "conectada", sin más
+        mensajes)."""
+        if self._messages:
+            return self._messages.pop(0)
         if self._disconnect_after_messages:
             raise ConnectionError("conexión perdida")
-        await asyncio.Event().wait()  # se queda "conectada", sin más mensajes
+        await asyncio.sleep(0.01)
+        return None
 
     async def punsubscribe(self, pattern: str) -> None:
         pass
