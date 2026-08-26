@@ -518,7 +518,15 @@ class PostAuctionService:
         lote = await self._lote_repository.get_by_id(case.lote_id)
         remate = await self._remate_repository.get_by_id(case.remate_id)
         buyer = await self._user_repository.get_by_id(case.buyer_id)
+        # `case.rematador_id` = `remate.owner_id` (la empresa, ver comentario en
+        # schemas.py) -- esta misma consulta ya resuelve `empresa_name`, sin otra vuelta a
+        # la base. El operador que realmente dirigió el remate en vivo es un usuario
+        # distinto (`remate.rematador_id`, ADR-048), así que necesita su propia consulta,
+        # solo si la empresa efectivamente asignó a alguien.
         rematador = await self._user_repository.get_by_id(case.rematador_id)
+        operador = None
+        if remate is not None and remate.rematador_id is not None:
+            operador = await self._user_repository.get_by_id(remate.rematador_id)
         lote_images = sorted(lote.images, key=lambda image: image.get("order", 0)) if lote else []
         read = PostAuctionCaseRead(
             id=case.id,
@@ -532,6 +540,8 @@ class PostAuctionService:
             buyer_name=buyer.full_name if buyer else None,
             rematador_id=case.rematador_id,
             rematador_name=rematador.full_name if rematador else None,
+            empresa_name=rematador.full_name if rematador else None,
+            operador_name=operador.full_name if operador else None,
             base_price=lote.base_price if lote else None,
             final_price=case.final_price,
             status=case.status,

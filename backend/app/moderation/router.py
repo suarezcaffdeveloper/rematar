@@ -3,9 +3,9 @@ docs/42-moderacion-en-tiempo-real.md y ADR-045.
 
 Montado en `/remates/{remate_id}/moderation/...`, top-level (no dentro de
 `app/modules/remates/`) -- mismo criterio que `chat_router`/`postauction_router`.
-Escritura (expulsar/silenciar/bloquear-chat/destacar/quitar-destacado): exclusiva del
-dueño del remate, sin excepción para admin (mismo criterio que
-`ChatService.delete_message`). Lectura (conectados/destacados/historial): dueño o admin.
+Escritura (expulsar/silenciar/bloquear-chat/destacar/quitar-destacado): dueño del
+remate o el rematador asignado como operador (ADR-048), sin excepción para admin.
+Lectura (conectados/historial): dueño, rematador asignado o admin.
 """
 
 import uuid
@@ -35,7 +35,7 @@ DEFAULT_PAGE_SIZE = 20
 @router.post(
     "/remates/{remate_id}/moderation/expulsar",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Expulsar a un comprador de la sala e impedir su reingreso -- solo el dueño",
+    summary="Expulsar a un comprador de la sala e impedir su reingreso -- dueño o rematador asignado",
 )
 async def kick_buyer(
     remate_id: uuid.UUID,
@@ -49,7 +49,7 @@ async def kick_buyer(
 @router.post(
     "/remates/{remate_id}/moderation/silenciar",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Silenciar temporalmente a un comprador -- solo el dueño",
+    summary="Silenciar temporalmente a un comprador -- dueño o rematador asignado",
 )
 async def mute_buyer(
     remate_id: uuid.UUID,
@@ -77,7 +77,7 @@ async def lock_chat(
 @router.post(
     "/remates/{remate_id}/moderation/mensajes/{message_id}/destacar",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Destacar un mensaje del chat (anuncio del rematador) -- solo el dueño",
+    summary="Destacar un mensaje del chat (anuncio del rematador) -- dueño o rematador asignado",
 )
 async def pin_message(
     remate_id: uuid.UUID,
@@ -91,7 +91,7 @@ async def pin_message(
 @router.delete(
     "/remates/{remate_id}/moderation/mensajes/{message_id}/destacar",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Quitar el destacado de un mensaje -- solo el dueño",
+    summary="Quitar el destacado de un mensaje -- dueño o rematador asignado",
 )
 async def unpin_message(
     remate_id: uuid.UUID,
@@ -105,7 +105,7 @@ async def unpin_message(
 @router.get(
     "/remates/{remate_id}/moderation/conectados",
     response_model=list[ConnectedBuyerRead],
-    summary="Compradores conectados a la sala, con estado y búsqueda por nombre -- dueño o admin",
+    summary="Compradores conectados a la sala, con estado y búsqueda por nombre -- dueño, rematador asignado o admin",
 )
 async def list_connected_buyers(
     remate_id: uuid.UUID,
@@ -132,7 +132,7 @@ async def list_pinned_messages(
 @router.get(
     "/remates/{remate_id}/moderation/historial",
     response_model=Page[ModerationHistoryEntry],
-    summary="Historial reciente de acciones de moderación -- dueño o admin",
+    summary="Historial reciente de acciones de moderación -- dueño, rematador asignado o admin",
 )
 async def list_recent_moderation_actions(
     remate_id: uuid.UUID,

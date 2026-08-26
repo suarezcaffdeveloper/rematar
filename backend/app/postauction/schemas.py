@@ -43,8 +43,23 @@ class PostAuctionCaseRead(BaseModel):
     remate_title: str
     buyer_id: uuid.UUID
     buyer_name: str | None
+    # Pese al nombre heredado, `rematador_id`/`rematador_name` identifican a la EMPRESA
+    # dueña del remate (`PostAuctionCase.rematador_id` = `Remate.owner_id`, ver
+    # `service.py::_build_read_and_buyer` -- así se calculaba desde antes de ADR-047, que
+    # separó "empresa" de "rematador" como roles distintos). Se dejan sin tocar para no
+    # romper a los consumidores existentes (permisos de gestión, exports, notificaciones)
+    # que ya dependen de este valor puntual. `empresa_name`/`operador_name` abajo son los
+    # campos nuevos, honestamente rotulados, para mostrarle al comprador quién es la
+    # empresa y quién es el rematador que efectivamente operó el remate en vivo.
     rematador_id: uuid.UUID
     rematador_name: str | None
+    # Nombre de la empresa dueña del remate -- mismo valor que `rematador_name` hoy, pero
+    # con el rótulo correcto para mostrar en la UI.
+    empresa_name: str | None = None
+    # Nombre del rematador que efectivamente operó el remate en vivo (`Remate.rematador_id`,
+    # asignado por código de operador -- ver ADR-048). `None` si la empresa lo operó ella
+    # misma sin asignar a nadie.
+    operador_name: str | None = None
     # Precio base del lote (`Lote.base_price`) -- lo carga `_build_read_and_buyer` de la
     # misma fila de `Lote` que ya resuelve `lot_number`/`lote_title`, mismo criterio
     # defensivo (`None` si el lote no resuelve).

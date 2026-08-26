@@ -95,10 +95,11 @@ class ChatService:
     async def delete_message(
         self, remate_id: uuid.UUID, message_id: uuid.UUID, moderator: User
     ) -> ChatMessage:
-        """Exclusivamente el dueño del remate -- sin excepción para admin, mismo
-        criterio restrictivo que ya aplica `RemateService` a sus propias transiciones
-        (docs/14-modulo-remate.md: "el admin puede ver todo pero no puede escribir")."""
-        await self._remate_service.get_owned_or_raise(remate_id, moderator)
+        """Dueño del remate o el rematador asignado como operador (ADR-048, mismo
+        criterio que el resto de las acciones de moderación en vivo, ver
+        `ModerationService`) -- sin excepción para admin (docs/14-modulo-remate.md: "el
+        admin puede ver todo pero no puede escribir")."""
+        await self._remate_service.get_operator_or_raise(remate_id, moderator)
 
         message = await self._repository.get_by_id(message_id)
         if message is None or message.remate_id != remate_id:

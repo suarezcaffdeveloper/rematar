@@ -11,6 +11,12 @@ docs/42-moderacion-en-tiempo-real.md y ADR-045) **antes** de llamar a
 ambos estado efímero en Redis (`ModerationRedisGateway`, no `ModerationService`: esta
 única lectura no necesita el resto de lo que compone el servicio completo). `ChatService`
 no se modifica en absoluto.
+
+El bloqueo de sala completa ("bloquear-chat") no aplica al dueño del remate ni al
+rematador asignado como operador (ADR-048): son quienes lo activan para frenar el
+volumen de mensajes y poder hacerse escuchar, así que tiene que seguir dejándolos
+escribir -- si no, se silenciarían a sí mismos junto con el resto. El silenciado
+individual sí aplica siempre (nadie se automutea).
 """
 
 import uuid
@@ -29,6 +35,8 @@ from app.modules.bots.lookup import BotIdentityResolver
 from app.modules.chat.dependencies import get_chat_service
 from app.modules.chat.schemas import ChatMessageCreate, ChatMessageRead
 from app.modules.chat.service import ChatService
+from app.modules.remates.dependencies import get_remate_service
+from app.modules.remates.service import RemateService
 from app.modules.users.models import User
 from app.modules.users.repository import UserRepository
 
@@ -36,11 +44,19 @@ router = APIRouter()
 
 
 async def _assert_can_send_message(
-    remate_id: uuid.UUID, user_id: uuid.UUID, gateway: ModerationRedisGateway
+    remate_id: uuid.UUID,
+    user: User,
+    gateway: ModerationRedisGateway,
+    remate_service: RemateService,
 ) -> None:
     if await gateway.is_chat_locked(remate_id):
-        raise ForbiddenError("El chat está bloqueado temporalmente por el rematador.")
-    if await gateway.is_muted(remate_id, user_id):
+        # El dueño y el rematador asignado pueden seguir escribiendo aunque hayan
+        # bloqueado el chat -- ver docstring del módulo.
+        remate = await remate_service.get_visible_or_raise(remate_id, user)
+        is_owner_or_operator = remate.owner_id == user.id or remate.rematador_id == user.id
+        if not is_owner_or_operator:
+            raise ForbiddenError("El chat está bloqueado temporalmente por el rematador.")
+    if await gateway.is_muted(remate_id, user.id):
         raise ForbiddenError("Estás silenciado temporalmente en este chat.")
 
 
@@ -58,8 +74,9 @@ async def send_chat_message(
     moderation_gateway: Annotated[
         ModerationRedisGateway, Depends(get_moderation_redis_gateway)
     ],
+    remate_service: Annotated[RemateService, Depends(get_remate_service)],
 ) -> ChatMessageRead:
-    await _assert_can_send_message(remate_id, current_user.id, moderation_gateway)
+    await _assert_can_send_message(remate_id, current_user, moderation_gateway, remate_service)
     message = await service.send_message(remate_id, current_user, data)
     # El autor es siempre `current_user` acá -- su avatar ya está en memoria, sin
     # necesidad de la consulta batch que sí hace falta en `list_chat_messages`.
@@ -112,7 +129,7 @@ async def list_chat_messages(
 @router.delete(
     "/remates/{remate_id}/chat/messages/{message_id}",
     response_model=ChatMessageRead,
-    summary="Eliminar (moderar) un mensaje -- solo el rematador dueño del remate",
+    summary="Eliminar (moderar) un mensaje -- dueño del remate o rematador asignado",
 )
 async def delete_chat_message(
     remate_id: uuid.UUID,

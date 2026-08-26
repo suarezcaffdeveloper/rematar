@@ -29,8 +29,16 @@ export interface PostAuctionCase {
    * y no campos requeridos. */
   buyer_email?: string | null;
   buyer_phone?: string | null;
+  /** Pese al nombre, identifica a la EMPRESA dueña del remate -- ver comentario en
+   * `backend/app/postauction/schemas.py`. Usar `empresa_name`/`operador_name` abajo para
+   * mostrar cada rol con su rótulo correcto. */
   rematador_id: string;
   rematador_name: string | null;
+  /** Nombre de la empresa creadora del remate (mismo valor que `rematador_name` hoy). */
+  empresa_name?: string | null;
+  /** Nombre de quien efectivamente operó el remate en vivo (`Remate.rematador_id`),
+   * `null` si la empresa lo operó ella misma sin asignar a nadie. */
+  operador_name?: string | null;
   /** Precio base del lote (`Lote.base_price`) -- agregado junto con el rediseño del
    * panel de detalle para mostrar "precio inicial" junto al final. */
   base_price: string;

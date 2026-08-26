@@ -5,9 +5,13 @@ Compone `RemateService` (ownership, mismo patrón que `ChatService`/`AuctionEngi
 `ChatMessageRepository`/`UserRepository`/`RemateRepository` directo (nunca sus
 `Service`, mismo criterio "repositorio del vecino" que ya usa el resto del proyecto) y
 `ConnectionManager`/`RoomManager`/`PresenceService` (`app/websocket/`, `app/presence/`,
-sin modificarlos) para poder expulsar y listar conectados. Todas las acciones de
-escritura son exclusivas del dueño del remate -- sin excepción para admin, mismo
-criterio restrictivo que `ChatService.delete_message` ya aplica a la moderación de chat.
+sin modificarlos) para poder expulsar y listar conectados. Las acciones de escritura
+usan `RemateService.get_operator_or_raise` (ADR-048): dueño (empresa) o el rematador
+asignado como operador (`Remate.rematador_id`) pueden moderar -- sin excepción para
+admin. Antes de este ajuste solo el dueño podía moderar, lo que dejaba al rematador que
+efectivamente dirige el remate en vivo sin acceso a expulsar/silenciar/bloquear el chat
+ni ver conectados/historial -- mismo criterio que ya usa la Consola Operativa para el
+resto de las acciones en vivo.
 """
 
 import uuid
@@ -100,7 +104,7 @@ class ModerationService:
     async def kick_user(
         self, remate_id: uuid.UUID, actor: User, target_user_id: uuid.UUID, reason: str | None
     ) -> None:
-        await self._remate_service.get_owned_or_raise(remate_id, actor)
+        await self._remate_service.get_operator_or_raise(remate_id, actor)
         target = await self._get_comprador_or_raise(target_user_id)
 
         existing_ban = await self._repository.get_ban(remate_id, target_user_id)
@@ -149,7 +153,7 @@ class ModerationService:
     async def mute_user(
         self, remate_id: uuid.UUID, actor: User, target_user_id: uuid.UUID, duration_seconds: int
     ) -> None:
-        await self._remate_service.get_owned_or_raise(remate_id, actor)
+        await self._remate_service.get_operator_or_raise(remate_id, actor)
         target = await self._get_comprador_or_raise(target_user_id)
 
         await self._redis_gateway.mute(remate_id, target_user_id, duration_seconds)
@@ -175,7 +179,7 @@ class ModerationService:
         )
 
     async def lock_chat(self, remate_id: uuid.UUID, actor: User, duration_seconds: int) -> None:
-        await self._remate_service.get_owned_or_raise(remate_id, actor)
+        await self._remate_service.get_operator_or_raise(remate_id, actor)
 
         await self._redis_gateway.lock_chat(remate_id, duration_seconds)
         self._audit_repository.record(
@@ -241,7 +245,7 @@ class ModerationService:
     async def pin_message(
         self, remate_id: uuid.UUID, actor: User, message_id: uuid.UUID
     ) -> ModerationPinnedMessage:
-        await self._remate_service.get_owned_or_raise(remate_id, actor)
+        await self._remate_service.get_operator_or_raise(remate_id, actor)
         message = await self._get_own_message_or_raise(remate_id, message_id)
 
         existing = await self._repository.get_pin(message_id)
@@ -270,7 +274,7 @@ class ModerationService:
         return pin
 
     async def unpin_message(self, remate_id: uuid.UUID, actor: User, message_id: uuid.UUID) -> None:
-        await self._remate_service.get_owned_or_raise(remate_id, actor)
+        await self._remate_service.get_operator_or_raise(remate_id, actor)
 
         pin = await self._repository.get_pin(message_id)
         if pin is None or pin.remate_id != remate_id:
@@ -341,9 +345,11 @@ class ModerationService:
 
     @staticmethod
     def _assert_can_read(remate, viewer: User) -> None:
-        if viewer.role != UserRole.ADMIN and remate.owner_id != viewer.id:
+        is_owner_or_operator = remate.owner_id == viewer.id or remate.rematador_id == viewer.id
+        if viewer.role != UserRole.ADMIN and not is_owner_or_operator:
             raise ForbiddenError(
-                "Solo el rematador dueño del remate (o un administrador) puede ver esto."
+                "Solo el dueño del remate, el rematador asignado (o un administrador) "
+                "puede ver esto."
             )
 
     # --- Intentos de oferta inválidos (disparado por `realtime.py`, no por HTTP) --------
