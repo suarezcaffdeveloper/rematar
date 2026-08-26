@@ -2,24 +2,16 @@ import {
   Activity,
   BarChart3,
   Boxes,
-  Braces,
-  Cloud,
-  Cpu,
-  Database,
-  FileCode2,
   Gavel,
-  KeyRound,
   Layers,
-  Lock,
   MessageSquare,
+  Monitor,
   Radio,
-  Server,
   Shield,
   ShieldCheck,
   Sparkles,
   Timer,
   Users,
-  Workflow,
   Zap,
   type LucideIcon,
 } from 'lucide-react';
@@ -41,8 +33,7 @@ export const NAV_LINKS: NavLink[] = [
   { label: 'Inicio', href: '#inicio' },
   { label: 'Características', href: '#caracteristicas' },
   { label: 'Cómo funciona', href: '#como-funciona' },
-  { label: 'Tecnologías', href: '#tecnologias' },
-  { label: 'Demo', href: '#demo' },
+  { label: 'Plataforma', href: '#plataforma' },
 ];
 
 export interface RubroItem {
@@ -172,31 +163,6 @@ export const SYSTEM_SCREENS: SystemScreen[] = [
   },
 ];
 
-export interface TechItem {
-  icon: LucideIcon;
-  name: string;
-}
-
-export const BACKEND_TECH: TechItem[] = [
-  { icon: FileCode2, name: 'Python' },
-  { icon: Zap, name: 'FastAPI' },
-  { icon: Database, name: 'PostgreSQL' },
-  { icon: Server, name: 'Redis' },
-  { icon: Radio, name: 'WebSockets' },
-  { icon: Layers, name: 'SQLAlchemy' },
-  { icon: Workflow, name: 'Alembic' },
-  { icon: KeyRound, name: 'JWT' },
-  { icon: Cloud, name: 'Docker' },
-];
-
-export const FRONTEND_TECH: TechItem[] = [
-  { icon: Braces, name: 'React' },
-  { icon: FileCode2, name: 'TypeScript' },
-  { icon: Cpu, name: 'Vite' },
-  { icon: Sparkles, name: 'Tailwind CSS' },
-  { icon: Activity, name: 'Framer Motion' },
-];
-
 export interface FeatureCard {
   icon: LucideIcon;
   title: string;
@@ -204,16 +170,13 @@ export interface FeatureCard {
 }
 
 export const FEATURES: FeatureCard[] = [
-  { icon: Radio, title: 'Remates en tiempo real', description: 'Cada oferta, cada segundo, sincronizado al instante entre todos los participantes.' },
-  { icon: Zap, title: 'WebSockets', description: 'Comunicación bidireccional persistente, sin recargas ni polling.' },
-  { icon: MessageSquare, title: 'Chat integrado', description: 'Conversación en vivo dentro de la misma sala del remate.' },
-  { icon: ShieldCheck, title: 'Roles y permisos', description: 'Comprador, rematador y administrador, cada uno con su propio alcance.' },
-  { icon: BarChart3, title: 'Dashboard', description: 'Información clara y accionable para cada tipo de usuario.' },
-  { icon: Boxes, title: 'Gestión de lotes', description: 'Cargá, ordená y editá lotes antes y durante el remate.' },
-  { icon: Timer, title: 'Temporizador', description: 'Control fino del tiempo de cada lote, con extensiones cuando hace falta.' },
-  { icon: Shield, title: 'Moderación', description: 'Herramientas para mantener el orden durante un evento en vivo.' },
-  { icon: Layers, title: 'Arquitectura modular', description: 'Backend organizado por dominios, fácil de extender.' },
-  { icon: Lock, title: 'Escalable', description: 'Pensado para crecer en usuarios concurrentes sin perder velocidad.' },
-  { icon: Cloud, title: 'Docker', description: 'Entornos reproducibles, del desarrollo a producción.' },
-  { icon: Server, title: 'API REST', description: 'Contratos claros y documentados para cada recurso del sistema.' },
+  { icon: Radio, title: 'Remates en tiempo real', description: 'Cada oferta se actualiza al instante para todos los presentes, sin recargar la página.' },
+  { icon: MessageSquare, title: 'Chat integrado', description: 'Comprador y rematador se comunican sin salir de la sala del remate.' },
+  { icon: Users, title: 'Un panel para cada rol', description: 'Empresa, rematador y comprador tienen su propia vista, con solo lo que necesitan ver.' },
+  { icon: Boxes, title: 'Gestión de lotes', description: 'Catálogo con imágenes, precios base y estado de cada lote, de principio a fin.' },
+  { icon: Shield, title: 'Moderación y seguridad', description: 'Validación de participantes y herramientas para mantener el orden durante el evento.' },
+  { icon: BarChart3, title: 'Resultados en tiempo real', description: 'Adjudicaciones, ventas y métricas de cada remate, siempre a mano.' },
+  { icon: Layers, title: 'Múltiples rubros', description: 'Inmuebles, vehículos, hacienda, arte y más: un mismo sistema para cualquier categoría.' },
+  { icon: Timer, title: 'Seguimiento post-remate', description: 'El comprador sigue el progreso de su compra hasta la entrega final.' },
+  { icon: Monitor, title: 'Desde cualquier dispositivo', description: 'Pensado para participar y administrar remates desde celular, tablet o computadora.' },
 ];

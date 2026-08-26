@@ -39,7 +39,7 @@ export function BenefitsSection({
           reverse && 'lg:[&>*:first-child]:order-2',
         )}
       >
-        <Reveal direction={reverse ? 'none' : 'up'}>
+        <Reveal direction={reverse ? 'right' : 'left'}>
           <span className="text-sm font-semibold uppercase tracking-wide text-brand-600">
             {eyebrow}
           </span>
@@ -50,8 +50,8 @@ export function BenefitsSection({
 
           <ul className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2">
             {benefits.map((benefit) => (
-              <li key={benefit.title} className="flex gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+              <li key={benefit.title} className="group flex gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700 transition-colors group-hover:bg-brand-600 group-hover:text-white">
                   <benefit.icon className="h-4 w-4" />
                 </span>
                 <div>
@@ -63,7 +63,9 @@ export function BenefitsSection({
           </ul>
         </Reveal>
 
-        <Reveal delay={0.1}>{visual}</Reveal>
+        <Reveal direction={reverse ? 'left' : 'right'} delay={0.1}>
+          <div className="transition-transform duration-300 hover:-translate-y-1">{visual}</div>
+        </Reveal>
       </div>
     </section>
   );

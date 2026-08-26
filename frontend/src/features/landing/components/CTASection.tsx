@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, PlayCircle } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { Reveal } from '../../../shared/components/Reveal';
 import { useLandingCta } from '../ctaContext';
 
@@ -15,34 +15,34 @@ export function CTASection() {
           <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
 
           <h2 className="text-3xl font-bold text-white sm:text-4xl">
-            ¿Listo para conocer RematAR?
+            ¿Listo para tu primer remate?
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-base text-brand-100">
-            Descubrí cómo se ve un remate en tiempo real, de punta a punta.
+            Creá tu cuenta, armá tu catálogo y viví la puja en tiempo real.
           </p>
 
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a
-              href="#demo"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-brand-50"
-            >
-              <PlayCircle className="h-4 w-4" /> Probar Demo
-            </a>
             {cta.external ? (
               <a
                 href={cta.href}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/30 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-semibold text-brand-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-brand-50"
               >
-                {cta.label} <ArrowRight className="h-4 w-4" />
+                {cta.label}
               </a>
             ) : (
               <Link
                 to={cta.href}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/30 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-semibold text-brand-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-brand-50"
               >
-                {cta.label} <ArrowRight className="h-4 w-4" />
+                {cta.label}
               </Link>
             )}
+            <a
+              href="#plataforma"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/30 px-6 py-3 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-white/10"
+            >
+              Ver la plataforma <ArrowRight className="h-4 w-4" />
+            </a>
           </div>
         </div>
       </Reveal>

@@ -7,9 +7,9 @@ export function FeaturesSection() {
     <section id="caracteristicas" className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
       <Reveal className="mx-auto max-w-2xl text-center">
         <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-          Características principales
+          Todo lo que necesitás para gestionar remates profesionales
         </h2>
-        <p className="mt-4 text-lg text-slate-600">Todo lo que hace falta para un remate profesional.</p>
+        <p className="mt-4 text-lg text-slate-600">De la creación del evento a la entrega del lote, en un mismo lugar.</p>
       </Reveal>
 
       <div className="mt-16 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">

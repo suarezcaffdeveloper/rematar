@@ -6,14 +6,13 @@ import { RematadorConsoleMockup } from '../components/RematadorConsoleMockup';
 import { CompradorSalaMockup } from '../components/CompradorSalaMockup';
 import { HowItWorksSection } from '../components/HowItWorksSection';
 import { ScreenshotsSection } from '../components/ScreenshotsSection';
-import { TechStackSection } from '../components/TechStackSection';
 import { FeaturesSection } from '../components/FeaturesSection';
 import { CTASection } from '../components/CTASection';
 import { LandingFooter } from '../components/LandingFooter';
 import { EMPRESA_BENEFITS, REMATADOR_BENEFITS, COMPRADOR_BENEFITS } from '../data';
 
 /**
- * Landing pública de RematAR (portfolio) -- servida en la ruta "/" únicamente para
+ * Landing pública de RematAR -- servida en la ruta "/" únicamente para
  * visitantes sin sesión (ver el branch dedicado en `shared/guards/RequireAuth.tsx`).
  * Una única página larga con navegación por anclas, sin datos ni llamadas a la API:
  * todo el contenido es estático (`features/landing/data.ts`).
@@ -50,7 +49,6 @@ export function LandingPage() {
         />
         <HowItWorksSection />
         <ScreenshotsSection />
-        <TechStackSection />
         <FeaturesSection />
         <CTASection />
       </main>

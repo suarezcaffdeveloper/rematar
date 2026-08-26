@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowRight, CheckCircle2, MessageSquare, PlayCircle, TrendingUp } from 'lucide-react';
+import { ArrowRight, CheckCircle2, MessageSquare, TrendingUp } from 'lucide-react';
 import { MockupWindow } from './MockupWindow';
 import { AnimatedCounter } from './AnimatedCounter';
 import { useLandingCta } from '../ctaContext';
@@ -82,27 +82,27 @@ export function HeroSection() {
           </p>
 
           <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-            <a
-              href="#demo"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700"
-            >
-              <PlayCircle className="h-4 w-4" /> Ver demostración
-            </a>
             {cta.external ? (
               <a
                 href={cta.href}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-brand-700 hover:shadow-md"
               >
-                {cta.label} <ArrowRight className="h-4 w-4" />
+                {cta.label}
               </a>
             ) : (
               <Link
                 to={cta.href}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-brand-700 hover:shadow-md"
               >
-                {cta.label} <ArrowRight className="h-4 w-4" />
+                {cta.label}
               </Link>
             )}
+            <a
+              href="#plataforma"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50"
+            >
+              Ver la plataforma <ArrowRight className="h-4 w-4" />
+            </a>
           </div>
 
           <div className="mt-14 grid grid-cols-3 gap-6 border-t border-slate-200 pt-8">
@@ -120,9 +120,9 @@ export function HeroSection() {
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-900">
-                <AnimatedCounter value={0} suffix="ms" />
+                <AnimatedCounter value={3} />
               </p>
-              <p className="mt-1 text-sm text-slate-500">Demora perceptible</p>
+              <p className="mt-1 text-sm text-slate-500">Roles, un mismo remate</p>
             </div>
           </div>
         </motion.div>
