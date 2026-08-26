@@ -2,7 +2,7 @@ import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { Header } from './Header';
 import { useBreadcrumbStore } from './breadcrumbStore';
 
@@ -13,10 +13,20 @@ vi.mock('../../features/notifications/components/NotificationBell', () => ({
   NotificationBell: () => null,
 }));
 
-function renderHeader(onOpenSidebar = vi.fn()) {
+const { useAuthMock } = vi.hoisted(() => ({
+  useAuthMock: vi.fn(() => ({ isAuthenticated: false })),
+}));
+vi.mock('../../features/auth/hooks', () => ({
+  useAuth: useAuthMock,
+}));
+
+function renderHeader(onOpenSidebar = vi.fn(), initialPath = '/remates') {
   return render(
-    <MemoryRouter>
-      <Header onOpenSidebar={onOpenSidebar} />
+    <MemoryRouter initialEntries={[initialPath]}>
+      <Routes>
+        <Route path="/login" element={<p>Pantalla de login</p>} />
+        <Route path="*" element={<Header onOpenSidebar={onOpenSidebar} />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -25,6 +35,7 @@ afterEach(() => {
   act(() => {
     useBreadcrumbStore.setState({ items: [] });
   });
+  useAuthMock.mockReturnValue({ isAuthenticated: false });
 });
 
 describe('Header', () => {
@@ -51,5 +62,20 @@ describe('Header', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
 
     expect(onOpenSidebar).toHaveBeenCalledTimes(1);
+  });
+
+  it('sin sesión (visitante de /remates), muestra "Iniciar sesión" y lleva a /login', async () => {
+    renderHeader();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+
+    expect(screen.getByText('Pantalla de login')).toBeInTheDocument();
+  });
+
+  it('con sesión iniciada, no muestra el botón "Iniciar sesión"', () => {
+    useAuthMock.mockReturnValue({ isAuthenticated: true });
+    renderHeader();
+
+    expect(screen.queryByRole('button', { name: 'Iniciar sesión' })).not.toBeInTheDocument();
   });
 });

@@ -21,9 +21,27 @@ import type { Remate } from '../../remates/types';
 // cerrados. Estos son los únicos estados que cuentan como "lo que tengo asignado ahora".
 const ACTIVE_ASSIGNMENT_STATUSES = new Set<Remate['status']>(['draft', 'scheduled', 'live', 'paused']);
 
+/** Pasos del canje, mostrados junto al formulario -- puramente explicativos (rediseño del
+ * panel, sin datos propios), para que alguien que entra por primera vez entienda de dónde
+ * salen el ID y el código antes de pedírselos. */
+const CLAIM_STEPS = [
+  {
+    title: 'La empresa te asigna un remate',
+    description: 'Y te comparte el ID del remate junto con un código de operador de un solo uso.',
+  },
+  {
+    title: 'Ingresás los datos acá',
+    description: 'Completá el ID y el código en el formulario para canjearlo.',
+  },
+  {
+    title: 'Entrás en vivo',
+    description: 'Pasás directo a la Consola Operativa para manejar el remate en tiempo real.',
+  },
+] as const;
+
 function ClaimSkeleton() {
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-6">
+    <div className="mx-auto flex max-w-4xl flex-col gap-6">
       <Skeleton className="h-16 w-full rounded-xl" />
       <Skeleton className="h-64 w-full rounded-2xl" />
     </div>
@@ -117,7 +135,7 @@ export function OperatorClaimPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-6">
+    <div className="mx-auto flex max-w-4xl flex-col gap-10">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
           Unirme como operador
@@ -128,32 +146,59 @@ export function OperatorClaimPage() {
         </p>
       </div>
 
-      <Card>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-          {claimError && <Alert variant="error">{claimError}</Alert>}
+      <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:gap-12">
+        <div className="flex flex-1 flex-col gap-6 lg:pt-1">
+          {CLAIM_STEPS.map((step, index) => (
+            <div key={step.title} className="flex gap-4">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-sm font-semibold text-brand-700">
+                {index + 1}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-ink">{step.title}</p>
+                <p className="mt-1 max-w-sm text-sm text-ink-muted">{step.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
 
-          <Input
-            label="ID del remate"
-            required
-            value={remateId}
-            onChange={(event) => setRemateId(event.target.value)}
-            placeholder="Lo comparte la empresa junto con el código"
-          />
+        <div className="w-full lg:w-[380px] lg:shrink-0">
+          <Card>
+            <div className="mb-3.5 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+              <KeyRound aria-hidden="true" className="h-5 w-5" />
+            </div>
+            <h2 className="mb-4 text-base font-semibold text-ink">Datos de acceso</h2>
 
-          <Input
-            label="Código de operador"
-            required
-            icon={KeyRound}
-            value={code}
-            onChange={(event) => setCode(event.target.value.toUpperCase())}
-            placeholder="Ej: A3K7P2QX"
-          />
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+              {claimError && <Alert variant="error">{claimError}</Alert>}
 
-          <Button type="submit" isLoading={isSubmitting} disabled={!remateId.trim() || !code.trim()}>
-            Entrar a la Consola Operativa
-          </Button>
-        </form>
-      </Card>
+              <Input
+                label="ID del remate"
+                required
+                value={remateId}
+                onChange={(event) => setRemateId(event.target.value)}
+                placeholder="Lo comparte la empresa junto con el código"
+              />
+
+              <Input
+                label="Código de operador"
+                required
+                icon={KeyRound}
+                value={code}
+                onChange={(event) => setCode(event.target.value.toUpperCase())}
+                placeholder="Ej: A3K7P2QX"
+              />
+
+              <Button type="submit" isLoading={isSubmitting} disabled={!remateId.trim() || !code.trim()}>
+                Entrar a la Consola Operativa
+              </Button>
+            </form>
+
+            <p className="mt-3.5 text-center text-xs text-ink-muted">
+              ¿No tenés un código? Pedíselo a la empresa que organiza el remate.
+            </p>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

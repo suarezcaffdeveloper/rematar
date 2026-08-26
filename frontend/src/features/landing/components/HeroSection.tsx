@@ -35,9 +35,9 @@ function FloatingCard({
         prefersReducedMotion
           ? { duration: 0.6, delay: floatDelay }
           : {
-              opacity: { duration: 0.6, delay: floatDelay },
-              scale: { duration: 0.6, delay: floatDelay },
-              y: { duration: 5, repeat: Infinity, ease: 'easeInOut', delay: floatDelay + 0.6 },
+              opacity: { duration: 0.45, delay: floatDelay },
+              scale: { duration: 0.45, delay: floatDelay },
+              y: { duration: 2.6, repeat: Infinity, ease: 'easeInOut', delay: floatDelay + 0.45 },
             }
       }
     >

@@ -296,7 +296,7 @@ function LiveSlide({
               </div>
             </dl>
             <Button
-              variant="hero"
+              variant="primary"
               className="absolute bottom-3 right-3 w-fit gap-1.5 sm:bottom-5 sm:right-5"
               onClick={onNavigate}
             >

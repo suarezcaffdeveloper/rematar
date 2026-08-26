@@ -7,9 +7,9 @@ export interface RematadorInfoCardProps {
 }
 
 /**
- * "Rematador" (sección 5 del pedido) -- por ahora solo el nombre: no hay ningún otro dato
- * público del rematador disponible en el sistema hoy (sin perfil público, ver
- * `PostAuctionCaseRead`). A propósito no trae email/teléfono -- esos campos ni siquiera
+ * "Responsables de esta compra" (sección 5 del pedido) -- por ahora solo el nombre: no hay
+ * ningún otro dato público del rematador disponible en el sistema hoy (sin perfil público,
+ * ver `PostAuctionCaseRead`). A propósito no trae email/teléfono -- esos campos ni siquiera
  * llegan a esta vista (`PostAuctionCaseRead`, sin los `buyer_email`/`buyer_phone` que sí
  * tiene `PostAuctionCaseRematadorRead` del lado del rematador; acá el equivalente para el
  * rematador ni existe en el DTO).
@@ -27,7 +27,7 @@ export function RematadorInfoCard({ data }: RematadorInfoCardProps) {
 
   return (
     <Card>
-      <h2 className="mb-4 text-sm font-semibold text-slate-900">Rematador</h2>
+      <h2 className="mb-4 text-sm font-semibold text-slate-900">Responsables de esta compra</h2>
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
@@ -35,7 +35,7 @@ export function RematadorInfoCard({ data }: RematadorInfoCardProps) {
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-slate-900">{rematadorName ?? '—'}</p>
-            <p className="text-xs text-slate-500">Responsable de esta compra</p>
+            <p className="text-xs text-slate-500">Martillero responsable de la gestión del remate</p>
           </div>
         </div>
 
@@ -46,7 +46,7 @@ export function RematadorInfoCard({ data }: RematadorInfoCardProps) {
             </span>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-slate-900">{data.empresa_name}</p>
-              <p className="text-xs text-slate-500">Empresa creadora del remate</p>
+              <p className="text-xs text-slate-500">Empresa creadora y dueña del remate</p>
             </div>
           </div>
         )}

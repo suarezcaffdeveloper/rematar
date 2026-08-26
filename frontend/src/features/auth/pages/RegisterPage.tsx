@@ -133,6 +133,7 @@ export function RegisterPage() {
                   required
                   icon={User}
                   className="py-2.5"
+                  placeholder="Juan Pérez"
                   value={fullName}
                   onChange={(event) => setFullName(event.target.value)}
                   rightElement={
@@ -161,6 +162,7 @@ export function RegisterPage() {
                     required
                     icon={Mail}
                     className="py-2.5"
+                    placeholder="juan.perez@email.com"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     rightElement={isEmailValid ? <CheckCircle2 className="h-4 w-4 text-success-500" /> : undefined}
@@ -177,6 +179,7 @@ export function RegisterPage() {
                       required
                       icon={Lock}
                       className="py-2.5"
+                      placeholder="Mínimo 8 caracteres"
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
                       rightElement={
@@ -201,6 +204,7 @@ export function RegisterPage() {
                     required
                     icon={Lock}
                     className="py-2.5"
+                    placeholder="Repetí tu contraseña"
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     error={passwordsMismatch ? 'Las contraseñas no coinciden.' : undefined}
@@ -213,7 +217,7 @@ export function RegisterPage() {
                 </div>
 
                 <fieldset className="flex flex-col gap-1.5">
-                  <legend className="text-sm font-medium text-ink">Quiero registrarme como</legend>
+                  <legend className="mb-2 text-sm font-medium text-ink">Quiero registrarme como</legend>
                   <div className="grid grid-cols-3 gap-3">
                     {ROLE_OPTIONS.map((option) => {
                       const isSelected = role === option.value;

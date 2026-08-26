@@ -92,7 +92,7 @@ export function RemateDetailOverview({ remate, lotes = [], onEnterRoom }: Remate
                 whileHover={prefersReducedMotion ? undefined : { scale: 1.02, y: -2 }}
                 whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
               >
-                <Button variant="hero" onClick={handleEnterClick} className="shadow-lg shadow-slate-900/30">
+                <Button variant="primary" onClick={handleEnterClick} className="shadow-lg shadow-slate-900/30">
                   Entrar al remate
                   <ArrowRight aria-hidden="true" className="h-4 w-4" />
                 </Button>

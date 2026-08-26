@@ -44,7 +44,8 @@ describe('OperatorCodePanel', () => {
   it('sin código generado ni operador asignado, muestra el estado vacío', () => {
     render(<OperatorCodePanel remate={makeRemate()} />);
 
-    expect(screen.getByText('Todavía no generaste un código de operador.')).toBeInTheDocument();
+    expect(screen.getByText('Sin generar')).toBeInTheDocument();
+    expect(screen.getByText('Falta generar')).toBeInTheDocument();
     expect(screen.queryByText('Operador asignado')).not.toBeInTheDocument();
   });
 
@@ -66,5 +67,26 @@ describe('OperatorCodePanel', () => {
 
     expect(screen.getByText('Regenerar código de operador')).toBeInTheDocument();
     expect(apiMocks.generateOperatorCodeRequest).not.toHaveBeenCalled();
+  });
+
+  it('"Copiar datos" está deshabilitado hasta que hay un código generado', () => {
+    render(<OperatorCodePanel remate={makeRemate()} />);
+
+    expect(screen.getByRole('button', { name: 'Copiar datos' })).toBeDisabled();
+  });
+
+  it('"Copiar datos" copia el ID y el código juntos, uno por línea', async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    apiMocks.generateOperatorCodeRequest.mockResolvedValue({ code: 'A3K7P2QX' });
+
+    render(<OperatorCodePanel remate={makeRemate({ id: 'remate-7' })} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Generar código' }));
+    await screen.findByText('A3K7P2QX');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Copiar datos' }));
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      'ID del remate: remate-7\nCódigo de acceso: A3K7P2QX',
+    );
   });
 });

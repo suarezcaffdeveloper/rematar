@@ -18,7 +18,7 @@ interface InlineCopyFieldProps {
   successMessage: string;
 }
 
-/** Un dato copiable inline -- ID de remate y código de operador comparten la misma
+/** Un dato copiable inline -- ID de remate y código de acceso comparten la misma
  * interacción (copiar al portapapeles, ícono que confirma un instante), así que se
  * resuelve una sola vez acá en vez de duplicar el manejo de estado. */
 function InlineCopyField({ label, value, successMessage }: InlineCopyFieldProps) {
@@ -37,16 +37,14 @@ function InlineCopyField({ label, value, successMessage }: InlineCopyFieldProps)
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-[11px] text-ink-faint">{label}</span>
-      <code className="rounded-md border border-line bg-surface-subtle px-2 py-0.5 text-[13px] font-semibold text-ink">
-        {value}
-      </code>
+    <div className="flex items-center gap-2 rounded-lg border border-brand-200 bg-white px-2.5 py-1.5">
+      <span className="text-[11px] font-semibold text-ink-faint">{label}</span>
+      <code className="text-[13px] font-semibold text-ink">{value}</code>
       <button
         type="button"
         onClick={() => void handleCopy()}
         aria-label={`Copiar ${label.toLowerCase()}`}
-        className="rounded p-1 text-ink-faint transition-colors hover:text-ink-muted"
+        className="rounded p-0.5 text-ink-faint transition-colors hover:bg-slate-100 hover:text-ink-muted"
       >
         {justCopied ? (
           <Check aria-hidden="true" className="h-3.5 w-3.5 text-success-600" />
@@ -54,6 +52,18 @@ function InlineCopyField({ label, value, successMessage }: InlineCopyFieldProps)
           <Copy aria-hidden="true" className="h-3.5 w-3.5" />
         )}
       </button>
+    </div>
+  );
+}
+
+/** Mismo tamaño/forma que `InlineCopyField`, para el momento en que todavía no hay
+ * código generado -- reserva el espacio en la franja en vez de dejarlo saltar de ancho
+ * apenas se genera uno. */
+function EmptyCodeField() {
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-dashed border-line-strong px-2.5 py-1.5">
+      <span className="text-[11px] font-semibold text-ink-faint">Código de acceso</span>
+      <span className="text-xs italic text-ink-faint">Sin generar</span>
     </div>
   );
 }
@@ -70,11 +80,14 @@ function InlineCopyField({ label, value, successMessage }: InlineCopyFieldProps)
  * copiarlo de la URL, y encima el código vivía en un panel angosto al final de la
  * página, lejos de donde la empresa mira primero.
  *
- * Retexturizada a una franja fina con separador (`border-b border-line`), sin card ni
- * fondo de color -- mismo criterio "sin card, solo un separador" que ya usan
- * `ConsolaHeader` y `ConsolaLotePanel` en esta misma página; la card punteada original
- * ocupaba ~230px siempre expandida y competía visualmente con el título del remate
- * justo debajo.
+ * Rediseñada a una franja fina con fondo/borde de marca (`bg-brand-50 border-brand-200`,
+ * una sola línea de alto en vez de las ~230px de la card punteada original) -- pedido
+ * explícito: que se note que es una acción pendiente de la empresa, sin volver a la
+ * altura de la card vieja. El campo del código reserva su lugar aunque todavía no se
+ * generó ninguno (`EmptyCodeField`), para que generar uno no corra el resto de la franja
+ * de ancho. `handleCopyBoth` junta ambos datos en un solo texto ("ID del remate: ...\n
+ * Código de acceso: ...") -- antes la empresa tenía que copiar el ID y el código por
+ * separado para pasárselos al rematador.
  *
  * El código se muestra en texto plano una única vez (`generateOperatorCodeRequest`, el
  * backend nunca lo persiste así) -- si se pierde, la única opción es regenerarlo, lo
@@ -87,6 +100,7 @@ export function OperatorCodePanel({ remate }: OperatorCodePanelProps) {
   const [lastCode, setLastCode] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
+  const [justCopiedBoth, setJustCopiedBoth] = useState(false);
 
   async function generate() {
     setIsGenerating(true);
@@ -110,44 +124,82 @@ export function OperatorCodePanel({ remate }: OperatorCodePanelProps) {
     void generate();
   }
 
+  /** Copia ambos datos juntos, uno debajo del otro, listos para pegar tal cual en un
+   * chat con el rematador -- en vez de que la empresa tenga que copiar y pegar el ID y
+   * el código por separado. */
+  async function handleCopyBoth() {
+    if (!lastCode) return;
+    const combined = `ID del remate: ${remate.id}\nCódigo de acceso: ${lastCode}`;
+    try {
+      await navigator.clipboard.writeText(combined);
+      setJustCopiedBoth(true);
+      useToastStore.getState().push('success', 'ID y código copiados.');
+      window.setTimeout(() => setJustCopiedBoth(false), 2000);
+    } catch {
+      // Portapapeles no disponible -- los datos ya están visibles en pantalla.
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-2.5 border-b border-line pb-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <KeyRound aria-hidden="true" className="h-3.5 w-3.5 text-brand-600" />
-          <span className="text-xs font-semibold text-ink-muted">Datos para el rematador</span>
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5">
+      <div className="flex items-center gap-2.5">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
+          <KeyRound aria-hidden="true" className="h-4 w-4" />
         </div>
-        {rematadorId && <Badge variant="success">Operador asignado</Badge>}
+        <span className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">Datos para el rematador</span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-7 gap-y-2">
-        <InlineCopyField label="ID del remate" value={remate.id} successMessage="ID del remate copiado." />
+      {rematadorId ? (
+        <Badge variant="success">Operador asignado</Badge>
+      ) : lastCode ? (
+        <Badge variant="brand">Código listo</Badge>
+      ) : (
+        <Badge variant="warning">Falta generar</Badge>
+      )}
 
-        <span aria-hidden="true" className="hidden h-4 w-px bg-line sm:block" />
+      <span aria-hidden="true" className="h-7 w-px shrink-0 bg-brand-200" />
 
-        {lastCode ? (
-          <InlineCopyField label="Código de operador" value={lastCode} successMessage="Código copiado." />
-        ) : (
-          <span className="text-sm italic text-ink-faint">
-            {rematadorId
-              ? 'Ya hay un rematador asignado -- regenerá el código para reasignarlo a otra persona.'
-              : 'Todavía no generaste un código de operador.'}
-          </span>
-        )}
+      <InlineCopyField label="ID del remate" value={remate.id} successMessage="ID del remate copiado." />
 
+      {lastCode ? (
+        <InlineCopyField label="Código de acceso" value={lastCode} successMessage="Código copiado." />
+      ) : (
+        <EmptyCodeField />
+      )}
+
+      <div className="ml-auto flex items-center gap-2">
         <Button
-          variant="ghost"
-          className="ml-auto !gap-1.5 !px-2 !py-1 text-xs"
+          variant="ink-outline"
+          className="!gap-1.5 !px-2.5 !py-1.5 text-xs"
           onClick={handleGenerateClick}
           isLoading={isGenerating}
         >
           <RefreshCcw aria-hidden="true" className="h-3.5 w-3.5" />
           {rematadorId || lastCode ? 'Regenerar código' : 'Generar código'}
         </Button>
+
+        <Button
+          variant="primary"
+          className="!gap-1.5 !px-2.5 !py-1.5 text-xs"
+          onClick={() => void handleCopyBoth()}
+          disabled={!lastCode}
+        >
+          {justCopiedBoth ? (
+            <>
+              <Check aria-hidden="true" className="h-3.5 w-3.5" />
+              ¡Copiado!
+            </>
+          ) : (
+            <>
+              <Copy aria-hidden="true" className="h-3.5 w-3.5" />
+              Copiar datos
+            </>
+          )}
+        </Button>
       </div>
 
       {lastCode && (
-        <p className="text-xs text-ink-faint">
+        <p className="w-full text-xs text-ink-faint">
           El código no se va a volver a mostrar una vez que salgas de esta pantalla --
           copialo ahora.
         </p>

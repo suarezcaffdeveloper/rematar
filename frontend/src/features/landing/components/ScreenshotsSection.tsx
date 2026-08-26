@@ -6,8 +6,8 @@ import { SYSTEM_SCREENS } from '../data';
 
 const IMG_H = 340;
 const BAR_H = 38;
-const CAP_H = 76;
-const CARD_H = BAR_H + IMG_H + CAP_H; // 454 px
+const CAP_H = 128;
+const CARD_H = BAR_H + IMG_H + CAP_H; // 506 px
 
 // Active card: 62 % of viewport. Adjacent cards show ~30 % of their width on each side.
 const CARD_W_PCT = 62;
@@ -144,21 +144,23 @@ export function ScreenshotsSection() {
                   }}
                 >
                   <MockupWindow urlLabel={`app.rematar.com/${screen.key}`} noPadding>
-                    <img
-                      src={screen.image}
-                      alt={screen.title}
-                      draggable={false}
-                      loading="lazy"
-                      style={{
-                        display: 'block',
-                        width: '100%',
-                        height: IMG_H,
-                        objectFit: 'cover',
-                        objectPosition: 'top',
-                      }}
-                    />
+                    <div className="flex items-center justify-center bg-slate-50" style={{ height: IMG_H }}>
+                      <img
+                        src={screen.image}
+                        alt={screen.title}
+                        draggable={false}
+                        loading="lazy"
+                        style={{
+                          display: 'block',
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain',
+                          objectPosition: 'center',
+                        }}
+                      />
+                    </div>
                   </MockupWindow>
-                  <div className="mt-4 text-center">
+                  <div className="mt-4 px-2 text-center">
                     <p className="text-sm font-semibold text-slate-900">{screen.title}</p>
                     <p className="mt-1 text-sm text-slate-500">{screen.description}</p>
                   </div>

@@ -1,7 +1,9 @@
 import { Menu } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../features/auth/hooks';
 import { NotificationBell } from '../../features/notifications/components/NotificationBell';
 import { Breadcrumb } from '../../shared/components/Breadcrumb';
+import { Button } from '../../shared/components/Button';
 import { useBreadcrumbStore } from './breadcrumbStore';
 
 export interface HeaderProps {
@@ -20,6 +22,7 @@ export interface HeaderProps {
 export function Header({ onOpenSidebar }: HeaderProps) {
   const items = useBreadcrumbStore((state) => state.items);
   const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 sm:px-6">
@@ -37,8 +40,16 @@ export function Header({ onOpenSidebar }: HeaderProps) {
       <div className="flex shrink-0 items-center gap-3">
         {/* Visitante anónimo (ADR-049): sin sesión no hay notificaciones que pedir --
             si se montara igual, dispararía un 401 contra un endpoint autenticado apenas
-            entra a la página pública de un remate. */}
-        {isAuthenticated && <NotificationBell />}
+            entra a la página pública de un remate. En su lugar, un botón a "Iniciar
+            sesión": ni el Sidebar (su bloque de usuario/logout solo se renderiza con
+            `user`) ni este Header mostraban antes ningún punto de entrada a /login, así
+            que alguien navegando /remates sin cuenta no tenía forma de encontrar el
+            login salvo escribiendo la URL a mano. */}
+        {isAuthenticated ? (
+          <NotificationBell />
+        ) : (
+          <Button onClick={() => navigate('/login')}>Iniciar sesión</Button>
+        )}
       </div>
     </header>
   );
