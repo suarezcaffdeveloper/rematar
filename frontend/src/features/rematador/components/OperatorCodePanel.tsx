@@ -146,7 +146,7 @@ export function OperatorCodePanel({ remate }: OperatorCodePanelProps) {
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
           <KeyRound aria-hidden="true" className="h-4 w-4" />
         </div>
-        <span className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">Datos para el rematador</span>
+        <span className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">Datos para el martillero</span>
       </div>
 
       {rematadorId ? (
@@ -214,7 +214,7 @@ export function OperatorCodePanel({ remate }: OperatorCodePanelProps) {
         }}
         variant="danger"
         title="Regenerar código de operador"
-        message="Ya hay un rematador asignado. Regenerar el código lo desvincula de este remate de inmediato -- vas a tener que darle el código nuevo para que vuelva a entrar."
+        message="Ya hay un martillero asignado. Regenerar el código lo desvincula de este remate de inmediato -- vas a tener que darle el código nuevo para que vuelva a entrar."
         confirmLabel="Regenerar de todos modos"
       />
     </div>

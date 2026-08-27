@@ -309,7 +309,7 @@ export function LoteFormModal({ isOpen, onClose, remateId, lote, onSaved }: Lote
             <Switch
               id={requeuePresetSwitchId}
               label="Preautorizar reencolado"
-              description='Si este lote no recibe ofertas, el rematador que esté operando el remate va a poder volver a rematarlo con este precio, sin que vos tengas que estar presente en ese momento.'
+              description='Si este lote no recibe ofertas, el martillero que esté operando el remate va a poder volver a rematarlo con este precio, sin que vos tengas que estar presente en ese momento.'
               checked={values.requeue_preset_enabled}
               onChange={(checked) => setField('requeue_preset_enabled', checked)}
             />

@@ -105,7 +105,7 @@ export function WhatIsSection() {
         </h2>
         <p className="mt-5 text-lg leading-relaxed text-slate-600">
           RematAR es una plataforma para realizar remates online completos, con
-          interacción en tiempo real entre compradores y rematadores. Desde la
+          interacción en tiempo real entre compradores y martilleros. Desde la
           creación del evento hasta la adjudicación del último lote, todo sucede en
           vivo, en un mismo lugar.
         </p>

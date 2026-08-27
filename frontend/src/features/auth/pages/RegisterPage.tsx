@@ -14,7 +14,7 @@ import { RegisterShowcase } from '../components/RegisterShowcase';
 const ROLE_OPTIONS: { value: RegisterableRole; label: string; description: string; icon: typeof User }[] = [
   { value: 'comprador', label: 'Comprador', description: 'Quiero ofertar en remates', icon: User },
   { value: 'empresa', label: 'Empresa', description: 'Quiero organizar remates', icon: Building2 },
-  { value: 'rematador', label: 'Rematador', description: 'Quiero dirigir remates en vivo', icon: Gavel },
+  { value: 'rematador', label: 'Martillero', description: 'Quiero dirigir remates en vivo', icon: Gavel },
 ];
 
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
@@ -111,7 +111,7 @@ export function RegisterPage() {
             <>
               <h1 className="mt-6 text-3xl font-bold tracking-tight text-ink">Cuenta creada</h1>
               <Alert variant="success" className="mt-4">
-                Tu cuenta como {role === 'empresa' ? 'empresa' : 'rematador'} quedó pendiente de
+                Tu cuenta como {role === 'empresa' ? 'empresa' : 'martillero'} quedó pendiente de
                 aprobación. Un administrador de RematAR la va a revisar y activar antes de que
                 puedas iniciar sesión -- te vamos a avisar por email apenas esté lista.
               </Alert>

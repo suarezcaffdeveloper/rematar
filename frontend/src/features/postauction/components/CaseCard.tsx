@@ -22,7 +22,7 @@ export interface CaseCardProps {
  * `RemateCard` (evita anidar controles interactivos dentro de un elemento clickeable). */
 export function CaseCard({ item, to, perspective, currency = 'ARS' }: CaseCardProps) {
   const navigate = useNavigate();
-  const counterpartLabel = perspective === 'rematador' ? 'Comprador' : 'Rematador';
+  const counterpartLabel = perspective === 'rematador' ? 'Comprador' : 'Martillero';
   const counterpartName = perspective === 'rematador' ? item.buyer_name : item.rematador_name;
 
   return (

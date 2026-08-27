@@ -148,7 +148,7 @@ export function CompradorDashboardPage() {
           <EmptyState
             icon={<GavelIcon className="h-10 w-10" />}
             title="Todavía no hay remates disponibles"
-            description="Cuando un rematador programe un remate, vas a poder verlo acá."
+            description="Cuando un martillero programe un remate, vas a poder verlo acá."
           />
         )}
 

@@ -28,12 +28,12 @@ export function LandingPage() {
         <BenefitsSection
           eyebrow="Para empresas"
           title="Administrá tus remates, lotes y resultados"
-          description="El backoffice de la empresa: creá eventos, cargá catálogos, asigná rematadores y seguí adjudicaciones y ventas post-remate."
+          description="El backoffice de la empresa: creá eventos, cargá catálogos, asigná martilleros y seguí adjudicaciones y ventas post-remate."
           benefits={EMPRESA_BENEFITS}
           visual={<EmpresaMockup />}
         />
         <BenefitsSection
-          eyebrow="Para rematadores"
+          eyebrow="Para martilleros"
           title="Conducí el remate en vivo"
           description="Accedé con tus credenciales directo a la consola operativa, conducí el evento en tiempo real y terminá tu trabajo al cerrar."
           benefits={REMATADOR_BENEFITS}

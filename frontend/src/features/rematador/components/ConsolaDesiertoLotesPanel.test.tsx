@@ -1,23 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { ConsolaDesiertoLotesPanel } from './ConsolaDesiertoLotesPanel';
 import type { Lote } from '../../remates/types';
 
-vi.mock('../../remates/api', () => ({ requeueLoteRequest: vi.fn() }));
-vi.mock('../../../shared/toast/toastStore', () => ({
-  useToastStore: { getState: () => ({ push: vi.fn() }) },
+const apiMocks = vi.hoisted(() => ({
+  requeueLotePresetRequest: vi.fn(),
+  requeueLoteRequest: vi.fn(),
 }));
+vi.mock('../../remates/api', () => apiMocks);
 
 function makeLote(overrides: Partial<Lote> = {}): Lote {
   return {
     id: 'lote-1',
     remate_id: 'remate-1',
-    lot_number: '2',
+    lot_number: '7',
     display_order: 0,
-    title: 'Sembradora Apache',
+    title: 'Toro Angus',
     description: null,
-    category: 'maquinaria_pesada_y_agricola',
+    category: 'hacienda',
     attributes: {},
     images: [],
     quantity: 1,
@@ -29,58 +29,73 @@ function makeLote(overrides: Partial<Lote> = {}): Lote {
     status: 'closed_unsold',
     timer_ends_at: null,
     timer_paused_remaining_seconds: null,
-    timer_auto_close_enabled: true,
+    timer_auto_close_enabled: false,
     round_number: 1,
     requeue_preset_enabled: false,
     requeue_preset_base_price: null,
     requeue_preset_min_increment: null,
     created_at: '2026-07-01T00:00:00Z',
     ...overrides,
-  };
+  } as Lote;
 }
 
 describe('ConsolaDesiertoLotesPanel', () => {
-  it('sin lotes desiertos, no renderiza nada (evita ruido en la interfaz)', () => {
+  it('sin lotes desiertos, no renderiza nada', () => {
     const { container } = render(
-      <ConsolaDesiertoLotesPanel remateId="remate-1" lotes={[]} currency="ARS" />,
+      <ConsolaDesiertoLotesPanel remateId="remate-1" lotes={[]} currency="ARS" canUseCustomPrice={false} />,
     );
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('lista cada lote desierto con su número, título y botón "Volver a rematar"', () => {
+  it('lote sin preset, empresa (canUseCustomPrice): muestra "Volver a rematar" con precio libre', () => {
     render(
       <ConsolaDesiertoLotesPanel
         remateId="remate-1"
+        lotes={[makeLote()]}
         currency="ARS"
-        lotes={[
-          makeLote({ id: 'lote-1', lot_number: '2', title: 'Sembradora Apache' }),
-          makeLote({ id: 'lote-2', lot_number: '5', title: 'Tractor John Deere' }),
-        ]}
+        canUseCustomPrice
       />,
     );
-
-    expect(screen.getByText('Lotes desiertos')).toBeInTheDocument();
-    expect(screen.getByText('Sembradora Apache')).toBeInTheDocument();
-    expect(screen.getByText('Tractor John Deere')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Volver a rematar' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: /volver a rematar/i })).toBeInTheDocument();
+    expect(screen.queryByText(/necesita que la empresa defina un precio/i)).not.toBeInTheDocument();
   });
 
-  it('clickear "Volver a rematar" en una tarjeta abre el formulario inline de esa tarjeta, sin afectar las demás', async () => {
+  it('lote sin preset, rematador (sin canUseCustomPrice): no ofrece precio libre, solo avisa', () => {
     render(
       <ConsolaDesiertoLotesPanel
         remateId="remate-1"
+        lotes={[makeLote()]}
         currency="ARS"
-        lotes={[
-          makeLote({ id: 'lote-1', lot_number: '2', title: 'Sembradora Apache' }),
-          makeLote({ id: 'lote-2', lot_number: '5', title: 'Tractor John Deere' }),
-        ]}
+        canUseCustomPrice={false}
       />,
     );
+    expect(screen.queryByRole('button', { name: /volver a rematar/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/necesita que la empresa defina un precio/i)).toBeInTheDocument();
+  });
 
-    await userEvent.click(screen.getAllByRole('button', { name: 'Volver a rematar' })[0]);
+  it('lote con preset, rematador: puede reencolar en un click, sin link a precio libre', () => {
+    render(
+      <ConsolaDesiertoLotesPanel
+        remateId="remate-1"
+        lotes={[makeLote({ requeue_preset_enabled: true, requeue_preset_base_price: '900.00', requeue_preset_min_increment: '50.00' })]}
+        currency="ARS"
+        canUseCustomPrice={false}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /volver a rematar/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /usar otro precio/i })).not.toBeInTheDocument();
+  });
 
-    expect(screen.getByRole('button', { name: 'Confirmar reincorporación' })).toBeInTheDocument();
-    // La segunda tarjeta sigue sin expandirse -- solo queda un botón "Volver a rematar" (el suyo).
-    expect(screen.getAllByRole('button', { name: 'Volver a rematar' })).toHaveLength(1);
+  it('lote con preset, empresa: además del click preautorizado, ofrece "Usar otro precio"', () => {
+    render(
+      <ConsolaDesiertoLotesPanel
+        remateId="remate-1"
+        lotes={[makeLote({ requeue_preset_enabled: true, requeue_preset_base_price: '900.00', requeue_preset_min_increment: '50.00' })]}
+        currency="ARS"
+        canUseCustomPrice
+      />,
+    );
+    expect(screen.getByRole('button', { name: /volver a rematar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /usar otro precio/i })).toBeInTheDocument();
   });
 });

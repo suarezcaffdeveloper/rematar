@@ -26,38 +26,38 @@ const BASE_COPY: Record<PostAuctionStatus, StatusCopy> = {
     headline: 'Ganaste este lote. Todavía no hay novedades del proceso de pago y entrega.',
     nextStepTitle: 'Compra adjudicada',
     nextStepDescription:
-      'La compra fue adjudicada. Próximamente el rematador va a iniciar la gestión de pago y entrega.',
+      'La compra fue adjudicada. Próximamente el martillero va a iniciar la gestión de pago y entrega.',
   },
   pendiente_contacto: {
-    headline: 'El rematador todavía no se puso en contacto con vos.',
+    headline: 'El martillero todavía no se puso en contacto con vos.',
     nextStepTitle: 'Esperando contacto',
     nextStepDescription:
-      'El rematador se va a poner en contacto con vos para coordinar los próximos pasos de esta compra.',
+      'El martillero se va a poner en contacto con vos para coordinar los próximos pasos de esta compra.',
   },
   pago_pendiente: {
     headline: 'Tu compra está pendiente de pago.',
     nextStepTitle: 'Pago pendiente',
-    nextStepDescription: 'Contactá al rematador para coordinar el pago de esta compra.',
+    nextStepDescription: 'Contactá al martillero para coordinar el pago de esta compra.',
   },
   pago_recibido: {
     headline: 'Tu pago fue registrado correctamente.',
     nextStepTitle: 'Pago recibido',
-    nextStepDescription: 'El pago fue registrado. El rematador va a preparar la entrega de tu compra.',
+    nextStepDescription: 'El pago fue registrado. El martillero va a preparar la entrega de tu compra.',
   },
   preparando_entrega: {
-    headline: 'El rematador está preparando tu entrega.',
+    headline: 'El martillero está preparando tu entrega.',
     nextStepTitle: 'Preparando entrega',
-    nextStepDescription: 'El rematador está organizando el envío o la entrega de tu compra.',
+    nextStepDescription: 'El martillero está organizando el envío o la entrega de tu compra.',
   },
   enviado: {
     headline: 'Tu compra fue enviada.',
     nextStepTitle: 'Compra enviada',
-    nextStepDescription: 'Tu compra está en camino. Si necesitás más información, contactá al rematador.',
+    nextStepDescription: 'Tu compra está en camino. Si necesitás más información, contactá al martillero.',
   },
   entregado: {
     headline: 'Tu compra fue entregada.',
     nextStepTitle: 'Entrega registrada',
-    nextStepDescription: 'La entrega de tu compra ya fue registrada por el rematador.',
+    nextStepDescription: 'La entrega de tu compra ya fue registrada por el martillero.',
   },
   finalizado: {
     headline: 'El proceso de tu compra finalizó con éxito.',
@@ -74,13 +74,13 @@ export function getStatusCopy(data: PostAuctionCaseDetail): StatusCopy {
   if (data.status === 'pago_recibido' && data.payment_at) {
     return {
       ...base,
-      nextStepDescription: `Registramos tu pago el ${formatDateTime(data.payment_at)}. El rematador va a preparar la entrega de tu compra.`,
+      nextStepDescription: `Registramos tu pago el ${formatDateTime(data.payment_at)}. El martillero va a preparar la entrega de tu compra.`,
     };
   }
   if (data.status === 'enviado' && data.shipped_at) {
     return {
       ...base,
-      nextStepDescription: `Tu compra fue enviada el ${formatDateTime(data.shipped_at)}. Si necesitás más información, contactá al rematador.`,
+      nextStepDescription: `Tu compra fue enviada el ${formatDateTime(data.shipped_at)}. Si necesitás más información, contactá al martillero.`,
     };
   }
   if (data.status === 'entregado' && data.delivered_at) {

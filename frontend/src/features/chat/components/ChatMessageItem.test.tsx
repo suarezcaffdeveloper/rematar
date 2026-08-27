@@ -41,7 +41,7 @@ describe('ChatMessageItem', () => {
     expect(screen.getByText('Juan Pérez')).toBeInTheDocument();
     expect(screen.getByText('Hola a todos')).toBeInTheDocument();
     expect(screen.queryByText('Comprador')).not.toBeInTheDocument();
-    expect(screen.queryByText('Rematador')).not.toBeInTheDocument();
+    expect(screen.queryByText('Martillero')).not.toBeInTheDocument();
   });
 
   it('con author_avatar_url, muestra la foto de perfil del autor en vez de sus iniciales', () => {

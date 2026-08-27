@@ -25,6 +25,7 @@ import {
 import type { Lote, Remate } from '../../remates/types';
 import type { OfertaSnapshotEntry } from '../../sala/types';
 import { DesiertoLoteNotice } from './DesiertoLoteNotice';
+import { LoteAdjudicadoOverlay, type AdjudicatedLoteInfo } from './LoteAdjudicadoOverlay';
 
 export interface ConsolaControlPanelProps {
   remate: Remate;
@@ -202,6 +203,12 @@ export function ConsolaControlPanel({
   // ("Continuar"/Escape/click afuera) -- no se descarta solo, ni siquiera si mientras
   // tanto se abre otro lote.
   const [desiertoBanner, setDesiertoBanner] = useState<Lote | null>(null);
+  // Cartel de "lote adjudicado" (`LoteAdjudicadoOverlay`) -- se dispara apenas
+  // `runAdjudicate` cierra el lote como `sold`. `null` cuando no hay ninguno para
+  // mostrar. A diferencia de `desiertoBanner`, tiene dos salidas posibles: "Cancelar"
+  // (solo lo cierra) o "Pasar al siguiente lote" (lo cierra y además dispara
+  // `handleAdvance`, ver `handleOverlayAdvance` más abajo).
+  const [adjudicatedLote, setAdjudicatedLote] = useState<AdjudicatedLoteInfo | null>(null);
 
   const isLive = remate.status === 'live';
   const isPaused = remate.status === 'paused';
@@ -268,11 +275,27 @@ export function ConsolaControlPanel({
       useToastStore
         .getState()
         .push('success', `Lote adjudicado por ${formatCurrency(offer.amount, remate.settings.currency)}.`);
+      setAdjudicatedLote({
+        lotNumber: lote.lot_number,
+        title: lote.title,
+        finalPrice: offer.amount,
+        currency: remate.settings.currency,
+        isBot: offer.is_bot,
+      });
     } catch (err) {
       useToastStore.getState().push('error', normalizeApiError(err).message);
     } finally {
       setPendingAction(null);
     }
+  }
+
+  /** "Pasar al siguiente lote" desde el cartel de adjudicación -- lo cierra y encadena
+   * la misma acción que el botón "Pasar al siguiente lote" del panel (`handleAdvance`).
+   * Distinto de "Cancelar" (`onCancel={() => setAdjudicatedLote(null)}` directo en el
+   * JSX), que ÚNICAMENTE cierra el cartel sin tocar el lote activo ni el remate. */
+  async function handleOverlayAdvance() {
+    setAdjudicatedLote(null);
+    await handleAdvance();
   }
 
   /** "Adjudicar lote": solo tiene sentido con oferta ganadora (ver el JSX más abajo,
@@ -308,6 +331,16 @@ export function ConsolaControlPanel({
        * ver `DesiertoLoteNotice`. Se renderiza siempre (portal a `document.body`,
        * controlado por `isOpen`/`lote`), así que su posición en este JSX no importa. */}
       <DesiertoLoteNotice lote={desiertoBanner} onClose={() => setDesiertoBanner(null)} />
+
+      {/* Cartel de "lote adjudicado" -- ver `LoteAdjudicadoOverlay` y el docstring de
+       * `adjudicatedLote` más arriba. "Cancelar" solo cierra el cartel (no deshace la
+       * adjudicación); "Pasar al siguiente lote" además dispara `handleAdvance` vía
+       * `handleOverlayAdvance`. */}
+      <LoteAdjudicadoOverlay
+        adjudicatedLote={adjudicatedLote}
+        onAdvance={() => void handleOverlayAdvance()}
+        onCancel={() => setAdjudicatedLote(null)}
+      />
 
       {/* "Pasar al siguiente lote" (la acción que más se usa durante un remate en vivo)
        * vive adentro de "Gestión de lote", arriba de "Abrir lote"/"Cerrar lote" -- las

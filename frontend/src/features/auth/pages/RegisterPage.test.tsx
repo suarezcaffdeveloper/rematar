@@ -36,7 +36,7 @@ describe('RegisterPage', () => {
     expect(screen.getByLabelText(/confirmar contraseña/i)).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /comprador/i })).toBeChecked();
     expect(screen.getByRole('radio', { name: /empresa/i })).not.toBeChecked();
-    expect(screen.getByRole('radio', { name: /rematador/i })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: /martillero/i })).not.toBeChecked();
     expect(screen.getByRole('button', { name: /crear cuenta/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /iniciar sesión/i })).toHaveAttribute('href', '/login');
   });

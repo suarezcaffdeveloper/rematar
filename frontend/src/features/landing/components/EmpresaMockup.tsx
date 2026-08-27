@@ -87,12 +87,12 @@ const SCENES: MockupScene[] = [
   },
   {
     key: 'asignar-rematador',
-    label: 'Asignación de rematadores',
+    label: 'Asignación de martilleros',
     urlLabel: 'app.rematar.com/mis-remates/estancia-la-elena',
     content: (
       <>
         <div className="flex items-center justify-between gap-2">
-          <Eyebrow icon={KeyRound}>Datos para el rematador</Eyebrow>
+          <Eyebrow icon={KeyRound}>Datos para el martillero</Eyebrow>
           <Badge variant="success">Operador asignado</Badge>
         </div>
         <div className="mt-3 flex flex-col gap-2.5">
@@ -100,7 +100,7 @@ const SCENES: MockupScene[] = [
           <InlineCopyChip label="Código de operador" value="8f3a-91c2" />
         </div>
         <p className="mt-2 text-xs leading-relaxed text-slate-400">
-          El código le da acceso al rematador a la consola operativa de este remate.
+          El código le da acceso al martillero a la consola operativa de este remate.
         </p>
         <div className="mt-auto flex items-center gap-1.5 text-xs font-semibold text-slate-500">
           <RefreshCcw className="h-3.5 w-3.5" /> Regenerar código

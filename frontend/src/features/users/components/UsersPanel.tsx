@@ -17,7 +17,7 @@ const PAGE_SIZE = 20;
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Administrador',
   empresa: 'Empresa',
-  rematador: 'Rematador',
+  rematador: 'Martillero',
   comprador: 'Comprador',
 };
 
@@ -101,7 +101,7 @@ export function UsersPanel() {
           title={pendingOnly ? 'No hay cuentas pendientes' : 'Sin usuarios'}
           description={
             pendingOnly
-              ? 'Ninguna cuenta de empresa o rematador está esperando aprobación en este momento.'
+              ? 'Ninguna cuenta de empresa o martillero está esperando aprobación en este momento.'
               : 'Todavía no hay usuarios registrados.'
           }
         />

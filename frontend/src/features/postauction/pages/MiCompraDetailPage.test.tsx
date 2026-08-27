@@ -96,7 +96,7 @@ describe('MiCompraDetailPage', () => {
     expect((await screen.findAllByText('Ford Ranger XLT 3.2 4x2')).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Pago pendiente').length).toBeGreaterThan(0);
     expect(screen.getByText('Tu compra está pendiente de pago.')).toBeInTheDocument();
-    expect(screen.getByText('Contactá al rematador para coordinar el pago de esta compra.')).toBeInTheDocument();
+    expect(screen.getByText('Contactá al martillero para coordinar el pago de esta compra.')).toBeInTheDocument();
     expect(screen.getAllByText(/\$\s?15\.000\.000/).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Rematador Demo').length).toBeGreaterThan(0);
   });
@@ -113,7 +113,7 @@ describe('MiCompraDetailPage', () => {
     apiMocks.fetchMiCompraDetailRequest.mockResolvedValue(makeDetail());
     renderPage();
 
-    expect(await screen.findByText('Observaciones del rematador')).toBeInTheDocument();
+    expect(await screen.findByText('Observaciones del martillero')).toBeInTheDocument();
     expect(screen.getAllByText(/El comprador ya me quiere pagar esta re loco/).length).toBeGreaterThan(0);
     expect(screen.queryByText('Error al enviar notificación')).not.toBeInTheDocument();
   });
@@ -123,7 +123,7 @@ describe('MiCompraDetailPage', () => {
     renderPage();
 
     expect((await screen.findAllByText('Ford Ranger XLT 3.2 4x2')).length).toBeGreaterThan(0);
-    expect(screen.queryByText('Observaciones del rematador')).not.toBeInTheDocument();
+    expect(screen.queryByText('Observaciones del martillero')).not.toBeInTheDocument();
     expect(screen.getByText('Sin actividad registrada')).toBeInTheDocument();
   });
 

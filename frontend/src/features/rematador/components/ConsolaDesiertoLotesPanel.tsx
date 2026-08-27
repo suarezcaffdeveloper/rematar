@@ -26,10 +26,12 @@ function PresetRequeueButton({
   remateId,
   lote,
   currency,
+  canUseCustomPrice,
 }: {
   remateId: string;
   lote: Lote;
   currency: string;
+  canUseCustomPrice: boolean;
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [useCustomForm, setUseCustomForm] = useState(false);
@@ -72,13 +74,15 @@ function PresetRequeueButton({
           Desde {formatCurrency(lote.requeue_preset_base_price, currency)}
         </span>
       )}
-      <button
-        type="button"
-        onClick={() => setUseCustomForm(true)}
-        className="text-xs text-ink-faint underline decoration-dotted hover:text-ink-muted"
-      >
-        Usar otro precio
-      </button>
+      {canUseCustomPrice && (
+        <button
+          type="button"
+          onClick={() => setUseCustomForm(true)}
+          className="text-xs text-ink-faint underline decoration-dotted hover:text-ink-muted"
+        >
+          Usar otro precio
+        </button>
+      )}
     </div>
   );
 }
@@ -87,10 +91,12 @@ function DesiertoLoteCard({
   remateId,
   lote,
   currency,
+  canUseCustomPrice,
 }: {
   remateId: string;
   lote: Lote;
   currency: string;
+  canUseCustomPrice: boolean;
 }) {
   const [isRequeuing, setIsRequeuing] = useState(false);
   const mainImage = [...lote.images].sort((a, b) => a.order - b.order)[0];
@@ -132,12 +138,21 @@ function DesiertoLoteCard({
         </div>
       </div>
       {lote.requeue_preset_enabled ? (
-        <PresetRequeueButton remateId={remateId} lote={lote} currency={currency} />
-      ) : (
+        <PresetRequeueButton
+          remateId={remateId}
+          lote={lote}
+          currency={currency}
+          canUseCustomPrice={canUseCustomPrice}
+        />
+      ) : canUseCustomPrice ? (
         <Button variant="brand-soft" className="shrink-0 !gap-1.5" onClick={() => setIsRequeuing(true)}>
           <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" />
           Volver a rematar
         </Button>
+      ) : (
+        <span className="shrink-0 text-right text-xs text-ink-faint">
+          Necesita que la empresa defina un precio para reincorporarlo.
+        </span>
       )}
     </div>
   );
@@ -149,6 +164,13 @@ export interface ConsolaDesiertoLotesPanelProps {
    * `ConsolaUpcomingLotesPanel.lotes` (filtrado en el caller, acá solo presentación). */
   lotes: Lote[];
   currency: string;
+  /** `true` solo para la empresa dueña: el reencolado con precio libre
+   * (`requeueLoteRequest`) es owner-only en el backend (`LoteService.requeue`), a
+   * diferencia del preautorizado (`requeue_preset`), que sí puede usar el rematador
+   * operador. Sin este flag, el rematador veía el mismo botón "Volver a rematar" que la
+   * empresa para un lote sin preset, pero el submit le fallaba con 403 -- acá en vez de
+   * eso ve un aviso de que hace falta que la empresa defina un precio. */
+  canUseCustomPrice: boolean;
 }
 
 /**
@@ -162,7 +184,7 @@ export interface ConsolaDesiertoLotesPanelProps {
  * `ConsolaControlPanel` (que se puede haber descartado con "Continuar") -- este panel es
  * la vía persistente para decidir más adelante, tal como pide el enunciado.
  */
-export function ConsolaDesiertoLotesPanel({ remateId, lotes, currency }: ConsolaDesiertoLotesPanelProps) {
+export function ConsolaDesiertoLotesPanel({ remateId, lotes, currency, canUseCustomPrice }: ConsolaDesiertoLotesPanelProps) {
   if (lotes.length === 0) return null;
 
   return (
@@ -173,7 +195,13 @@ export function ConsolaDesiertoLotesPanel({ remateId, lotes, currency }: Consola
       </h2>
       <div className="flex flex-col gap-2">
         {lotes.map((lote) => (
-          <DesiertoLoteCard key={lote.id} remateId={remateId} lote={lote} currency={currency} />
+          <DesiertoLoteCard
+            key={lote.id}
+            remateId={remateId}
+            lote={lote}
+            currency={currency}
+            canUseCustomPrice={canUseCustomPrice}
+          />
         ))}
       </div>
     </div>

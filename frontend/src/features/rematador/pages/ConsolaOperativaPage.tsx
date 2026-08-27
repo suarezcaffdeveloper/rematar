@@ -287,7 +287,12 @@ export function ConsolaOperativaPage() {
                 />
               </div>
 
-              <ConsolaDesiertoLotesPanel remateId={remate.id} lotes={desiertoLotes} currency={currency} />
+              <ConsolaDesiertoLotesPanel
+                remateId={remate.id}
+                lotes={desiertoLotes}
+                currency={currency}
+                canUseCustomPrice={isOwner}
+              />
             </div>
 
             <div className="xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:self-stretch">

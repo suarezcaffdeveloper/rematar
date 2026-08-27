@@ -7,7 +7,7 @@ import type { UserRole } from '../auth/types';
 
 export const CHAT_ROLE_LABELS: Record<UserRole, string> = {
   comprador: 'Comprador',
-  rematador: 'Rematador',
+  rematador: 'Martillero',
   empresa: 'Empresa',
   admin: 'Administrador',
 };

@@ -261,7 +261,7 @@ export function SalaPage() {
             <EmptyState
               icon={<GavelIcon className="h-10 w-10" />}
               title="No hay ningún lote abierto en este momento"
-              description="El rematador todavía no abrió un lote para ofertar. Volvé a intentar en unos minutos."
+              description="El martillero todavía no abrió un lote para ofertar. Volvé a intentar en unos minutos."
               action={
                 <Button variant="secondary" onClick={reloadSnapshot}>
                   Actualizar

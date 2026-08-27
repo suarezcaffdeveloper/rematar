@@ -4,7 +4,7 @@ import type { UserRole } from '../auth/types';
  * `features/chat/labels.ts` (no hay un mapeo compartido todavía, ver su docstring). */
 export const PROFILE_ROLE_LABELS: Record<UserRole, string> = {
   comprador: 'Comprador',
-  rematador: 'Rematador',
+  rematador: 'Martillero',
   empresa: 'Empresa',
   admin: 'Administrador',
 };

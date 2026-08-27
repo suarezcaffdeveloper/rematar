@@ -33,7 +33,7 @@ const SCENES: MockupScene[] = [
         <Eyebrow>Chat del remate</Eyebrow>
         <div className="mt-2.5 flex-1 space-y-2 text-sm">
           <div>
-            <span className="text-xs font-semibold text-sky-700">Rematador</span>
+            <span className="text-xs font-semibold text-sky-700">Martillero</span>
             <p className="leading-snug text-slate-600">El lote 14 incluye flete dentro del radio pactado.</p>
           </div>
           <div>
@@ -172,7 +172,7 @@ const SCENES: MockupScene[] = [
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-700">Qué sigue</p>
             <p className="text-sm font-semibold text-slate-900">Pago pendiente</p>
-            <p className="text-xs leading-snug text-slate-500">Coordiná el pago con el rematador para avanzar.</p>
+            <p className="text-xs leading-snug text-slate-500">Coordiná el pago con el martillero para avanzar.</p>
           </div>
         </div>
         <div className="mt-auto grid grid-cols-2 gap-2">

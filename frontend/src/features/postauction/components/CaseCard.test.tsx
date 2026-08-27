@@ -46,7 +46,7 @@ describe('CaseCard', () => {
 
   it('perspectiva comprador muestra el nombre del rematador', () => {
     renderCard('comprador');
-    expect(screen.getByText('Rematador')).toBeInTheDocument();
+    expect(screen.getByText('Martillero')).toBeInTheDocument();
     expect(screen.getByText('Ana Rematadora')).toBeInTheDocument();
   });
 

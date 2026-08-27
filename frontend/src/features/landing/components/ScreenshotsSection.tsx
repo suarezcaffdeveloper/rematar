@@ -82,7 +82,7 @@ export function ScreenshotsSection() {
           Así se ve por dentro
         </h2>
         <p className="mt-4 text-lg text-slate-600">
-          Un vistazo real a las pantallas que ven compradores y rematadores.
+          Un vistazo real a las pantallas que ven compradores y martilleros.
         </p>
       </Reveal>
 

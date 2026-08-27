@@ -179,7 +179,7 @@ describe('ConsolaOperativaPage', () => {
     expect(screen.getByText('Ver resumen')).toBeInTheDocument();
   });
 
-  it('remate "scheduled", viewer dueño: ya muestra "Datos para el rematador" aunque todavía no esté en vivo', () => {
+  it('remate "scheduled", viewer dueño: ya muestra "Datos para el martillero" aunque todavía no esté en vivo', () => {
     useAuthMock.mockReturnValue({ user: { id: 'owner-1', role: 'empresa' } });
     mockLiveState({ snapshot: makeSnapshot({ remate: makeRemate({ status: 'scheduled' }), active_lote: null }) });
 
@@ -189,7 +189,7 @@ describe('ConsolaOperativaPage', () => {
     expect(screen.getByText('Esta consola es para remates en vivo')).toBeInTheDocument();
   });
 
-  it('remate "finished", viewer dueño: ya no muestra "Datos para el rematador"', () => {
+  it('remate "finished", viewer dueño: ya no muestra "Datos para el martillero"', () => {
     useAuthMock.mockReturnValue({ user: { id: 'owner-1', role: 'empresa' } });
     mockLiveState({ snapshot: makeSnapshot({ remate: makeRemate({ status: 'finished' }), active_lote: null }) });
 

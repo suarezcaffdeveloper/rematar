@@ -23,7 +23,7 @@ export function ObservationsFeed({ data }: ObservationsFeedProps) {
 
   return (
     <Card>
-      <h2 className="mb-4 text-sm font-semibold text-slate-900">Observaciones del rematador</h2>
+      <h2 className="mb-4 text-sm font-semibold text-slate-900">Observaciones del martillero</h2>
       <ol className="flex flex-col">
         {notes.map((entry, index) => (
           <li
@@ -32,7 +32,7 @@ export function ObservationsFeed({ data }: ObservationsFeedProps) {
           >
             <p className="text-sm leading-relaxed text-slate-700">&ldquo;{entry.note}&rdquo;</p>
             <p className="text-xs text-slate-400">
-              {entry.actor_name ?? 'Rematador'} · {formatDateTime(entry.occurred_at)}
+              {entry.actor_name ?? 'Martillero'} · {formatDateTime(entry.occurred_at)}
             </p>
           </li>
         ))}

@@ -61,7 +61,7 @@ export interface BenefitItem {
 
 export const EMPRESA_BENEFITS: BenefitItem[] = [
   { icon: Layers, title: 'Gestión de remates y lotes', description: 'Creá remates, cargá el catálogo de lotes con imágenes y precios base, y organizá cada evento desde cero.' },
-  { icon: Users, title: 'Asignación de rematadores', description: 'Designá operadores para cada remate y controlá quién conduce el evento en vivo.' },
+  { icon: Users, title: 'Asignación de martilleros', description: 'Designá operadores para cada remate y controlá quién conduce el evento en vivo.' },
   { icon: BarChart3, title: 'Panel de administración', description: 'Visualizá resultados globales, adjudicaciones, ventas post-remate y métricas de tus eventos.' },
   { icon: Boxes, title: 'Control de inventario', description: 'Administrá la documentación, fotos y estado de cada lote hasta su venta final.' },
   { icon: ShieldCheck, title: 'Aprobaciones y seguridad', description: 'Validá participantes, auditá acciones y mantené el control sobre qué usuarios ingresan a cada evento.' },
@@ -81,7 +81,7 @@ export const COMPRADOR_BENEFITS: BenefitItem[] = [
   { icon: Boxes, title: 'Visualización del lote', description: 'Imágenes, video y toda la información del lote, clara y a mano antes de ofertar.' },
   { icon: Radio, title: 'Ofertas en vivo', description: 'Segui cómo sube la puja en tiempo real, sin recargar la página ni perder el ritmo.' },
   { icon: Activity, title: 'Historial', description: 'Repasá cada oferta hecha durante el remate, la tuya y la del resto.' },
-  { icon: MessageSquare, title: 'Chat', description: 'Consultá al rematador o a otros participantes sin salir de la sala.' },
+  { icon: MessageSquare, title: 'Chat', description: 'Consultá al martillero o a otros participantes sin salir de la sala.' },
   { icon: Timer, title: 'Seguimiento del remate', description: 'Sabé siempre qué lote está en juego y cuánto tiempo queda.' },
   { icon: Sparkles, title: 'Experiencia intuitiva', description: 'Pensada para participar sin fricción, desde cualquier dispositivo.' },
 ];
@@ -95,10 +95,10 @@ export interface TimelineStep {
 export const TIMELINE_STEPS: TimelineStep[] = [
   { number: 1, title: 'La empresa crea el remate', description: 'Define fecha, condiciones y reglas del evento.' },
   { number: 2, title: 'Carga los lotes', description: 'Suma imágenes, descripciones y precios base a cada lote.' },
-  { number: 3, title: 'Asigna al rematador', description: 'La empresa designa el operador que conducirá el evento en vivo.' },
-  { number: 4, title: 'El rematador inicia el remate', description: 'Accede con sus credenciales a la consola operativa y abre la sala del remate.' },
+  { number: 3, title: 'Asigna al martillero', description: 'La empresa designa el operador que conducirá el evento en vivo.' },
+  { number: 4, title: 'El martillero inicia el remate', description: 'Accede con sus credenciales a la consola operativa y abre la sala del remate.' },
   { number: 5, title: 'Los compradores ingresan', description: 'Acceden a la sala del remate y ven los lotes disponibles.' },
-  { number: 6, title: 'El rematador conduce el remate en vivo', description: 'Controla tiempos, modera y conduce cada lote desde la consola.' },
+  { number: 6, title: 'El martillero conduce el remate en vivo', description: 'Controla tiempos, modera y conduce cada lote desde la consola.' },
   { number: 7, title: 'Se adjudica el lote', description: 'La oferta ganadora queda registrada y el proceso post-remate comienza.' },
 ];
 
@@ -133,13 +133,13 @@ export const SYSTEM_SCREENS: SystemScreen[] = [
   },
   {
     key: 'panel-rematador',
-    title: 'Panel del rematador',
+    title: 'Panel del martillero',
     description: 'Mis remates: estado, creación, métricas globales y accesos rápidos a cada evento.',
     image: '/screenshots/panel-rematador.png',
   },
   {
     key: 'consola-rematador',
-    title: 'Consola del rematador',
+    title: 'Consola del martillero',
     description: 'El martillero modera y conduce el remate en vivo: temporizador, pujas y compradores en directo.',
     image: '/screenshots/consola-rematador.png',
   },
@@ -171,8 +171,8 @@ export interface FeatureCard {
 
 export const FEATURES: FeatureCard[] = [
   { icon: Radio, title: 'Remates en tiempo real', description: 'Cada oferta se actualiza al instante para todos los presentes, sin recargar la página.' },
-  { icon: MessageSquare, title: 'Chat integrado', description: 'Comprador y rematador se comunican sin salir de la sala del remate.' },
-  { icon: Users, title: 'Un panel para cada rol', description: 'Empresa, rematador y comprador tienen su propia vista, con solo lo que necesitan ver.' },
+  { icon: MessageSquare, title: 'Chat integrado', description: 'Comprador y martillero se comunican sin salir de la sala del remate.' },
+  { icon: Users, title: 'Un panel para cada rol', description: 'Empresa, martillero y comprador tienen su propia vista, con solo lo que necesitan ver.' },
   { icon: Boxes, title: 'Gestión de lotes', description: 'Catálogo con imágenes, precios base y estado de cada lote, de principio a fin.' },
   { icon: Shield, title: 'Moderación y seguridad', description: 'Validación de participantes y herramientas para mantener el orden durante el evento.' },
   { icon: BarChart3, title: 'Resultados en tiempo real', description: 'Adjudicaciones, ventas y métricas de cada remate, siempre a mano.' },

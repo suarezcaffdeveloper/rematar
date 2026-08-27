@@ -116,7 +116,7 @@ export function RemateDetailPage() {
           <EmptyState
             icon={<GavelIcon className="h-10 w-10" />}
             title="Este remate todavía no tiene lotes cargados"
-            description="Cuando el rematador cargue lotes, van a aparecer acá."
+            description="Cuando el martillero cargue lotes, van a aparecer acá."
           />
         )}
 

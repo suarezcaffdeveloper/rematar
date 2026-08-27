@@ -63,7 +63,7 @@ export function LoteWonOverlay({ wonLote, onContinue }: LoteWonOverlayProps) {
 
         <p className="text-sm leading-relaxed text-slate-600">
           Te enviamos un email y un mensaje por WhatsApp con los detalles de tu compra. El
-          rematador se va a contactar con vos a la brevedad.
+          martillero se va a contactar con vos a la brevedad.
         </p>
 
         <Button onClick={onContinue} className="w-full py-2.5 text-sm font-semibold">

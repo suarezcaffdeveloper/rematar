@@ -103,6 +103,19 @@ export function HeroSection() {
             >
               Ver la plataforma <ArrowRight className="h-4 w-4" />
             </a>
+            {/* Demo interactiva standalone (`frontend/public/demo.html`, sin backend) --
+             * pedido explícito: un botón acá para quien llega a la landing más adelante
+             * (buscador, reenvío) y no vio el link compartido aparte. Mismo tratamiento
+             * "secundario" que "Ver la plataforma" (outline, no compite con el CTA
+             * principal) -- `target="_blank"` para no sacar a la persona de la landing. */}
+            <a
+              href="/demo.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50"
+            >
+              Probar la demo <ArrowRight className="h-4 w-4" />
+            </a>
           </div>
 
           <div className="mt-14 grid grid-cols-3 gap-6 border-t border-slate-200 pt-8">
