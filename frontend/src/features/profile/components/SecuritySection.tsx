@@ -16,7 +16,7 @@ export function SecuritySection({ onChangePassword }: SecuritySectionProps) {
     <section>
       <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Seguridad</h2>
 
-      <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-slate-100 px-5 py-4">
+      <div className="mt-4 flex flex-col gap-4 rounded-xl border border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-400">
             <ShieldCheck aria-hidden="true" className="h-4 w-4" />
@@ -27,7 +27,7 @@ export function SecuritySection({ onChangePassword }: SecuritySectionProps) {
           </div>
         </div>
 
-        <Button variant="secondary" onClick={onChangePassword} className="shrink-0">
+        <Button variant="secondary" onClick={onChangePassword} className="w-full shrink-0 sm:w-auto">
           Cambiar contraseña
         </Button>
       </div>

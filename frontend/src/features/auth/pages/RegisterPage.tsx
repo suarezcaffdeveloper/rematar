@@ -34,8 +34,9 @@ const PHONE_PATTERN = /^\+?\d{8,15}$/;
  * sí viaja en el POST de registro para que el backend pueda revalidarlo.
  *
  * Teléfono/email y contraseña/confirmar contraseña van de a pares en la misma fila
- * (`grid grid-cols-2`) para mantener el formulario compacto en altura pese a tener
- * más campos que el login.
+ * (`grid sm:grid-cols-2`) para mantener el formulario compacto en altura pese a tener
+ * más campos que el login -- apilados en una sola columna por debajo de `sm` (640px),
+ * donde dos columnas dejan muy poco ancho por campo y truncan los placeholders.
  */
 export function RegisterPage() {
   const { register } = useAuthActions();
@@ -141,7 +142,7 @@ export function RegisterPage() {
                   }
                 />
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Input
                     label="Teléfono"
                     type="tel"
@@ -169,7 +170,7 @@ export function RegisterPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <Input
                       label="Contraseña"
@@ -218,7 +219,7 @@ export function RegisterPage() {
 
                 <fieldset className="flex flex-col gap-1.5">
                   <legend className="mb-2 text-sm font-medium text-ink">Quiero registrarme como</legend>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     {ROLE_OPTIONS.map((option) => {
                       const isSelected = role === option.value;
                       return (

@@ -1,0 +1,47 @@
+{
+  "qa-empresa@rematar-demo.com": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MTFjZDQwNC02NzNlLTRjMjgtYWNiMC00N2Q0NjgzNWFiMTQiLCJyb2xlIjoiZW1wcmVzYSIsInR5cGUiOiJhY2Nlc3MiLCJzaWQiOiI2YmE2NDRiMS0xOWUzLTQxNjUtOTJmNy0zOTYzMmQ1Y2VlNzMiLCJpYXQiOjE3ODc4NDAyMjcsImV4cCI6MTc4Nzg0MjAyN30.a3y7wLLNXkFbJ0uY4XvLqR5o4A5ZI4HjwAjAa3S_z7M",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2MTFjZDQwNC02NzNlLTRjMjgtYWNiMC00N2Q0NjgzNWFiMTQiLCJqdGkiOiI2YmE2NDRiMS0xOWUzLTQxNjUtOTJmNy0zOTYzMmQ1Y2VlNzMiLCJ0eXBlIjoicmVmcmVzaCIsImlhdCI6MTc4Nzg0MDIyNywiZXhwIjoxNzg4NDQ1MDI3fQ.l-25WnzbAZpxrZLcD1RDqAci_27zMT96HjsxU3h3oPw",
+    "token_type": "bearer",
+    "user": {
+      "id": "611cd404-673e-4c28-acb0-47d46835ab14",
+      "email": "qa-empresa@rematar-demo.com",
+      "full_name": "QA Empresa Test",
+      "phone": "+5491100000001",
+      "avatar_url": null,
+      "role": "empresa",
+      "is_active": true,
+      "created_at": "2026-08-27T13:00:26.158609Z"
+    }
+  },
+  "qa-rematador@rematar-demo.com": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3NmI3MTk3MC0yMWM2LTRmMmYtYTdkYi04ZjI3YTM5N2ZmMzQiLCJyb2xlIjoicmVtYXRhZG9yIiwidHlwZSI6ImFjY2VzcyIsInNpZCI6IjgxODk1MWQwLTc3NWItNDUxOC1iOWQ1LWI3ZTI3NjEzMzU2MSIsImlhdCI6MTc4Nzg0MDIyNywiZXhwIjoxNzg3ODQyMDI3fQ.-XW4Q8DEp-y1u-l1tondQjp4y5dgkV-qVqeKl7EEQLY",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3NmI3MTk3MC0yMWM2LTRmMmYtYTdkYi04ZjI3YTM5N2ZmMzQiLCJqdGkiOiI4MTg5NTFkMC03NzViLTQ1MTgtYjlkNS1iN2UyNzYxMzM1NjEiLCJ0eXBlIjoicmVmcmVzaCIsImlhdCI6MTc4Nzg0MDIyNywiZXhwIjoxNzg4NDQ1MDI3fQ.WLUmAR1xR1QcuzkO6p74vlD0Me8IiHwXGeMAVOcGAyk",
+    "token_type": "bearer",
+    "user": {
+      "id": "76b71970-21c6-4f2f-a7db-8f27a397ff34",
+      "email": "qa-rematador@rematar-demo.com",
+      "full_name": "QA Rematador Test",
+      "phone": "+5491100000002",
+      "avatar_url": null,
+      "role": "rematador",
+      "is_active": true,
+      "created_at": "2026-08-27T13:00:26.355796Z"
+    }
+  },
+  "qa-comprador@rematar-demo.com": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ZDg0YmIzZC00NDA4LTQwYjgtOTk0My1kODllYTc4ZWY0YWMiLCJyb2xlIjoiY29tcHJhZG9yIiwidHlwZSI6ImFjY2VzcyIsInNpZCI6ImU3MmYzYzczLTY2ODUtNDc2Yi1hZDQyLTM0MTlkMjFmNzgxZSIsImlhdCI6MTc4Nzg0MDIyNywiZXhwIjoxNzg3ODQyMDI3fQ.67fe8aXXvaG0H8aSLx5KLkfsPW8I6d6a70RHM1OhinQ",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ZDg0YmIzZC00NDA4LTQwYjgtOTk0My1kODllYTc4ZWY0YWMiLCJqdGkiOiJlNzJmM2M3My02Njg1LTQ3NmItYWQ0Mi0zNDE5ZDIxZjc4MWUiLCJ0eXBlIjoicmVmcmVzaCIsImlhdCI6MTc4Nzg0MDIyNywiZXhwIjoxNzg4NDQ1MDI3fQ.R6A47MGrjPLqU_8MbJ7MJP-6Nw_qIS5ZDx3WMpAw3AU",
+    "token_type": "bearer",
+    "user": {
+      "id": "6d84bb3d-4408-40b8-9943-d89ea78ef4ac",
+      "email": "qa-comprador@rematar-demo.com",
+      "full_name": "QA Comprador Test",
+      "phone": "+5491100000003",
+      "avatar_url": null,
+      "role": "comprador",
+      "is_active": true,
+      "created_at": "2026-08-27T13:00:26.518958Z"
+    }
+  }
+}

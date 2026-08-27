@@ -32,7 +32,10 @@ export function BenefitsSection({
   className,
 }: BenefitsSectionProps) {
   return (
-    <section id={id} className={clsx('mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8', className)}>
+    <section
+      id={id}
+      className={clsx('mx-auto max-w-7xl overflow-x-hidden px-4 py-24 sm:px-6 lg:px-8', className)}
+    >
       <div
         className={clsx(
           'grid grid-cols-1 items-center gap-16 lg:grid-cols-2',

@@ -246,7 +246,7 @@ export function LotesManagementPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8 pb-20 font-display">
+    <div className="flex flex-col gap-8 pb-28 font-display sm:pb-20">
       <div className="flex flex-col gap-3 border-b border-line pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Preparación del Remate</h1>
@@ -268,7 +268,7 @@ export function LotesManagementPage() {
           isDuplicating={isDuplicatingRemate}
         />
 
-        <div className="flex flex-1 flex-col gap-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-ink">Lotes</h2>
             {isStructureEditable && <AddLoteButton onClick={() => setLoteModalState({ mode: 'create' })} />}
@@ -315,11 +315,11 @@ export function LotesManagementPage() {
 
           {!isLotesLoading && !lotesError && lotes.length > 0 && (
             <>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col flex-wrap gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <LotesSummaryChips lotes={lotes} />
 
-                <div className="flex items-center gap-2">
-                  <div className="relative">
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                  <div className="relative w-full sm:w-48 md:w-56">
                     <label htmlFor="lote-search" className="sr-only">
                       Buscar lote
                     </label>
@@ -330,17 +330,19 @@ export function LotesManagementPage() {
                       value={searchQuery}
                       onChange={(event) => setSearchQuery(event.target.value)}
                       placeholder="Buscar lote..."
-                      className={`${FIELD_CONTROL_CLASSES} w-48 border-slate-300 pl-9 sm:w-56`}
+                      className={`${FIELD_CONTROL_CLASSES} w-full border-slate-300 pl-9`}
                     />
                   </div>
-                  <Button variant="secondary" disabled title="Próximamente" className="!px-3">
-                    <Filter className="h-4 w-4" aria-hidden="true" />
-                    Filtrar
-                  </Button>
-                  <Button variant="secondary" disabled title="Próximamente" className="!px-3">
-                    <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
-                    Ordenar
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="secondary" disabled title="Próximamente" className="!px-3">
+                      <Filter className="h-4 w-4" aria-hidden="true" />
+                      Filtrar
+                    </Button>
+                    <Button variant="secondary" disabled title="Próximamente" className="!px-3">
+                      <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+                      Ordenar
+                    </Button>
+                  </div>
                 </div>
               </div>
 
@@ -439,8 +441,11 @@ export function LotesManagementPage() {
       )}
 
       {isDraft && (
-        <div className="fixed bottom-6 right-6 z-30">
-          <div className="flex items-center gap-3 rounded-2xl border border-line bg-white/95 p-3 pl-4 shadow-xl backdrop-blur-sm">
+        <div
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 p-3 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.18)] backdrop-blur-sm sm:inset-x-auto sm:bottom-6 sm:right-6 sm:rounded-2xl sm:border sm:p-3 sm:pl-4 sm:shadow-xl"
+          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        >
+          <div className="mx-auto flex max-w-md items-center gap-3 sm:mx-0 sm:max-w-none">
             <span className="hidden text-sm text-ink-muted sm:block">
               {canPublish ? 'Todo listo para comenzar' : publishBlockedReason}
             </span>
@@ -449,7 +454,7 @@ export function LotesManagementPage() {
               isLoading={isPublishing}
               disabled={!canPublish}
               title={!canPublish ? publishBlockedReason : undefined}
-              className="shadow-lg shadow-brand-600/20"
+              className="w-full shadow-lg shadow-brand-600/20 sm:w-auto"
             >
               <SendIcon className="h-4 w-4" />
               Publicar remate

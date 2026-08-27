@@ -31,6 +31,8 @@
   --success-soft:rgba(46,204,143,0.12);
   --warn:#F0A93E;
   --warn-soft:rgba(240,169,62,0.12);
+  --info:#3B82F6;
+  --info-soft:rgba(59,130,246,0.12);
   --danger:#E5484D;
   --danger-soft:rgba(229,72,77,0.12);
   --neutral:#8A8A94;
@@ -112,6 +114,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .badge-success .dot{background:var(--success);}
 .badge-warn{color:var(--warn);background:var(--warn-soft);border-color:rgba(240,169,62,0.3);}
 .badge-warn .dot{background:var(--warn);}
+.badge-info{color:var(--info);background:var(--info-soft);border-color:rgba(59,130,246,0.3);}
+.badge-info .dot{background:var(--info);}
 .badge-danger{color:var(--danger);background:var(--danger-soft);border-color:rgba(229,72,77,0.3);}
 .badge-danger .dot{background:var(--danger);}
 .badge-neutral{color:var(--neutral);background:var(--neutral-soft);border-color:var(--border);}
@@ -293,12 +297,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 /* ============ FORMS / WIZARD ============ */
 .field{display:flex;flex-direction:column;gap:6px;margin-bottom:var(--sp-4);}
 .field label{font-size:12px;color:var(--text-tertiary);font-weight:600;}
-.field input[type=text],.field input[type=date],.field input[type=time],.field input[type=number],.field textarea{
+.field input[type=text],.field input[type=date],.field input[type=time],.field input[type=number],.field textarea,.field select{
   background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);
   padding:11px 13px;color:var(--text);font-family:var(--font-sans);font-size:14px;outline:none;transition:border-color .15s ease;
 }
 .field textarea{resize:vertical;min-height:76px;}
-.field input:focus,.field textarea:focus{border-color:var(--accent);}
+.field select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%236B6B76' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:36px;}
+.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent);}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-4);}
 @media (max-width:600px){.field-row{grid-template-columns:1fr;}}
 .radio-group{display:flex;flex-direction:column;gap:8px;}
@@ -331,6 +336,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 /* ============ LOTE PAGE ============ */
 .lote-layout{display:grid;grid-template-columns:1.4fr 1fr;gap:var(--sp-6);align-items:start;}
 @media (max-width:960px){.lote-layout{grid-template-columns:1fr;}}
+/* Columna derecha de `viewLote` (oferta + chat) -- ver `updateOfferPanelPin()` más
+   abajo en el script: el panel de oferta (`#offer-panel`) queda anclado con JS
+   (`position:fixed`), no con `position:sticky`. Se probó `sticky` primero, pero
+   dependía de que esta columna fuera tan alta como la descripción de la izquierda
+   para tener recorrido -- en la práctica seguía bajando con el resto de la página.
+   `position:fixed` no depende de la altura de ningún contenedor: queda clavado en la
+   pantalla apenas se cruza el umbral de scroll, sin excepciones. */
+.lote-side{position:relative;}
 .gallery{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;}
 .gallery-main{height:280px;display:flex;align-items:center;justify-content:center;font-size:64px;position:relative;}
 .gallery-main .gm-count{position:absolute;bottom:10px;right:10px;font-family:var(--font-mono);font-size:10.5px;background:rgba(10,10,12,0.65);color:var(--text-secondary);padding:3px 9px;border-radius:var(--radius-full);}
@@ -352,8 +365,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .footer-note p{font-size:12.5px;color:var(--text-tertiary);}
 
 /* ============ OFFER PANEL ============ */
-.offer-panel{position:sticky;top:80px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--sp-5);}
-@media (max-width:960px){.offer-panel{position:static;}}
+.offer-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--sp-5);box-sizing:border-box;}
+.offer-panel.is-pinned{position:fixed;top:80px;z-index:20;}
 .op-price .op-label{font-size:11px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.06em;font-family:var(--font-mono);}
 .op-price .op-val{font-family:var(--font-mono);font-size:30px;font-weight:700;margin-top:4px;color:var(--text);transition:color .3s ease;}
 .op-price .op-val.flash{color:var(--accent);}
@@ -504,6 +517,14 @@ var REMATADOR_NOMBRE = 'Juan Pérez';
 var BIDDER_NAMES = ['Usuario #144','Usuario #091','Usuario #182'];
 var CHAT_NAMES = ['María','Pedro','Lucía','Diego'];
 var INCREMENTS = [200000,300000,250000,400000,150000,350000];
+/* Moneda del wizard "Crear remate" -- ARS siempre primera/default (pedido explícito). */
+var CURRENCY_OPTIONS = [
+  {v:'ARS', l:'ARS — Peso argentino'},
+  {v:'USD', l:'USD — Dólar estadounidense'},
+  {v:'EUR', l:'EUR — Euro'},
+  {v:'BRL', l:'BRL — Real brasileño'},
+  {v:'CLP', l:'CLP — Peso chileno'}
+];
 
 function mkLote(id,numero,title,subtitle,category,subcat,icon,gradient,base,participantes,fotos,status,feed,extra){
   return Object.assign({
@@ -519,7 +540,7 @@ function mkLote(id,numero,title,subtitle,category,subcat,icon,gradient,base,part
 function mkDraftRemate(){
   return {
     id:'RD'+Date.now(), nombre:'Nuevo remate', empresa:EMPRESA_NOMBRE, rematador:REMATADOR_NOMBRE,
-    estado:'borrador', fecha:'', hora:'', modalidad:'online', garantia:'no-requerida',
+    estado:'borrador', fecha:'', hora:'', moneda:'ARS', garantia:'no-requerida',
     categoria:'vehiculos', ubicacion:'Rosario, Santa Fe', participantes:0, published:false, siguiendo:false,
     descripcion:'', chat:[], lotes:[]
   };
@@ -641,7 +662,7 @@ function getLote(id){
 function currentOffer(lote){ var o=lote.feed.filter(function(e){return e.kind==='oferta';}); return o.length? o[0].amount : lote.base; }
 function leadingBidder(lote){ var o=lote.feed.filter(function(e){return e.kind==='oferta';}); return o.length? o[0].bidder : null; }
 function nextBidderName(lote){ var o=lote.feed.filter(function(e){return e.kind==='oferta' && e.bidder!=='Vos';}); return BIDDER_NAMES[o.length % BIDDER_NAMES.length]; }
-function nextIncrement(lote){ var n=lote.feed.filter(function(e){return e.kind==='oferta';}).length; return INCREMENTS[n % INCREMENTS.length]; }
+function nextIncrement(lote){ if(lote.incremento){ return lote.incremento; } var n=lote.feed.filter(function(e){return e.kind==='oferta';}).length; return INCREMENTS[n % INCREMENTS.length]; }
 function pushOferta(lote, amount, bidder){
   lote.feed.unshift({kind:'oferta', amount:amount, bidder:bidder, ts:Date.now()});
   lote.status = 'en_subasta';
@@ -653,8 +674,8 @@ function pushChat(remate, from, role, text){ remate.chat.push({from:from, role:r
 
 var REMATE_STATUS = {
   borrador:{cls:'neutral', label:'BORRADOR'},
-  programado:{cls:'warn', label:'PROGRAMADO'},
-  en_vivo:{cls:'live', label:'EN VIVO'},
+  programado:{cls:'info', label:'PROGRAMADO'},
+  en_vivo:{cls:'success', label:'EN VIVO'},
   finalizado:{cls:'neutral', label:'FINALIZADO'},
   cancelado:{cls:'danger', label:'CANCELADO'}
 };
@@ -680,6 +701,42 @@ setInterval(function(){
   var rels = document.querySelectorAll('[data-ts]');
   for(var i=0;i<rels.length;i++){ rels[i].textContent = timeAgo(parseInt(rels[i].getAttribute('data-ts'),10)); }
 }, 1000);
+
+/* Ancla `#offer-panel` (el panel de "Oferta actual" de `viewLote`, comprador) con
+   `position:fixed` una vez que el scroll llega a su altura natural -- ver el
+   comentario de `.lote-side` en el CSS de más arriba: `position:sticky` dependía de
+   que la columna derecha fuera tan alta como la descripción de la izquierda, y en la
+   práctica el panel seguía bajando con el resto de la página. `fixed` no depende de
+   ningún contenedor: una vez que se cruza el umbral, se queda clavado en la pantalla
+   pase lo que pase con el scroll. `#offer-anchor` se queda en el flujo normal, con su
+   altura fijada al alto del panel, para que el chat de abajo no salte al lugar que el
+   panel dejó vacío. No hace nada si `#offer-anchor` no existe (cualquier ruta que no
+   sea `viewLote`) ni por debajo de 960px (ahí el layout pasa a una sola columna y el
+   chat deja de estar al lado -- ver `@media` de `.lote-layout`/`.side-panel`). */
+var OFFER_PANEL_PIN_TOP = 80;
+function updateOfferPanelPin(){
+  var anchor = document.getElementById('offer-anchor');
+  var panel = document.getElementById('offer-panel');
+  if(!anchor || !panel) return;
+  if(window.innerWidth < 960){
+    panel.classList.remove('is-pinned');
+    panel.style.left = ''; panel.style.width = '';
+    anchor.style.height = '';
+    return;
+  }
+  anchor.style.height = panel.offsetHeight + 'px';
+  var rect = anchor.getBoundingClientRect();
+  if(rect.top <= OFFER_PANEL_PIN_TOP){
+    panel.style.left = rect.left + 'px';
+    panel.style.width = rect.width + 'px';
+    panel.classList.add('is-pinned');
+  } else {
+    panel.classList.remove('is-pinned');
+    panel.style.left = ''; panel.style.width = '';
+  }
+}
+window.addEventListener('scroll', updateOfferPanelPin, {passive:true});
+window.addEventListener('resize', updateOfferPanelPin);
 
 function toast(msg, type){
   var box = document.getElementById('toasts');
@@ -772,6 +829,7 @@ function render(){
   if(scrollTopOnNextRender){ window.scrollTo(0,0); scrollTopOnNextRender=false; }
   var chatBody = document.getElementById('chat-scroll');
   if(chatBody) chatBody.scrollTop = chatBody.scrollHeight;
+  updateOfferPanelPin();
 }
 
 /* ============================================================
@@ -803,8 +861,9 @@ function remateCard(r, actionLabel, actionOnclick, inert){
     (inert ? '' : '<span class="btn btn-secondary btn-block rc-cta">'+actionLabel+'</span>')+
   '</div>';
 }
-function loteCardHtml(l, clickable){
-  return '<div class="lote-card'+(clickable?' is-link':'')+'" '+(clickable?'onclick="Actions.openLote(\''+l.id+'\')"':'')+'>'+
+function loteCardHtml(l, clickable, action){
+  var onclickAction = action || ("Actions.openLote('"+l.id+"')");
+  return '<div class="lote-card'+(clickable?' is-link':'')+'" '+(clickable?'onclick="'+onclickAction+'"':'')+'>'+
     '<div class="lote-photo" style="background:'+l.gradient+';"><span class="lp-num mono">#'+l.numero+'</span><span class="lp-badge">'+badge(LOTE_STATUS,l.status)+'</span>'+l.icon+'</div>'+
     '<div class="lote-body"><h4>'+escHtml(l.title)+'</h4><p class="lb-sub">'+escHtml(l.subtitle)+'</p>'+
       '<p class="lb-label">'+(l.status==='adjudicado'?'Adjudicado en':(leadingBidder(l)?'Oferta actual':'Precio base'))+'</p>'+
@@ -988,16 +1047,14 @@ function wizardStep1(){
     field('text','w-nombre','Nombre del remate', r.nombre, 'autofocus')+
     '<div class="field-row">'+field('date','w-fecha','Fecha', dateToInput(r.fecha))+field('time','w-hora','Hora', r.hora)+'</div>'+
     '<div class="field"><label>Descripción</label><textarea id="w-desc">'+escHtml(r.descripcion)+'</textarea></div>'+
-    '<div class="field"><label>Modalidad</label><div class="radio-group">'+
-      radioOpt('modalidad','online','Online', r.modalidad==='online')+
-      radioOpt('modalidad','presencial','Presencial', r.modalidad==='presencial')+
-      radioOpt('modalidad','online-transmision','Online + transmisión', r.modalidad==='online-transmision')+
-    '</div></div>'+
+    '<div class="field"><label>Moneda</label><select id="w-moneda">'+
+      CURRENCY_OPTIONS.map(function(c){return '<option value="'+c.v+'"'+(r.moneda===c.v?' selected':'')+'>'+c.l+'</option>';}).join('')+
+    '</select></div>'+
     '<div class="field"><label>Garantía</label><div class="radio-group">'+
       radioOpt('garantia','requerida','Requerida', r.garantia==='requerida')+
       radioOpt('garantia','no-requerida','No requerida', r.garantia==='no-requerida')+
     '</div></div>'+
-    '<div class="form-actions"><button class="btn btn-ghost" onclick="Actions.goHome(\'empresa/dashboard\')">Cancelar</button><button class="btn btn-primary" onclick="Actions.wizardSaveStep1()">Continuar</button></div>'+
+    '<div class="form-actions"><button class="btn btn-ghost" onclick="Actions.goHome(\'empresa/dashboard\')">Cancelar</button><button class="btn btn-primary" onclick="Actions.wizardSaveStep1()">Crear remate</button></div>'+
   '</div>';
 }
 function wizardStep2(){
@@ -1008,7 +1065,13 @@ function wizardStep2(){
   '<div class="form-actions"><button class="btn btn-ghost" onclick="Actions.wizardGoStep(1)">Atrás</button><button class="btn btn-primary" onclick="Actions.wizardGoStep(3)">Continuar</button></div>';
 }
 function addLoteForm(){
-  return field('text','al-nombre','Nombre del lote','')+field('number','al-base','Precio base (ARS)','')+
+  var moneda = (state.wizard.draft && state.wizard.draft.moneda) || 'ARS';
+  return field('text','al-nombre','Nombre del lote','')+
+  '<div class="field"><label>Descripción</label><textarea id="al-desc"></textarea></div>'+
+  '<div class="field-row">'+
+    field('number','al-base','Precio base ('+moneda+')','')+
+    field('number','al-incremento','Incremento mínimo ('+moneda+', opcional)','')+
+  '</div>'+
   '<div class="form-actions"><button class="btn btn-ghost" onclick="Actions.wizardToggleAddLote()">Cancelar</button><button class="btn btn-primary" onclick="Actions.wizardAddLote()">Agregar lote</button></div>';
 }
 function wizardStep3(){
@@ -1123,6 +1186,12 @@ function viewRematadorLive(){
 
   var offer = currentOffer(lote), bidder = leadingBidder(lote);
   var idx = r.lotes.indexOf(lote)+1;
+  /* "Próximos lotes a rematar" (pedido explícito): mismos lotes que le siguen a este
+     en el remate (hasta 3), como preview -- mismo criterio que la versión del
+     comprador en `viewLote`. */
+  var siguientesLotesR = r.lotes.slice(r.lotes.indexOf(lote)+1, r.lotes.indexOf(lote)+4);
+  var siguientesLotesBlock = siguientesLotesR.length ?
+    '<div class="detalle-block"><h4>Próximos lotes a rematar</h4><div class="lote-grid">'+siguientesLotesR.map(function(l){return loteCardHtml(l,false);}).join('')+'</div></div>' : '';
   return '<div class="wrap page">'+
     '<div class="live-top" style="display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap;margin-bottom:var(--sp-5);">'+
       badge(REMATE_STATUS,r.estado)+badge(LOTE_STATUS, lote.status)+(lote.paused?'<span class="tag">⏸ Pausado</span>':'')+
@@ -1138,11 +1207,12 @@ function viewRematadorLive(){
           '<div class="op-timer"><div><div class="om-label">Participantes</div><div class="om-val mono" style="color:var(--text);">'+lote.participantes+'</div></div><div style="text-align:right;"><div class="om-label">Tiempo</div><div class="om-val mono" id="countdown">'+fmtTime(timerSeconds)+'</div></div></div>'+
           '<div class="live-controls" style="margin-top:var(--sp-4);">'+
             '<button class="btn btn-outline" '+(lote.paused||lote.simRunning?'disabled':'')+' onclick="Actions.rematadorSimular(\''+lote.id+'\')">'+(lote.simRunning?'Simulando…':'Iniciar simulación')+'</button>'+
-            '<button class="btn btn-secondary" '+(lote.paused?'disabled':'')+' onclick="Actions.rematadorNuevaOferta(\''+lote.id+'\')">Nueva oferta</button>'+
-            '<button class="btn btn-secondary" onclick="Actions.rematadorPausar(\''+lote.id+'\')">'+(lote.paused?'Reanudar lote':'Pausar lote')+'</button>'+
+            '<button class="btn btn-secondary" onclick="Actions.rematadorSiguienteLote()">Pasar al siguiente lote</button>'+
+            '<button class="btn btn-secondary" onclick="Actions.goRoute(\'rematador/fin\')">Finalizar remate</button>'+
             '<button class="btn btn-primary" onclick="Actions.rematadorAbrirAdjudicar(\''+lote.id+'\')">Adjudicar lote</button>'+
           '</div>'+
         '</div>'+
+        siguientesLotesBlock+
       '</div>'+
       '<div>'+sidePanel(r, lote, state.sheetOpen?'sheet-open':'')+'</div>'+
     '</div>'+
@@ -1210,7 +1280,7 @@ function viewCompradorRemate(){
   return '<div class="wrap page">'+
     '<div class="remate-head">'+
       '<div class="rh-top">'+badge(REMATE_STATUS,r.estado)+
-        '<div class="rh-actions"><button class="btn '+(r.siguiendo?'btn-secondary':'btn-outline')+'" onclick="Actions.toggleSeguir(\''+r.id+'\')">'+(r.siguiendo?'✓ Siguiendo':'Seguir remate')+'</button></div>'+
+        '<div class="rh-actions"><button class="btn btn-primary" onclick="Actions.entrarRemate(\''+r.id+'\')">Entrar al remate</button></div>'+
       '</div>'+
       '<h1 class="rh-name">'+escHtml(r.nombre)+'</h1>'+
       '<div class="rh-org">Organizado por '+escHtml(r.empresa)+' · Conducido por ⚖️ '+escHtml(r.rematador)+'</div>'+
@@ -1220,7 +1290,7 @@ function viewCompradorRemate(){
     '<div class="section-title"><h2>Lotes del remate</h2></div>'+
     (relevantSubcats.length>1 ? '<div class="chips" style="margin-bottom:var(--sp-5);">'+relevantSubcats.map(function(s){return '<button class="chip'+(subcat===s.v?' active':'')+'" onclick="Actions.loteSubcat(\''+s.v+'\')">'+s.l+'</button>';}).join('')+'</div>' : '')+
     '<div class="lote-grid">'+
-      (lotes.length ? lotes.map(function(l){ return loteCardHtml(l, r.estado!=='cancelado'); }).join('') :
+      (lotes.length ? lotes.map(function(l){ return loteCardHtml(l, r.estado!=='cancelado', "Actions.previewLote('"+l.id+"')"); }).join('') :
         emptyState('🕓','Sin lotes en esta categoría','Todavía no hay lotes de este tipo en el remate.'))+
     '</div>'+
   '</div>';
@@ -1284,6 +1354,14 @@ function viewLote(){
     actionPanel = '<p style="font-size:12.5px;color:var(--text-tertiary);">Estás viendo este lote como '+roleLabel()+'. Este rol no realiza ofertas.</p>';
   }
 
+  /* "Próximos lotes" (pedido explícito): reemplaza el botón "Ver todos los lotes" --
+     una imitación de los lotes que siguen a este en el remate (hasta 3, en el mismo
+     orden), sin acción propia -- solo para que se vean, "Volver al remate" (breadcrumb
+     de arriba) sigue siendo el camino real de vuelta al listado completo. */
+  var siguientesLotes = r.lotes.slice(r.lotes.indexOf(lote)+1, r.lotes.indexOf(lote)+4);
+  var siguientesBlock = siguientesLotes.length ?
+    '<div class="detalle-block"><h4>Próximos lotes</h4><div class="lote-grid">'+siguientesLotes.map(function(l){return loteCardHtml(l,false);}).join('')+'</div></div>' : '';
+
   return '<div class="wrap page">'+
     '<div class="lote-layout">'+
       '<div>'+
@@ -1297,13 +1375,15 @@ function viewLote(){
         '<div class="detalle-block"><h4>Características</h4><div class="spec-grid">'+Object.keys(lote.caracteristicas).map(function(k){return '<div><b>'+k+'</b><span>'+lote.caracteristicas[k]+'</span></div>';}).join('')+'</div></div>'+
         '<div class="detalle-block"><h4>Ubicación</h4><p>📍 '+r.ubicacion+'</p></div>'+
         '<div class="detalle-block"><h4>Documentación</h4><div class="doc-list">'+lote.docs.map(function(d){return '<div>✓ '+d+'</div>';}).join('')+'</div></div>'+
-        '<div class="footer-note"><p>Este lote pertenece al <b style="color:var(--text-secondary);">'+escHtml(r.nombre)+'</b>.</p><button class="btn btn-secondary btn-sm" onclick="'+remateOpen+'">Ver todos los lotes</button></div>'+
+        siguientesBlock+
       '</div>'+
-      '<div>'+
-        '<div class="offer-panel">'+
-          '<div class="op-price"><div class="op-label">Oferta actual</div><div class="op-val mono" id="oc-price">'+fmtMoney(offer)+'</div>'+(leader?'<div class="op-bidder">'+leader+'</div>':'')+'</div>'+
-          '<div class="op-timer"><div><div class="om-label">Tiempo restante</div><div class="om-val mono" id="countdown">'+fmtTime(timerSeconds)+'</div></div><div style="text-align:right;"><div class="om-label">Participantes</div><div class="om-val mono" style="color:var(--text-secondary);">'+lote.participantes+'</div></div></div>'+
-          actionPanel+
+      '<div class="lote-side">'+
+        '<div id="offer-anchor">'+
+          '<div class="offer-panel" id="offer-panel">'+
+            '<div class="op-price"><div class="op-label">Oferta actual</div><div class="op-val mono" id="oc-price">'+fmtMoney(offer)+'</div>'+(leader?'<div class="op-bidder">'+leader+'</div>':'')+'</div>'+
+            '<div class="op-timer"><div><div class="om-label">Tiempo restante</div><div class="om-val mono" id="countdown">'+fmtTime(timerSeconds)+'</div></div><div style="text-align:right;"><div class="om-label">Participantes</div><div class="om-val mono" style="color:var(--text-secondary);">'+lote.participantes+'</div></div></div>'+
+            actionPanel+
+          '</div>'+
         '</div>'+
         '<div style="margin-top:var(--sp-4);">'+sidePanel(r, lote, state.sheetOpen?'sheet-open':'')+'</div>'+
       '</div>'+
@@ -1374,21 +1454,25 @@ window.Actions = {
     if(d){ var p = d.split('-'); r.fecha = p[2]+'/'+p[1]+'/'+p[0]; }
     r.hora = document.getElementById('w-hora').value || r.hora;
     r.descripcion = document.getElementById('w-desc').value || r.descripcion;
-    var mod = document.querySelector('input[name=modalidad]:checked'); if(mod) r.modalidad = mod.value;
+    var moneda = document.getElementById('w-moneda'); if(moneda) r.moneda = moneda.value;
     var gar = document.querySelector('input[name=garantia]:checked'); if(gar) r.garantia = gar.value;
     state.wizard.step = 2; scrollTopOnNextRender = true; save(); render();
   },
   wizardToggleAddLote:function(){ state.wizard.addingLote = !state.wizard.addingLote; save(); render(); },
   wizardAddLote:function(){
     var nombre = document.getElementById('al-nombre').value.trim();
+    var descripcion = document.getElementById('al-desc').value.trim();
     var base = parseInt(document.getElementById('al-base').value,10);
+    var incrementoRaw = document.getElementById('al-incremento').value.trim();
+    var incremento = incrementoRaw ? parseInt(incrementoRaw,10) : null;
     if(!nombre || !base){ toast('Completá nombre y precio base', 'warning'); return; }
     var r = state.wizard.draft;
     var icons = ['📦','🚗','🏠','🚜','🛠️'];
     var grads = ['linear-gradient(135deg,#241a2c,#3a2a4a)','linear-gradient(135deg,#1a2b2e,#254048)','linear-gradient(135deg,#241f38,#3a2e5c)'];
+    var extra = {desc: descripcion || 'Lote agregado durante la demo interactiva.', caracteristicas:{'Estado':'A definir'}, docs:['Documentación pendiente de carga']};
+    if(incremento){ extra.incremento = incremento; }
     r.lotes.push(mkLote('L'+(1000+r.lotes.length), String(r.lotes.length+1).padStart(3,'0'), nombre, 'Lote agregado en la demo', 'vehiculos', 'camionetas',
-      icons[r.lotes.length%icons.length], grads[r.lotes.length%grads.length], base, 20+Math.floor(Math.random()*40), 4, 'pendiente', [],
-      {desc:'Lote agregado durante la demo interactiva.', caracteristicas:{'Estado':'A definir'}, docs:['Documentación pendiente de carga']}));
+      icons[r.lotes.length%icons.length], grads[r.lotes.length%grads.length], base, 20+Math.floor(Math.random()*40), 4, 'pendiente', [], extra));
     state.wizard.addingLote = false; save(); render(); toast('Lote agregado', 'success');
   },
   wizardPublish:function(){
@@ -1436,21 +1520,6 @@ window.Actions = {
       flashPrice(); updateLiveNumbers(l);
     }, 1500);
   },
-  rematadorNuevaOferta:function(id){
-    var lote = getLote(id);
-    if(lote.paused || lote.status==='adjudicado') return;
-    var amount = currentOffer(lote) + nextIncrement(lote);
-    var bidder = nextBidderName(lote);
-    pushOferta(lote, amount, bidder);
-    toast(bidder+' realizó una nueva oferta');
-    render(); flashPrice();
-  },
-  rematadorPausar:function(id){
-    var lote = getLote(id);
-    lote.paused = !lote.paused;
-    if(lote.paused && simIntervals[id]){ clearInterval(simIntervals[id]); lote.simRunning=false; }
-    save(); render(); toast(lote.paused ? 'Lote pausado' : 'Lote reanudado');
-  },
   rematadorAbrirAdjudicar:function(id){
     var lote = getLote(id);
     var offer = currentOffer(lote), bidder = leadingBidder(lote) || 'Sin ofertas';
@@ -1481,8 +1550,36 @@ window.Actions = {
     if(el){ el.focus(); try{ el.setSelectionRange(v.length, v.length); }catch(e){} }
   },
   loteSubcat:function(v){ state.loteSubcat = v; save(); render(); },
-  toggleSeguir:function(id){ var r=getRemate(id); r.siguiendo=!r.siguiendo; save(); render(); toast(r.siguiendo?'Ahora seguís este remate':'Dejaste de seguir este remate'); },
+  /* "Entrar al remate" (pedido explícito): reemplaza "Seguir remate" -- ya no es un
+     toggle, entra directo a la sala (el lote en subasta si hay uno, si no el primero)
+     en vez de dejar que la única forma de entrar sea clickeando un lote suelto. */
+  entrarRemate:function(id){
+    var r = getRemate(id);
+    if(!r || !r.lotes.length){ toast('Este remate todavía no tiene lotes cargados.', 'warning'); return; }
+    var lote = r.lotes.find(function(l){return l.status==='en_subasta';}) || r.lotes[0];
+    go('lote', {currentRemateId:id, currentLoteId:lote.id, galleryIndex:0});
+  },
   openLote:function(id){ state.currentLoteId=id; state.galleryIndex=0; go('lote'); },
+  /* Preview de un lote desde el panel del remate (pedido explícito): ya no navega a
+     la página completa del lote -- abre una versión más grande de la misma card, en un
+     modal, para verlo con más detalle sin salir del panel. */
+  previewLote:function(id){
+    var lote = getLote(id);
+    if(!lote) return;
+    var offer = currentOffer(lote), leader = leadingBidder(lote);
+    var priceLabel = lote.status==='adjudicado' ? 'Adjudicado en' : (leader ? 'Oferta actual' : 'Precio base');
+    var priceVal = lote.status==='adjudicado' ? (lote.winPrice||lote.base) : offer;
+    openModal(
+      '<div class="lote-photo" style="height:200px;margin:calc(var(--sp-6) * -1) calc(var(--sp-6) * -1) var(--sp-5);border-radius:var(--radius-lg) var(--radius-lg) 0 0;background:'+lote.gradient+';font-size:52px;">'+
+        '<span class="lp-num mono">#'+lote.numero+'</span><span class="lp-badge">'+badge(LOTE_STATUS,lote.status)+'</span>'+lote.icon+
+      '</div>'+
+      '<h3>'+escHtml(lote.title)+'</h3><p class="note" style="margin-top:-6px;">'+escHtml(lote.subtitle)+'</p>'+
+      '<p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-top:var(--sp-3);">'+escHtml(lote.desc)+'</p>'+
+      '<div class="spec-grid" style="margin-top:var(--sp-4);">'+Object.keys(lote.caracteristicas).map(function(k){return '<div><b>'+k+'</b><span>'+escHtml(String(lote.caracteristicas[k]))+'</span></div>';}).join('')+'</div>'+
+      '<div style="margin-top:var(--sp-5);padding-top:var(--sp-4);border-top:1px solid var(--border);"><p class="op-label">'+priceLabel+'</p><p class="modal-price mono" style="margin:4px 0 0;">'+fmtMoney(priceVal)+'</p></div>'+
+      '<div class="modal-actions"><button class="btn btn-secondary btn-block" onclick="Actions.closeModal()">Cerrar</button></div>'
+    );
+  },
   galleryPick:function(i){ state.galleryIndex=i; render(); },
 
   compradorAbrirOferta:function(id, isMejora){

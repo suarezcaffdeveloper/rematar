@@ -84,7 +84,7 @@ export function LoteManagementCard({
         onDrop={onDrop}
         onDragEnd={onDragEnd}
         className={clsx(
-          'flex items-center gap-4 rounded-2xl border bg-white p-4 shadow-sm transition-shadow duration-200',
+          'flex items-center gap-3 rounded-2xl border bg-white p-3 shadow-sm transition-shadow duration-200 sm:gap-4 sm:p-4',
           'hover:shadow-lg',
           isDragOver ? 'border-brand-500 ring-2 ring-brand-200' : 'border-line',
           isDragging && 'opacity-40',
@@ -114,7 +114,7 @@ export function LoteManagementCard({
         </div>
       )}
 
-      <div className="relative h-20 w-28 shrink-0 overflow-hidden rounded-xl">
+      <div className="relative h-16 w-20 shrink-0 overflow-hidden rounded-xl sm:h-20 sm:w-28">
         {mainImage ? (
           <img src={mainImage.url} alt="" className="h-full w-full object-cover" />
         ) : (
