@@ -1,0 +1,1560 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Demo interactiva de RematAR: probá el flujo de empresa, rematador y comprador con datos ficticios.">
+<title>Viví RematAR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+/* ============ TOKENS ============ */
+:root{
+  --bg:#0A0A0C;
+  --bg-elevated:#0E0E11;
+  --surface:#131316;
+  --surface-2:#18181C;
+  --surface-3:#1F1F24;
+  --border:rgba(255,255,255,0.08);
+  --border-strong:rgba(255,255,255,0.14);
+  --text:#F2F2F4;
+  --text-secondary:#A3A3AD;
+  --text-tertiary:#6B6B76;
+  --accent:#7C6FF0;
+  --accent-hover:#8F84F5;
+  --accent-soft:rgba(124,111,240,0.14);
+  --on-accent:#FFFFFF;
+  --live:#FB4B4B;
+  --live-soft:rgba(251,75,75,0.12);
+  --success:#2ECC8F;
+  --success-soft:rgba(46,204,143,0.12);
+  --warn:#F0A93E;
+  --warn-soft:rgba(240,169,62,0.12);
+  --danger:#E5484D;
+  --danger-soft:rgba(229,72,77,0.12);
+  --neutral:#8A8A94;
+  --neutral-soft:rgba(138,138,148,0.12);
+  --radius-sm:6px;
+  --radius-md:10px;
+  --radius-lg:16px;
+  --radius-full:999px;
+  --shadow-xs:0 1px 2px rgba(0,0,0,0.4);
+  --shadow-sm:0 2px 8px -2px rgba(0,0,0,0.45);
+  --shadow-md:0 8px 24px -8px rgba(0,0,0,0.55);
+  --shadow-lg:0 24px 48px -16px rgba(0,0,0,0.65);
+  --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:20px;--sp-6:24px;--sp-7:32px;--sp-8:48px;--sp-9:64px;
+  --container:1160px;
+  --font-sans:'Manrope', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --ease:cubic-bezier(.2,.7,.3,1);
+}
+
+*{box-sizing:border-box;}
+html{color-scheme:dark;}
+body{
+  background:var(--bg);color:var(--text);font-family:var(--font-sans);
+  font-size:14.5px;line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh;
+}
+h1,h2,h3,h4{font-family:var(--font-sans);font-weight:800;letter-spacing:-0.02em;text-wrap:balance;margin:0;color:var(--text);}
+p{margin:0;}
+a{color:inherit;text-decoration:none;}
+button{font-family:inherit;}
+::selection{background:var(--accent);color:var(--on-accent);}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:6px;}
+button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;border-radius:4px;
+}
+
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums;}
+.eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);}
+.wrap{max-width:var(--container);margin:0 auto;padding:0 var(--sp-6);}
+@media (max-width:640px){ .wrap{padding:0 var(--sp-4);} }
+.text-pretty{text-wrap:pretty;}
+
+/* ============ BUTTONS ============ */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  font-family:var(--font-sans);font-weight:700;font-size:13.5px;letter-spacing:0;
+  padding:10px 18px;border-radius:var(--radius-md);border:1px solid transparent;
+  cursor:pointer;transition:transform .1s var(--ease), background .15s ease, border-color .15s ease, opacity .15s ease, box-shadow .2s ease, color .15s ease;
+  white-space:nowrap;
+}
+.btn:active{transform:scale(0.97);}
+.btn-primary{background:var(--accent);color:var(--on-accent);}
+.btn-primary:hover{background:var(--accent-hover);box-shadow:0 8px 20px -8px var(--accent);}
+.btn-secondary{background:var(--surface-3);color:var(--text);border-color:var(--border);}
+.btn-secondary:hover{border-color:var(--border-strong);background:var(--surface-2);}
+.btn-ghost{background:transparent;color:var(--text-secondary);border-color:transparent;}
+.btn-ghost:hover{color:var(--text);background:var(--surface-2);}
+.btn-outline{background:transparent;color:var(--text);border-color:var(--border-strong);}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent);}
+.btn-danger{background:transparent;color:var(--danger);border-color:rgba(229,72,77,0.35);}
+.btn-danger:hover{background:var(--danger-soft);}
+.btn-lg{padding:13px 24px;font-size:14.5px;}
+.btn-sm{padding:7px 12px;font-size:12.5px;border-radius:var(--radius-sm);}
+.btn-block{width:100%;}
+.btn:disabled{opacity:0.4;cursor:not-allowed;}
+.btn-icon{padding:9px;border-radius:var(--radius-md);}
+
+/* ============ BADGES ============ */
+.badge{
+  display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10.5px;
+  letter-spacing:0.06em;text-transform:uppercase;padding:4px 9px;border-radius:var(--radius-full);
+  border:1px solid transparent;font-weight:600;
+}
+.badge .dot{width:6px;height:6px;border-radius:50%;flex:none;}
+.badge-live{color:var(--live);background:var(--live-soft);border-color:rgba(251,75,75,0.3);}
+.badge-live .dot{background:var(--live);box-shadow:0 0 0 3px rgba(251,75,75,0.18);animation:pulse 1.6s infinite;}
+.badge-success{color:var(--success);background:var(--success-soft);border-color:rgba(46,204,143,0.3);}
+.badge-success .dot{background:var(--success);}
+.badge-warn{color:var(--warn);background:var(--warn-soft);border-color:rgba(240,169,62,0.3);}
+.badge-warn .dot{background:var(--warn);}
+.badge-danger{color:var(--danger);background:var(--danger-soft);border-color:rgba(229,72,77,0.3);}
+.badge-danger .dot{background:var(--danger);}
+.badge-neutral{color:var(--neutral);background:var(--neutral-soft);border-color:var(--border);}
+.badge-neutral .dot{background:var(--neutral);}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(251,75,75,0.18);}50%{box-shadow:0 0 0 6px rgba(251,75,75,0.05);}}
+
+.tag{
+  display:inline-flex;align-items:center;gap:6px;font-family:var(--font-sans);font-size:11.5px;font-weight:600;
+  color:var(--text-tertiary);background:var(--surface-3);padding:5px 10px;border-radius:var(--radius-full);
+  border:1px solid var(--border);
+}
+
+/* ============ TOPBAR / BREADCRUMB ============ */
+.topbar{position:sticky;top:0;z-index:30;background:rgba(10,10,12,0.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);}
+.topbar-inner{max-width:var(--container);margin:0 auto;padding:14px var(--sp-6);display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);}
+.logo{font-family:var(--font-sans);font-weight:800;font-size:17px;letter-spacing:-0.02em;cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px;}
+.logo .logo-mark{width:22px;height:22px;border-radius:6px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;flex:none;}
+.nav-right{display:flex;align-items:center;gap:8px;}
+.role-tag{
+  font-family:var(--font-sans);font-size:12.5px;font-weight:600;color:var(--text-secondary);
+  background:var(--surface-2);border:1px solid var(--border);padding:6px 12px;border-radius:var(--radius-full);
+  display:flex;align-items:center;gap:6px;
+}
+.nav-actions{display:flex;align-items:center;gap:4px;}
+.icon-btn{
+  background:transparent;border:1px solid transparent;color:var(--text-tertiary);border-radius:var(--radius-md);
+  padding:8px 11px;font-size:12.5px;font-family:var(--font-sans);font-weight:600;cursor:pointer;
+  display:flex;align-items:center;gap:6px;transition:all .15s ease;
+}
+.icon-btn:hover{color:var(--text);background:var(--surface-2);}
+.icon-btn.subtle:hover{color:var(--danger);}
+.nav-divider{width:1px;height:16px;background:var(--border);flex:none;margin:0 2px;}
+@media (max-width:640px){
+  .topbar-inner{flex-wrap:wrap;gap:8px;padding:12px var(--sp-4);}
+  .nav-right{flex-wrap:wrap;gap:6px;}
+  .icon-btn{padding:6px 8px;font-size:11px;}
+  .role-tag{font-size:11px;padding:5px 10px;}
+  .nav-divider{display:none;}
+}
+
+.crumbbar{border-bottom:1px solid var(--border);background:var(--bg-elevated);}
+.crumbbar-inner{max-width:var(--container);margin:0 auto;padding:11px var(--sp-6);display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap;}
+.crumbs{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12px;color:var(--text-tertiary);flex-wrap:wrap;}
+.crumbs a, .crumbs .crumb-link{cursor:pointer;color:var(--text-tertiary);transition:color .15s ease;}
+.crumbs .crumb-link:hover{color:var(--accent);}
+.crumbs .crumb-current{color:var(--text-secondary);}
+.crumbs .crumb-sep{color:var(--border-strong);}
+.crumb-back{
+  font-family:var(--font-sans);font-size:12.5px;font-weight:600;color:var(--text-secondary);background:none;border:none;
+  cursor:pointer;display:flex;align-items:center;gap:6px;padding:4px 0;transition:color .15s ease;
+}
+.crumb-back:hover{color:var(--accent);}
+
+.badge-fixed{
+  position:fixed;left:var(--sp-4);bottom:var(--sp-4);z-index:40;font-family:var(--font-mono);font-size:10px;
+  color:var(--text-tertiary);background:rgba(19,19,22,0.9);border:1px solid var(--border);border-radius:var(--radius-full);
+  padding:7px 13px;display:flex;align-items:center;gap:7px;backdrop-filter:blur(6px);
+}
+.badge-fixed b{color:var(--text-secondary);font-weight:700;letter-spacing:0.05em;}
+.badge-fixed span{opacity:0.85;}
+@media (max-width:640px){.badge-fixed{left:var(--sp-2);bottom:var(--sp-2);font-size:9px;padding:6px 10px;}}
+
+/* ============ LAYOUT / PAGE ============ */
+.page{padding:var(--sp-7) 0 var(--sp-9);}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--sp-4);margin-bottom:var(--sp-7);flex-wrap:wrap;}
+.page-head h1{font-size:clamp(22px,3vw,28px);}
+.page-head .greet{color:var(--text-tertiary);margin-top:5px;font-size:13.5px;}
+.section-title{display:flex;align-items:center;justify-content:space-between;margin:var(--sp-7) 0 var(--sp-4);gap:var(--sp-3);flex-wrap:wrap;}
+.section-title h2{font-size:16px;font-weight:700;}
+.section-title .st-hint{font-size:12px;color:var(--text-tertiary);font-family:var(--font-mono);}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--sp-6);}
+
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:var(--sp-7);}
+@media (max-width:700px){.metrics{grid-template-columns:repeat(2,1fr);}}
+.metric{background:var(--surface);padding:var(--sp-5) var(--sp-6);}
+.metric .m-val{font-family:var(--font-mono);font-size:26px;font-weight:600;color:var(--text);}
+.metric .m-label{font-size:11.5px;color:var(--text-tertiary);margin-top:4px;}
+
+.eyebrow-label{margin-bottom:var(--sp-3);}
+
+/* ============ LANDING ============ */
+.hero{padding:var(--sp-9) 0 var(--sp-7);text-align:center;}
+.hero h1{font-size:clamp(36px,6vw,56px);line-height:1.05;}
+.hero h1 span{color:var(--accent);}
+.hero-sub{font-size:clamp(15px,1.8vw,18px);color:var(--text-secondary);margin-top:var(--sp-4);max-width:560px;margin-inline:auto;text-wrap:pretty;line-height:1.6;}
+.hero-cta{margin-top:var(--sp-7);display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+
+.flow-strip{display:flex;align-items:center;justify-content:center;gap:var(--sp-3);flex-wrap:wrap;margin:var(--sp-8) 0;padding:var(--sp-4) 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
+.flow-item{font-family:var(--font-mono);font-size:11px;letter-spacing:0.03em;color:var(--text-tertiary);display:flex;align-items:center;gap:var(--sp-3);}
+.flow-item b{color:var(--text-secondary);font-weight:600;}
+.flow-arrow{color:var(--border-strong);}
+
+.role-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-4);margin:var(--sp-8) 0;}
+@media (max-width:820px){.role-grid{grid-template-columns:1fr;}}
+.role-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:var(--sp-6);text-align:left;cursor:pointer;transition:all .18s var(--ease);
+  display:flex;flex-direction:column;gap:var(--sp-4);
+}
+.role-card:hover{border-color:var(--border-strong);transform:translateY(-3px);box-shadow:var(--shadow-md);background:var(--surface-2);}
+.role-card .rc-icon{width:40px;height:40px;border-radius:var(--radius-md);background:var(--surface-3);display:flex;align-items:center;justify-content:center;font-size:19px;}
+.role-card h3{font-size:17px;}
+.role-card p{color:var(--text-secondary);font-size:13.5px;line-height:1.55;}
+.role-card .rc-list{display:flex;flex-direction:column;gap:5px;margin-top:2px;}
+.role-card .rc-list span{font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);}
+.role-card .btn{align-self:flex-start;margin-top:auto;}
+
+.tagline{text-align:center;font-family:var(--font-mono);font-size:11.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-tertiary);margin-top:var(--sp-2);}
+
+.connect{padding:var(--sp-9) 0;border-top:1px solid var(--border);}
+.connect h2{text-align:center;font-size:clamp(24px,3.4vw,34px);}
+.connect h2 span{color:var(--accent);}
+.connect-sub{text-align:center;color:var(--text-secondary);margin-top:var(--sp-3);max-width:480px;margin-inline:auto;text-wrap:pretty;}
+.connect-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-4);margin-top:var(--sp-7);}
+@media (max-width:820px){.connect-grid{grid-template-columns:1fr;}}
+.connect-col{padding:var(--sp-5);border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface);}
+.connect-col h4{font-size:14.5px;margin-bottom:2px;}
+.connect-col p{color:var(--text-tertiary);font-size:12.5px;}
+.connect-col ul{list-style:none;padding:0;margin:var(--sp-3) 0 0;display:flex;flex-direction:column;gap:6px;}
+.connect-col li{font-size:12.5px;color:var(--text-secondary);font-family:var(--font-mono);}
+
+/* ============ REMATE CARD ============ */
+.remate-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:var(--sp-4);}
+.remate-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--sp-5);
+  cursor:pointer;transition:all .18s var(--ease);display:flex;flex-direction:column;gap:var(--sp-3);
+}
+.remate-card:hover{border-color:var(--border-strong);transform:translateY(-2px);box-shadow:var(--shadow-sm);background:var(--surface-2);}
+.remate-card.is-inert{cursor:default;opacity:0.65;}
+.remate-card.is-inert:hover{transform:none;box-shadow:none;background:var(--surface);border-color:var(--border);}
+.rc-name{font-size:16px;font-weight:700;margin-top:2px;}
+.rc-org{font-size:12.5px;color:var(--text-tertiary);}
+.rc-meta{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:11.5px;color:var(--text-secondary);flex-wrap:wrap;}
+.rc-meta .sep{color:var(--border-strong);}
+.rc-date{font-family:var(--font-mono);font-size:11.5px;color:var(--text-tertiary);}
+.rc-cta{margin-top:auto;pointer-events:none;}
+
+/* ============ LOTE CARD ============ */
+.lote-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:var(--sp-4);}
+.lote-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;
+  display:flex;flex-direction:column;transition:all .18s var(--ease);
+}
+.lote-card.is-link{cursor:pointer;}
+.lote-card.is-link:hover{border-color:var(--border-strong);transform:translateY(-2px);box-shadow:var(--shadow-sm);}
+.lote-photo{height:140px;display:flex;align-items:center;justify-content:center;font-size:38px;position:relative;}
+.lote-photo .lp-num{position:absolute;top:9px;left:9px;font-family:var(--font-mono);font-size:10.5px;background:rgba(10,10,12,0.65);color:var(--text);padding:3px 8px;border-radius:var(--radius-full);}
+.lote-photo .lp-badge{position:absolute;top:9px;right:9px;}
+.lote-body{padding:var(--sp-4);display:flex;flex-direction:column;gap:6px;flex:1;}
+.lote-body h4{font-size:14px;font-weight:700;}
+.lote-body .lb-sub{font-size:11.5px;color:var(--text-tertiary);}
+.lote-body .lb-label{font-size:10.5px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.06em;font-family:var(--font-mono);margin-top:auto;}
+.lote-body .lb-price{font-family:var(--font-mono);font-weight:700;font-size:16px;color:var(--text);}
+
+/* ============ TABS / CHIPS ============ */
+.tabs{display:flex;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:3px;width:fit-content;}
+.tab{
+  font-family:var(--font-sans);font-size:12.5px;font-weight:600;color:var(--text-tertiary);background:transparent;
+  border:none;padding:7px 14px;border-radius:calc(var(--radius-md) - 3px);cursor:pointer;transition:all .15s ease;
+}
+.tab:hover{color:var(--text);}
+.tab.active{background:var(--surface-3);color:var(--text);}
+
+.chips{display:flex;gap:8px;flex-wrap:wrap;}
+.chip{
+  font-family:var(--font-sans);font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:var(--radius-full);
+  border:1px solid var(--border);color:var(--text-tertiary);cursor:pointer;transition:all .15s ease;background:transparent;
+}
+.chip:hover{border-color:var(--border-strong);color:var(--text);}
+.chip.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
+
+.search-row{display:flex;gap:var(--sp-3);margin-bottom:var(--sp-5);flex-wrap:wrap;}
+.search-wrap{position:relative;flex:1;min-width:220px;}
+.search-wrap svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);pointer-events:none;}
+.search-input{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:11px 14px 11px 40px;color:var(--text);font-family:var(--font-sans);font-size:14px;outline:none;transition:border-color .15s ease;}
+.search-input:focus{border-color:var(--accent);}
+
+/* ============ FORMS / WIZARD ============ */
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:var(--sp-4);}
+.field label{font-size:12px;color:var(--text-tertiary);font-weight:600;}
+.field input[type=text],.field input[type=date],.field input[type=time],.field input[type=number],.field textarea{
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);
+  padding:11px 13px;color:var(--text);font-family:var(--font-sans);font-size:14px;outline:none;transition:border-color .15s ease;
+}
+.field textarea{resize:vertical;min-height:76px;}
+.field input:focus,.field textarea:focus{border-color:var(--accent);}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-4);}
+@media (max-width:600px){.field-row{grid-template-columns:1fr;}}
+.radio-group{display:flex;flex-direction:column;gap:8px;}
+.radio-opt{display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--border);border-radius:var(--radius-md);cursor:pointer;transition:all .15s ease;}
+.radio-opt:hover{border-color:var(--border-strong);}
+.radio-opt.checked{border-color:var(--accent);background:var(--accent-soft);}
+.radio-opt input{accent-color:var(--accent);width:16px;height:16px;}
+.radio-opt span{font-size:13.5px;}
+.form-actions{display:flex;gap:10px;margin-top:var(--sp-5);}
+
+.stepper{display:flex;align-items:center;gap:8px;margin-bottom:var(--sp-7);}
+.step-dot{font-family:var(--font-mono);font-size:11px;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);color:var(--text-tertiary);flex:none;}
+.step-dot.active{border-color:var(--accent);color:var(--accent);}
+.step-dot.done{background:var(--accent);border-color:var(--accent);color:var(--on-accent);}
+.step-line{width:28px;height:1px;background:var(--border);}
+.step-label{font-family:var(--font-mono);font-size:10.5px;color:var(--text-tertiary);letter-spacing:0.04em;text-transform:uppercase;}
+.add-lote-form{border:1px dashed var(--border);border-radius:var(--radius-lg);padding:var(--sp-5);margin-top:var(--sp-4);}
+
+/* ============ REMATE PAGE HEADER ============ */
+.remate-head{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--sp-6);margin-bottom:var(--sp-7);}
+.rh-top{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap;margin-bottom:var(--sp-3);}
+.rh-name{font-size:clamp(20px,3vw,26px);}
+.rh-org{color:var(--text-secondary);font-size:13.5px;margin-top:4px;}
+.rh-meta{display:flex;gap:var(--sp-5);flex-wrap:wrap;margin-top:var(--sp-5);padding-top:var(--sp-5);border-top:1px solid var(--border);}
+.rh-meta-item .rm-val{font-family:var(--font-mono);font-size:17px;font-weight:600;color:var(--text);}
+.rh-meta-item .rm-label{font-size:10.5px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.05em;font-family:var(--font-mono);margin-top:2px;}
+.rh-actions{display:flex;gap:10px;margin-left:auto;}
+@media (max-width:640px){.rh-actions{margin-left:0;width:100%;} .rh-actions .btn{flex:1;}}
+
+/* ============ LOTE PAGE ============ */
+.lote-layout{display:grid;grid-template-columns:1.4fr 1fr;gap:var(--sp-6);align-items:start;}
+@media (max-width:960px){.lote-layout{grid-template-columns:1fr;}}
+.gallery{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;}
+.gallery-main{height:280px;display:flex;align-items:center;justify-content:center;font-size:64px;position:relative;}
+.gallery-main .gm-count{position:absolute;bottom:10px;right:10px;font-family:var(--font-mono);font-size:10.5px;background:rgba(10,10,12,0.65);color:var(--text-secondary);padding:3px 9px;border-radius:var(--radius-full);}
+.gallery-thumbs{display:flex;gap:6px;padding:10px;}
+.gallery-thumb{width:42px;height:42px;border-radius:var(--radius-sm);cursor:pointer;border:2px solid transparent;flex:none;transition:all .15s ease;}
+.gallery-thumb:hover{border-color:var(--border-strong);}
+.gallery-thumb.active{border-color:var(--accent);}
+.lote-context{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-family:var(--font-mono);font-size:11.5px;color:var(--text-tertiary);margin-top:var(--sp-3);}
+.lote-context .sep{color:var(--border-strong);}
+.detalle-block{margin-top:var(--sp-6);}
+.detalle-block h4{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-family:var(--font-mono);color:var(--text-tertiary);margin-bottom:var(--sp-3);font-weight:600;}
+.detalle-block p{color:var(--text-secondary);font-size:13.5px;line-height:1.65;text-wrap:pretty;}
+.spec-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;}
+.spec-grid div{font-size:12.5px;color:var(--text-secondary);display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:6px;}
+.spec-grid div b{color:var(--text-tertiary);font-weight:600;}
+.doc-list{display:flex;flex-direction:column;gap:6px;}
+.doc-list div{font-size:13px;color:var(--success);display:flex;align-items:center;gap:8px;}
+.footer-note{margin-top:var(--sp-7);padding-top:var(--sp-6);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);flex-wrap:wrap;}
+.footer-note p{font-size:12.5px;color:var(--text-tertiary);}
+
+/* ============ OFFER PANEL ============ */
+.offer-panel{position:sticky;top:80px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--sp-5);}
+@media (max-width:960px){.offer-panel{position:static;}}
+.op-price .op-label{font-size:11px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.06em;font-family:var(--font-mono);}
+.op-price .op-val{font-family:var(--font-mono);font-size:30px;font-weight:700;margin-top:4px;color:var(--text);transition:color .3s ease;}
+.op-price .op-val.flash{color:var(--accent);}
+.op-price .op-bidder{font-size:12px;color:var(--text-tertiary);margin-top:3px;}
+.op-timer{display:flex;align-items:center;justify-content:space-between;margin:var(--sp-4) 0;padding:var(--sp-3) 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
+.op-timer .om-label{font-size:10.5px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.05em;font-family:var(--font-mono);}
+.op-timer .om-val{font-family:var(--font-mono);font-size:18px;color:var(--live);}
+.op-timer .om-val.low{animation:pulse-text 1s infinite;}
+@keyframes pulse-text{0%,100%{opacity:1;}50%{opacity:0.5;}}
+.status-note{padding:11px 13px;border-radius:var(--radius-md);font-size:12.5px;margin-bottom:var(--sp-4);display:flex;gap:9px;align-items:flex-start;}
+.status-note.win{background:var(--success-soft);border:1px solid rgba(46,204,143,0.3);color:var(--success);}
+.status-note.warn{background:var(--live-soft);border:1px solid rgba(251,75,75,0.3);color:var(--live);}
+
+/* ============ SIDE PANEL (Actividad / Chat) ============ */
+.side-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;height:480px;overflow:hidden;}
+.sp-tabs{display:flex;border-bottom:1px solid var(--border);flex:none;}
+.sp-tab{flex:1;background:transparent;border:none;padding:13px;font-family:var(--font-sans);font-size:12.5px;font-weight:700;color:var(--text-tertiary);cursor:pointer;transition:all .15s ease;border-bottom:2px solid transparent;}
+.sp-tab:hover{color:var(--text-secondary);}
+.sp-tab.active{color:var(--text);border-bottom-color:var(--accent);}
+.sp-body{flex:1;overflow-y:auto;padding:var(--sp-4);}
+
+.activity-item{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);}
+.activity-item:last-child{border-bottom:none;}
+.activity-item .ai-icon{width:26px;height:26px;border-radius:50%;background:var(--surface-3);display:flex;align-items:center;justify-content:center;font-size:12px;flex:none;}
+.activity-item .ai-text{font-size:12.5px;color:var(--text-secondary);flex:1;}
+.activity-item .ai-text b{color:var(--text);font-family:var(--font-mono);font-weight:600;}
+.activity-item .ai-time{font-size:10.5px;color:var(--text-tertiary);font-family:var(--font-mono);flex:none;white-space:nowrap;}
+
+.chat-list{display:flex;flex-direction:column;gap:var(--sp-4);}
+.chat-msg{display:flex;flex-direction:column;gap:2px;}
+.chat-msg .cm-head{display:flex;align-items:center;gap:7px;}
+.chat-msg .cm-name{font-size:12px;font-weight:700;color:var(--text);}
+.chat-msg .cm-role{font-size:9.5px;font-family:var(--font-mono);color:var(--accent);background:var(--accent-soft);padding:2px 6px;border-radius:var(--radius-full);text-transform:uppercase;letter-spacing:0.04em;}
+.chat-msg .cm-time{font-size:10px;color:var(--text-tertiary);font-family:var(--font-mono);margin-left:auto;}
+.chat-msg .cm-text{font-size:13px;color:var(--text-secondary);line-height:1.5;}
+.chat-msg.is-me .cm-name{color:var(--accent);}
+.chat-input-row{display:flex;gap:8px;padding:var(--sp-3);border-top:1px solid var(--border);flex:none;}
+.chat-input-row input{flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:9px 12px;color:var(--text);font-family:var(--font-sans);font-size:13px;outline:none;}
+.chat-input-row input:focus{border-color:var(--accent);}
+
+/* mobile FAB + bottom sheet */
+.fab{display:none;}
+.sheet-backdrop{display:none;}
+@media (max-width:960px){
+  .side-panel{display:none;}
+  .side-panel.sheet-open{
+    display:flex;position:fixed;left:0;right:0;bottom:0;top:auto;height:70vh;
+    border-radius:var(--radius-lg) var(--radius-lg) 0 0;z-index:150;box-shadow:var(--shadow-lg);
+    animation:sheetUp .22s var(--ease);
+  }
+  .fab{
+    display:flex;position:fixed;right:var(--sp-4);bottom:var(--sp-4);z-index:120;
+    background:var(--accent);color:var(--on-accent);border:none;border-radius:var(--radius-full);
+    padding:13px 18px;font-family:var(--font-sans);font-weight:700;font-size:13px;align-items:center;gap:8px;
+    box-shadow:var(--shadow-md);cursor:pointer;
+  }
+  .sheet-backdrop.show{display:block;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:140;}
+}
+@keyframes sheetUp{from{transform:translateY(24px);opacity:0.6;}to{transform:none;opacity:1;}}
+
+/* ============ MODAL ============ */
+.modal-overlay{position:fixed;inset:0;background:rgba(5,5,6,0.7);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:200;padding:var(--sp-4);animation:fadeIn .15s ease;}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+.modal-box{background:var(--surface-2);border:1px solid var(--border-strong);border-radius:var(--radius-lg);padding:var(--sp-6);max-width:400px;width:100%;box-shadow:var(--shadow-lg);animation:modalIn .18s var(--ease);}
+@keyframes modalIn{from{opacity:0;transform:translateY(8px) scale(0.98);}to{opacity:1;transform:none;}}
+.modal-box h3{font-size:18px;margin-bottom:var(--sp-2);}
+.modal-box .modal-price{font-family:var(--font-mono);font-size:32px;font-weight:700;margin:var(--sp-3) 0;color:var(--accent);}
+.modal-box p.note{color:var(--text-tertiary);font-size:12.5px;margin-bottom:var(--sp-4);}
+.modal-actions{display:flex;gap:10px;margin-top:var(--sp-5);}
+
+/* ============ TOASTS ============ */
+.toasts{position:fixed;top:var(--sp-4);right:var(--sp-4);z-index:300;display:flex;flex-direction:column;gap:8px;max-width:320px;}
+.toast{background:var(--surface-2);border:1px solid var(--border-strong);border-left:3px solid var(--accent);border-radius:var(--radius-md);padding:11px 15px;font-size:12.5px;box-shadow:var(--shadow-md);animation:toastIn .2s var(--ease);color:var(--text-secondary);}
+.toast.success{border-left-color:var(--success);}
+.toast.warning{border-left-color:var(--live);}
+@keyframes toastIn{from{opacity:0;transform:translateX(16px);}to{opacity:1;transform:none;}}
+.toast.out{animation:toastOut .2s ease forwards;}
+@keyframes toastOut{to{opacity:0;transform:translateX(16px);}}
+
+/* ============ RESULT / ADJUDICADO ============ */
+.result-banner{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-4) var(--sp-5);background:var(--success-soft);border:1px solid rgba(46,204,143,0.3);border-radius:var(--radius-lg);margin-bottom:var(--sp-5);}
+.result-banner .rb-icon{font-size:20px;}
+.result-banner b{color:var(--success);}
+.adjudicado-hero{text-align:center;padding:var(--sp-8) var(--sp-5);}
+.adjudicado-hero .ah-icon{font-size:44px;}
+.adjudicado-hero h2{font-size:clamp(24px,3.4vw,32px);margin-top:var(--sp-3);}
+.adjudicado-hero .ah-price{font-family:var(--font-mono);font-size:clamp(26px,4vw,36px);color:var(--success);margin-top:var(--sp-3);font-weight:700;}
+.adjudicado-hero .ah-note{color:var(--text-tertiary);margin-top:var(--sp-2);font-size:13.5px;}
+
+/* ============ ACTIONS ROW (rematador) ============ */
+.live-controls{display:flex;gap:8px;flex-wrap:wrap;}
+
+/* ============ CHECKLIST / BEFORE-AFTER ============ */
+.checklist{display:flex;flex-direction:column;gap:9px;margin:var(--sp-5) 0;}
+.checklist div{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--text-secondary);}
+.checklist div span.ck{color:var(--success);font-weight:700;}
+.antes-despues{display:grid;grid-template-columns:1fr auto 1fr;gap:var(--sp-5);align-items:center;margin-top:var(--sp-5);}
+@media (max-width:700px){.antes-despues{grid-template-columns:1fr;} .ad-arrow{display:none;}}
+.ad-col{border:1px solid var(--border);border-radius:var(--radius-lg);padding:var(--sp-5);}
+.ad-col.antes{opacity:0.55;}
+.ad-col.despues{border-color:var(--accent);background:var(--accent-soft);}
+.ad-col h5{font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-tertiary);margin-bottom:var(--sp-3);}
+.ad-col ul{list-style:none;padding:0;display:flex;flex-direction:column;gap:8px;}
+.ad-col li{font-size:13.5px;color:var(--text-secondary);}
+.ad-col.antes li::before{content:"✕ ";color:var(--danger);}
+.ad-col.despues li::before{content:"✓ ";color:var(--accent);}
+.ad-arrow{font-size:22px;color:var(--text-tertiary);}
+
+/* ============ PERFIL / CIERRE ============ */
+.perfil-head{display:flex;align-items:center;gap:var(--sp-5);margin-bottom:var(--sp-7);flex-wrap:wrap;}
+.avatar{width:64px;height:64px;border-radius:50%;background:var(--surface-3);border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--text);flex:none;}
+.spec-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:var(--sp-2);}
+
+.close-block{margin-top:var(--sp-9);padding-top:var(--sp-7);border-top:1px solid var(--border);text-align:center;}
+.close-roles{display:flex;justify-content:center;gap:var(--sp-6);margin-top:var(--sp-5);flex-wrap:wrap;}
+.close-role-btn{background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--text-tertiary);font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;transition:color .15s ease;}
+.close-role-btn:hover{color:var(--text);}
+.close-role-btn .cr-icon{width:36px;height:36px;border-radius:50%;background:var(--surface-3);display:flex;align-items:center;justify-content:center;font-size:16px;}
+
+.fade-in{animation:fadeUp .25s ease;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+.empty-note{color:var(--text-tertiary);font-size:13px;padding:var(--sp-4) 0;}
+.empty-state{grid-column:1/-1;text-align:center;padding:var(--sp-8) var(--sp-5);border:1px dashed var(--border);border-radius:var(--radius-lg);color:var(--text-tertiary);}
+.empty-state .es-icon{font-size:24px;opacity:0.7;}
+.empty-state h4{font-size:14px;color:var(--text-secondary);margin-top:var(--sp-2);}
+.empty-state p{font-size:12.5px;color:var(--text-tertiary);margin-top:4px;max-width:300px;margin-inline:auto;}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:0.001ms !important;animation-iteration-count:1 !important;transition-duration:0.001ms !important;}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toasts" aria-live="polite"></div>
+<div id="modal-root"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   DATA / STATE
+   ============================================================ */
+var STORAGE_KEY = 'rematar_demo_v2';
+var EMPRESA_NOMBRE = 'Automotores del Litoral';
+var REMATADOR_NOMBRE = 'Juan Pérez';
+var BIDDER_NAMES = ['Usuario #144','Usuario #091','Usuario #182'];
+var CHAT_NAMES = ['María','Pedro','Lucía','Diego'];
+var INCREMENTS = [200000,300000,250000,400000,150000,350000];
+
+function mkLote(id,numero,title,subtitle,category,subcat,icon,gradient,base,participantes,fotos,status,feed,extra){
+  return Object.assign({
+    id:id, numero:numero, title:title, subtitle:subtitle, category:category, subcat:subcat,
+    icon:icon, gradient:gradient, base:base, participantes:participantes, fotos:fotos,
+    status:status, paused:false, simRunning:false, winner:null, winPrice:null, feed:feed||[]
+  }, extra||{});
+}
+
+/* Borrador para el wizard "Crear remate" (Actions.wizardStart) -- objeto SUELTO,
+   todavía no forma parte de `state.remates` (recién `wizardPublish` lo empuja ahí) --
+   así, cancelar el wizard antes de publicar no deja una tarjeta vacía dando vueltas. */
+function mkDraftRemate(){
+  return {
+    id:'RD'+Date.now(), nombre:'Nuevo remate', empresa:EMPRESA_NOMBRE, rematador:REMATADOR_NOMBRE,
+    estado:'borrador', fecha:'', hora:'', modalidad:'online', garantia:'no-requerida',
+    categoria:'vehiculos', ubicacion:'Rosario, Santa Fe', participantes:0, published:false, siguiendo:false,
+    descripcion:'', chat:[], lotes:[]
+  };
+}
+
+function seedRemates(){
+  var now = Date.now();
+  return [
+    {
+      id:'R1', nombre:'Remate Automotor Agosto', empresa:EMPRESA_NOMBRE, rematador:REMATADOR_NOMBRE,
+      estado:'en_vivo', fecha:'30/08/2026', hora:'20:00', modalidad:'online-transmision', garantia:'requerida',
+      categoria:'vehiculos', ubicacion:'Rosario, Santa Fe', participantes:184, published:true, siguiendo:false,
+      descripcion:'Remate de vehículos utilitarios seleccionados, sin base ni reserva, con financiación disponible.',
+      chat:[
+        {from:'María', role:'comprador', text:'¿La camioneta tiene toda la documentación al día?', ts: now-180000},
+        {from:REMATADOR_NOMBRE, role:'rematador', text:'Sí, está cargada y disponible en la ficha de cada lote.', ts: now-150000},
+        {from:'Pedro', role:'comprador', text:'¿Se puede visitar antes del remate?', ts: now-90000}
+      ],
+      lotes:[
+        mkLote('L001','001','Toyota Hilux SRX 2022','4x4 · Diésel · Manual','vehiculos','camionetas','🚙','linear-gradient(135deg,#241f38,#3a2e5c)',25000000,184,8,'en_subasta',[
+          {kind:'oferta', amount:28500000, bidder:'Usuario #182', ts: now-40000},
+          {kind:'oferta', amount:28200000, bidder:'Usuario #091', ts: now-75000},
+          {kind:'join', bidder:'Usuario #205', ts: now-95000},
+          {kind:'oferta', amount:28000000, bidder:'Usuario #144', ts: now-130000}
+        ], {desc:'Pick-up mediana en excelente estado general, service oficial al día, único dueño. Ideal para uso mixto ciudad/ruta.',
+            caracteristicas:{'Año':'2022','Kilómetros':'45.000 km','Motor':'2.8 TDI 4x4','Combustible':'Diésel','Transmisión':'Manual','Color':'Blanco perlado'},
+            docs:['Cédula verde al día','VTV vigente','Libre de multas']}),
+        mkLote('L002','002','Ford Ranger XLT 2021','4x2 · Diésel · Automática','vehiculos','camionetas','🛻','linear-gradient(135deg,#1a2b2e,#254048)',19000000,96,6,'pendiente',[],
+          {desc:'Pick-up XLT con paquete de seguridad completo y baja utilización comercial.',
+           caracteristicas:{'Año':'2021','Kilómetros':'62.000 km','Motor':'2.0 Bi-Turbo 4x2','Combustible':'Diésel','Transmisión':'Automática','Color':'Gris plata'},
+           docs:['Cédula verde al día','VTV vigente']}),
+        mkLote('L003','003','Volkswagen Amarok 2022','4x4 · Diésel · Automática','vehiculos','camionetas','🚐','linear-gradient(135deg,#241a2c,#3a2a4a)',22000000,71,7,'pendiente',[],
+          {desc:'Amarok tope de gama, cuero, techo eléctrico, service en concesionario oficial.',
+           caracteristicas:{'Año':'2022','Kilómetros':'38.500 km','Motor':'3.0 V6 TDI 4x4','Combustible':'Diésel','Transmisión':'Automática','Color':'Negro profundo'},
+           docs:['Cédula verde al día','VTV vigente','Libre de multas']})
+      ]
+    },
+    {
+      id:'R2', nombre:'Maquinaria Industrial', empresa:EMPRESA_NOMBRE, rematador:REMATADOR_NOMBRE,
+      estado:'programado', fecha:'02/09/2026', hora:'18:00', modalidad:'online', garantia:'no-requerida',
+      categoria:'maquinaria', ubicacion:'Rosario, Santa Fe', participantes:0, published:true, siguiendo:false,
+      descripcion:'Maquinaria vial e industrial en excelente estado, ideal para empresas constructoras.',
+      chat:[],
+      lotes:[
+        mkLote('L004','001','Retroexcavadora JCB 3CX','Vial · Diésel','maquinaria','pesada','🚜','linear-gradient(135deg,#1a2416,#2e4326)',32000000,0,5,'pendiente',[],
+          {desc:'Retroexcavadora 3CX con bajo uso, mantenimiento al día.', caracteristicas:{'Año':'2021','Horas':'1.200 hs'}, docs:['Documentación pendiente de carga']}),
+        mkLote('L005','002','Motoniveladora Caterpillar 120K','Vial · Diésel','maquinaria','pesada','🏗️','linear-gradient(135deg,#241f16,#433a24)',45000000,0,4,'pendiente',[],
+          {desc:'Motoniveladora para obras viales, motor reconstruido.', caracteristicas:{'Año':'2019','Horas':'3.400 hs'}, docs:['Documentación pendiente de carga']})
+      ]
+    },
+    {
+      id:'R3', nombre:'Vehículos Julio', empresa:EMPRESA_NOMBRE, rematador:REMATADOR_NOMBRE,
+      estado:'finalizado', fecha:'15/07/2026', hora:'19:00', modalidad:'online', garantia:'requerida',
+      categoria:'vehiculos', ubicacion:'Rosario, Santa Fe', participantes:142, published:true, siguiendo:false,
+      descripcion:'Remate de vehículos particulares finalizado el mes pasado.',
+      chat:[],
+      lotes:[
+        mkLote('L006','001','Chevrolet S10 2020','4x2 · Diésel','vehiculos','camionetas','🚗','linear-gradient(135deg,#1f1a24,#332a44)',16000000,88,5,'adjudicado',[
+          {kind:'oferta', amount:18400000, bidder:'Usuario #077', ts: now-2600000000}
+        ], {winPrice:18400000, winner:'Usuario #077', desc:'Vehículo particular con service oficial.', caracteristicas:{'Año':'2020'}, docs:['Cédula verde al día']}),
+        mkLote('L007','002','Renault Duster 2019','4x2 · Nafta','vehiculos','autos','🚗','linear-gradient(135deg,#1a2420,#25392f)',12000000,54,5,'adjudicado',[
+          {kind:'oferta', amount:13100000, bidder:'Usuario #033', ts: now-2600000000}
+        ], {winPrice:13100000, winner:'Usuario #033', desc:'SUV compacta, primera mano.', caracteristicas:{'Año':'2019'}, docs:['Cédula verde al día']})
+      ]
+    },
+    {
+      id:'R4', nombre:'Exposición Rural', empresa:EMPRESA_NOMBRE, rematador:REMATADOR_NOMBRE,
+      estado:'cancelado', fecha:'—', hora:'—', modalidad:'presencial', garantia:'no-requerida',
+      categoria:'campo', ubicacion:'Rosario, Santa Fe', participantes:0, published:true, siguiendo:false,
+      descripcion:'Este remate fue cancelado por el organizador.', chat:[], lotes:[]
+    }
+  ];
+}
+
+function seedState(){
+  return {
+    route:'landing', role:null, currentRemateId:null, currentLoteId:null,
+    compradorTab:'en_vivo', compradorCategoria:'todos', compradorSearch:'', loteSubcat:'todos',
+    sidePanelTab:'actividad', sheetOpen:false, galleryIndex:0,
+    wizard:{ step:1, publishState:'idle', addingLote:false },
+    remates: seedRemates()
+  };
+}
+
+var state = loadState();
+function loadState(){
+  try{
+    var raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){ var p = JSON.parse(raw); if(p && Array.isArray(p.remates) && p.remates.length) return p; }
+  }catch(e){}
+  return seedState();
+}
+function save(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){} }
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+function fmtMoney(n){ return '$' + Math.round(n).toLocaleString('es-AR'); }
+function fmtTime(sec){ sec = Math.max(0,sec); var m=Math.floor(sec/60), s=sec%60; return (m<10?'0':'')+m+':'+(s<10?'0':'')+s; }
+function timeAgo(ts){
+  var s = Math.max(0, Math.floor((Date.now()-ts)/1000));
+  if(s<5) return 'ahora';
+  if(s<60) return 'hace '+s+'s';
+  var m = Math.floor(s/60);
+  if(m<60) return 'hace '+m+'m';
+  var h = Math.floor(m/60);
+  if(h<24) return 'hace '+h+'h';
+  return 'hace '+Math.floor(h/24)+'d';
+}
+function getRemate(id){ return state.remates.find(function(r){return r.id===id;}) || null; }
+function getRemateOfLote(loteId){ return state.remates.find(function(r){return r.lotes.some(function(l){return l.id===loteId;});}) || null; }
+function getLote(id){
+  for(var i=0;i<state.remates.length;i++){
+    var r = state.remates[i];
+    for(var j=0;j<r.lotes.length;j++){ if(r.lotes[j].id===id) return r.lotes[j]; }
+  }
+  return null;
+}
+function currentOffer(lote){ var o=lote.feed.filter(function(e){return e.kind==='oferta';}); return o.length? o[0].amount : lote.base; }
+function leadingBidder(lote){ var o=lote.feed.filter(function(e){return e.kind==='oferta';}); return o.length? o[0].bidder : null; }
+function nextBidderName(lote){ var o=lote.feed.filter(function(e){return e.kind==='oferta' && e.bidder!=='Vos';}); return BIDDER_NAMES[o.length % BIDDER_NAMES.length]; }
+function nextIncrement(lote){ var n=lote.feed.filter(function(e){return e.kind==='oferta';}).length; return INCREMENTS[n % INCREMENTS.length]; }
+function pushOferta(lote, amount, bidder){
+  lote.feed.unshift({kind:'oferta', amount:amount, bidder:bidder, ts:Date.now()});
+  lote.status = 'en_subasta';
+  lote.participantes = lote.participantes + (Math.random()>0.45 ? 1 : 0);
+  resetTimer(); save();
+}
+function pushJoin(lote, name){ lote.feed.unshift({kind:'join', bidder:name, ts:Date.now()}); save(); }
+function pushChat(remate, from, role, text){ remate.chat.push({from:from, role:role, text:text, ts:Date.now()}); save(); }
+
+var REMATE_STATUS = {
+  borrador:{cls:'neutral', label:'BORRADOR'},
+  programado:{cls:'warn', label:'PROGRAMADO'},
+  en_vivo:{cls:'live', label:'EN VIVO'},
+  finalizado:{cls:'neutral', label:'FINALIZADO'},
+  cancelado:{cls:'danger', label:'CANCELADO'}
+};
+var LOTE_STATUS = {
+  pendiente:{cls:'neutral', label:'PENDIENTE'},
+  en_subasta:{cls:'live', label:'EN SUBASTA'},
+  adjudicado:{cls:'success', label:'ADJUDICADO'},
+  desierto:{cls:'neutral', label:'DESIERTO'},
+  retirado:{cls:'danger', label:'RETIRADO'}
+};
+function badge(map, key){ var d = map[key] || {cls:'neutral', label:key}; return '<span class="badge badge-'+d.cls+'"><span class="dot"></span>'+d.label+'</span>'; }
+
+/* ============================================================
+   TIMER / TOAST / MODAL
+   ============================================================ */
+var timerSeconds = 151;
+var timerLoteId = null;
+function ensureTimerFor(loteId){ if(timerLoteId!==loteId){ timerLoteId=loteId; timerSeconds=151; } }
+function resetTimer(){ timerSeconds = 151; }
+setInterval(function(){
+  var el = document.getElementById('countdown');
+  if(el){ if(timerSeconds>0) timerSeconds--; el.textContent = fmtTime(timerSeconds); el.classList.toggle('low', timerSeconds<30); }
+  var rels = document.querySelectorAll('[data-ts]');
+  for(var i=0;i<rels.length;i++){ rels[i].textContent = timeAgo(parseInt(rels[i].getAttribute('data-ts'),10)); }
+}, 1000);
+
+function toast(msg, type){
+  var box = document.getElementById('toasts');
+  var el = document.createElement('div');
+  el.className = 'toast' + (type?(' '+type):'');
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(function(){ el.classList.add('out'); setTimeout(function(){ el.remove(); }, 220); }, 3400);
+}
+function openModal(html){
+  document.getElementById('modal-root').innerHTML = '<div class="modal-overlay" onclick="if(event.target===this)Actions.closeModal()"><div class="modal-box">'+html+'</div></div>';
+}
+function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
+
+/* ============================================================
+   RENDER SHELL
+   ============================================================ */
+var simIntervals = {};
+var scrollTopOnNextRender = false;
+
+function go(route, extra){
+  extra = extra || {};
+  Object.keys(extra).forEach(function(k){ state[k]=extra[k]; });
+  state.route = route;
+  scrollTopOnNextRender = true;
+  save(); render();
+}
+function clearAllSims(){
+  Object.keys(simIntervals).forEach(function(k){ clearInterval(simIntervals[k]); var l=getLote(k); if(l) l.simRunning=false; });
+  simIntervals = {};
+}
+
+function roleHome(){ return {empresa:'empresa/dashboard', rematador:'rematador/dashboard', comprador:'comprador/explorar'}[state.role]; }
+function roleLabel(){ return {empresa:'🏢 Empresa', rematador:'⚖️ Rematador', comprador:'👤 Comprador'}[state.role] || ''; }
+
+function chrome(inner, opts){
+  opts = opts || {};
+  var home = roleHome();
+  var crumbBar = opts.crumbs ? breadcrumbBar(opts.crumbs, opts.back) : '';
+  return topbarHtml(home) + crumbBar + '<div class="fade-in">'+inner+'</div>' + fixedBadge();
+}
+function topbarHtml(home){
+  return '<div class="topbar"><div class="topbar-inner">'+
+    '<div class="logo" onclick="Actions.goHome(\''+home+'\')"><span class="logo-mark">🔨</span>RematAR</div>'+
+    '<div class="nav-right">'+
+      '<span class="role-tag">'+roleLabel()+'</span>'+
+      '<div class="nav-actions">'+
+        '<button class="icon-btn" onclick="Actions.goHome(\''+home+'\')">Inicio</button>'+
+        '<button class="icon-btn" onclick="Actions.switchRole()">Cambiar de rol</button>'+
+        '<span class="nav-divider"></span>'+
+        '<button class="icon-btn subtle" onclick="Actions.confirmReset()">Reiniciar</button>'+
+      '</div>'+
+    '</div>'+
+  '</div></div>';
+}
+function breadcrumbBar(parts, back){
+  var html = parts.map(function(p,i){
+    var isLast = i===parts.length-1;
+    if(isLast) return '<span class="crumb-current">'+escHtml(p.label)+'</span>';
+    return '<span class="crumb-link" onclick="'+p.action+'">'+escHtml(p.label)+'</span><span class="crumb-sep">/</span>';
+  }).join('');
+  return '<div class="crumbbar"><div class="crumbbar-inner">'+
+    '<div class="crumbs">'+html+'</div>'+
+    (back ? '<button class="crumb-back" onclick="'+back.action+'">← '+back.label+'</button>' : '')+
+  '</div></div>';
+}
+function fixedBadge(){
+  return '<div class="badge-fixed"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);"></span><b>DEMO INTERACTIVA</b><span>· Simulación, datos ficticios</span></div>';
+}
+
+function render(){
+  clearAllSims();
+  var app = document.getElementById('app');
+  var html = '';
+  switch(state.route){
+    case 'landing': html = viewLanding(); break;
+    case 'empresa/dashboard': html = chrome(viewEmpresaDashboard()); break;
+    case 'empresa/remate': html = chrome(viewEmpresaRemate(), empresaRemateCrumbs()); break;
+    case 'empresa/wizard': html = chrome(viewEmpresaWizard(), wizardCrumbs()); break;
+    case 'rematador/dashboard': html = chrome(viewRematadorDashboard()); break;
+    case 'rematador/perfil': html = chrome(viewRematadorPerfil(), {crumbs:[{label:'RematAR',action:"Actions.goHome('rematador/dashboard')"},{label:'Perfil'}]}); break;
+    case 'rematador/live': html = chrome(viewRematadorLive(), rematadorLiveCrumbs()); break;
+    case 'rematador/fin': html = chrome(viewRematadorFin()); break;
+    case 'comprador/explorar': html = chrome(viewCompradorExplorar()); break;
+    case 'comprador/remate': html = chrome(viewCompradorRemate(), compradorRemateCrumbs()); break;
+    case 'lote': html = chrome(viewLote(), loteCrumbs()); break;
+    default: html = viewLanding();
+  }
+  app.innerHTML = html;
+  if(scrollTopOnNextRender){ window.scrollTo(0,0); scrollTopOnNextRender=false; }
+  var chatBody = document.getElementById('chat-scroll');
+  if(chatBody) chatBody.scrollTop = chatBody.scrollHeight;
+}
+
+/* ============================================================
+   SHARED COMPONENTS
+   ============================================================ */
+function metric(val,label){ return '<div class="metric"><div class="m-val mono">'+val+'</div><div class="m-label">'+label+'</div></div>'; }
+function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+/* Texto libre (nombre/descripción de remate, nombre de lote, mensajes de chat) se
+   inserta vía innerHTML en varias vistas -- sin esto, alguien podía tipear "<b>" o
+   similar en esos campos y romper el layout de su propia sesión (todo el estado es
+   local, no afecta a otros visitantes, pero se ve descuidado en una demo pública). */
+function escHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function slugify(s){
+  return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'remate';
+}
+function field(type,id,label,value,extra){ return '<div class="field"><label>'+label+'</label><input type="'+type+'" id="'+id+'" value="'+escAttr(value)+'" '+(extra||'')+'></div>'; }
+function radioOpt(name,val,label,checked){ return '<label class="radio-opt'+(checked?' checked':'')+'" onclick="Actions.radioPick(this)"><input type="radio" name="'+name+'" value="'+val+'" '+(checked?'checked':'')+'><span>'+label+'</span></label>'; }
+function dateToInput(d){ var p=d.split('/'); return p.length===3 ? (p[2]+'-'+p[1]+'-'+p[0]) : ''; }
+function emptyState(icon,title,sub){ return '<div class="empty-state"><div class="es-icon">'+icon+'</div><h4>'+title+'</h4><p>'+sub+'</p></div>'; }
+
+function remateCard(r, actionLabel, actionOnclick, inert){
+  return '<div class="remate-card'+(inert?' is-inert':'')+'" '+(inert?'':'onclick="'+actionOnclick+'"')+'>'+
+    badge(REMATE_STATUS, r.estado)+
+    '<div class="rc-name">'+escHtml(r.nombre)+'</div>'+
+    '<div class="rc-org">'+escHtml(r.empresa)+'</div>'+
+    '<div class="rc-meta"><span>'+r.lotes.length+' lotes</span><span class="sep">·</span><span>'+r.participantes+' participantes</span></div>'+
+    '<div class="rc-date">'+r.fecha+' · '+r.hora+'</div>'+
+    (inert ? '' : '<span class="btn btn-secondary btn-block rc-cta">'+actionLabel+'</span>')+
+  '</div>';
+}
+function loteCardHtml(l, clickable){
+  return '<div class="lote-card'+(clickable?' is-link':'')+'" '+(clickable?'onclick="Actions.openLote(\''+l.id+'\')"':'')+'>'+
+    '<div class="lote-photo" style="background:'+l.gradient+';"><span class="lp-num mono">#'+l.numero+'</span><span class="lp-badge">'+badge(LOTE_STATUS,l.status)+'</span>'+l.icon+'</div>'+
+    '<div class="lote-body"><h4>'+escHtml(l.title)+'</h4><p class="lb-sub">'+escHtml(l.subtitle)+'</p>'+
+      '<p class="lb-label">'+(l.status==='adjudicado'?'Adjudicado en':(leadingBidder(l)?'Oferta actual':'Precio base'))+'</p>'+
+      '<p class="lb-price mono">'+fmtMoney(l.status==='adjudicado'? (l.winPrice||l.base) : currentOffer(l))+'</p>'+
+    '</div>'+
+  '</div>';
+}
+function closeBlock(){
+  return '<div class="close-block">'+
+    '<h3 style="font-size:18px;">RematAR</h3>'+
+    '<p style="color:var(--text-tertiary);margin-top:6px;font-size:13px;">Todo el proceso de remate. Conectado en un solo lugar.</p>'+
+    '<div class="form-actions" style="justify-content:center;"><button class="btn btn-secondary" onclick="Actions.fullReset()">VOLVER A EXPLORAR</button><button class="btn btn-outline" onclick="Actions.switchRole()">VIVIR OTRA EXPERIENCIA</button></div>'+
+    '<div class="close-roles">'+
+      '<button class="close-role-btn" onclick="Actions.chooseRole(\'empresa\')"><span class="cr-icon">🏢</span>Empresa</button>'+
+      '<button class="close-role-btn" onclick="Actions.chooseRole(\'rematador\')"><span class="cr-icon">⚖️</span>Rematador</button>'+
+      '<button class="close-role-btn" onclick="Actions.chooseRole(\'comprador\')"><span class="cr-icon">👤</span>Comprador</button>'+
+    '</div>'+
+  '</div>';
+}
+
+/* ============================================================
+   SIDE PANEL — ACTIVIDAD / CHAT
+   ============================================================ */
+function activityFeedHtml(lote){
+  if(!lote.feed.length) return '<p class="empty-note">Todavía no hay actividad sobre este lote.</p>';
+  return lote.feed.slice(0,10).map(function(e){
+    if(e.kind==='oferta'){
+      return '<div class="activity-item"><div class="ai-icon">💰</div><div class="ai-text"><b>'+fmtMoney(e.amount)+'</b> — '+escHtml(e.bidder)+' realizó una oferta</div><div class="ai-time" data-ts="'+e.ts+'">'+timeAgo(e.ts)+'</div></div>';
+    }
+    return '<div class="activity-item"><div class="ai-icon">👤</div><div class="ai-text">'+escHtml(e.bidder)+' se unió al remate</div><div class="ai-time" data-ts="'+e.ts+'">'+timeAgo(e.ts)+'</div></div>';
+  }).join('');
+}
+function chatListHtml(remate){
+  if(!remate.chat.length) return '<p class="empty-note">Todavía no hay mensajes en este remate.</p>';
+  return '<div class="chat-list">'+remate.chat.slice(-30).map(function(m){
+    var roleTag = m.role==='rematador' ? '<span class="cm-role">Rematador</span>' : '';
+    return '<div class="chat-msg'+(m.from==='Vos'?' is-me':'')+'">'+
+      '<div class="cm-head"><span class="cm-name">'+escHtml(m.from)+'</span>'+roleTag+'<span class="cm-time" data-ts="'+m.ts+'">'+timeAgo(m.ts)+'</span></div>'+
+      '<div class="cm-text">'+escHtml(m.text)+'</div>'+
+    '</div>';
+  }).join('')+'</div>';
+}
+function sidePanel(remate, lote, sheetClass){
+  var tab = state.sidePanelTab;
+  return '<div class="side-panel '+(sheetClass||'')+'">'+
+    '<div class="sp-tabs">'+
+      '<button class="sp-tab'+(tab==='actividad'?' active':'')+'" onclick="Actions.sidePanelTab(\'actividad\')">Actividad</button>'+
+      '<button class="sp-tab'+(tab==='chat'?' active':'')+'" onclick="Actions.sidePanelTab(\'chat\')">Chat del remate</button>'+
+      (sheetClass ? '<button class="icon-btn" style="flex:none;margin:4px 6px;" onclick="Actions.closeSheet()">✕</button>' : '')+
+    '</div>'+
+    (tab==='actividad' ?
+      '<div class="sp-body">'+activityFeedHtml(lote)+'</div>' :
+      '<div class="sp-body" id="chat-scroll">'+chatListHtml(remate)+'</div>'+
+      '<div class="chat-input-row"><input id="chat-input" placeholder="Escribí un mensaje…" onkeydown="if(event.key===\'Enter\')Actions.sendChat()"><button class="btn btn-primary btn-sm" onclick="Actions.sendChat()">Enviar</button></div>'
+    )+
+  '</div>';
+}
+function sheetLauncher(){
+  return (state.sheetOpen ? '' : '<button class="fab" onclick="Actions.openSheet()">💬 Chat y actividad</button>')+
+    '<div class="sheet-backdrop'+(state.sheetOpen?' show':'')+'" onclick="Actions.closeSheet()"></div>';
+}
+
+/* ============================================================
+   LANDING
+   ============================================================ */
+function viewLanding(){
+  return '<div class="wrap">'+
+  '<div class="hero">'+
+    '<div class="eyebrow" style="margin-bottom:var(--sp-4);">Viví RematAR — demo interactiva</div>'+
+    '<h1>La forma moderna de <span>rematar</span>.</h1>'+
+    '<p class="hero-sub">Un remate puede tener docenas de lotes, decenas de participantes y un rematador conduciendo todo en vivo. RematAR conecta esas tres perspectivas en una sola plataforma.</p>'+
+    '<div class="hero-cta"><button class="btn btn-primary btn-lg" onclick="Actions.scrollToRoles()">Comenzar experiencia</button></div>'+
+  '</div>'+
+  '<div class="flow-strip">'+
+    '<span class="flow-item"><b>Empresa</b> crea el remate</span><span class="flow-arrow">→</span>'+
+    '<span class="flow-item">Publica sus <b>lotes</b></span><span class="flow-arrow">→</span>'+
+    '<span class="flow-item"><b>Rematador</b> conduce en vivo</span><span class="flow-arrow">→</span>'+
+    '<span class="flow-item"><b>Compradores</b> ofertan</span><span class="flow-arrow">→</span>'+
+    '<span class="flow-item">La empresa ve el <b>resultado</b></span>'+
+  '</div>'+
+  '<div id="roles" class="role-grid">'+
+    roleCard('empresa','🏢','Empresa','Gestioná tus remates, cada uno con sus propios lotes.',['Remates','Lotes','Publicación'])+
+    roleCard('rematador','⚖️','Rematador','Conducí el remate en vivo y adjudicá cada lote.',['Sala en vivo','Chat','Adjudicación'])+
+    roleCard('comprador','👤','Comprador','Explorá remates, entrá a sus lotes y ofertá.',['Explorar','Pujas','Chat en vivo'])+
+  '</div>'+
+  '<p class="tagline">Un remate. Muchos lotes. Tres perspectivas.</p>'+
+  '</div>'+
+  '<div class="connect"><div class="wrap">'+
+    '<h2>Un remate. <span>Muchos lotes.</span><br>Tres perspectivas.</h2>'+
+    '<p class="connect-sub">El mismo remate, con sus lotes, su chat y su actividad — visto y operado desde tres lugares distintos en tiempo real.</p>'+
+    '<div class="connect-grid">'+
+      '<div class="connect-col"><h4>🏢 Empresa</h4><p>Centraliza la gestión.</p><ul><li>Remates</li><li>Lotes</li><li>Adjudicación</li></ul></div>'+
+      '<div class="connect-col"><h4>⚖️ Rematador</h4><p>Conduce el remate.</p><ul><li>Ofertas</li><li>Chat en vivo</li><li>Adjudicación</li></ul></div>'+
+      '<div class="connect-col"><h4>👤 Comprador</h4><p>Participa.</p><ul><li>Exploración</li><li>Ofertas</li><li>Chat en vivo</li></ul></div>'+
+    '</div>'+
+  '</div></div>'+
+  fixedBadge();
+}
+function roleCard(role, icon, title, desc, tags){
+  return '<div class="role-card" onclick="Actions.chooseRole(\''+role+'\')">'+
+    '<div class="rc-icon">'+icon+'</div><h3>'+title+'</h3><p>'+desc+'</p>'+
+    '<div class="rc-list">'+tags.map(function(t){return '<span>· '+t+'</span>';}).join('')+'</div>'+
+    '<button class="btn btn-outline">Explorar</button>'+
+  '</div>';
+}
+
+/* ============================================================
+   EMPRESA
+   ============================================================ */
+function viewEmpresaDashboard(){
+  var remates = state.remates;
+  return '<div class="wrap page">'+
+    '<div class="page-head"><div><h1>Mis remates</h1><p class="greet">Hola, '+EMPRESA_NOMBRE+' 👋</p></div>'+
+    '<button class="btn btn-primary" onclick="Actions.wizardStart()">+ Crear remate</button>'+
+    '</div>'+
+    '<div class="eyebrow eyebrow-label">Tu cuenta · totales históricos</div>'+
+    '<div class="metrics">'+ metric('12','Remates')+metric('48','Lotes')+metric('184','Participantes')+metric('$285M','Adjudicado') +'</div>'+
+    '<div class="section-title"><h2>Remates</h2></div>'+
+    '<div class="remate-grid">'+
+      remates.map(function(r){
+        if(r.estado==='cancelado') return remateCard(r,'',null,true);
+        return remateCard(r, 'Gestionar remate', "Actions.openEmpresaRemate('"+r.id+"')");
+      }).join('')+
+    '</div>'+
+  '</div>';
+}
+
+function viewEmpresaRemate(){
+  var r = getRemate(state.currentRemateId);
+  if(!r) return '<div class="wrap page"><p class="empty-note">Remate no encontrado.</p></div>';
+  var totalAdj = r.lotes.reduce(function(a,l){return a+(l.status==='adjudicado'?(l.winPrice||0):0);},0);
+  var adjCount = r.lotes.filter(function(l){return l.status==='adjudicado';}).length;
+  var lastAdj = r.lotes.filter(function(l){return l.status==='adjudicado';}).pop();
+  return '<div class="wrap page">'+
+    (lastAdj ? '<div class="result-banner"><span class="rb-icon">🔨</span><div><b>'+escHtml(lastAdj.title)+'</b> fue adjudicado en <b>'+fmtMoney(lastAdj.winPrice)+'</b> a '+escHtml(lastAdj.winner)+'.</div></div>' : '')+
+    '<div class="remate-head">'+
+      '<div class="rh-top">'+badge(REMATE_STATUS,r.estado)+
+        (r.estado==='en_vivo' ? '<button class="btn btn-secondary btn-sm" onclick="Actions.verComoComprador(\''+r.id+'\')">Ver como comprador</button>' : '')+
+      '</div>'+
+      '<h1 class="rh-name">'+escHtml(r.nombre)+'</h1>'+
+      '<div class="rh-org">Organizado por vos · Rematador asignado: ⚖️ '+escHtml(r.rematador)+'</div>'+
+      '<div class="rh-meta">'+
+        metaItem(r.lotes.length,'Lotes')+metaItem(r.participantes,'Participantes')+metaItem(adjCount+'/'+r.lotes.length,'Adjudicados')+
+      '</div>'+
+    '</div>'+
+    '<div class="section-title"><h2>Lotes del remate</h2><span class="st-hint">'+fmtMoney(totalAdj)+' adjudicado hasta ahora</span></div>'+
+    '<div class="lote-grid">'+ r.lotes.map(function(l){ return loteCardHtml(l, true); }).join('') +'</div>'+
+  '</div>';
+}
+function metaItem(val,label){ return '<div class="rh-meta-item"><div class="rm-val mono">'+val+'</div><div class="rm-label">'+label+'</div></div>'; }
+function empresaRemateCrumbs(){
+  var r = getRemate(state.currentRemateId);
+  return {crumbs:[
+    {label:'RematAR', action:"Actions.goHome('empresa/dashboard')"},
+    {label:'Mis remates', action:"Actions.goHome('empresa/dashboard')"},
+    {label:r?r.nombre:''}
+  ], back:{label:'Mis remates', action:"Actions.goHome('empresa/dashboard')"}};
+}
+
+function wizardCrumbs(){
+  return {crumbs:[
+    {label:'RematAR', action:"Actions.goHome('empresa/dashboard')"},
+    {label:'Mis remates', action:"Actions.goHome('empresa/dashboard')"},
+    {label:'Crear remate · Paso '+state.wizard.step+' de 3'}
+  ], back: state.wizard.step>1 ? {label:'Paso anterior', action:"Actions.wizardGoStep("+(state.wizard.step-1)+")"} : {label:'Mis remates', action:"Actions.goHome('empresa/dashboard')"}};
+}
+function viewEmpresaWizard(){
+  var step = state.wizard.step;
+  var stepper = '<div class="stepper">'+stepDot(1,'Datos')+'<div class="step-line"></div>'+stepDot(2,'Lotes')+'<div class="step-line"></div>'+stepDot(3,'Publicar')+'</div>';
+  var body = step===1 ? wizardStep1() : step===2 ? wizardStep2() : wizardStep3();
+  return '<div class="wrap page">'+stepper+body+'</div>';
+}
+function stepDot(n,label){
+  var s = state.wizard.step, cls = n<s?'done':(n===s?'active':'');
+  return '<div class="step-dot '+cls+'">'+(n<s?'✓':n)+'</div><span class="step-label">'+label+'</span>';
+}
+function wizardStep1(){
+  var r = state.wizard.draft;
+  return '<h1 style="font-size:22px;margin-bottom:var(--sp-6);">Datos del remate</h1>'+
+  '<div class="card" style="max-width:560px;">'+
+    field('text','w-nombre','Nombre del remate', r.nombre, 'autofocus')+
+    '<div class="field-row">'+field('date','w-fecha','Fecha', dateToInput(r.fecha))+field('time','w-hora','Hora', r.hora)+'</div>'+
+    '<div class="field"><label>Descripción</label><textarea id="w-desc">'+escHtml(r.descripcion)+'</textarea></div>'+
+    '<div class="field"><label>Modalidad</label><div class="radio-group">'+
+      radioOpt('modalidad','online','Online', r.modalidad==='online')+
+      radioOpt('modalidad','presencial','Presencial', r.modalidad==='presencial')+
+      radioOpt('modalidad','online-transmision','Online + transmisión', r.modalidad==='online-transmision')+
+    '</div></div>'+
+    '<div class="field"><label>Garantía</label><div class="radio-group">'+
+      radioOpt('garantia','requerida','Requerida', r.garantia==='requerida')+
+      radioOpt('garantia','no-requerida','No requerida', r.garantia==='no-requerida')+
+    '</div></div>'+
+    '<div class="form-actions"><button class="btn btn-ghost" onclick="Actions.goHome(\'empresa/dashboard\')">Cancelar</button><button class="btn btn-primary" onclick="Actions.wizardSaveStep1()">Continuar</button></div>'+
+  '</div>';
+}
+function wizardStep2(){
+  var r = state.wizard.draft;
+  return '<div class="page-head"><div><h1 style="font-size:22px;">'+escHtml(r.nombre)+'</h1><p class="greet">Agregar lotes</p></div></div>'+
+  '<div class="lote-grid">'+ r.lotes.map(function(l){return loteCardHtml(l,false);}).join('') +'</div>'+
+  '<div class="add-lote-form">'+ (state.wizard.addingLote ? addLoteForm() : '<button class="btn btn-outline" onclick="Actions.wizardToggleAddLote()">+ Agregar lote</button>') +'</div>'+
+  '<div class="form-actions"><button class="btn btn-ghost" onclick="Actions.wizardGoStep(1)">Atrás</button><button class="btn btn-primary" onclick="Actions.wizardGoStep(3)">Continuar</button></div>';
+}
+function addLoteForm(){
+  return field('text','al-nombre','Nombre del lote','')+field('number','al-base','Precio base (ARS)','')+
+  '<div class="form-actions"><button class="btn btn-ghost" onclick="Actions.wizardToggleAddLote()">Cancelar</button><button class="btn btn-primary" onclick="Actions.wizardAddLote()">Agregar lote</button></div>';
+}
+function wizardStep3(){
+  var ps = state.wizard.publishState, r = state.wizard.draft;
+  if(ps==='publishing'){
+    return '<div class="card" style="max-width:460px;margin:var(--sp-8) auto;text-align:center;padding:var(--sp-8);">'+
+      '<div class="mono" style="font-size:12.5px;color:var(--text-tertiary);letter-spacing:0.08em;">PUBLICANDO REMATE…</div>'+
+      '<div style="height:3px;background:var(--border);border-radius:2px;margin-top:var(--sp-4);overflow:hidden;"><div style="height:100%;width:60%;background:var(--accent);animation:loadbar 1.1s ease-in-out infinite;"></div></div>'+
+      '<style>@keyframes loadbar{0%{transform:translateX(-100%);}100%{transform:translateX(220%);}}</style>'+
+    '</div>';
+  }
+  if(ps==='done'){
+    return '<div class="card fade-in" style="max-width:480px;margin:0 auto;text-align:center;padding:var(--sp-8);">'+
+      '<div style="font-size:38px;">✓</div><h2 style="margin-top:var(--sp-3);font-size:22px;">Remate publicado</h2>'+
+      '<p style="color:var(--text-tertiary);margin-top:var(--sp-2);font-size:13.5px;">Tu remate ya está disponible para participantes.</p>'+
+      '<div class="mono" style="margin-top:var(--sp-4);color:var(--accent);font-size:13px;">rematar.demo/remates/'+slugify(r.nombre)+'</div>'+
+      '<div class="form-actions" style="justify-content:center;"><button class="btn btn-primary" onclick="Actions.openEmpresaRemate(\''+r.id+'\')">Gestionar remate</button></div>'+
+    '</div>'+ beneficioSection();
+  }
+  return '<div class="page-head"><div><h1 style="font-size:22px;">Tu remate está listo</h1></div></div>'+
+  '<div class="card" style="max-width:560px;">'+
+    '<div style="display:flex;gap:var(--sp-7);flex-wrap:wrap;margin-bottom:var(--sp-5);">'+
+      '<div><div class="mono" style="font-size:20px;">'+r.lotes.length+'</div><div class="m-label">Lotes</div></div>'+
+      '<div><div class="mono" style="font-size:20px;">184</div><div class="m-label">Participantes estimados</div></div>'+
+      '<div><div class="mono" style="font-size:20px;">'+(r.garantia==='requerida'?'Sí':'No')+'</div><div class="m-label">Garantía requerida</div></div>'+
+    '</div>'+
+    '<div class="checklist">'+
+      '<div><span class="ck">✓</span> Información completa</div>'+
+      '<div><span class="ck">✓</span> Lotes configurados ('+r.lotes.length+')</div>'+
+      '<div><span class="ck">✓</span> Condiciones definidas</div>'+
+      '<div><span class="ck">✓</span> Documentación cargada</div>'+
+    '</div>'+
+    '<div class="form-actions"><button class="btn btn-ghost" onclick="Actions.wizardGoStep(2)">Atrás</button><button class="btn btn-primary btn-lg" onclick="Actions.wizardPublish()">Publicar remate</button></div>'+
+  '</div>';
+}
+function beneficioSection(){
+  return '<div style="max-width:680px;margin:var(--sp-8) auto 0;">'+
+    '<h3 style="text-align:center;font-size:19px;">Todo en un solo lugar.</h3>'+
+    '<div class="antes-despues">'+
+      '<div class="ad-col antes"><h5>Antes</h5><ul><li>Excel</li><li>WhatsApp</li><li>PDF</li><li>Emails</li><li>Llamadas</li></ul></div>'+
+      '<div class="ad-arrow">→</div>'+
+      '<div class="ad-col despues"><h5>RematAR</h5><ul><li>Remates</li><li>Lotes</li><li>Chat</li><li>Ofertas</li><li>Adjudicaciones</li></ul></div>'+
+    '</div>'+
+  '</div>';
+}
+
+/* ============================================================
+   REMATADOR
+   ============================================================ */
+function viewRematadorDashboard(){
+  /* Generalizado sobre TODOS los remates asignados a este rematador (`r.rematador`),
+     no solo R1/R2 hardcodeados -- así un remate creado y publicado desde el wizard de
+     la empresa también aparece acá para conducirlo, en vez de quedar invisible. */
+  var mine = state.remates.filter(function(r){ return r.rematador===REMATADOR_NOMBRE; });
+  var activo = mine.find(function(r){ return r.estado==='en_vivo'; });
+  var allDone = activo && activo.lotes.length>0 && activo.lotes.every(function(l){return l.status==='adjudicado';});
+  var otros = mine.filter(function(r){ return r!==activo; });
+  return '<div class="wrap page">'+
+    '<div class="page-head"><div><h1>Panel del rematador</h1><p class="greet">Hola, '+REMATADOR_NOMBRE.split(' ')[0]+' 👋</p></div>'+
+      '<button class="btn btn-secondary" onclick="Actions.goRoute(\'rematador/perfil\')">Ver perfil</button>'+
+    '</div>'+
+    '<div class="eyebrow eyebrow-label">Tu perfil · trayectoria</div>'+
+    '<div class="metrics">'+metric('✓','Verificado')+metric('42','Remates realizados')+metric('18','Empresas')+metric('4.9','Valoración')+'</div>'+
+    '<div class="section-title"><h2>Tu agenda</h2></div>'+
+    (activo ?
+      (allDone ?
+        '<div class="card" style="text-align:center;padding:var(--sp-7);"><div style="font-size:26px;">🏁</div><h3 style="margin-top:var(--sp-3);font-size:18px;">'+escHtml(activo.nombre)+' — finalizado</h3><p style="color:var(--text-tertiary);margin-top:6px;font-size:13px;">Todos los lotes fueron adjudicados.</p><button class="btn btn-outline" style="margin-top:var(--sp-4);" onclick="Actions.goRoute(\'rematador/fin\')">Ver resumen</button></div>'
+        :
+        remateCard(activo, 'Conducir remate', "Actions.rematadorEnter('"+activo.id+"')")
+      )
+      :
+      emptyState('🕓','Sin remates en vivo ahora mismo','Cuando una empresa te asigne un remate y lo publique, vas a poder conducirlo desde acá.')
+    )+
+    (otros.length ? '<div class="remate-grid" style="margin-top:var(--sp-4);">'+otros.map(function(r){return remateCard(r,'',null,true);}).join('')+'</div>' : '')+
+  '</div>';
+}
+function viewRematadorPerfil(){
+  var initials = REMATADOR_NOMBRE.split(' ').map(function(w){return w[0];}).join('');
+  return '<div class="wrap page">'+
+    '<div class="perfil-head"><div class="avatar">'+initials+'</div><div><h1 style="font-size:22px;">'+REMATADOR_NOMBRE+'</h1><span class="badge badge-success" style="margin-top:6px;"><span class="dot"></span>Verificado</span></div></div>'+
+    '<div class="metrics" style="grid-template-columns:repeat(3,1fr);">'+metric('42','Remates realizados')+metric('18','Empresas')+metric('4.9 ★','Valoración')+'</div>'+
+    '<div class="section-title"><h2>Especialidades</h2></div>'+
+    '<div class="spec-tags"><span class="tag">Automotores</span><span class="tag">Maquinaria</span><span class="tag">Inmuebles</span></div>'+
+    '<div class="card" style="margin-top:var(--sp-7);"><p class="eyebrow" style="margin-bottom:10px;">Cómo lo ve una empresa</p><p style="color:var(--text-secondary);font-size:13.5px;">Este es el perfil público que una empresa como '+EMPRESA_NOMBRE+' revisa antes de asignar un rematador a su remate.</p></div>'+
+  '</div>';
+}
+
+function rematadorLiveCrumbs(){
+  var r = getRemate(state.currentRemateId);
+  return {crumbs:[
+    {label:'RematAR', action:"Actions.goHome('rematador/dashboard')"},
+    {label:'Tu agenda', action:"Actions.goHome('rematador/dashboard')"},
+    {label: r?r.nombre:''}
+  ]};
+}
+function viewRematadorLive(){
+  var r = getRemate(state.currentRemateId);
+  if(!r) return '<div class="wrap page"><p class="empty-note">Remate no encontrado.</p></div>';
+  var lote = getLote(state.currentLoteId) || r.lotes.find(function(l){return l.status==='en_subasta';});
+  if(!lote) return '<div class="wrap page"><p class="empty-note">No hay lotes en vivo.</p></div>';
+  ensureTimerFor(lote.id);
+
+  if(lote.status==='adjudicado'){
+    var siguiente = r.lotes.find(function(l){return l.status==='pendiente';});
+    return '<div class="wrap page"><div class="card adjudicado-hero">'+
+      '<div class="ah-icon">🔨</div><h2>Adjudicado</h2><p style="font-size:16px;margin-top:6px;">'+escHtml(lote.title)+'</p>'+
+      '<div class="ah-price">'+fmtMoney(lote.winPrice)+'</div><p class="ah-note">Ganador: '+escHtml(lote.winner)+'</p>'+
+      '<div class="form-actions" style="justify-content:center;">'+
+        (siguiente ? '<button class="btn btn-primary btn-lg" onclick="Actions.rematadorSiguienteLote()">Siguiente lote</button>' : '<button class="btn btn-primary btn-lg" onclick="Actions.goRoute(\'rematador/fin\')">Finalizar remate</button>')+
+      '</div></div></div>';
+  }
+
+  var offer = currentOffer(lote), bidder = leadingBidder(lote);
+  var idx = r.lotes.indexOf(lote)+1;
+  return '<div class="wrap page">'+
+    '<div class="live-top" style="display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap;margin-bottom:var(--sp-5);">'+
+      badge(REMATE_STATUS,r.estado)+badge(LOTE_STATUS, lote.status)+(lote.paused?'<span class="tag">⏸ Pausado</span>':'')+
+    '</div>'+
+    '<div class="lote-layout">'+
+      '<div>'+
+        '<div class="gallery"><div class="gallery-main" style="background:'+lote.gradient+';">'+lote.icon+'</div></div>'+
+        '<div class="lote-context">LOTE #'+lote.numero+' · '+idx+' de '+r.lotes.length+'</div>'+
+        '<h1 style="font-size:24px;margin-top:6px;">'+escHtml(lote.title)+'</h1>'+
+        '<div class="lote-context">🏢 '+EMPRESA_NOMBRE+'<span class="sep">·</span>Base '+fmtMoney(lote.base)+'</div>'+
+        '<div class="card" style="margin-top:var(--sp-5);">'+
+          '<div class="op-price"><div class="op-label">Oferta actual</div><div class="op-val mono" id="oc-price">'+fmtMoney(offer)+'</div>'+(bidder?'<div class="op-bidder">'+bidder+(bidder==='Vos'?' (comprador demo)':'')+'</div>':'')+'</div>'+
+          '<div class="op-timer"><div><div class="om-label">Participantes</div><div class="om-val mono" style="color:var(--text);">'+lote.participantes+'</div></div><div style="text-align:right;"><div class="om-label">Tiempo</div><div class="om-val mono" id="countdown">'+fmtTime(timerSeconds)+'</div></div></div>'+
+          '<div class="live-controls" style="margin-top:var(--sp-4);">'+
+            '<button class="btn btn-outline" '+(lote.paused||lote.simRunning?'disabled':'')+' onclick="Actions.rematadorSimular(\''+lote.id+'\')">'+(lote.simRunning?'Simulando…':'Iniciar simulación')+'</button>'+
+            '<button class="btn btn-secondary" '+(lote.paused?'disabled':'')+' onclick="Actions.rematadorNuevaOferta(\''+lote.id+'\')">Nueva oferta</button>'+
+            '<button class="btn btn-secondary" onclick="Actions.rematadorPausar(\''+lote.id+'\')">'+(lote.paused?'Reanudar lote':'Pausar lote')+'</button>'+
+            '<button class="btn btn-primary" onclick="Actions.rematadorAbrirAdjudicar(\''+lote.id+'\')">Adjudicar lote</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+      '<div>'+sidePanel(r, lote, state.sheetOpen?'sheet-open':'')+'</div>'+
+    '</div>'+
+    sheetLauncher()+
+  '</div>';
+}
+function viewRematadorFin(){
+  var r = getRemate(state.currentRemateId);
+  if(!r) return '<div class="wrap page"><p class="empty-note">Remate no encontrado.</p></div>';
+  var adj = r.lotes.filter(function(l){return l.status==='adjudicado';});
+  var total = adj.reduce(function(a,l){return a+l.winPrice;},0);
+  return '<div class="wrap page">'+
+    '<div class="card" style="text-align:center;padding:var(--sp-8);max-width:600px;margin:0 auto;">'+
+      '<div style="font-size:36px;">🏁</div><h2 style="margin-top:var(--sp-3);font-size:20px;">Remate finalizado</h2>'+
+      '<p style="color:var(--text-tertiary);margin-top:6px;font-size:13px;">'+escHtml(r.nombre)+' — '+adj.length+' de '+r.lotes.length+' lotes adjudicados.</p>'+
+      '<div class="ah-price" style="margin-top:var(--sp-4);">'+fmtMoney(total)+'</div><p style="color:var(--text-tertiary);font-size:11.5px;">TOTAL ADJUDICADO</p>'+
+    '</div>'+ closeBlock() +
+  '</div>';
+}
+
+/* ============================================================
+   COMPRADOR
+   ============================================================ */
+var EXPLORAR_TABS = [{v:'en_vivo',l:'🔴 En vivo'},{v:'programado',l:'Próximos'},{v:'finalizado',l:'Finalizados'}];
+var CATS = [{v:'todos',l:'Todos'},{v:'vehiculos',l:'🚗 Vehículos'},{v:'maquinaria',l:'🏭 Maquinaria'},{v:'inmuebles',l:'🏠 Inmuebles'},{v:'campo',l:'🌾 Campo'},{v:'mercaderia',l:'📦 Mercadería'}];
+
+function viewCompradorExplorar(){
+  var tab = state.compradorTab, cat = state.compradorCategoria, search = (state.compradorSearch||'').toLowerCase();
+  var remates = state.remates.filter(function(r){
+    if(r.estado==='cancelado') return false;
+    if(r.estado!==tab) return false;
+    if(cat!=='todos' && r.categoria!==cat) return false;
+    if(search && r.nombre.toLowerCase().indexOf(search)===-1) return false;
+    return true;
+  });
+  return '<div class="wrap page">'+
+    '<div class="page-head"><div><h1>Explorá remates</h1></div></div>'+
+    '<div class="search-row"><div class="search-wrap"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><input class="search-input" placeholder="Buscar remates…" value="'+escAttr(state.compradorSearch||'')+'" oninput="Actions.compradorSearch(this.value)"></div></div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:var(--sp-4);flex-wrap:wrap;margin-bottom:var(--sp-5);">'+
+      '<div class="tabs">'+EXPLORAR_TABS.map(function(t){return '<button class="tab'+(tab===t.v?' active':'')+'" onclick="Actions.compradorTab(\''+t.v+'\')">'+t.l+'</button>';}).join('')+'</div>'+
+    '</div>'+
+    '<div class="chips" style="margin-bottom:var(--sp-6);">'+CATS.map(function(c){return '<button class="chip'+(cat===c.v?' active':'')+'" onclick="Actions.compradorCategoria(\''+c.v+'\')">'+c.l+'</button>';}).join('')+'</div>'+
+    '<div class="remate-grid">'+
+      (remates.length ? remates.map(function(r){ return remateCard(r,'Ver remate',"Actions.openCompradorRemate('"+r.id+"')"); }).join('') :
+        emptyState('🔍', 'Sin remates para este filtro', 'Probá otra categoría o mirá los remates en vivo de Automotores Agosto.'))+
+    '</div>'+
+  '</div>';
+}
+
+function compradorRemateCrumbs(){
+  var r = getRemate(state.currentRemateId);
+  return {crumbs:[
+    {label:'RematAR', action:"Actions.goHome('comprador/explorar')"},
+    {label:'Remates', action:"Actions.goHome('comprador/explorar')"},
+    {label:r?r.nombre:''}
+  ]};
+}
+var LOTE_SUBCATS = [{v:'todos',l:'Todos'},{v:'camionetas',l:'Camionetas'},{v:'autos',l:'Autos'},{v:'pesada',l:'Maquinaria pesada'}];
+function viewCompradorRemate(){
+  var r = getRemate(state.currentRemateId);
+  if(!r) return '<div class="wrap page"><p class="empty-note">Remate no encontrado.</p></div>';
+  var subcat = state.loteSubcat;
+  var relevantSubcats = LOTE_SUBCATS.filter(function(s){ return s.v==='todos' || r.lotes.some(function(l){return l.subcat===s.v;}); });
+  var lotes = r.lotes.filter(function(l){ return subcat==='todos' || l.subcat===subcat; });
+  return '<div class="wrap page">'+
+    '<div class="remate-head">'+
+      '<div class="rh-top">'+badge(REMATE_STATUS,r.estado)+
+        '<div class="rh-actions"><button class="btn '+(r.siguiendo?'btn-secondary':'btn-outline')+'" onclick="Actions.toggleSeguir(\''+r.id+'\')">'+(r.siguiendo?'✓ Siguiendo':'Seguir remate')+'</button></div>'+
+      '</div>'+
+      '<h1 class="rh-name">'+escHtml(r.nombre)+'</h1>'+
+      '<div class="rh-org">Organizado por '+escHtml(r.empresa)+' · Conducido por ⚖️ '+escHtml(r.rematador)+'</div>'+
+      '<div class="rh-meta">'+ metaItem(r.lotes.length,'Lotes')+metaItem(r.participantes,'Participantes')+metaItem(r.fecha+' · '+r.hora,'Fecha') +'</div>'+
+    '</div>'+
+    '<div class="detalle-block" style="margin-top:0;"><h4>Descripción</h4><p>'+escHtml(r.descripcion)+'</p></div>'+
+    '<div class="section-title"><h2>Lotes del remate</h2></div>'+
+    (relevantSubcats.length>1 ? '<div class="chips" style="margin-bottom:var(--sp-5);">'+relevantSubcats.map(function(s){return '<button class="chip'+(subcat===s.v?' active':'')+'" onclick="Actions.loteSubcat(\''+s.v+'\')">'+s.l+'</button>';}).join('')+'</div>' : '')+
+    '<div class="lote-grid">'+
+      (lotes.length ? lotes.map(function(l){ return loteCardHtml(l, r.estado!=='cancelado'); }).join('') :
+        emptyState('🕓','Sin lotes en esta categoría','Todavía no hay lotes de este tipo en el remate.'))+
+    '</div>'+
+  '</div>';
+}
+
+function loteCrumbs(){
+  var lote = getLote(state.currentLoteId);
+  var r = getRemateOfLote(state.currentLoteId);
+  var listRoute = state.role==='empresa' ? 'empresa/dashboard' : 'comprador/explorar';
+  var remateOpen = state.role==='empresa' ? "Actions.openEmpresaRemate('"+(r?r.id:'')+"')" : "Actions.openCompradorRemate('"+(r?r.id:'')+"')";
+  return {crumbs:[
+    {label:'RematAR', action:"Actions.goHome('"+listRoute+"')"},
+    {label:'Remates', action:"Actions.goHome('"+listRoute+"')"},
+    {label: r?r.nombre:'', action: remateOpen},
+    {label: 'Lote #'+(lote?lote.numero:'')}
+  ], back:{label:'Volver al remate', action: remateOpen}};
+}
+
+function viewLote(){
+  var lote = getLote(state.currentLoteId);
+  var r = getRemateOfLote(state.currentLoteId);
+  if(!lote || !r) return '<div class="wrap page"><p class="empty-note">Lote no encontrado.</p></div>';
+  ensureTimerFor(lote.id);
+  var offer = currentOffer(lote), leader = leadingBidder(lote);
+  var youLead = leader==='Vos';
+  var youBid = lote.feed.some(function(e){return e.kind==='oferta' && e.bidder==='Vos';});
+  var isComprador = state.role==='comprador';
+  var remateOpen = state.role==='empresa' ? "Actions.openEmpresaRemate('"+r.id+"')" : "Actions.openCompradorRemate('"+r.id+"')";
+
+  var activeShot = state.galleryIndex||0, shotCount=Math.min(lote.fotos,6);
+  if(activeShot>=shotCount) activeShot=0;
+  var hue = activeShot*11;
+
+  var winBlock = '';
+  if(lote.status==='adjudicado'){
+    if(lote.winner==='Vos'){
+      winBlock = '<div class="card adjudicado-hero"><div class="ah-icon">🔨</div><h2>¡Felicitaciones! Ganaste el lote.</h2>'+
+        '<p style="font-size:15px;margin-top:6px;">'+escHtml(lote.title)+'</p><div class="ah-price">'+fmtMoney(lote.winPrice)+'</div>'+
+        postRemateBlock()+'</div>';
+    } else {
+      winBlock = '<div class="card adjudicado-hero"><div class="ah-icon">🔨</div><h2>Lote adjudicado</h2>'+
+        '<p style="font-size:15px;margin-top:6px;">'+escHtml(lote.title)+'</p><div class="ah-price">'+fmtMoney(lote.winPrice)+'</div>'+
+        '<p class="ah-note">Adjudicado a '+escHtml(lote.winner)+' — este lote ya fue cerrado por el rematador.</p>'+
+        '<div class="form-actions" style="justify-content:center;"><button class="btn btn-outline" onclick="'+remateOpen+'">Ver todos los lotes</button></div></div>';
+    }
+    return '<div class="wrap page">'+winBlock+'</div>';
+  }
+
+  var actionPanel;
+  if(isComprador && r.estado!=='en_vivo'){
+    var waitMsg = r.estado==='programado' ? 'Este remate todavía no comenzó. Volvé el '+r.fecha+' a las '+r.hora+'.' : 'Este remate ya finalizó.';
+    actionPanel = '<div class="status-note warn" style="background:var(--neutral-soft);border-color:var(--border);color:var(--text-secondary);">⏳ '+waitMsg+'</div>';
+  } else if(isComprador){
+    actionPanel =
+      (youLead ? '<div class="status-note win">🥇 '+(lote.feed.filter(function(e){return e.kind==='oferta'&&e.bidder==='Vos';}).length===1?'Primera oferta — estás liderando este lote.':'Estás liderando este lote.')+'</div>' : '')+
+      (youBid && !youLead ? '<div class="status-note warn">⚠️ Otro participante realizó una oferta superior. Ya no estás en primera posición.</div>' : '')+
+      (youLead ? '<button class="btn btn-secondary btn-block" disabled>Ya estás liderando</button>' :
+        (youBid ? '<button class="btn btn-primary btn-block" onclick="Actions.compradorAbrirOferta(\''+lote.id+'\', true)">Mejorar mi oferta</button>' :
+        '<button class="btn btn-primary btn-lg btn-block" onclick="Actions.compradorAbrirOferta(\''+lote.id+'\', false)">Ofertar '+fmtMoney(offer+200000)+'</button>'));
+  } else {
+    actionPanel = '<p style="font-size:12.5px;color:var(--text-tertiary);">Estás viendo este lote como '+roleLabel()+'. Este rol no realiza ofertas.</p>';
+  }
+
+  return '<div class="wrap page">'+
+    '<div class="lote-layout">'+
+      '<div>'+
+        '<div class="gallery"><div class="gallery-main" style="background:'+lote.gradient+';filter:hue-rotate('+hue+'deg) saturate('+(1+activeShot*0.06)+');">'+lote.icon+'<span class="gm-count mono">'+(activeShot+1)+' / '+lote.fotos+'</span></div>'+
+        '<div class="gallery-thumbs">'+Array.from({length:shotCount}).map(function(_,i){return '<div class="gallery-thumb'+(i===activeShot?' active':'')+'" style="background:'+lote.gradient+';filter:hue-rotate('+(i*11)+'deg);" onclick="Actions.galleryPick('+i+')"></div>';}).join('')+'</div></div>'+
+        '<div class="lote-context">LOTE #'+lote.numero+'</div>'+
+        '<h1 style="font-size:24px;margin-top:6px;">'+escHtml(lote.title)+'</h1>'+
+        '<p style="color:var(--text-tertiary);margin-top:4px;font-size:12.5px;">'+escHtml(lote.subtitle)+'</p>'+
+        '<div class="lote-context">⚖️ Conducido por '+escHtml(r.rematador)+'<span class="sep">·</span>🏢 '+escHtml(r.empresa)+'</div>'+
+        '<div class="detalle-block"><h4>Descripción</h4><p>'+escHtml(lote.desc)+'</p></div>'+
+        '<div class="detalle-block"><h4>Características</h4><div class="spec-grid">'+Object.keys(lote.caracteristicas).map(function(k){return '<div><b>'+k+'</b><span>'+lote.caracteristicas[k]+'</span></div>';}).join('')+'</div></div>'+
+        '<div class="detalle-block"><h4>Ubicación</h4><p>📍 '+r.ubicacion+'</p></div>'+
+        '<div class="detalle-block"><h4>Documentación</h4><div class="doc-list">'+lote.docs.map(function(d){return '<div>✓ '+d+'</div>';}).join('')+'</div></div>'+
+        '<div class="footer-note"><p>Este lote pertenece al <b style="color:var(--text-secondary);">'+escHtml(r.nombre)+'</b>.</p><button class="btn btn-secondary btn-sm" onclick="'+remateOpen+'">Ver todos los lotes</button></div>'+
+      '</div>'+
+      '<div>'+
+        '<div class="offer-panel">'+
+          '<div class="op-price"><div class="op-label">Oferta actual</div><div class="op-val mono" id="oc-price">'+fmtMoney(offer)+'</div>'+(leader?'<div class="op-bidder">'+leader+'</div>':'')+'</div>'+
+          '<div class="op-timer"><div><div class="om-label">Tiempo restante</div><div class="om-val mono" id="countdown">'+fmtTime(timerSeconds)+'</div></div><div style="text-align:right;"><div class="om-label">Participantes</div><div class="om-val mono" style="color:var(--text-secondary);">'+lote.participantes+'</div></div></div>'+
+          actionPanel+
+        '</div>'+
+        '<div style="margin-top:var(--sp-4);">'+sidePanel(r, lote, state.sheetOpen?'sheet-open':'')+'</div>'+
+      '</div>'+
+    '</div>'+
+    sheetLauncher()+
+  '</div>';
+}
+function postRemateBlock(){
+  return '<div style="text-align:left;max-width:320px;margin:var(--sp-5) auto 0;">'+
+    '<p class="eyebrow" style="text-align:center;margin-bottom:var(--sp-3);">Post-remate</p>'+
+    '<div class="checklist">'+
+      '<div><span class="ck">✓</span> Oferta registrada</div>'+
+      '<div><span class="ck">✓</span> Lote adjudicado</div>'+
+      '<div><span class="ck">✓</span> Documentación disponible</div>'+
+      '<div><span class="ck">✓</span> Próximos pasos: coordinación de pago y entrega</div>'+
+    '</div>'+
+  '</div>'+ closeBlock();
+}
+
+/* ============================================================
+   ACTIONS
+   ============================================================ */
+var CHAT_SCRIPT = [
+  {from:'Lucía', role:'comprador', text:'¿Cuál es la base del lote #002?'},
+  {from:REMATADOR_NOMBRE, role:'rematador', text:'La base es '+fmtMoney(19000000)+', sin reserva.'},
+  {from:'Diego', role:'comprador', text:'¿Se puede retirar el mismo día de la adjudicación?'},
+  {from:'María', role:'comprador', text:'Gracias!'}
+];
+var chatScriptIndex = 0;
+
+window.Actions = {
+  scrollToRoles:function(){ var el=document.getElementById('roles'); if(el) el.scrollIntoView({behavior:'smooth', block:'center'}); },
+  chooseRole:function(role){
+    var routes = {empresa:'empresa/dashboard', rematador:'rematador/dashboard', comprador:'comprador/explorar'};
+    go(routes[role], {role:role});
+  },
+  switchRole:function(){ go('landing', {role:null}); setTimeout(function(){ Actions.scrollToRoles(); }, 60); },
+  goHome:function(route){ go(route); },
+  goRoute:function(route){ go(route); },
+
+  confirmReset:function(){
+    openModal('<h3>¿Reiniciar la demo?</h3><p class="note">Se perderá todo lo que hiciste: remates creados, ofertas y mensajes de chat. No afecta ninguna cuenta real.</p>'+
+      '<div class="modal-actions"><button class="btn btn-secondary btn-block" onclick="Actions.closeModal()">Cancelar</button><button class="btn btn-danger btn-block" onclick="Actions.fullReset()">Reiniciar</button></div>');
+  },
+  fullReset:function(){
+    try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+    state = seedState(); chatScriptIndex = 0;
+    closeModal(); scrollTopOnNextRender = true; render();
+  },
+  closeModal:closeModal,
+  radioPick:function(el){
+    var group = el.parentElement;
+    Array.prototype.forEach.call(group.children, function(c){ c.classList.remove('checked'); });
+    el.classList.add('checked');
+  },
+
+  /* ---- EMPRESA ---- */
+  /* "Crear remate" arma un borrador NUEVO (`mkDraftRemate`, no un remate de
+     `state.remates`) -- si el rematador cancela el wizard antes de publicar, ese
+     borrador simplemente se descarta sin dejar una tarjeta vacía en "Mis remates".
+     Recién `wizardPublish` lo agrega de verdad a `state.remates` (ver más abajo). */
+  wizardStart:function(){ state.wizard = {step:1, publishState:'idle', addingLote:false, draft:mkDraftRemate()}; go('empresa/wizard'); },
+  wizardGoStep:function(n){ state.wizard.step = n; scrollTopOnNextRender = true; save(); render(); },
+  wizardSaveStep1:function(){
+    var r = state.wizard.draft;
+    r.nombre = document.getElementById('w-nombre').value || r.nombre;
+    var d = document.getElementById('w-fecha').value;
+    if(d){ var p = d.split('-'); r.fecha = p[2]+'/'+p[1]+'/'+p[0]; }
+    r.hora = document.getElementById('w-hora').value || r.hora;
+    r.descripcion = document.getElementById('w-desc').value || r.descripcion;
+    var mod = document.querySelector('input[name=modalidad]:checked'); if(mod) r.modalidad = mod.value;
+    var gar = document.querySelector('input[name=garantia]:checked'); if(gar) r.garantia = gar.value;
+    state.wizard.step = 2; scrollTopOnNextRender = true; save(); render();
+  },
+  wizardToggleAddLote:function(){ state.wizard.addingLote = !state.wizard.addingLote; save(); render(); },
+  wizardAddLote:function(){
+    var nombre = document.getElementById('al-nombre').value.trim();
+    var base = parseInt(document.getElementById('al-base').value,10);
+    if(!nombre || !base){ toast('Completá nombre y precio base', 'warning'); return; }
+    var r = state.wizard.draft;
+    var icons = ['📦','🚗','🏠','🚜','🛠️'];
+    var grads = ['linear-gradient(135deg,#241a2c,#3a2a4a)','linear-gradient(135deg,#1a2b2e,#254048)','linear-gradient(135deg,#241f38,#3a2e5c)'];
+    r.lotes.push(mkLote('L'+(1000+r.lotes.length), String(r.lotes.length+1).padStart(3,'0'), nombre, 'Lote agregado en la demo', 'vehiculos', 'camionetas',
+      icons[r.lotes.length%icons.length], grads[r.lotes.length%grads.length], base, 20+Math.floor(Math.random()*40), 4, 'pendiente', [],
+      {desc:'Lote agregado durante la demo interactiva.', caracteristicas:{'Estado':'A definir'}, docs:['Documentación pendiente de carga']}));
+    state.wizard.addingLote = false; save(); render(); toast('Lote agregado', 'success');
+  },
+  wizardPublish:function(){
+    state.wizard.publishState = 'publishing'; scrollTopOnNextRender = true; save(); render();
+    setTimeout(function(){
+      var r = state.wizard.draft;
+      r.published = true; r.estado = 'en_vivo';
+      state.remates.push(r);
+      state.wizard.publishState = 'done'; scrollTopOnNextRender = true; save(); render();
+    }, 1300);
+  },
+  openEmpresaRemate:function(id){ go('empresa/remate', {currentRemateId:id}); },
+  verComoComprador:function(id){
+    var r = getRemate(id);
+    go('lote', {role:'comprador', currentRemateId:id, currentLoteId:r.lotes[0].id, galleryIndex:0});
+    toast('Estás viendo el remate como lo vería un comprador', 'success');
+  },
+
+  /* ---- REMATADOR ---- */
+  rematadorEnter:function(id){
+    var r = getRemate(id);
+    var lote = r.lotes.find(function(l){return l.status==='en_subasta';}) || r.lotes[0];
+    go('rematador/live', {currentRemateId:id, currentLoteId:lote.id});
+  },
+  rematadorSimular:function(id){
+    var lote = getLote(id);
+    if(lote.paused || lote.status==='adjudicado' || lote.simRunning) return;
+    lote.simRunning = true; save(); render();
+    var count = 0;
+    var r = getRemateOfLote(id);
+    simIntervals[id] = setInterval(function(){
+      var l = getLote(id);
+      if(!l || l.paused || l.status==='adjudicado' || count>=5){
+        if(l) { l.simRunning=false; save(); }
+        clearInterval(simIntervals[id]); render(); return;
+      }
+      var amount = currentOffer(l) + nextIncrement(l);
+      var bidder = nextBidderName(l);
+      pushOferta(l, amount, bidder);
+      count++;
+      if(count===2) pushJoin(l, 'Usuario #'+(200+Math.floor(Math.random()*90)));
+      if(count===3 && chatScriptIndex<CHAT_SCRIPT.length){ var m=CHAT_SCRIPT[chatScriptIndex++]; pushChat(r, m.from, m.role, m.text); }
+      var msgs = ['Nueva oferta recibida', bidder+' realizó una oferta', bidder+' superó la oferta anterior'];
+      toast(msgs[count%msgs.length]);
+      flashPrice(); updateLiveNumbers(l);
+    }, 1500);
+  },
+  rematadorNuevaOferta:function(id){
+    var lote = getLote(id);
+    if(lote.paused || lote.status==='adjudicado') return;
+    var amount = currentOffer(lote) + nextIncrement(lote);
+    var bidder = nextBidderName(lote);
+    pushOferta(lote, amount, bidder);
+    toast(bidder+' realizó una nueva oferta');
+    render(); flashPrice();
+  },
+  rematadorPausar:function(id){
+    var lote = getLote(id);
+    lote.paused = !lote.paused;
+    if(lote.paused && simIntervals[id]){ clearInterval(simIntervals[id]); lote.simRunning=false; }
+    save(); render(); toast(lote.paused ? 'Lote pausado' : 'Lote reanudado');
+  },
+  rematadorAbrirAdjudicar:function(id){
+    var lote = getLote(id);
+    var offer = currentOffer(lote), bidder = leadingBidder(lote) || 'Sin ofertas';
+    openModal('<h3>¿Confirmar adjudicación?</h3><p class="note">Oferta ganadora</p><div class="modal-price mono">'+fmtMoney(offer)+'</div><p class="note">Ganador: '+bidder+'</p>'+
+      '<div class="modal-actions"><button class="btn btn-secondary btn-block" onclick="Actions.closeModal()">Cancelar</button><button class="btn btn-primary btn-block" onclick="Actions.rematadorAdjudicar(\''+id+'\')">Confirmar adjudicación</button></div>');
+  },
+  rematadorAdjudicar:function(id){
+    var lote = getLote(id);
+    lote.status = 'adjudicado'; lote.winPrice = currentOffer(lote); lote.winner = leadingBidder(lote) || 'Sin ofertas';
+    if(simIntervals[id]) clearInterval(simIntervals[id]);
+    closeModal(); save(); render(); toast('Lote adjudicado correctamente', 'success');
+  },
+  rematadorSiguienteLote:function(){
+    var r = getRemate(state.currentRemateId);
+    var next = r.lotes.find(function(l){return l.status==='pendiente';});
+    if(!next){ go('rematador/fin'); return; }
+    next.status = 'en_subasta'; state.currentLoteId = next.id;
+    scrollTopOnNextRender = true; save(); render();
+  },
+
+  /* ---- COMPRADOR ---- */
+  openCompradorRemate:function(id){ go('comprador/remate', {currentRemateId:id, loteSubcat:'todos'}); },
+  compradorTab:function(v){ state.compradorTab = v; save(); render(); },
+  compradorCategoria:function(v){ state.compradorCategoria = v; save(); render(); },
+  compradorSearch:function(v){
+    state.compradorSearch = v; render();
+    var el = document.querySelector('.search-input');
+    if(el){ el.focus(); try{ el.setSelectionRange(v.length, v.length); }catch(e){} }
+  },
+  loteSubcat:function(v){ state.loteSubcat = v; save(); render(); },
+  toggleSeguir:function(id){ var r=getRemate(id); r.siguiendo=!r.siguiendo; save(); render(); toast(r.siguiendo?'Ahora seguís este remate':'Dejaste de seguir este remate'); },
+  openLote:function(id){ state.currentLoteId=id; state.galleryIndex=0; go('lote'); },
+  galleryPick:function(i){ state.galleryIndex=i; render(); },
+
+  compradorAbrirOferta:function(id, isMejora){
+    var lote = getLote(id);
+    var amount = currentOffer(lote) + (isMejora ? 300000 : 200000);
+    openModal('<h3>Confirmar oferta</h3><div class="modal-price mono">'+fmtMoney(amount)+'</div>'+
+      '<p class="note">Esta es una simulación. No representa una oferta real.</p>'+
+      '<div class="modal-actions"><button class="btn btn-secondary btn-block" onclick="Actions.closeModal()">Cancelar</button><button class="btn btn-primary btn-block" onclick="Actions.compradorConfirmarOferta(\''+id+'\','+amount+','+(isMejora?'true':'false')+')">Confirmar oferta</button></div>');
+  },
+  compradorConfirmarOferta:function(id, amount, isMejora){
+    var lote = getLote(id);
+    pushOferta(lote, amount, 'Vos');
+    closeModal(); save(); render(); flashPrice();
+    toast('✓ Oferta realizada: '+fmtMoney(amount), 'success');
+    if(isMejora){
+      setTimeout(function(){
+        var l = getLote(id);
+        if(l && l.status!=='adjudicado' && leadingBidder(l)==='Vos') toast('⏳ El rematador está cerrando la puja…');
+      }, 1100);
+      setTimeout(function(){
+        var l = getLote(id);
+        if(l && l.status!=='adjudicado' && leadingBidder(l)==='Vos'){
+          l.status='adjudicado'; l.winPrice=currentOffer(l); l.winner='Vos'; save();
+          if(state.route==='lote' && state.currentLoteId===id) render();
+          toast('🔨 El rematador cerró el lote', 'success');
+        }
+      }, 2600);
+    } else {
+      setTimeout(function(){
+        var l = getLote(id);
+        if(l && l.status!=='adjudicado' && leadingBidder(l)==='Vos'){
+          var contra = currentOffer(l)+200000, bidder = nextBidderName(l);
+          pushOferta(l, contra, bidder); save();
+          if(state.route==='lote' && state.currentLoteId===id){ render(); flashPrice(); }
+          toast('⚠️ Nueva oferta: '+bidder+' superó tu oferta', 'warning');
+        }
+      }, 4200);
+    }
+  },
+
+  /* ---- SIDE PANEL / CHAT ---- */
+  sidePanelTab:function(t){ state.sidePanelTab = t; render(); },
+  openSheet:function(){ state.sheetOpen = true; render(); },
+  closeSheet:function(){ state.sheetOpen = false; render(); },
+  sendChat:function(){
+    var input = document.getElementById('chat-input');
+    if(!input) return;
+    var text = input.value.trim();
+    if(!text) return;
+    var r = getRemateOfLote(state.currentLoteId) || getRemate(state.currentRemateId);
+    if(!r) return;
+    pushChat(r, 'Vos', state.role, text);
+    render();
+  }
+};
+
+function flashPrice(){
+  var el = document.getElementById('oc-price');
+  if(!el) return;
+  el.classList.add('flash');
+  setTimeout(function(){ el.classList.remove('flash'); }, 500);
+}
+function updateLiveNumbers(lote){
+  var el = document.getElementById('oc-price');
+  if(el) el.textContent = fmtMoney(currentOffer(lote));
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+render();
+})();
+</script>
+</body>
+</html>
