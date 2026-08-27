@@ -26,6 +26,7 @@ export function LandingPage() {
         <HeroSection />
         <WhatIsSection />
         <BenefitsSection
+          id="plataforma"
           eyebrow="Para empresas"
           title="Administrá tus remates, lotes y resultados"
           description="El backoffice de la empresa: creá eventos, cargá catálogos, asigná martilleros y seguí adjudicaciones y ventas post-remate."

@@ -71,25 +71,25 @@ function CollapsibleLabel({ compact, children }: { compact: boolean; children: s
   );
 }
 
-/** Logo oficial (`logo-rematar.png`, 660x245px -- isotipo + wordmark en un solo asset,
+/** Logo oficial (`logo-rematar.png`, 746x160px -- isotipo + wordmark en un solo asset,
  * sin versión recortada aparte). Mismo truco que `CollapsibleLabel`: la imagen nunca se
  * escala de forma distinta a su proporción original (siempre `h-8`, ancho proporcional
  * vía `w-auto`) -- lo que cambia es cuánto de ella queda visible, recortando con
  * `overflow-hidden` sobre un contenedor cuyo ancho transiciona igual que el propio
  * riel (`group-hover`/`group-focus-within`, sin JS). Anchos calculados a mano sobre el
- * asset real: a `h-8` (32px) la imagen completa mide ~86px de ancho; el isotipo (sin el
- * texto "RematAR") termina alrededor del píxel 226 del original y el texto arranca en el
- * 240 -- 30px de contenedor revela hasta el ~230 (con margen a cada lado) sin cortar el
- * isotipo ni asomar el texto. Si se reemplaza el asset por otro con proporciones
- * distintas, estos dos anchos hay que recalcularlos. */
+ * asset real: a `h-8` (32px) la imagen completa mide ~149px de ancho; el isotipo (sin el
+ * texto "RematAR") termina alrededor del píxel 31 y el texto arranca en el 36 -- 33px de
+ * contenedor revela el isotipo completo con margen a cada lado sin asomar el texto. Si
+ * se reemplaza el asset por otro con proporciones distintas, estos dos anchos hay que
+ * recalcularlos. */
 function SidebarLogo({ compact }: { compact: boolean }) {
   return (
     <span
       className={clsx(
         'block h-8 shrink-0 overflow-hidden',
         compact
-          ? 'w-[30px] transition-[width] duration-200 ease-out group-hover:w-[86px] group-focus-within:w-[86px]'
-          : 'w-[86px]',
+          ? 'w-[33px] transition-[width] duration-200 ease-out group-hover:w-[152px] group-focus-within:w-[152px]'
+          : 'w-[152px]',
       )}
     >
       <img src={logoRematar} alt="RematAR" className="h-8 w-auto max-w-none" />

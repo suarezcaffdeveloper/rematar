@@ -1,9 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { motion } from 'framer-motion';
+import logoRematar from '../../../assets/brand/logo-rematar.png';
+import { smoothScrollToHash } from '../../../shared/lib/smoothScrollToHash';
 import { NAV_LINKS } from '../data';
 import { useLandingCta } from '../ctaContext';
+
+/** Los `href` de `NAV_LINKS` son anclas dentro de esta misma página (pedido explícito:
+ * scroll suave y rápido en vez del salto instantáneo del navegador) -- `preventDefault`
+ * + `smoothScrollToHash`, y `history.pushState` para que la URL siga reflejando la
+ * sección (deep-link, back/forward) sin que el navegador dispare su propio salto
+ * instantáneo al cambiar el hash (lo haría si tocáramos `location.hash` directo). */
+function handleNavLinkClick(event: MouseEvent<HTMLAnchorElement>, href: string) {
+  event.preventDefault();
+  smoothScrollToHash(href);
+  window.history.pushState(null, '', href);
+}
 
 /**
  * Barra superior fija de la landing pública. Cambia de estilo (fondo sólido + sombra
@@ -35,8 +48,8 @@ export function LandingNavbar() {
       }`}
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-        <a href="#inicio" className="text-lg font-bold tracking-tight text-brand-700">
-          RematAR
+        <a href="#inicio" className="shrink-0">
+          <img src={logoRematar} alt="RematAR" className="h-8 w-auto sm:h-9" />
         </a>
 
         <nav className="hidden items-center gap-8 md:flex">
@@ -44,6 +57,7 @@ export function LandingNavbar() {
             <a
               key={link.href}
               href={link.href}
+              onClick={(event) => handleNavLinkClick(event, link.href)}
               className="text-sm font-medium text-slate-600 transition-colors hover:text-brand-700"
             >
               {link.label}
@@ -91,7 +105,10 @@ export function LandingNavbar() {
               <a
                 key={link.href}
                 href={link.href}
-                onClick={() => setIsMobileOpen(false)}
+                onClick={(event) => {
+                  handleNavLinkClick(event, link.href);
+                  setIsMobileOpen(false);
+                }}
                 className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
               >
                 {link.label}

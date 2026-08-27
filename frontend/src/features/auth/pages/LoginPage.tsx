@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Gavel } from 'lucide-react';
+import logoRematar from '../../../assets/brand/logo-rematar.png';
 import { useAuthActions } from '../hooks';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Button } from '../../../shared/components/Button';
@@ -65,11 +65,8 @@ export function LoginPage() {
           transition={{ duration: 0.6 }}
           className="mx-auto w-full max-w-sm"
         >
-          <Link to="/" className="inline-flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm">
-              <Gavel className="h-4 w-4" />
-            </span>
-            <span className="text-lg font-bold tracking-tight text-brand-700">RematAR</span>
+          <Link to="/" className="inline-flex items-center">
+            <img src={logoRematar} alt="RematAR" className="h-9 w-auto" />
           </Link>
 
           <h1 className="mt-10 text-3xl font-bold tracking-tight text-ink">

@@ -1,3 +1,4 @@
+import { smoothScrollToHash } from '../../../shared/lib/smoothScrollToHash';
 import { NAV_LINKS } from '../data';
 
 /** Footer de la landing: marca, tagline, nav y copyright -- sin nada del "detrás de escena". */
@@ -17,6 +18,11 @@ export function LandingFooter() {
             <a
               key={link.href}
               href={link.href}
+              onClick={(event) => {
+                event.preventDefault();
+                smoothScrollToHash(link.href);
+                window.history.pushState(null, '', link.href);
+              }}
               className="text-sm font-medium text-slate-600 transition-colors hover:text-brand-700"
             >
               {link.label}

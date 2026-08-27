@@ -29,11 +29,19 @@ export interface NavLink {
   href: string;
 }
 
+/** Orden de izquierda a derecha == orden de arriba a abajo en la landing (pedido
+ * explícito): cada href ancla a una sección de `LandingPage`, en el mismo orden en que
+ * aparecen ahí -- `#inicio` (Hero), `#nosotros` (`WhatIsSection`, "¿Qué es RematAR?"),
+ * `#plataforma` (arranque de las tres secciones de rol, "Para empresas" -- mismo
+ * ancla que ya usaba el botón "Ver la plataforma" del Hero, antes sin ninguna sección
+ * apuntándole), `#como-funciona` (`HowItWorksSection`), `#caracteristicas`
+ * (`FeaturesSection`). */
 export const NAV_LINKS: NavLink[] = [
   { label: 'Inicio', href: '#inicio' },
-  { label: 'Características', href: '#caracteristicas' },
+  { label: 'Nosotros', href: '#nosotros' },
+  { label: 'Funcionalidades', href: '#plataforma' },
   { label: 'Cómo funciona', href: '#como-funciona' },
-  { label: 'Plataforma', href: '#plataforma' },
+  { label: 'Características', href: '#caracteristicas' },
 ];
 
 export interface RubroItem {
