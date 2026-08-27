@@ -1035,7 +1035,6 @@ function viewEmpresaRemate(){
     (lastAdj ? '<div class="result-banner"><span class="rb-icon">🔨</span><div><b>'+escHtml(lastAdj.title)+'</b> fue adjudicado en <b>'+fmtMoney(lastAdj.winPrice)+'</b> a '+escHtml(lastAdj.winner)+'.</div></div>' : '')+
     '<div class="remate-head">'+
       '<div class="rh-top">'+badge(REMATE_STATUS,r.estado)+
-        (r.estado==='en_vivo' ? '<button class="btn btn-secondary btn-sm" onclick="Actions.verComoComprador(\''+r.id+'\')">Ver como comprador</button>' : '')+
       '</div>'+
       '<h1 class="rh-name">'+escHtml(r.nombre)+'</h1>'+
       '<div class="rh-org">Organizado por vos · Rematador asignado: ⚖️ '+escHtml(r.rematador)+'</div>'+
@@ -1519,11 +1518,6 @@ window.Actions = {
     }, 1300);
   },
   openEmpresaRemate:function(id){ go('empresa/remate', {currentRemateId:id}); },
-  verComoComprador:function(id){
-    var r = getRemate(id);
-    go('lote', {role:'comprador', currentRemateId:id, currentLoteId:r.lotes[0].id, galleryIndex:0});
-    toast('Estás viendo el remate como lo vería un comprador', 'success');
-  },
 
   /* ---- REMATADOR ---- */
   rematadorEnter:function(id){

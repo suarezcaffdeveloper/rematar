@@ -288,7 +288,10 @@ function OfertasRecientesScene() {
           label: offer.label === 'Ganadora' ? 'Superada' : offer.label,
           variant: 'neutral' as const,
         }));
-        return [{ id: n, amount, time: 'recién', label: 'Ganadora', variant: 'success' }, ...superadas].slice(0, 3);
+        return [{ id: n, amount, time: 'recién', label: 'Ganadora', variant: 'success' as const }, ...superadas].slice(
+          0,
+          3,
+        );
       });
     }, 2600);
     return () => window.clearInterval(id);
