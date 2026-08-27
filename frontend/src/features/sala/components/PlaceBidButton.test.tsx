@@ -83,7 +83,12 @@ describe('PlaceBidButton', () => {
 
   it('precarga el monto sugerido con el mínimo válido', () => {
     renderButton();
-    expect(screen.getByLabelText(/Tu oferta/)).toHaveValue('1000.00');
+    // Agrupado de a miles (auditoría mobile -- antes mostraba el monto crudo sin
+    // formatear, inconsistente con el resto de la sala): el input no está enfocado en
+    // este test, así que muestra el valor formateado, no el "limpio" que maneja el
+    // estado interno (ver `handleSubmit`/`isPositiveDecimal` más abajo, que sí siguen
+    // trabajando con el valor sin agrupar).
+    expect(screen.getByLabelText(/Tu oferta/)).toHaveValue('1.000,00');
   });
 
   it('un monto por debajo del mínimo muestra error y deshabilita el envío', async () => {
@@ -129,7 +134,7 @@ describe('PlaceBidButton', () => {
       'error',
       'El monto debe ser al menos 1050.00 (incremento mínimo no alcanzado).',
     );
-    expect(screen.getByLabelText(/Tu oferta/)).toHaveValue('1000.00');
+    expect(screen.getByLabelText(/Tu oferta/)).toHaveValue('1.000,00');
   });
 
   it('si la llamada falla (red/HTTP), muestra un toast de error genérico', async () => {
@@ -167,7 +172,7 @@ describe('PlaceBidButton', () => {
 
     await userEvent.click(screen.getByRole('button', { name: formatCurrency('24000.00', 'ARS') }));
 
-    expect(screen.getByLabelText(/Tu oferta/)).toHaveValue('24000.00');
+    expect(screen.getByLabelText(/Tu oferta/)).toHaveValue('24.000,00');
     expect(placeBidRequestMock).not.toHaveBeenCalled();
   });
 

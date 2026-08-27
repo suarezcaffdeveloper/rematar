@@ -46,39 +46,51 @@ export function AnalyticsPanel({ remateId, subscribeToRealtime, currency }: Anal
         <Alert variant="error">No se pudo cargar la analítica de este remate.</Alert>
       ) : (
         <>
+          {/* `centered` (auditoría mobile -- a 320px, 2 columnas dejaban ~130px por
+           * tarjeta, muy poco para etiquetas como "Compradores conectados" en una sola
+           * línea: truncaban a "COMPRAD..."): la variante centrada de `StatCard` deja
+           * que la etiqueta pase a un segundo renglón en vez de truncarse, pensada
+           * justo para grillas densas de KPIs como esta -- ver su prop `centered`. */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard
+              centered
               label="Compradores conectados"
               value={data.connected_buyers}
               formattedValue={String(data.connected_buyers)}
             />
             <StatCard
+              centered
               label="Usuarios activos"
               value={data.connected_users_total}
               formattedValue={String(data.connected_users_total)}
             />
             <StatCard
+              centered
               label="Ofertas por minuto"
               value={data.ofertas_per_minute}
               formattedValue={String(data.ofertas_per_minute)}
             />
             <StatCard
+              centered
               label="Total de ofertas"
               value={data.total_ofertas}
               formattedValue={String(data.total_ofertas)}
             />
             <StatCard
+              centered
               label="Lotes vendidos"
               value={data.lote_status_counts.closed_sold}
               formattedValue={String(data.lote_status_counts.closed_sold)}
             />
             <StatCard
+              centered
               label="Lotes restantes"
               value={lotesRestantes}
               formattedValue={String(lotesRestantes)}
               showTrend={false}
             />
             <StatCard
+              centered
               label="Tiempo promedio por lote"
               value={data.average_lote_duration_seconds ?? 0}
               formattedValue={
@@ -89,6 +101,7 @@ export function AnalyticsPanel({ remateId, subscribeToRealtime, currency }: Anal
               showTrend={false}
             />
             <StatCard
+              centered
               label="Valor total adjudicado"
               value={Number(data.total_awarded_value)}
               formattedValue={formatCurrency(data.total_awarded_value, currency)}

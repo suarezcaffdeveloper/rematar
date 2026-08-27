@@ -58,7 +58,7 @@ export function HeroSection() {
   return (
     <section
       id="inicio"
-      className="relative flex min-h-screen items-center overflow-hidden bg-gradient-to-b from-brand-50/60 via-white to-white pt-28 pb-16"
+      className="relative flex min-h-[100dvh] items-center overflow-hidden bg-gradient-to-b from-brand-50/60 via-white to-white pt-24 pb-12 sm:pt-28 sm:pb-16"
     >
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-brand-200/40 blur-3xl" />

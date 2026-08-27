@@ -188,7 +188,20 @@ export function ChatPanel({
         </div>
       )}
 
-      <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-2 py-2">
+      {/* `flex flex-col justify-end`: con pocos mensajes, el panel angosto (Sala) casi
+       * nunca lo nota, pero estirado a todo el alto disponible (Consola Operativa,
+       * `xl:flex-1` de `ConsolaSidebar`) una conversación corta quedaba pegada arriba,
+       * con un hueco vacío enorme antes del input -- pedido implícito de cualquier chat
+       * (WhatsApp/Slack/Discord): los mensajes se pegan abajo, contra el input, y el
+       * espacio de sobra (si lo hay) queda arriba. No afecta el caso con muchos mensajes
+       * (ya llenan/exceden el alto, así que no hay espacio de sobra que repartir) ni el
+       * auto-scroll/paginación hacia arriba de más arriba, que siguen operando sobre el
+       * mismo `scrollTop`/`scrollHeight` de este contenedor. */}
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="flex flex-1 flex-col justify-end overflow-y-auto px-2 py-2"
+      >
         {isLoadingOlder && (
           <div className="flex justify-center py-2">
             <Spinner size="sm" />

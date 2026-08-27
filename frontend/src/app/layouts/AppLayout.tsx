@@ -49,14 +49,24 @@ export function AppLayout() {
   const isFocusMode = useLayoutPreferencesStore((state) => state.isFocusMode);
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
-  const isFirstRenderRef = useRef(true);
+  // Comparación por valor contra el pathname anterior, no un flag booleano "ya until
+  // pasó el primer render": en desarrollo, StrictMode dispara cada efecto dos veces
+  // (montaje, cleanup simulado, montaje de nuevo) sobre la MISMA instancia del
+  // componente -- un `useRef(true)` que se pisa a `false` en el primer disparo ya
+  // vale `false` en el segundo, así que el efecto terminaba enfocando `<main>` (y
+  // desplazando la página, tapando el H1 detrás del header `sticky`) en la carga
+  // inicial de cualquier pantalla, no solo en una navegación real. Guardando el
+  // último pathname visto, el segundo disparo de StrictMode compara contra el mismo
+  // valor que él mismo acaba de guardar -- no hay cambio real, no enfoca.
+  const previousPathnameRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (isFirstRenderRef.current) {
-      isFirstRenderRef.current = false;
-      return;
+    const hasNavigated =
+      previousPathnameRef.current !== null && previousPathnameRef.current !== location.pathname;
+    previousPathnameRef.current = location.pathname;
+    if (hasNavigated) {
+      mainRef.current?.focus();
     }
-    mainRef.current?.focus();
   }, [location.pathname]);
 
   return (

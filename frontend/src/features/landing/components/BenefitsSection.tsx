@@ -34,7 +34,10 @@ export function BenefitsSection({
   return (
     <section
       id={id}
-      className={clsx('mx-auto max-w-7xl overflow-x-hidden px-4 py-24 sm:px-6 lg:px-8', className)}
+      className={clsx(
+        'mx-auto max-w-7xl overflow-x-hidden px-4 py-14 sm:px-6 sm:py-20 lg:px-8 lg:py-24',
+        className,
+      )}
     >
       <div
         className={clsx(

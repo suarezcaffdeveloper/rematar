@@ -8,9 +8,9 @@ export function CTASection() {
   const cta = useLandingCta();
 
   return (
-    <section className="mx-auto max-w-7xl px-4 pb-24 sm:px-6 lg:px-8">
+    <section className="mx-auto max-w-7xl px-4 pb-14 sm:px-6 sm:pb-20 lg:px-8 lg:pb-24">
       <Reveal>
-        <div className="relative overflow-hidden rounded-3xl bg-brand-700 px-8 py-16 text-center shadow-xl sm:px-16">
+        <div className="relative overflow-hidden rounded-3xl bg-brand-700 px-8 py-12 text-center shadow-xl sm:px-16 sm:py-16">
           <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-br from-brand-600 via-brand-700 to-brand-900" />
           <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
 

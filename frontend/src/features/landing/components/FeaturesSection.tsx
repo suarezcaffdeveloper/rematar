@@ -4,7 +4,7 @@ import { FEATURES } from '../data';
 /** Grilla de características principales, cards con hover suave. */
 export function FeaturesSection() {
   return (
-    <section id="caracteristicas" className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+    <section id="caracteristicas" className="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
       <Reveal className="mx-auto max-w-2xl text-center">
         <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
           Todo lo que necesitás para gestionar remates profesionales

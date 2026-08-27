@@ -12,6 +12,38 @@ import { placeBidRequest } from '../api';
 import { computeMinimumAmount, computeQuickBidSuggestions } from '../bidding';
 import type { OfertaSnapshotEntry } from '../types';
 
+const GROUPING_FORMATTER = new Intl.NumberFormat('es-AR');
+
+/** De lo que pega/tipea la persona a lo que espera el resto del formulario
+ * (`isPositiveDecimal`, `computeMinimumAmount`, `placeBidRequest`): dígitos + como mucho
+ * un punto decimal. Solo hace falta para el caso de pegar un monto ya formateado (ej.
+ * copiar "110.000" desde otro lado) mientras el input está enfocado -- ver el comentario
+ * en el `value`/`onChange` de más abajo sobre por qué mientras se tipea se usa el
+ * valor "limpio" tal cual, sin agrupar. */
+function sanitizeAmountInput(raw: string): string {
+  const digitsAndDots = raw.replace(/[^\d.]/g, '');
+  const firstDot = digitsAndDots.indexOf('.');
+  if (firstDot === -1) return digitsAndDots;
+  return `${digitsAndDots.slice(0, firstDot + 1)}${digitsAndDots.slice(firstDot + 1).replace(/\./g, '')}`;
+}
+
+/** Del monto "limpio" (`"110000"`/`"110000.5"`) al texto agrupado de a miles que se
+ * muestra en el input cuando no está enfocado (`"110.000"`) -- mismo `Intl.NumberFormat`
+ * que ya usa `formatCurrency`, sin el símbolo de moneda (ya está a la vista en "Mínimo:"
+ * y en los montos sugeridos, ponerlo también acá adentro del input sería ruido y
+ * complicaría bastante más escribir/editar el número). Vacío se muestra vacío, no "$ 0"
+ * ni "NaN". */
+function formatAmountDisplay(clean: string): string {
+  if (!clean || Number.isNaN(Number(clean))) return clean;
+  const [intPart, decPart] = clean.split('.');
+  const groupedInt = GROUPING_FORMATTER.format(Number(intPart || '0'));
+  // Coma para el separador decimal en la versión mostrada (`es-AR`, igual que
+  // `formatCurrency`) -- el estado interno sigue usando punto (`isPositiveDecimal`,
+  // `placeBidRequest`), la coma es solo cosmética acá y nunca vuelve a `sanitizeAmountInput`
+  // (que solo procesa el valor crudo mientras el input está enfocado, sin agrupar).
+  return decPart === undefined ? groupedInt : `${groupedInt},${decPart}`;
+}
+
 export interface PlaceBidButtonProps {
   remateId: string;
   lote: Lote;
@@ -50,6 +82,7 @@ export function PlaceBidButton({
   const minimumAmount = computeMinimumAmount(lote, winningOffer);
   const [amount, setAmount] = useState(minimumAmount);
   const [touched, setTouched] = useState(false);
+  const [isAmountFocused, setIsAmountFocused] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const clientTokenRef = useRef<{ amount: string; token: string } | null>(null);
 
@@ -159,14 +192,22 @@ export function PlaceBidButton({
           type="text"
           inputMode="decimal"
           variant="underline"
-          value={amount}
+          // Enfocado: el valor "limpio" tal cual, para no pelear con la posición del
+          // cursor mientras se tipea (reformatear en cada tecla -- agregar/sacar puntos
+          // de miles a medida que crecen los dígitos -- corre el cursor de un lugar
+          // impredecible). Sin foco: agrupado de a miles (`formatAmountDisplay`), para
+          // que se lea igual que el resto de los montos de la pantalla ("Mínimo: $
+          // 110.000") en vez del número crudo (pedido explícito, auditoría mobile).
+          value={isAmountFocused ? amount : formatAmountDisplay(amount)}
+          onFocus={() => setIsAmountFocused(true)}
+          onBlur={() => setIsAmountFocused(false)}
           onChange={(event) => {
             setTouched(true);
-            setAmount(event.target.value);
+            setAmount(sanitizeAmountInput(event.target.value));
           }}
           error={validationError ?? undefined}
           disabled={isSubmitting}
-          className="text-lg font-semibold"
+          className="text-lg font-semibold tabular-nums"
         />
         {/* Monto mínimo en su propia línea, separado del label -- si viviera dentro del
          * label (como antes) cada oferta ajena que llega por WebSocket cambia ese texto

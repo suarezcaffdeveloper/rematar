@@ -176,7 +176,20 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 }
 .badge-fixed b{color:var(--text-secondary);font-weight:700;letter-spacing:0.05em;}
 .badge-fixed span{opacity:0.85;}
-@media (max-width:640px){.badge-fixed{left:var(--sp-2);bottom:var(--sp-2);font-size:9px;padding:6px 10px;}}
+/* En mobile/tablet, `position:fixed` queda ANCLADA a la esquina del viewport pase lo que
+   pase con el scroll -- en una página larga (varias cards apiladas) termina tapando
+   contenido real (texto, el botón "Explorar", el "Tiempo restante" del panel de oferta)
+   en algún punto del scroll, no solo al fondo de la página. Mismo umbral que `.fab`/
+   `.side-panel` (960px, donde el layout de una columna pasa a dos): por debajo pasa a
+   estática, como una nota de pie más -- se ve una sola vez al final del contenido, en vez
+   de perseguir el scroll y taparlo. */
+@media (max-width:960px){
+  .badge-fixed{
+    position:static;display:inline-flex;margin:var(--sp-6) auto 0;left:auto;bottom:auto;
+    font-size:9px;padding:6px 10px;
+  }
+  .badge-fixed-wrap{display:flex;justify-content:center;padding:0 var(--sp-4) var(--sp-6);}
+}
 
 /* ============ LAYOUT / PAGE ============ */
 .page{padding:var(--sp-7) 0 var(--sp-9);}
@@ -312,7 +325,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .radio-opt.checked{border-color:var(--accent);background:var(--accent-soft);}
 .radio-opt input{accent-color:var(--accent);width:16px;height:16px;}
 .radio-opt span{font-size:13.5px;}
-.form-actions{display:flex;gap:10px;margin-top:var(--sp-5);}
+.form-actions{display:flex;gap:10px;margin-top:var(--sp-5);flex-wrap:wrap;}
 
 .stepper{display:flex;align-items:center;gap:8px;margin-bottom:var(--sp-7);}
 .step-dot{font-family:var(--font-mono);font-size:11px;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);color:var(--text-tertiary);flex:none;}
@@ -486,8 +499,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .close-role-btn:hover{color:var(--text);}
 .close-role-btn .cr-icon{width:36px;height:36px;border-radius:50%;background:var(--surface-3);display:flex;align-items:center;justify-content:center;font-size:16px;}
 
+/* Sin `transform` en el keyframe (a propósito -- se probó con un `translateY` chico
+   primero, pero animar `transform` en un contenedor convierte a ESE contenedor en el
+   "containing block" de cualquier descendiente `position:fixed` mientras la animación
+   está activa: el FAB "Chat y actividad" y el fondo del bottom-sheet (`.fab`/
+   `.sheet-backdrop`, dentro de `.fade-in` vía `chrome()`) dejaban de anclarse al
+   viewport y quedaban pegados cerca del final del contenido de la pantalla en vez de
+   flotar fijos -- inutilizando el botón en pantallas largas. Solo opacidad evita el
+   problema por completo y el fade en sí se sigue viendo prácticamente igual). */
 .fade-in{animation:fadeUp .25s ease;}
-@keyframes fadeUp{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+@keyframes fadeUp{from{opacity:0;}to{opacity:1;}}
 .empty-note{color:var(--text-tertiary);font-size:13px;padding:var(--sp-4) 0;}
 .empty-state{grid-column:1/-1;text-align:center;padding:var(--sp-8) var(--sp-5);border:1px dashed var(--border);border-radius:var(--radius-lg);color:var(--text-tertiary);}
 .empty-state .es-icon{font-size:24px;opacity:0.7;}
@@ -629,7 +650,20 @@ var state = loadState();
 function loadState(){
   try{
     var raw = localStorage.getItem(STORAGE_KEY);
-    if(raw){ var p = JSON.parse(raw); if(p && Array.isArray(p.remates) && p.remates.length) return p; }
+    if(raw){
+      var p = JSON.parse(raw);
+      if(p && Array.isArray(p.remates) && p.remates.length){
+        /* Cada carga fresca de la página (sea el link de la landing o volver a abrir
+           la pestaña) arranca siempre en la pantalla de inicio, con ningún rol
+           elegido -- pedido explícito: no quedar posicionado en el panel del último
+           rol que se probó. Lo único que persiste entre cargas es lo que se creó
+           durante la demo (remates, lotes, chat) -- no en qué pantalla se había
+           quedado. Dentro de una misma sesión, navegar sigue funcionando normal:
+           esto solo pisa el estado que se lee UNA vez al arrancar. */
+        p.route = 'landing'; p.role = null; p.sheetOpen = false;
+        return p;
+      }
+    }
   }catch(e){}
   return seedState();
 }
@@ -804,7 +838,7 @@ function breadcrumbBar(parts, back){
   '</div></div>';
 }
 function fixedBadge(){
-  return '<div class="badge-fixed"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);"></span><b>DEMO INTERACTIVA</b><span>· Simulación, datos ficticios</span></div>';
+  return '<div class="badge-fixed-wrap"><div class="badge-fixed"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);"></span><b>DEMO INTERACTIVA</b><span>· Simulación, datos ficticios</span></div></div>';
 }
 
 function render(){

@@ -76,7 +76,7 @@ export function ScreenshotsSection() {
   }, [activeIndex, goTo]);
 
   return (
-    <section id="plataforma" className="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+    <section id="plataforma" className="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
       <Reveal className="mx-auto max-w-2xl text-center">
         <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
           Así se ve por dentro
