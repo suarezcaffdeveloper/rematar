@@ -289,6 +289,14 @@ export function SalaPage() {
               <hr className="border-t border-line" />
             </>
           )}
+          {/* Por debajo de `xl:` la columna no tiene alto fijo (`xl:h-[calc(100vh-2rem)]`
+           * recién aplica desde ahí), así que sin un alto propio acá el panel crecía con
+           * la cantidad de mensajes/ofertas que tuviera -- nada de scroll interno, y para
+           * llegar a "Próximos lotes" había que scrollear todo ese alto. `h-[28rem]` fija
+           * el tamaño (~6/7 mensajes de chat visibles) y deja que el scroll interno de
+           * `SalaSidePanel` (`OfferHistoryList`/`ChatPanel`) haga el resto. Desde `xl:` se
+           * vuelve a `h-auto` + `flex-1` para repartirse el alto fijo de la columna, tal
+           * como antes. */}
           <SalaSidePanel
             recentOffers={recentOffers}
             currency={currency}
@@ -296,7 +304,7 @@ export function SalaPage() {
             subscribeToRealtime={subscribeToRealtime}
             currentUserId={user?.id}
             connectedUsers={snapshot.connected_users}
-            className="min-h-0 flex-1"
+            className="h-[28rem] min-h-0 xl:h-auto xl:flex-1"
           />
         </div>
       </div>
