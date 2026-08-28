@@ -188,20 +188,27 @@ export function ChatPanel({
         </div>
       )}
 
-      {/* `flex flex-col justify-end`: con pocos mensajes, el panel angosto (Sala) casi
-       * nunca lo nota, pero estirado a todo el alto disponible (Consola Operativa,
-       * `xl:flex-1` de `ConsolaSidebar`) una conversación corta quedaba pegada arriba,
-       * con un hueco vacío enorme antes del input -- pedido implícito de cualquier chat
-       * (WhatsApp/Slack/Discord): los mensajes se pegan abajo, contra el input, y el
-       * espacio de sobra (si lo hay) queda arriba. No afecta el caso con muchos mensajes
-       * (ya llenan/exceden el alto, así que no hay espacio de sobra que repartir) ni el
-       * auto-scroll/paginación hacia arriba de más arriba, que siguen operando sobre el
-       * mismo `scrollTop`/`scrollHeight` de este contenedor. */}
+      {/* Antes: `justify-end` en este contenedor para pegar los mensajes abajo con pocos
+       * mensajes (ver historial de git). Se saca porque `justify-content: flex-end` +
+       * `overflow-y: auto` es un bug clásico de flexbox: el navegador ancla los items al
+       * final del eje y el contenido que desborda por el lado de *arriba* queda fuera del
+       * área de scroll -- se puede ver el mensaje más nuevo pero no se puede scrollear
+       * hacia arriba para llegar a los anteriores (justo el reporte: "si quiero ver
+       * mensajes que se enviaron antes no estoy pudiendo"). En su lugar, un spacer
+       * `flex-1` como primer hijo: con pocos mensajes se estira y empuja la lista contra
+       * el input (mismo resultado visual que `justify-end`), con muchos se encoge a 0 y
+       * la lista queda en flujo normal desde arriba -- ahí el overflow/scroll de
+       * `overflow-y-auto` funciona como cualquier lista larga común, sin el bug. El
+       * auto-scroll al fondo (`useLayoutEffect` de más arriba) sigue llevando a los
+       * mensajes nuevos vía `scrollTop = scrollHeight`, y la paginación hacia atrás
+       * (`handleScroll`) sigue leyendo el mismo `scrollTop` de este contenedor. */}
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="flex flex-1 flex-col justify-end overflow-y-auto px-2 py-2"
+        className="flex flex-1 flex-col overflow-y-auto px-2 py-2"
       >
+        <div className="flex-1" />
+
         {isLoadingOlder && (
           <div className="flex justify-center py-2">
             <Spinner size="sm" />
