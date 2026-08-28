@@ -141,7 +141,7 @@ export const SYSTEM_SCREENS: SystemScreen[] = [
   },
   {
     key: 'panel-rematador',
-    title: 'Panel del martillero',
+    title: 'Panel de la empresa',
     description: 'Mis remates: estado, creación, métricas globales y accesos rápidos a cada evento.',
     image: '/screenshots/panel-rematador.png',
   },
@@ -152,22 +152,16 @@ export const SYSTEM_SCREENS: SystemScreen[] = [
     image: '/screenshots/consola-rematador.png',
   },
   {
-    key: 'historial-remate',
-    title: 'Historial y resultados',
-    description: 'Resumen ejecutivo, valor adjudicado, métricas clave y resultado lote por lote al finalizar el remate.',
-    image: '/screenshots/historial-remate.png',
-  },
-  {
     key: 'ventas-adjudicadas',
     title: 'Ventas adjudicadas',
-    description: 'Seguimiento y gestión post-remate del martillero: contacto, cobro y entrega de cada lote vendido.',
+    description: 'Seguimiento y gestión post-remate de la empresa: contacto, cobro y entrega de cada lote vendido.',
     image: '/screenshots/ventas-adjudicadas.png',
   },
   {
-    key: 'seguimiento',
-    title: 'Seguimiento de mi compra',
-    description: 'El comprador sigue el progreso post-remate paso a paso, desde la adjudicación y pago hasta la entrega.',
-    image: '/screenshots/seguimiento-compra.png',
+    key: 'gestion-venta',
+    title: 'Gestión de la venta',
+    description: 'Vista de la empresa para gestionar la venta: cambiar el estado, sumar observaciones y subir documentación.',
+    image: '/screenshots/gestion-venta.png',
   },
 ];
 
