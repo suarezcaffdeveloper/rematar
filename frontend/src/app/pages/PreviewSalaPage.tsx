@@ -43,6 +43,7 @@ const winningOffer: OfertaSnapshotEntry = {
 
 export function PreviewSalaPage() {
   const [withWinner, setWithWinner] = useState(true);
+  const [isLeadingBidder, setIsLeadingBidder] = useState(false);
 
   return (
     // Mismo contenedor exterior que `AppLayout` usa para `SalaPage` en modo foco
@@ -51,13 +52,22 @@ export function PreviewSalaPage() {
     // tamaños/proporciones contra ella queda mal calibrada.
     <div className="mx-auto min-h-screen w-full max-w-[110rem] bg-slate-50 px-3 py-4 sm:px-4 lg:px-6">
       <div className="mx-auto flex w-full max-w-[85rem] flex-col gap-4 font-display">
-        <button
-          type="button"
-          onClick={() => setWithWinner((v) => !v)}
-          className="w-fit rounded bg-slate-800 px-3 py-1 text-sm text-white"
-        >
-          Toggle winner: {String(withWinner)}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setWithWinner((v) => !v)}
+            className="w-fit rounded bg-slate-800 px-3 py-1 text-sm text-white"
+          >
+            Toggle winner: {String(withWinner)}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsLeadingBidder((v) => !v)}
+            className="w-fit rounded bg-slate-800 px-3 py-1 text-sm text-white"
+          >
+            Toggle leading: {String(isLeadingBidder)}
+          </button>
+        </div>
         <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1fr_380px] xl:gap-14">
           <ActiveLotePanel lote={lote} />
           <div className="flex flex-col gap-6">
@@ -68,6 +78,7 @@ export function PreviewSalaPage() {
               winningOffer={withWinner ? winningOffer : null}
               remateStatus="live"
               viewerRole="comprador"
+              isLeadingBidder={isLeadingBidder}
             />
             <hr className="border-t border-line" />
             <SalaSidePanel
