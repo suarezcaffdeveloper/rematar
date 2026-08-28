@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { BadgeCheck } from 'lucide-react';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Button } from '../../../shared/components/Button';
 import { Input } from '../../../shared/components/Input';
@@ -58,6 +59,11 @@ export interface PlaceBidButtonProps {
    * propia sala no debería ver un formulario que el backend rechazaría con 403
    * (`AuctionEngine.place_bid`, "Solo los compradores pueden ofertar."). */
   viewerRole: UserRole | undefined;
+  /** `true` si quien está viendo esto va liderando el lote ahora mismo -- ver
+   * `SalaPage`/`SalaBidPanel`. Mientras sea así y no haya tocado el monto todavía,
+   * reemplaza el valor sugerido/las ofertas rápidas por un aviso ("Vas liderando este
+   * lote") en vez de invitarlo a ofertar contra sí mismo (pedido explícito). */
+  isLeadingBidder: boolean;
 }
 
 /**
@@ -78,6 +84,7 @@ export function PlaceBidButton({
   winningOffer,
   remateStatus,
   viewerRole,
+  isLeadingBidder,
 }: PlaceBidButtonProps) {
   const minimumAmount = computeMinimumAmount(lote, winningOffer);
   const [amount, setAmount] = useState(minimumAmount);
@@ -141,6 +148,12 @@ export function PlaceBidButton({
     }
   }
 
+  // Mientras vaya liderando y no haya tocado el monto, no tiene sentido invitarlo a
+  // ofertar contra sí mismo con el mínimo/las sugerencias precargadas -- en su lugar, un
+  // aviso ("Vas liderando este lote"). Si igual quiere ofertar más (ver el botón de más
+  // abajo), un click alcanza para volver al formulario de siempre.
+  const showLeadingBanner = isLeadingBidder && !touched;
+
   const quickBidSuggestions = computeQuickBidSuggestions(lote, winningOffer);
 
   // Elegir una sugerencia sólo completa el input -- no manda la oferta, eso sigue
@@ -186,71 +199,108 @@ export function PlaceBidButton({
 
   return (
     <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-2.5">
-      <div>
-        <Input
-          label="Tu oferta"
-          type="text"
-          inputMode="decimal"
-          variant="underline"
-          // Enfocado: el valor "limpio" tal cual, para no pelear con la posición del
-          // cursor mientras se tipea (reformatear en cada tecla -- agregar/sacar puntos
-          // de miles a medida que crecen los dígitos -- corre el cursor de un lugar
-          // impredecible). Sin foco: agrupado de a miles (`formatAmountDisplay`), para
-          // que se lea igual que el resto de los montos de la pantalla ("Mínimo: $
-          // 110.000") en vez del número crudo (pedido explícito, auditoría mobile).
-          value={isAmountFocused ? amount : formatAmountDisplay(amount)}
-          onFocus={() => setIsAmountFocused(true)}
-          onBlur={() => setIsAmountFocused(false)}
-          onChange={(event) => {
-            setTouched(true);
-            setAmount(sanitizeAmountInput(event.target.value));
-          }}
-          error={validationError ?? undefined}
-          disabled={isSubmitting}
-          className="text-lg font-semibold tabular-nums"
-        />
-        {/* Monto mínimo en su propia línea, separado del label -- si viviera dentro del
-         * label (como antes) cada oferta ajena que llega por WebSocket cambia ese texto
-         * y puede volcarlo de una línea a dos (o al revés) según cuántos dígitos tenga
-         * el nuevo mínimo, empujando el resto del formulario para abajo/arriba en un
-         * saltito. Acá, en su propia línea de altura fija y con `tabular-nums`, solo
-         * cambian los dígitos -- nunca la altura. */}
-        <p className="mt-1 font-mono text-xs tabular-nums text-ink-faint">
-          Mínimo: {formatCurrency(minimumAmount, currency)}
-        </p>
-      </div>
+      {showLeadingBanner ? (
+        // Mismo tratamiento visual que el callout de "Comprador verificado" de
+        // `OfferHistoryPanel` -- acá reemplaza al input+sugerencias en vez de al lado,
+        // porque es justo ese valor precargado (el mínimo/las ofertas rápidas) lo que
+        // podía tentar a ofertar contra sí mismo.
+        <>
+          <div className="flex items-center gap-2 rounded-lg border-2 border-success-500 bg-success-50 px-3 py-2.5">
+            <BadgeCheck aria-hidden="true" className="h-5 w-5 shrink-0 text-success-600" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-success-700">Vas liderando este lote</p>
+              <p className="text-xs text-success-700/80">Nadie superó tu oferta todavía.</p>
+            </div>
+          </div>
 
-      {/* Ofertas inteligentes: tres montos sugeridos (mínimo válido + dos escalones de
-       * un incremento cada uno, ver `computeQuickBidSuggestions`) para completar el
-       * input con un click en vez de calcularlo a mano -- elegir uno no manda la oferta,
-       * eso sigue siendo el botón "Ofertar" de más abajo (pedido explícito, reemplaza al
-       * atajo único "+incremento mínimo" que había antes). `tabular-nums` acá también --
-       * mismo motivo que el precio grande de `ActiveLotePanel`, para que una oferta ajena
-       * actualizando estos montos no genere el mismo saltito. */}
-      <div className="grid grid-cols-3 gap-2">
-        {quickBidSuggestions.map((suggestedAmount) => (
+          {/* `type="button"` fijo -- nunca pasa a `"submit"` en este mismo nodo. Mutar el
+           * `type` de un botón adentro de su propio `onClick` (de `"button"` a `"submit"`)
+           * es un footgun conocido de React: React aplica la mutación del DOM en el mismo
+           * ciclo síncrono del evento `click` (eventos discretos), así que para cuando el
+           * navegador evalúa la acción por defecto de ESE click, el botón ya quedó con
+           * `type="submit"` y termina mandando el formulario solo -- exactamente lo que
+           * pasaba acá (un solo click en "Ofertar de todos modos" terminaba ofertando).
+           * La solución es que este botón y el de "Ofertar" de abajo sean dos elementos
+           * (nodos DOM) distintos, cada uno con su `type` fijo de por vida, nunca el mismo
+           * nodo mutando de uno a otro. */}
           <Button
-            key={suggestedAmount}
             type="button"
-            variant="chip"
-            onClick={() => handleSelectSuggestion(suggestedAmount)}
-            disabled={isSubmitting}
-            className="min-w-0 whitespace-normal break-words px-1.5 py-2 text-center font-mono text-xs font-semibold leading-tight tabular-nums"
+            variant="hero"
+            onClick={() => setTouched(true)}
+            className="mt-1 w-full py-2 text-sm font-semibold"
           >
-            {formatCurrency(suggestedAmount, currency)}
+            Ofertar de todos modos
           </Button>
-        ))}
-      </div>
+        </>
+      ) : (
+        <>
+          <div>
+            <Input
+              label="Tu oferta"
+              type="text"
+              inputMode="decimal"
+              variant="underline"
+              // Enfocado: el valor "limpio" tal cual, para no pelear con la posición del
+              // cursor mientras se tipea (reformatear en cada tecla -- agregar/sacar puntos
+              // de miles a medida que crecen los dígitos -- corre el cursor de un lugar
+              // impredecible). Sin foco: agrupado de a miles (`formatAmountDisplay`), para
+              // que se lea igual que el resto de los montos de la pantalla ("Mínimo: $
+              // 110.000") en vez del número crudo (pedido explícito, auditoría mobile).
+              value={isAmountFocused ? amount : formatAmountDisplay(amount)}
+              onFocus={() => setIsAmountFocused(true)}
+              onBlur={() => setIsAmountFocused(false)}
+              onChange={(event) => {
+                setTouched(true);
+                setAmount(sanitizeAmountInput(event.target.value));
+              }}
+              error={validationError ?? undefined}
+              disabled={isSubmitting}
+              className="text-lg font-semibold tabular-nums"
+            />
+            {/* Monto mínimo en su propia línea, separado del label -- si viviera dentro del
+             * label (como antes) cada oferta ajena que llega por WebSocket cambia ese texto
+             * y puede volcarlo de una línea a dos (o al revés) según cuántos dígitos tenga
+             * el nuevo mínimo, empujando el resto del formulario para abajo/arriba en un
+             * saltito. Acá, en su propia línea de altura fija y con `tabular-nums`, solo
+             * cambian los dígitos -- nunca la altura. */}
+            <p className="mt-1 font-mono text-xs tabular-nums text-ink-faint">
+              Mínimo: {formatCurrency(minimumAmount, currency)}
+            </p>
+          </div>
 
-      <Button
-        type="submit"
-        variant="hero"
-        isLoading={isSubmitting}
-        disabled={Boolean(validationError)}
-        className="mt-1 w-full py-2 text-sm font-semibold"
-      >
-        Ofertar
-      </Button>
+          {/* Ofertas inteligentes: tres montos sugeridos (mínimo válido + dos escalones de
+           * un incremento cada uno, ver `computeQuickBidSuggestions`) para completar el
+           * input con un click en vez de calcularlo a mano -- elegir uno no manda la oferta,
+           * eso sigue siendo el botón "Ofertar" de más abajo (pedido explícito, reemplaza al
+           * atajo único "+incremento mínimo" que había antes). `tabular-nums` acá también --
+           * mismo motivo que el precio grande de `ActiveLotePanel`, para que una oferta ajena
+           * actualizando estos montos no genere el mismo saltito. */}
+          <div className="grid grid-cols-3 gap-2">
+            {quickBidSuggestions.map((suggestedAmount) => (
+              <Button
+                key={suggestedAmount}
+                type="button"
+                variant="chip"
+                onClick={() => handleSelectSuggestion(suggestedAmount)}
+                disabled={isSubmitting}
+                className="min-w-0 whitespace-normal break-words px-1.5 py-2 text-center font-mono text-xs font-semibold leading-tight tabular-nums"
+              >
+                {formatCurrency(suggestedAmount, currency)}
+              </Button>
+            ))}
+          </div>
+
+          <Button
+            type="submit"
+            variant="hero"
+            isLoading={isSubmitting}
+            disabled={Boolean(validationError)}
+            className="mt-1 w-full py-2 text-sm font-semibold"
+          >
+            Ofertar
+          </Button>
+        </>
+      )}
     </form>
   );
 }

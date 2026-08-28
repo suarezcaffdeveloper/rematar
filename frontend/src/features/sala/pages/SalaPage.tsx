@@ -153,6 +153,14 @@ export function SalaPage() {
 
   const leadingBuyerRef = useRef<{ loteId: string; buyerId: string } | null>(null);
   const [wonLote, setWonLote] = useState<WonLoteInfo | null>(null);
+  // "Vas liderando" (pedido explícito, comprador): mismo `buyer_id` real de los eventos
+  // crudos que ya se sigue para el cartel de "ganaste el lote" de más abajo -- acá en vez
+  // de un ref es estado, porque esto sí se pinta en cada render (`PlaceBidButton`, para
+  // no dejar que el comprador se sobreoferte a sí mismo). Igual que `leadingBuyerRef`,
+  // arranca en `false` sin forma de reconstruirlo desde el snapshot (`buyer_id` llega
+  // enmascarado, ver `types.ts`) -- consistente con la misma limitación que ya tenía el
+  // cartel de "ganaste el lote".
+  const [isLeadingBidder, setIsLeadingBidder] = useState(false);
   useEffect(() => {
     return subscribeToRealtime((message) => {
       if (!isDomainEventMessage(message)) return;
@@ -160,16 +168,20 @@ export function SalaPage() {
 
       if (payload.event_type === 'oferta.accepted') {
         leadingBuyerRef.current = { loteId: payload.lote_id, buyerId: payload.buyer_id };
+        setIsLeadingBidder(payload.buyer_id === user?.id);
         return;
       }
       if (payload.event_type === 'oferta.winner_changed') {
         leadingBuyerRef.current = { loteId: payload.lote_id, buyerId: payload.new_buyer_id };
+        setIsLeadingBidder(payload.new_buyer_id === user?.id);
         return;
       }
       if (payload.event_type === 'lote.opened') {
         leadingBuyerRef.current = null;
+        setIsLeadingBidder(false);
         return;
       }
+      if (payload.event_type === 'lote.closed') setIsLeadingBidder(false);
       if (payload.event_type !== 'lote.closed' || payload.outcome !== 'sold') return;
 
       const leading = leadingBuyerRef.current;
@@ -285,6 +297,7 @@ export function SalaPage() {
                 winningOffer={winningOffer}
                 remateStatus={remate.status}
                 viewerRole={user?.role}
+                isLeadingBidder={isLeadingBidder}
               />
               <hr className="border-t border-line" />
             </>

@@ -13,6 +13,11 @@ export interface SalaBidPanelProps {
   winningOffer: OfertaSnapshotEntry | null;
   remateStatus: RemateStatus;
   viewerRole: UserRole | undefined;
+  /** `true` si quien mira la sala es, ahora mismo, el comprador que va liderando este
+   * lote -- ver `SalaPage` sobre por qué esto no puede salir de `winningOffer.buyer_id`
+   * (siempre enmascarado para un comprador, ADR-031). Se lo pasa a `PlaceBidButton` para
+   * no invitarlo a sobreofertarse a sí mismo (pedido explícito). */
+  isLeadingBidder: boolean;
 }
 
 /**
@@ -29,7 +34,15 @@ export interface SalaBidPanelProps {
  * solo se dejó de mostrar). `LoteCountdown` queda sin usar en la Sala pero no se borró
  * el componente ni su lógica.
  */
-export function SalaBidPanel({ remateId, lote, currency, winningOffer, remateStatus, viewerRole }: SalaBidPanelProps) {
+export function SalaBidPanel({
+  remateId,
+  lote,
+  currency,
+  winningOffer,
+  remateStatus,
+  viewerRole,
+  isLeadingBidder,
+}: SalaBidPanelProps) {
   const currentOfferAmount = winningOffer?.amount ?? lote.base_price;
 
   // Animación sutil de "el precio acaba de cambiar" (mejora de UX, no toca WebSockets ni
@@ -80,6 +93,7 @@ export function SalaBidPanel({ remateId, lote, currency, winningOffer, remateSta
         winningOffer={winningOffer}
         remateStatus={remateStatus}
         viewerRole={viewerRole}
+        isLeadingBidder={isLeadingBidder}
       />
     </div>
   );

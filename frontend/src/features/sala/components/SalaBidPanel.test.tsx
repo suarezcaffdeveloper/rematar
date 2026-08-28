@@ -45,6 +45,7 @@ function makeProps(overrides: Partial<SalaBidPanelProps> = {}): SalaBidPanelProp
     winningOffer: null,
     remateStatus: 'live',
     viewerRole: 'comprador',
+    isLeadingBidder: false,
     ...overrides,
   };
 }

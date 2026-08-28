@@ -61,6 +61,7 @@ function makeProps(overrides: Partial<PlaceBidButtonProps> = {}): PlaceBidButton
     winningOffer: null,
     remateStatus: 'live',
     viewerRole: 'comprador',
+    isLeadingBidder: false,
     ...overrides,
   };
 }
@@ -197,5 +198,24 @@ describe('PlaceBidButton', () => {
     expect(screen.getByRole('button', { name: 'Iniciá sesión para ofertar' })).toBeInTheDocument();
     expect(screen.queryByLabelText(/Tu oferta/)).not.toBeInTheDocument();
     expect(screen.queryByText('Solo los compradores pueden ofertar en la sala.')).not.toBeInTheDocument();
+  });
+
+  it('va liderando -- muestra el aviso en vez del monto sugerido/las ofertas rápidas', () => {
+    renderButton({ isLeadingBidder: true });
+
+    expect(screen.getByText('Vas liderando este lote')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Tu oferta/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ofertar de todos modos' })).toBeInTheDocument();
+  });
+
+  it('va liderando -- "Ofertar de todos modos" vuelve a mostrar el formulario de siempre, sin ofertar todavía', async () => {
+    renderButton({ isLeadingBidder: true });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ofertar de todos modos' }));
+
+    expect(screen.queryByText('Vas liderando este lote')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Tu oferta/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ofertar' })).toBeInTheDocument();
+    expect(placeBidRequestMock).not.toHaveBeenCalled();
   });
 });
