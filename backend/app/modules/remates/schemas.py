@@ -12,7 +12,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
-from app.modules.remates.models import RemateCategory, RemateStatus
+from app.modules.remates.models import RemateAccessType, RemateCategory, RemateStatus
 
 
 class RemateSettings(BaseModel):
@@ -59,6 +59,9 @@ class RemateCreate(BaseModel, _RemateDateValidationMixin):
     starts_at: datetime | None = None
     ends_at: datetime | None = None
     settings: RemateSettings = Field(default_factory=RemateSettings)
+    # Elegible solo al crear -- RemateUpdate deliberadamente no lo incluye (ver
+    # docstring de RemateUpdate más abajo).
+    access_type: RemateAccessType = RemateAccessType.PUBLIC
 
     @model_validator(mode="after")
     def _validate_dates(self) -> "RemateCreate":
@@ -71,7 +74,11 @@ class RemateUpdate(BaseModel, _RemateDateValidationMixin):
     se envían, no se tocan) — no confundir con qué campos son opcionales a nivel de
     *dominio* (eso lo define `Remate` en el modelo ORM). `RemateService.update` usa
     `model_dump(exclude_unset=True)` para distinguir "no lo mandaron" de "lo mandaron en
-    null"."""
+    null".
+
+    A propósito sin `access_type`: público/privado se elige solo al crear (spec); si más
+    adelante se quiere permitir cambiarlo después, es un agregado chico y separado acá.
+    """
 
     title: str | None = Field(default=None, min_length=3, max_length=200)
     category: RemateCategory | None = None
@@ -121,6 +128,22 @@ class RemateOperatorClaimRequest(BaseModel):
     code: str = Field(min_length=1, max_length=32)
 
 
+class RematePrivateAccessCodeResponse(BaseModel):
+    """Respuesta de `GET /remates/{id}/private-access-code` (código actual, sin
+    regenerarlo) y de `POST /remates/{id}/private-access-code` (genera/regenera). El
+    código se persiste cifrado (reversible, ver `Remate.private_access_code_encrypted`),
+    no hasheado -- por eso el `GET` puede devolver el mismo código las veces que haga
+    falta sin invalidarlo. A diferencia del código de operador, regenerar (`POST`) NO
+    revoca los accesos ya otorgados."""
+
+    code: str
+    generated_at: datetime
+
+
+class RematePrivateAccessRedeemRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=32)
+
+
 class RemateRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -135,9 +158,21 @@ class RemateRead(BaseModel):
     starts_at: datetime | None
     ends_at: datetime | None
     status: RemateStatus
+    access_type: RemateAccessType
+    private_access_code_generated_at: datetime | None
     settings: RemateSettings
     cancellation_reason: str | None
     cancelled_at: datetime | None
     finished_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class RemateCreateResponse(RemateRead):
+    """Extiende `RemateRead` únicamente para `POST /remates`: cuando `access_type` es
+    `private`, agrega el código en texto plano, visible una única vez (mismo criterio
+    que `RematePrivateAccessCodeResponse`). Si es `public`, siempre es `None` -- mismo
+    tipo de respuesta para no bifurcar el contrato del endpoint según el tipo de acceso.
+    """
+
+    private_access_code: str | None = None

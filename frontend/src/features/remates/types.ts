@@ -15,6 +15,12 @@ export type RemateStatus = 'draft' | 'scheduled' | 'live' | 'paused' | 'finished
  */
 export type VisibleRemateStatus = Exclude<RemateStatus, 'draft'>;
 
+/** `RemateAccessType` del backend -- `public` (comportamiento de siempre, visible en
+ * "Remates disponibles") o `private` (oculto del listado, requiere URL + código, ver
+ * `RedeemPrivateAccessPage`). Elegible solo al crear -- no forma parte de
+ * `RemateFormPayload` en modo edición. */
+export type RemateAccessType = 'public' | 'private';
+
 /** `RemateCategory` del backend -- las mismas nueve categorías, ni una más. */
 export type RemateCategory =
   | 'inmuebles'
@@ -57,6 +63,17 @@ export interface Remate {
   starts_at: string | null;
   ends_at: string | null;
   status: RemateStatus;
+  // Opcionales a nivel de tipo (aunque el backend siempre los manda), mismo criterio
+  // pragmático que `rematador_id` arriba -- no romper los fixtures de prueba existentes
+  // que arman un `Remate` a mano sin estos dos campos, nuevos en esta revisión.
+  // `undefined` se trata igual que `'public'` en cualquier chequeo (`remate.access_type
+  // === 'private'` da `false`), que es el default real del backend.
+  access_type?: RemateAccessType;
+  // `null` hasta que se genera un código (o después de que el remate nace público). El
+  // código en sí NUNCA viaja acá en texto plano -- solo en `RemateCreateResponse.
+  // private_access_code`/`PrivateAccessCodeResponse.code` (`POST` o `GET
+  // /remates/{id}/private-access-code`, ver `getPrivateAccessCodeRequest` en `api.ts`).
+  private_access_code_generated_at?: string | null;
   settings: RemateSettings;
   cancellation_reason: string | null;
   cancelled_at: string | null;
@@ -94,6 +111,9 @@ export interface RemateFormPayload {
   starts_at?: string | null;
   ends_at?: string | null;
   settings?: Partial<RemateSettings>;
+  // Solo tiene efecto al crear (`RemateCreate.access_type`) -- el backend lo ignora en
+  // un `PATCH` (`RemateUpdate` no lo incluye), así que da igual mandarlo también ahí.
+  access_type?: RemateAccessType;
 }
 
 /** `LoteStatus` del backend (`lotes/models.py`) -- los mismos cinco valores, ni uno más. */
@@ -237,4 +257,24 @@ export interface LoteFormPayload {
 export interface OperatorCodeResponse {
   code: string;
   generated_at: string;
+}
+
+/** Respuesta de `GET /remates/{id}/private-access-code` (código actual, sin
+ * regenerarlo -- `getPrivateAccessCodeRequest`) y de `POST /remates/{id}/
+ * private-access-code` (genera/regenera -- `generatePrivateAccessCodeRequest`). A
+ * diferencia de `OperatorCodeResponse`, el código SÍ se puede volver a consultar (se
+ * persiste cifrado, no hasheado, en el backend) -- y regenerar NO revoca los accesos ya
+ * otorgados (a diferencia del código de operador). */
+export interface PrivateAccessCodeResponse {
+  code: string;
+  generated_at: string;
+}
+
+/** Respuesta de `POST /remates` cuando el remate creado es privado -- `Remate` + el
+ * código en texto plano. Ya no es la única forma de verlo (ver `PrivateAccessCodeResponse`/
+ * `getPrivateAccessCodeRequest`), pero sigue siendo útil para mostrarlo sin un segundo
+ * request. `private_access_code` es `null` si el remate es público.
+ */
+export interface RemateCreateResponse extends Remate {
+  private_access_code: string | null;
 }

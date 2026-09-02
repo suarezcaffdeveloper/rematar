@@ -13,6 +13,7 @@ import {
   fetchLoteByIdRequest,
   fetchLoteCountRequest,
   fetchLotesRequest,
+  fetchMyPrivateAccessGrantsRequest,
   fetchRemateByIdRequest,
   fetchRematesRequest,
 } from './api';
@@ -201,6 +202,27 @@ export function useRemateDetail(remateId: string): UseRemateDetailResult {
   } = useAsyncResource<Remate | null>(() => fetchRemateByIdRequest(remateId), [remateId], null);
 
   return { remate, isLoading, error, reload };
+}
+
+export interface UseMyPrivateAccessGrantsResult {
+  remates: Remate[];
+  isLoading: boolean;
+  error: NormalizedApiError | null;
+  reload: () => void;
+}
+
+/** Remates privados ya canjeados por el usuario actual (`RedeemPrivateAccessPage`) --
+ * mismo patrón que `useRemateDetail`, sin params porque el backend ya filtra por el
+ * usuario autenticado (`GET /remates/private/mine`). */
+export function useMyPrivateAccessGrants(): UseMyPrivateAccessGrantsResult {
+  const {
+    data: remates,
+    isLoading,
+    error,
+    reload,
+  } = useAsyncResource<Remate[]>(() => fetchMyPrivateAccessGrantsRequest(), [], []);
+
+  return { remates, isLoading, error, reload };
 }
 
 const LOTES_PAGE_SIZE = 100;

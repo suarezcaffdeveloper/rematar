@@ -135,6 +135,13 @@ class Settings(BaseSettings):
     LOGIN_RATE_LIMIT_MAX_ATTEMPTS: int = 10
     LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 900
 
+    # --- Remates privados: canje de código de acceso (RemateService.redeem_private_access) ---
+    # Mismo mecanismo/orden de magnitud que LOGIN_RATE_LIMIT_* -- defensa contra
+    # adivinar el código por fuerza bruta online, por comprador autenticado (no por IP,
+    # que comparte NAT/VPN entre usuarios distintos).
+    PRIVATE_ACCESS_REDEEM_RATE_LIMIT_MAX_ATTEMPTS: int = 10
+    PRIVATE_ACCESS_REDEEM_RATE_LIMIT_WINDOW_SECONDS: int = 900
+
     # --- Recuperación de contraseña ---
     # Vigencia corta a propósito (RNF-11): el link viaja por email, un canal que puede
     # quedar expuesto (bandeja compartida, forwarding) más tiempo del que tarda en

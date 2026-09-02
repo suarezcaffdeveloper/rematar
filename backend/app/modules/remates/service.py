@@ -68,7 +68,8 @@ from fastapi import UploadFile
 from app.audit.actions import AuditAction
 from app.audit.repository import AuditLogRepository
 from app.core.config import Settings
-from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
+from app.core.crypto import decrypt_secret, encrypt_secret
+from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError, RateLimitError
 from app.events.bus import EventBus
 from app.modules.remates import media_storage
 from app.modules.remates.events import (
@@ -81,11 +82,18 @@ from app.modules.remates.events import (
     RemateStarted,
 )
 from app.modules.remates.lotes.repository import LoteRepository
-from app.modules.remates.models import Remate, RemateCategory, RemateStatus
+from app.modules.remates.models import (
+    Remate,
+    RemateAccessGrant,
+    RemateAccessType,
+    RemateCategory,
+    RemateStatus,
+)
 from app.modules.remates.repository import RemateRepository
 from app.modules.remates.schemas import RemateCreate, RemateUpdate
 from app.modules.remates.state_machine import assert_transition_allowed
 from app.modules.users.models import User, UserRole
+from app.redis.rate_limit import RedisRateLimiter
 
 # Sin 0/O/1/I (ambiguos al leerlos/tipearlos en voz alta el día del remate). No es un
 # secreto de alto valor sujeto a fuerza bruta offline -- por eso alcanza un hash rápido
@@ -93,9 +101,23 @@ from app.modules.users.models import User, UserRole
 _OPERATOR_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 _OPERATOR_CODE_LENGTH = 8
 
+# Mismo alfabeto que operator_code (sin 0/O/1/I). Un poco más largo (10 vs 8): este
+# código se comparte por canales externos (WhatsApp, email) elegidos por la empresa, más
+# superficie de exposición que operator_code (que la empresa entrega directo a un
+# rematador puntual) -- igual sigue siendo un secreto de bajo valor, no sujeto a fuerza
+# bruta offline (por eso alcanza cifrado simétrico reversible en vez de algo tipo
+# argon2; ver `private_access_code_encrypted` en models.py sobre por qué reversible y no
+# hasheado, a diferencia de operator_code_hash).
+_PRIVATE_ACCESS_CODE_ALPHABET = _OPERATOR_CODE_ALPHABET
+_PRIVATE_ACCESS_CODE_LENGTH = 10
+
 
 def _hash_operator_code(code: str) -> str:
     return hashlib.sha256(code.strip().upper().encode("utf-8")).hexdigest()
+
+
+def _normalize_private_access_code(code: str) -> str:
+    return code.strip().upper()
 
 
 class RemateService:
@@ -105,11 +127,26 @@ class RemateService:
         lote_repository: LoteRepository,
         event_bus: EventBus,
         audit_repository: AuditLogRepository,
+        rate_limiter: RedisRateLimiter | None = None,
+        settings: Settings | None = None,
     ) -> None:
         self._repository = repository
         self._lote_repository = lote_repository
         self._event_bus = event_bus
         self._audit_repository = audit_repository
+        # Opcionales: RemateService se instancia directo (sin pasar por
+        # get_remate_service) en una docena de lugares (snapshot, moderación, chat,
+        # bots, timer, tests) que nunca ejercitan el flujo de remates privados --
+        # exigirlos como parámetros obligatorios forzaría tocar todos esos call sites
+        # solo para satisfacer una firma que no necesitan. Solo get_remate_service
+        # (dependencies.py) los inyecta de verdad; redeem_private_access salta el rate
+        # limit si faltan (nunca pasa a través del router real, que sí los provee).
+        # `settings` además provee SECRET_KEY, usado para cifrar/descifrar
+        # private_access_code_encrypted (create, generate_private_access_code,
+        # get_private_access_code, redeem_private_access) -- ninguno de esos métodos se
+        # ejercita fuera del router real, mismo criterio que el rate limiter.
+        self._rate_limiter = rate_limiter
+        self._settings = settings
 
     def _record_status_change(
         self, remate: Remate, actor: User | None, previous_status: RemateStatus, *, trigger: str
@@ -125,7 +162,7 @@ class RemateService:
             details={"from": previous_status.value, "to": remate.status.value, "trigger": trigger},
         )
 
-    async def create(self, owner: User, data: RemateCreate) -> Remate:
+    async def create(self, owner: User, data: RemateCreate) -> tuple[Remate, str | None]:
         remate = Remate(
             owner_id=owner.id,
             title=data.title,
@@ -136,7 +173,22 @@ class RemateService:
             starts_at=data.starts_at,
             ends_at=data.ends_at,
             settings=data.settings.model_dump(),
+            access_type=data.access_type,
         )
+        # Si el remate nace privado, el código se genera de una: el requisito es que la
+        # empresa lo tenga disponible apenas crea el remate, sin un segundo paso manual
+        # (ver PrivateAccessPanel en el frontend, que lo pre-carga desde esta respuesta).
+        code: str | None = None
+        if data.access_type == RemateAccessType.PRIVATE:
+            code = "".join(
+                secrets.choice(_PRIVATE_ACCESS_CODE_ALPHABET)
+                for _ in range(_PRIVATE_ACCESS_CODE_LENGTH)
+            )
+            normalized = _normalize_private_access_code(code)
+            remate.private_access_code_encrypted = encrypt_secret(
+                normalized, self._settings.SECRET_KEY
+            )
+            remate.private_access_code_generated_at = datetime.now(UTC)
         self._repository.add(remate)
         # `remate.id` es un default client-side (`uuid.uuid4`, ver `db/mixins.py`) --
         # flush lo asigna sin comitear, para poder usarlo como resource_id/remate_id de
@@ -152,6 +204,16 @@ class RemateService:
             remate_id=remate.id,
             details={"title": remate.title, "category": remate.category.value},
         )
+        if code is not None:
+            self._audit_repository.record(
+                actor_id=owner.id,
+                actor_name=owner.full_name,
+                actor_role=owner.role.value,
+                action=AuditAction.REMATE_PRIVATE_ACCESS_CODE_GENERATED,
+                resource_type="remate",
+                resource_id=remate.id,
+                remate_id=remate.id,
+            )
         await self._repository.commit()
         await self._repository.refresh(remate)
         await self._event_bus.publish(
@@ -162,7 +224,7 @@ class RemateService:
                 category=remate.category,
             )
         )
-        return remate
+        return remate, code
 
     async def upload_cover_image(
         self, owner: User, upload: UploadFile, settings: Settings, request_base_url: str
@@ -196,13 +258,39 @@ class RemateService:
         # siga en borrador. Mismo ajuste que `RemateRepository.list_for_viewer`.
         if remate.rematador_id == viewer.id:
             return True
+        # Un PRIVATE nunca es visible por la rama genérica de abajo -- la única vía
+        # adicional es un RemateAccessGrant, chequeado en get_visible_or_raise (requiere
+        # una consulta async, que este método estático no puede hacer).
+        if remate.access_type == RemateAccessType.PRIVATE:
+            return False
         return remate.status != RemateStatus.DRAFT
 
     async def get_visible_or_raise(self, remate_id: uuid.UUID, viewer: User | None) -> Remate:
         remate = await self._repository.get_by_id(remate_id)
-        if remate is None or not self._is_visible(remate, viewer):
+        if remate is None:
             raise NotFoundError("Remate no encontrado.")
-        return remate
+        if self._is_visible(remate, viewer):
+            return remate
+        # Único caso adicional a _is_visible: un comprador con un grant vigente para
+        # este remate PRIVATE puntual. Mismo NotFoundError genérico en cualquier otro
+        # caso (id inexistente, borrador ajeno, privado sin grant) -- anti-enumeración,
+        # nunca se distingue "no existe" de "existe pero no tenés acceso".
+        if (
+            remate.access_type == RemateAccessType.PRIVATE
+            and viewer is not None
+            and await self._repository.get_access_grant(remate_id, viewer.id) is not None
+        ):
+            return remate
+        raise NotFoundError("Remate no encontrado.")
+
+    async def list_private_access_granted(self, user: User) -> list[Remate]:
+        """Remates privados a los que `user` ya canjeó el código alguna vez -- vista de
+        autoservicio de "Ingresar a remate privado" (`RedeemPrivateAccessPage`), no el
+        listado general (`list_for_viewer`, que nunca muestra un PRIVATE). Sin chequeo
+        de rol adicional: un grant solo existe para quien canjeó un código siendo
+        `comprador` (`redeem_private_access` exige ese rol en el router), alcanza con
+        estar autenticado para consultar los propios."""
+        return await self._repository.list_granted_for_user(user.id)
 
     async def get_owned_or_raise(self, remate_id: uuid.UUID, owner: User) -> Remate:
         remate = await self.get_visible_or_raise(remate_id, owner)
@@ -279,6 +367,112 @@ class RemateService:
         )
         await self._repository.commit()
         await self._repository.refresh(remate)
+        return remate
+
+    async def generate_private_access_code(
+        self, remate_id: uuid.UUID, owner: User
+    ) -> tuple[Remate, str]:
+        """Genera (o regenera) el código de acceso de un remate privado. A diferencia de
+        `generate_operator_code`, regenerar NO revoca nada: el código es un canal de
+        invitación compartido por varios compradores, no una asignación 1:1 -- los
+        `RemateAccessGrant` ya otorgados con el código anterior siguen valiendo."""
+        remate = await self.get_owned_or_raise(remate_id, owner)
+        if remate.access_type != RemateAccessType.PRIVATE:
+            raise BusinessRuleError(
+                "Este remate no es privado; no se puede generar un código de acceso."
+            )
+        code = "".join(
+            secrets.choice(_PRIVATE_ACCESS_CODE_ALPHABET)
+            for _ in range(_PRIVATE_ACCESS_CODE_LENGTH)
+        )
+        remate.private_access_code_encrypted = encrypt_secret(
+            _normalize_private_access_code(code), self._settings.SECRET_KEY
+        )
+        remate.private_access_code_generated_at = datetime.now(UTC)
+        self._audit_repository.record(
+            actor_id=owner.id,
+            actor_name=owner.full_name,
+            actor_role=owner.role.value,
+            action=AuditAction.REMATE_PRIVATE_ACCESS_CODE_GENERATED,
+            resource_type="remate",
+            resource_id=remate.id,
+            remate_id=remate.id,
+        )
+        await self._repository.commit()
+        await self._repository.refresh(remate)
+        return remate, code
+
+    async def get_private_access_code(
+        self, remate_id: uuid.UUID, owner: User
+    ) -> tuple[Remate, str] | None:
+        """Devuelve el código de acceso ACTUAL de un remate privado, sin regenerarlo --
+        a diferencia de `generate_private_access_code`, es una operación de solo
+        lectura (sin entrada de auditoría: no cambia nada). Es lo que permite mostrar el
+        mismo código en la card del dashboard y en la Consola Operativa sin que cada
+        vista tenga que invalidar la anterior. `None` si el remate es privado pero
+        todavía no tiene código generado (no debería pasar para remates creados después
+        de este cambio, ya que `create` siempre genera uno; puede pasar para datos
+        preexistentes)."""
+        remate = await self.get_owned_or_raise(remate_id, owner)
+        if remate.access_type != RemateAccessType.PRIVATE:
+            raise BusinessRuleError(
+                "Este remate no es privado; no tiene código de acceso."
+            )
+        if remate.private_access_code_encrypted is None:
+            return None
+        code = decrypt_secret(remate.private_access_code_encrypted, self._settings.SECRET_KEY)
+        return remate, code
+
+    async def redeem_private_access(
+        self, remate_id: uuid.UUID, comprador: User, code: str
+    ) -> Remate:
+        """Un `comprador` canjea el código de acceso de un remate privado para quedar
+        con acceso persistente (`RemateAccessGrant`) a ESE remate puntual. Busca por id
+        directo, sin pasar por `get_visible_or_raise` (mismo criterio que
+        `claim_operator`: el código es la credencial). Cualquier fallo -- remate
+        inexistente, no privado, sin código generado, código incorrecto -- da el mismo
+        `NotFoundError` genérico: nunca se filtra por qué falló (anti-enumeración, mismo
+        criterio que `get_visible_or_raise`)."""
+        if self._rate_limiter is not None and self._settings is not None:
+            allowed = await self._rate_limiter.check_and_increment(
+                f"private_access_redeem:{comprador.id}",
+                limit=self._settings.PRIVATE_ACCESS_REDEEM_RATE_LIMIT_MAX_ATTEMPTS,
+                window_seconds=self._settings.PRIVATE_ACCESS_REDEEM_RATE_LIMIT_WINDOW_SECONDS,
+            )
+            if not allowed:
+                raise RateLimitError(
+                    "Demasiados intentos. Esperá unos minutos antes de volver a intentar."
+                )
+
+        remate = await self._repository.get_by_id(remate_id)
+        if (
+            remate is None
+            or remate.access_type != RemateAccessType.PRIVATE
+            or remate.private_access_code_encrypted is None
+        ):
+            raise NotFoundError("Remate no encontrado o código inválido.")
+        stored_code = decrypt_secret(
+            remate.private_access_code_encrypted, self._settings.SECRET_KEY
+        )
+        if not secrets.compare_digest(stored_code, _normalize_private_access_code(code)):
+            raise NotFoundError("Remate no encontrado o código inválido.")
+
+        existing_grant = await self._repository.get_access_grant(remate.id, comprador.id)
+        if existing_grant is None:
+            self._repository.add_access_grant(
+                RemateAccessGrant(remate_id=remate.id, user_id=comprador.id)
+            )
+            self._audit_repository.record(
+                actor_id=comprador.id,
+                actor_name=comprador.full_name,
+                actor_role=comprador.role.value,
+                action=AuditAction.REMATE_PRIVATE_ACCESS_REDEEMED,
+                resource_type="remate",
+                resource_id=remate.id,
+                remate_id=remate.id,
+            )
+            await self._repository.commit()
+            await self._repository.refresh(remate)
         return remate
 
     async def list_for_viewer(

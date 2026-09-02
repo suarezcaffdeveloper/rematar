@@ -8,10 +8,16 @@ incorrecto para la paginación (`total` quedaría mal) como lento.
 
 import uuid
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.remates.models import Remate, RemateCategory, RemateStatus
+from app.modules.remates.models import (
+    Remate,
+    RemateAccessGrant,
+    RemateAccessType,
+    RemateCategory,
+    RemateStatus,
+)
 from app.modules.users.models import User, UserRole
 
 
@@ -40,20 +46,34 @@ class RemateRepository:
 
         if viewer is None:
             # Visitante anónimo (ADR-049): nunca ve borradores, no tiene remates
-            # "propios" que ver en cualquier estado.
-            stmt = stmt.where(Remate.status != RemateStatus.DRAFT)
+            # "propios" que ver en cualquier estado. Tampoco ve remates PRIVATE -- un
+            # anónimo nunca puede tener un grant (RemateAccessGrant exige un user_id).
+            stmt = stmt.where(
+                Remate.access_type == RemateAccessType.PUBLIC,
+                Remate.status != RemateStatus.DRAFT,
+            )
         elif viewer.role != UserRole.ADMIN:
             # Ve sus propios remates en cualquier estado, los que tiene asignados como
             # operador en cualquier estado (la empresa puede generar el código de
             # operador desde `draft`, ver `OperatorCodePanel`, así que un rematador
             # recién asignado tiene que poder ver ESE remate aunque siga en borrador), y
-            # los de cualquiera mientras no estén en borrador. Ver
+            # los PUBLIC de cualquiera mientras no estén en borrador. Ver
             # docs/14-modulo-remate.md, sección "Visibilidad".
+            #
+            # A propósito NO se consulta RemateAccessGrant acá: un remate PRIVATE nunca
+            # aparece en "remates disponibles" (este listado general), ni siquiera para
+            # alguien que ya canjeó su código -- el grant solo habilita el detalle/sala
+            # puntual (RemateService.get_visible_or_raise) y la vista de autoservicio
+            # separada `list_granted_for_user` ("Ingresar a remate privado"), nunca ESTE
+            # listado.
             stmt = stmt.where(
                 or_(
                     Remate.owner_id == viewer.id,
                     Remate.rematador_id == viewer.id,
-                    Remate.status != RemateStatus.DRAFT,
+                    and_(
+                        Remate.access_type == RemateAccessType.PUBLIC,
+                        Remate.status != RemateStatus.DRAFT,
+                    ),
                 )
             )
 
@@ -91,6 +111,34 @@ class RemateRepository:
         )
         result = await self._db.execute(stmt)
         return result.scalars().first()
+
+    async def get_access_grant(
+        self, remate_id: uuid.UUID, user_id: uuid.UUID
+    ) -> RemateAccessGrant | None:
+        stmt = select(RemateAccessGrant).where(
+            RemateAccessGrant.remate_id == remate_id, RemateAccessGrant.user_id == user_id
+        )
+        result = await self._db.execute(stmt)
+        return result.scalars().first()
+
+    async def list_granted_for_user(self, user_id: uuid.UUID) -> list[Remate]:
+        """Remates PRIVATE a los que `user_id` ya canjeó el código en algún momento --
+        a diferencia de `list_for_viewer`, esto SÍ consulta `RemateAccessGrant` a
+        propósito: es la vista de autoservicio de "Ingresar a remate privado"
+        (`RedeemPrivateAccessPage`), no el listado general de remates disponibles, que
+        sigue sin mostrar nunca un PRIVATE aunque haya grant (ver el comentario de esa
+        rama más arriba y el docstring de `RemateAccessGrant`)."""
+        stmt = (
+            select(Remate)
+            .join(RemateAccessGrant, RemateAccessGrant.remate_id == Remate.id)
+            .where(RemateAccessGrant.user_id == user_id, Remate.deleted_at.is_(None))
+            .order_by(RemateAccessGrant.created_at.desc())
+        )
+        result = await self._db.execute(stmt)
+        return list(result.scalars().all())
+
+    def add_access_grant(self, grant: RemateAccessGrant) -> None:
+        self._db.add(grant)
 
     def add(self, remate: Remate) -> None:
         self._db.add(remate)

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
+import { Lock } from 'lucide-react';
 import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
 import { ConfirmModal } from '../../../shared/components/ConfirmModal';
@@ -14,6 +15,7 @@ import { BoxIcon, CalendarIcon, UsersIcon } from '../../remates/components/icons
 import { CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_CARD_ACCENT, STATUS_LABELS } from '../../remates/labels';
 import type { Remate } from '../../remates/types';
 import { CancelRemateModal } from './CancelRemateModal';
+import { PrivateAccessCredentialsPopover } from './PrivateAccessCredentialsPopover';
 import { RemateFormModal } from './RemateFormModal';
 import { duplicateRemate } from '../duplication';
 import { useRemateOperationalInfo } from '../hooks';
@@ -81,11 +83,17 @@ export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighte
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
+  const [isPrivateAccessModalOpen, setIsPrivateAccessModalOpen] = useState(false);
 
   const isDraft = remate.status === 'draft';
   const isEditableStructure = remate.status === 'draft' || remate.status === 'scheduled';
   const isCancellable =
     remate.status === 'draft' || remate.status === 'scheduled' || remate.status === 'live' || remate.status === 'paused';
+  // Mismo criterio que `showPrivateAccessPanel` en ConsolaOperativaPage: visible en
+  // cualquier estado no terminal -- a diferencia de ese panel, acá no hace falta
+  // chequear `isOwner`, porque el dashboard del rematador solo lista remates propios.
+  const showPrivateAccessButton =
+    remate.access_type === 'private' && remate.status !== 'finished' && remate.status !== 'cancelled';
   // `draft` (nunca se publicó, no hay nada que auditar) o `cancelled` (ya es terminal;
   // su motivo de cancelación queda asentado aparte, en el log de auditoría, borrar el
   // remate no lo hace desaparecer) -- ver `RemateService.soft_delete` para por qué
@@ -178,9 +186,21 @@ export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighte
           lugar de sobra. `z-10` para pintar por encima de la imagen sin depender del
           orden en el DOM. */}
       <div className="absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-2">
-        <Badge variant={STATUS_BADGE_VARIANTS[remate.status]} className="shadow-sm">
-          {STATUS_LABELS[remate.status]}
-        </Badge>
+        <div className="flex items-center gap-1.5">
+          <Badge variant={STATUS_BADGE_VARIANTS[remate.status]} className="shadow-sm">
+            {STATUS_LABELS[remate.status]}
+          </Badge>
+          {showPrivateAccessButton && (
+            <button
+              type="button"
+              onClick={() => setIsPrivateAccessModalOpen(true)}
+              className="flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[11px] font-semibold text-ink-muted shadow-sm backdrop-blur-sm transition-colors hover:bg-white hover:text-ink"
+            >
+              <Lock aria-hidden="true" className="h-3 w-3" />
+              Copiar credenciales
+            </button>
+          )}
+        </div>
         <div className="shrink-0 rounded-full bg-white/90 shadow-sm backdrop-blur-sm">
           <DropdownMenu
             triggerLabel={`Más acciones para ${remate.title}`}
@@ -317,6 +337,14 @@ export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighte
         confirmLabel="Eliminar"
         variant="danger"
       />
+
+      {showPrivateAccessButton && (
+        <PrivateAccessCredentialsPopover
+          isOpen={isPrivateAccessModalOpen}
+          onClose={() => setIsPrivateAccessModalOpen(false)}
+          remate={remate}
+        />
+      )}
 
       {isHighlighted && (
         <>

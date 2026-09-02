@@ -22,6 +22,7 @@ import { ConsolaLotePanel } from '../components/ConsolaLotePanel';
 import { ConsolaSidebar } from '../components/ConsolaSidebar';
 import { ConsolaUpcomingLotesPanel } from '../components/ConsolaUpcomingLotesPanel';
 import { OperatorCodePanel } from '../components/OperatorCodePanel';
+import { PrivateAccessPanel } from '../components/PrivateAccessPanel';
 
 const NOT_OPERATIONAL_MESSAGES: Partial<Record<RemateStatus, string>> = {
   draft: 'El remate todavía está en borrador. Programalo desde el dashboard antes de operarlo acá.',
@@ -223,10 +224,18 @@ export function ConsolaOperativaPage() {
   // generar o compartir un código para un remate que ya terminó no tiene ninguna acción
   // útil detrás.
   const showOperatorCodePanel = isOwner && remate.status !== 'finished' && remate.status !== 'cancelled';
+  // Mismo criterio que `showOperatorCodePanel`, pero solo para un remate privado (ver
+  // `PrivateAccessPanel`) -- uno público no tiene ninguna credencial que mostrar acá.
+  const showPrivateAccessPanel =
+    isOwner &&
+    remate.access_type === 'private' &&
+    remate.status !== 'finished' &&
+    remate.status !== 'cancelled';
 
   return (
     <div className="flex flex-col gap-4 font-display">
       {showOperatorCodePanel && <OperatorCodePanel remate={remate} />}
+      {showPrivateAccessPanel && <PrivateAccessPanel remate={remate} />}
 
       {!isOperational ? (
         <>

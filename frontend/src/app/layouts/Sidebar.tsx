@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { Bot, Gavel, History, LayoutDashboard, LogOut, Package, ShoppingBag, type LucideIcon } from 'lucide-react';
+import {
+  Bot,
+  Gavel,
+  History,
+  KeyRound,
+  LayoutDashboard,
+  LogOut,
+  Package,
+  ShoppingBag,
+  type LucideIcon,
+} from 'lucide-react';
 import clsx from 'clsx';
 import logoRematar from '../../assets/brand/logo-rematar.png';
 import { useAuth, useAuthActions } from '../../features/auth/hooks';
@@ -39,6 +49,7 @@ const PUBLIC_NAV_ITEMS: NavItem[] = [{ label: 'Todos los remates', to: '/remates
 const NAV_ITEMS_BY_ROLE: Record<UserRole, NavItem[]> = {
   comprador: [
     { label: 'Remates', to: '/', icon: Gavel },
+    { label: 'Ingresar a remate privado', to: '/remates-privados/ingresar', icon: KeyRound },
     { label: 'Mis compras', to: '/mis-compras', icon: ShoppingBag },
   ],
   empresa: [

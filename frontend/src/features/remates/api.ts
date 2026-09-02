@@ -5,6 +5,7 @@
  * (vive detrás de `RequireAuth`).
  */
 
+import { isAxiosError } from 'axios';
 import { apiClient } from '../../shared/api/client';
 import type { Page } from '../../shared/api/types';
 import type {
@@ -16,7 +17,9 @@ import type {
   LoteRequeuePayload,
   LoteRound,
   OperatorCodeResponse,
+  PrivateAccessCodeResponse,
   Remate,
+  RemateCreateResponse,
   RemateFormPayload,
   RemateListParams,
 } from './types';
@@ -36,8 +39,8 @@ export async function fetchRematesRequest(params: RemateListParams): Promise<Pag
  * -- todas estas reglas ya las valida el backend, el frontend las refleja
  * deshabilitando la acción correspondiente antes de intentarla.
  */
-export async function createRemateRequest(payload: RemateFormPayload): Promise<Remate> {
-  const { data } = await apiClient.post<Remate>('/remates', payload);
+export async function createRemateRequest(payload: RemateFormPayload): Promise<RemateCreateResponse> {
+  const { data } = await apiClient.post<RemateCreateResponse>('/remates', payload);
   return data;
 }
 
@@ -186,6 +189,61 @@ export async function generateOperatorCodeRequest(remateId: string): Promise<Ope
 
 export async function claimOperatorRequest(remateId: string, code: string): Promise<Remate> {
   const { data } = await apiClient.post<Remate>(`/remates/${remateId}/claim-operator`, { code });
+  return data;
+}
+
+/**
+ * Remates privados: acceso vía URL + código en vez de listado público (misma sala,
+ * mismo motor de pujas -- ver `PrivateAccessCredentials`/`RedeemPrivateAccessPage`).
+ * `generatePrivateAccessCodeRequest` genera/regenera (invalida el código anterior para
+ * quien todavía no lo canjeó, pero NO revoca los accesos ya otorgados -- a diferencia
+ * del código de operador). `getPrivateAccessCodeRequest`, más abajo, trae el código
+ * actual sin regenerarlo. `redeemPrivateAccessRequest` canjea el código y deja al
+ * comprador con acceso persistente a ESE remate puntual -- el detalle/sala funcionan
+ * después sin volver a canjear.
+ */
+export async function generatePrivateAccessCodeRequest(
+  remateId: string,
+): Promise<PrivateAccessCodeResponse> {
+  const { data } = await apiClient.post<PrivateAccessCodeResponse>(
+    `/remates/${remateId}/private-access-code`,
+  );
+  return data;
+}
+
+/**
+ * Trae el código de acceso ACTUAL de un remate privado sin regenerarlo -- a diferencia
+ * de `generatePrivateAccessCodeRequest` (que siempre crea uno nuevo), este es el que
+ * hay que usar para simplemente mostrar/copiar el código ya existente (card del
+ * dashboard, Consola Operativa). `null` si el remate privado todavía no tiene código
+ * generado (404 del backend).
+ */
+export async function getPrivateAccessCodeRequest(
+  remateId: string,
+): Promise<PrivateAccessCodeResponse | null> {
+  try {
+    const { data } = await apiClient.get<PrivateAccessCodeResponse>(
+      `/remates/${remateId}/private-access-code`,
+    );
+    return data;
+  } catch (err) {
+    if (isAxiosError(err) && err.response?.status === 404) return null;
+    throw err;
+  }
+}
+
+export async function redeemPrivateAccessRequest(remateId: string, code: string): Promise<Remate> {
+  const { data } = await apiClient.post<Remate>(`/remates/${remateId}/redeem-private-access`, {
+    code,
+  });
+  return data;
+}
+
+/** Remates privados a los que el usuario actual ya canjeó el código alguna vez --
+ * `RedeemPrivateAccessPage` los muestra debajo del formulario de canje para volver a
+ * entrar sin re-tipear nada (el grant ya persiste, ver `RemateAccessGrant`). */
+export async function fetchMyPrivateAccessGrantsRequest(): Promise<Remate[]> {
+  const { data } = await apiClient.get<Remate[]>('/remates/private/mine');
   return data;
 }
 

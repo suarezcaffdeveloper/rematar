@@ -1,5 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
+import { useAuth } from '../../auth/hooks';
 import { Alert } from '../../../shared/components/Alert';
 import type { BreadcrumbItem } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
@@ -30,10 +31,19 @@ function DetailSkeleton() {
  * de "entrar" a la sala en vivo. Dos fuentes de datos independientes, cada una con su
  * propio estado de carga/error (`useRemateDetail`, `useLotes`): un fallo al traer los
  * lotes no debería tirar abajo la información del remate que sí cargó bien, y viceversa.
+ *
+ * El botón "Iniciar sesión" en el error solo aparece sin sesión (`!isAuthenticated`) --
+ * mismo trato para CUALQUIER 404 anónimo, sin distinguir "no existe" de "es privado y
+ * hace falta sesión" (mismo criterio anti-enumeración que ya aplica el backend). Cubre
+ * al comprador que ya tiene `RemateAccessGrant` para un remate privado pero perdió la
+ * sesión (logout, refresh token vencido): sin este botón, no había ninguna pista de que
+ * loguearse de nuevo alcanzaría para recuperar el acceso sin re-tipear el código (ver
+ * también `RedeemPrivateAccessPage`, que le muestra sus remates ya canjeados).
  */
 export function RemateDetailPage() {
   const { remateId } = useParams<{ remateId: string }>();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
 
   const {
     remate,
@@ -69,6 +79,11 @@ export function RemateDetailPage() {
               <Button variant="secondary" onClick={reloadRemate}>
                 Reintentar
               </Button>
+              {!isAuthenticated && (
+                <Button variant="secondary" onClick={() => navigate('/login')}>
+                  Iniciar sesión
+                </Button>
+              )}
               <Button variant="secondary" onClick={() => navigate('/')}>
                 Volver al dashboard
               </Button>

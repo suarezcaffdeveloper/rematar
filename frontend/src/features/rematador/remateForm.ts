@@ -6,7 +6,7 @@
  * aislamiento.
  */
 
-import type { Remate, RemateCategory, RemateFormPayload } from '../remates/types';
+import type { Remate, RemateAccessType, RemateCategory, RemateFormPayload } from '../remates/types';
 
 export interface RemateFormValues {
   title: string;
@@ -14,6 +14,10 @@ export interface RemateFormValues {
   description: string;
   cover_image_url: string;
   location: string;
+  /** Elegible solo al crear -- `RemateFormModal` no muestra este campo en modo edición,
+   * así que en ese modo siempre viaja de vuelta con el mismo valor que ya tenía el
+   * remate (el backend lo ignora en un `PATCH` de todas formas). */
+  access_type: RemateAccessType;
   /** Formato de `<input type="datetime-local">` (`YYYY-MM-DDTHH:mm`, hora local, sin
    * zona horaria) -- nunca un ISO 8601 con `Z`. */
   starts_at: string;
@@ -35,6 +39,7 @@ export const DEFAULT_REMATE_FORM_VALUES: RemateFormValues = {
   description: '',
   cover_image_url: '',
   location: '',
+  access_type: 'public',
   starts_at: '',
   ends_at: '',
   currency: 'ARS',
@@ -77,6 +82,7 @@ export function remateToFormValues(remate: Remate): RemateFormValues {
     description: remate.description ?? '',
     cover_image_url: remate.cover_image_url ?? '',
     location: remate.location ?? '',
+    access_type: remate.access_type ?? 'public',
     starts_at: remate.starts_at ? toDatetimeLocalValue(remate.starts_at) : '',
     ends_at: remate.ends_at ? toDatetimeLocalValue(remate.ends_at) : '',
     currency: remate.settings.currency,
@@ -144,6 +150,7 @@ export function buildRemateFormPayload(values: RemateFormValues): RemateFormPayl
     description: values.description.trim() || null,
     cover_image_url: values.cover_image_url.trim() || null,
     location: values.location.trim() || null,
+    access_type: values.access_type,
     starts_at: values.starts_at ? fromDatetimeLocalValue(values.starts_at) : null,
     ends_at: values.ends_at ? fromDatetimeLocalValue(values.ends_at) : null,
     settings: {

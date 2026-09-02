@@ -33,6 +33,7 @@ import { VentaAdjudicadaDetailPage } from '../features/postauction/pages/VentaAd
 import { VentasAdjudicadasPage } from '../features/postauction/pages/VentasAdjudicadasPage';
 import { ProfilePage } from '../features/profile/pages/ProfilePage';
 import { CompradorDashboardPage } from '../features/remates/pages/CompradorDashboardPage';
+import { RedeemPrivateAccessPage } from '../features/remates/pages/RedeemPrivateAccessPage';
 import { SalaPage } from '../features/sala/pages/SalaPage';
 import { HomePage } from './pages/HomePage';
 import { PreviewSalaPage } from './pages/PreviewSalaPage';
@@ -139,6 +140,18 @@ export const router = createBrowserRouter([
               {
                 element: <RequireRole allowedRoles={['empresa', 'rematador']} />,
                 children: [{ path: '/simuladores', element: <BotProfilesPage /> }],
+              },
+              // "Ingresar a remate privado" (sidebar del comprador) -- a diferencia del
+              // resto de `/remates/:remateId/*`, esta ruta en sí no cuelga de un remate
+              // puntual (es una herramienta de canje), así que sí tiene sentido acotarla
+              // por rol acá: solo un `comprador` la necesita. El backend igual es quien
+              // valida el código (RemateService.redeem_private_access) -- este guard
+              // solo evita mostrarle la pantalla a quien nunca la va a usar.
+              {
+                element: <RequireRole allowedRoles={['comprador']} />,
+                children: [
+                  { path: '/remates-privados/ingresar', element: <RedeemPrivateAccessPage /> },
+                ],
               },
             ],
           },

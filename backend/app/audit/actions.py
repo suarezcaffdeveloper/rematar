@@ -23,6 +23,8 @@ class AuditAction:
     REMATE_STATUS_CHANGED = "remate.status_changed"
     REMATE_OPERATOR_CODE_GENERATED = "remate.operator_code_generated"
     REMATE_OPERATOR_CLAIMED = "remate.operator_claimed"
+    REMATE_PRIVATE_ACCESS_CODE_GENERATED = "remate.private_access_code_generated"
+    REMATE_PRIVATE_ACCESS_REDEEMED = "remate.private_access_redeemed"
 
     LOTE_CREATED = "lote.created"
     LOTE_UPDATED = "lote.updated"

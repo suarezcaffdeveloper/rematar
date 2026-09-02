@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 
 from app.common.schemas import Page
 from app.core.config import Settings, get_settings
+from app.core.exceptions import NotFoundError
 from app.modules.auth.dependencies import get_current_user, get_current_user_optional, require_roles
 from app.modules.remates.dependencies import get_remate_service
 from app.modules.remates.lotes.router import router as lotes_router
@@ -30,8 +31,11 @@ from app.modules.remates.schemas import (
     RemateCancelRequest,
     RemateCoverImageUploadResponse,
     RemateCreate,
+    RemateCreateResponse,
     RemateOperatorClaimRequest,
     RemateOperatorCodeResponse,
+    RematePrivateAccessCodeResponse,
+    RematePrivateAccessRedeemRequest,
     RemateRead,
     RemateUpdate,
 )
@@ -47,7 +51,7 @@ router.include_router(lotes_router, prefix="/{remate_id}/lotes", tags=["lotes"])
 
 @router.post(
     "",
-    response_model=RemateRead,
+    response_model=RemateCreateResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_roles(UserRole.EMPRESA))],
     summary="Crear un remate en borrador (RF-04)",
@@ -56,8 +60,11 @@ async def create_remate(
     data: RemateCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     service: Annotated[RemateService, Depends(get_remate_service)],
-) -> Remate:
-    return await service.create(current_user, data)
+) -> RemateCreateResponse:
+    remate, code = await service.create(current_user, data)
+    return RemateCreateResponse(
+        **RemateRead.model_validate(remate).model_dump(), private_access_code=code
+    )
 
 
 @router.post(
@@ -106,6 +113,18 @@ async def list_remates(
         rematador_id=rematador_id,
     )
     return Page[RemateRead](items=list(items), total=total, page=page, page_size=page_size)
+
+
+@router.get(
+    "/private/mine",
+    response_model=list[RemateRead],
+    summary="Remates privados a los que el usuario actual ya canjeó el código",
+)
+async def list_my_private_access_grants(
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[RemateService, Depends(get_remate_service)],
+) -> list[Remate]:
+    return await service.list_private_access_granted(current_user)
 
 
 @router.get(
@@ -244,6 +263,56 @@ async def claim_operator(
     service: Annotated[RemateService, Depends(get_remate_service)],
 ) -> Remate:
     return await service.claim_operator(remate_id, current_user, data.code)
+
+
+@router.post(
+    "/{remate_id}/private-access-code",
+    response_model=RematePrivateAccessCodeResponse,
+    summary="Generar/regenerar el código de acceso de un remate privado propio",
+)
+async def generate_private_access_code(
+    remate_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[RemateService, Depends(get_remate_service)],
+) -> RematePrivateAccessCodeResponse:
+    remate, code = await service.generate_private_access_code(remate_id, current_user)
+    return RematePrivateAccessCodeResponse(
+        code=code, generated_at=remate.private_access_code_generated_at
+    )
+
+
+@router.get(
+    "/{remate_id}/private-access-code",
+    response_model=RematePrivateAccessCodeResponse,
+    summary="Ver el código de acceso ACTUAL de un remate privado propio, sin regenerarlo",
+)
+async def get_private_access_code(
+    remate_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[RemateService, Depends(get_remate_service)],
+) -> RematePrivateAccessCodeResponse:
+    result = await service.get_private_access_code(remate_id, current_user)
+    if result is None:
+        raise NotFoundError("Todavía no se generó un código de acceso para este remate.")
+    remate, code = result
+    return RematePrivateAccessCodeResponse(
+        code=code, generated_at=remate.private_access_code_generated_at
+    )
+
+
+@router.post(
+    "/{remate_id}/redeem-private-access",
+    response_model=RemateRead,
+    dependencies=[Depends(require_roles(UserRole.COMPRADOR))],
+    summary="Canjear el código de acceso de un remate privado (acceso persistente al detalle/sala)",
+)
+async def redeem_private_access(
+    remate_id: uuid.UUID,
+    data: RematePrivateAccessRedeemRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[RemateService, Depends(get_remate_service)],
+) -> Remate:
+    return await service.redeem_private_access(remate_id, current_user, data.code)
 
 
 @router.delete(

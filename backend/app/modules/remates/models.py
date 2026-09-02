@@ -18,7 +18,16 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, String, Text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -54,6 +63,15 @@ class RemateCategory(str, enum.Enum):
     TECNOLOGIA_ELECTRODOMESTICOS_Y_HOGAR = "tecnologia_electrodomesticos_y_hogar"
     NAUTICA_Y_AVIACION = "nautica_y_aviacion"
     MERCADERIA_E_INDUMENTARIA = "mercaderia_e_indumentaria"
+
+
+class RemateAccessType(str, enum.Enum):
+    """Remates privados: mismo remate, misma sala, mismo motor de pujas -- lo único que
+    cambia es cómo se llega. Ver RemateService.redeem_private_access /
+    RemateAccessGrant. Elegible solo al crear (RemateCreate), no editable después."""
+
+    PUBLIC = "public"
+    PRIVATE = "private"
 
 
 # Valor por defecto de `Remate.settings` (ver ADR-012). Vive acá, no en schemas.py, para
@@ -119,6 +137,37 @@ class Remate(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # Remates privados: elegido solo al crear (ver RemateCreate/RemateService.create), no
+    # editable después. PUBLIC es el default para no alterar el comportamiento de ningún
+    # remate existente ni de ningún flujo que no mande el campo.
+    access_type: Mapped[RemateAccessType] = mapped_column(
+        Enum(
+            RemateAccessType,
+            name="remate_access_type",
+            native_enum=True,
+            values_callable=_enum_values,
+        ),
+        nullable=False,
+        default=RemateAccessType.PUBLIC,
+    )
+    # A diferencia de operator_code_hash, este campo se guarda CIFRADO (reversible, ver
+    # app/core/crypto.py), no hasheado: el dueño necesita poder volver a ver el código
+    # actual (card del dashboard, sala en vivo) sin regenerarlo -- un hash irreversible
+    # obligaría a "regenerar" cada vez que quiere volver a copiarlo, invalidándolo para
+    # quien todavía no lo canjeó. Sigue sin ser un secreto de alto valor (código corto
+    # que la empresa comparte por WhatsApp/email), por eso alcanza cifrado simétrico con
+    # la SECRET_KEY de la app en vez de un esquema de claves por remate.
+    # A diferencia de operator_code, regenerar NO limpia ningún otro campo -- este código
+    # es un canal de invitación compartido (varios compradores pueden canjearlo), no una
+    # asignación exclusiva 1:1, así que regenerar no debe revocar los accesos ya
+    # otorgados (ver RemateAccessGrant).
+    private_access_code_encrypted: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    private_access_code_generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     category: Mapped[RemateCategory] = mapped_column(
@@ -165,3 +214,47 @@ class Remate(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
 
     def __repr__(self) -> str:
         return f"<Remate id={self.id} title={self.title!r} status={self.status.value}>"
+
+
+class RemateAccessGrant(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Un comprador que canjeó el código de acceso de un remate PRIVATE (ver
+    RemateService.redeem_private_access) queda con acceso persistente a ESE remate
+    puntual -- sin esto, conocer la URL + código una vez alcanzaría solo para esa
+    sesión; recargar la página o reconectar el WebSocket exigiría re-tipear el código
+    cada vez.
+
+    No es una lista de invitados (fuera de alcance): no hay aprobación, no expira, y no
+    se revoca al regenerar el código (ver Remate.private_access_code_encrypted).
+    `RemateRepository.list_for_viewer` (el listado GENERAL de remates disponibles) NUNCA
+    consulta esta tabla -- un remate privado sigue sin aparecer ahí incluso para alguien
+    con un grant vigente; el grant afecta la visibilidad puntual de detalle/sala
+    (RemateService._is_visible / get_visible_or_raise) y, aparte, alimenta una vista de
+    autoservicio deliberadamente separada (`list_granted_for_user`, consumida por
+    "Ingresar a remate privado" / RedeemPrivateAccessPage) para que un comprador pueda
+    volver a entrar a un remate que ya canjeó sin re-tipear el código."""
+
+    __tablename__ = "remate_access_grants"
+    __table_args__ = (
+        UniqueConstraint(
+            "remate_id", "user_id", name="uq_remate_access_grants_remate_id_user_id"
+        ),
+    )
+
+    # CASCADE, a diferencia de owner_id (RESTRICT) más arriba: un grant es membresía
+    # descartable sin valor de auditoría propio (el registro de negocio es el remate en
+    # sí, no quién tiene acceso a verlo) -- mismo criterio que refresh_tokens.
+    remate_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("remates.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    def __repr__(self) -> str:
+        return f"<RemateAccessGrant remate_id={self.remate_id} user_id={self.user_id}>"

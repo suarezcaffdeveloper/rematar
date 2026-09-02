@@ -1,14 +1,15 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { RemateDetailPage } from './RemateDetailPage';
 import type { Lote, Remate } from '../types';
 
-const { navigateMock, useRemateDetailMock, useLotesMock } = vi.hoisted(() => ({
+const { navigateMock, useRemateDetailMock, useLotesMock, useAuthMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   useRemateDetailMock: vi.fn(),
   useLotesMock: vi.fn(),
+  useAuthMock: vi.fn(),
 }));
 
 vi.mock('react-router-dom', async () => {
@@ -24,6 +25,8 @@ vi.mock('../hooks', () => ({
   useRemateDetail: useRemateDetailMock,
   useLotes: useLotesMock,
 }));
+
+vi.mock('../../auth/hooks', () => ({ useAuth: useAuthMock }));
 
 function makeRemate(overrides: Partial<Remate> = {}): Remate {
   return {
@@ -82,6 +85,10 @@ function renderPage() {
 }
 
 describe('RemateDetailPage', () => {
+  beforeEach(() => {
+    useAuthMock.mockReturnValue({ isAuthenticated: true });
+  });
+
   it('mientras carga el remate, muestra esqueletos y no el contenido', () => {
     useRemateDetailMock.mockReturnValue({ remate: null, isLoading: true, error: null, reload: vi.fn() });
     useLotesMock.mockReturnValue({ lotes: [], total: 0, isLoading: true, error: null, reload: vi.fn() });
@@ -105,12 +112,31 @@ describe('RemateDetailPage', () => {
     renderPage();
 
     expect(screen.getByText('Remate no encontrado.')).toBeInTheDocument();
+    // Con sesión iniciada, no tiene sentido ofrecer "Iniciar sesión" -- este error no se
+    // resuelve logueándose de nuevo.
+    expect(screen.queryByRole('button', { name: 'Iniciar sesión' })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(reloadRemate).toHaveBeenCalledTimes(1);
 
     await userEvent.click(screen.getByRole('button', { name: 'Volver al dashboard' }));
     expect(navigateMock).toHaveBeenCalledWith('/');
+  });
+
+  it('sin sesión, el error de acceso también ofrece "Iniciar sesión" (grant de remate privado persistente, sesión perdida)', async () => {
+    useAuthMock.mockReturnValue({ isAuthenticated: false });
+    useRemateDetailMock.mockReturnValue({
+      remate: null,
+      isLoading: false,
+      error: { status: 404, code: 'not_found', message: 'Remate no encontrado.' },
+      reload: vi.fn(),
+    });
+    useLotesMock.mockReturnValue({ lotes: [], total: 0, isLoading: false, error: null, reload: vi.fn() });
+
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+    expect(navigateMock).toHaveBeenCalledWith('/login');
   });
 
   it('con el remate cargado, muestra su información y la cantidad de lotes', () => {

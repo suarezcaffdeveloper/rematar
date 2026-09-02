@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { ArrowRight, Lightbulb } from 'lucide-react';
+import { ArrowRight, Globe, Lightbulb, Lock } from 'lucide-react';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Alert } from '../../../shared/components/Alert';
 import { Button } from '../../../shared/components/Button';
@@ -35,6 +35,21 @@ export interface RemateFormModalProps {
 const DESCRIPTION_MAX_LENGTH = 5000;
 const COMMON_CURRENCIES = ['ARS', 'USD', 'EUR', 'UYU', 'BRL'];
 const REVEAL_TRANSITION = { duration: 0.25, ease: [0.21, 0.47, 0.32, 0.98] as const };
+
+const ACCESS_TYPE_OPTIONS = [
+  {
+    value: 'public' as const,
+    icon: Globe,
+    label: 'Público',
+    description: 'Visible en el listado de remates disponibles para cualquier comprador.',
+  },
+  {
+    value: 'private' as const,
+    icon: Lock,
+    label: 'Privado',
+    description: 'Oculto del listado. Solo entra quien tenga la URL y el código que compartís vos.',
+  },
+];
 
 const HELP_TIPS = [
   'Podrás agregar los lotes después de crear el remate.',
@@ -181,6 +196,46 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
               />
             </div>
           </FormSection>
+
+          {!isEditMode && (
+            <FormSection title="Tipo de acceso">
+              <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <legend className="sr-only">Tipo de acceso</legend>
+                {ACCESS_TYPE_OPTIONS.map((option) => {
+                  const isSelected = values.access_type === option.value;
+                  return (
+                    <label
+                      key={option.value}
+                      className={`flex cursor-pointer flex-col gap-1 rounded-lg border p-3 transition-all duration-200 ${
+                        isSelected
+                          ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-200'
+                          : 'border-line bg-white hover:border-brand-300 hover:bg-surface-subtle'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="access_type"
+                        value={option.value}
+                        checked={isSelected}
+                        onChange={() => setField('access_type', option.value)}
+                        className="sr-only"
+                      />
+                      <span className="flex items-center gap-1.5">
+                        <option.icon
+                          aria-hidden="true"
+                          className={`h-4 w-4 shrink-0 ${isSelected ? 'text-brand-600' : 'text-ink-faint'}`}
+                        />
+                        <span className={`text-sm font-semibold ${isSelected ? 'text-brand-700' : 'text-ink'}`}>
+                          {option.label}
+                        </span>
+                      </span>
+                      <span className="text-xs text-ink-muted">{option.description}</span>
+                    </label>
+                  );
+                })}
+              </fieldset>
+            </FormSection>
+          )}
 
           <FormSection title="Descripción">
             <div className="flex flex-col gap-1.5">
