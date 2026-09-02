@@ -6,54 +6,54 @@
 <meta name="description" content="Demo interactiva de RematAR: probá el flujo de empresa, rematador y comprador con datos ficticios.">
 <title>Viví RematAR</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 
 <style>
 /* ============ TOKENS ============ */
 :root{
-  --bg:#0A0A0C;
-  --bg-elevated:#0E0E11;
-  --surface:#131316;
-  --surface-2:#18181C;
-  --surface-3:#1F1F24;
-  --border:rgba(255,255,255,0.08);
-  --border-strong:rgba(255,255,255,0.14);
-  --text:#F2F2F4;
-  --text-secondary:#A3A3AD;
-  --text-tertiary:#6B6B76;
-  --accent:#7C6FF0;
-  --accent-hover:#8F84F5;
-  --accent-soft:rgba(124,111,240,0.14);
+  --bg:#FFFFFF;
+  --bg-elevated:#FAFAF9;
+  --surface:#FFFFFF;
+  --surface-2:#F7F7F5;
+  --surface-3:#EEF0F3;
+  --border:#E7E7EA;
+  --border-strong:#D8D9DD;
+  --text:#101114;
+  --text-secondary:#6B6F76;
+  --text-tertiary:#A2A5AB;
+  --accent:#2451F2;
+  --accent-hover:#1B3FC4;
+  --accent-soft:#F0F3FE;
   --on-accent:#FFFFFF;
-  --live:#FB4B4B;
-  --live-soft:rgba(251,75,75,0.12);
-  --success:#2ECC8F;
-  --success-soft:rgba(46,204,143,0.12);
-  --warn:#F0A93E;
-  --warn-soft:rgba(240,169,62,0.12);
-  --info:#3B82F6;
-  --info-soft:rgba(59,130,246,0.12);
-  --danger:#E5484D;
-  --danger-soft:rgba(229,72,77,0.12);
-  --neutral:#8A8A94;
-  --neutral-soft:rgba(138,138,148,0.12);
+  --live:#DC2626;
+  --live-soft:#FEF2F2;
+  --success:#15803D;
+  --success-soft:#F0FDF4;
+  --warn:#B45309;
+  --warn-soft:#FFFBEB;
+  --info:#1B3FC4;
+  --info-soft:#E1E8FD;
+  --danger:#B91C1C;
+  --danger-soft:#FEF2F2;
+  --neutral:#6B7280;
+  --neutral-soft:#F1F2F4;
   --radius-sm:6px;
   --radius-md:10px;
   --radius-lg:16px;
   --radius-full:999px;
-  --shadow-xs:0 1px 2px rgba(0,0,0,0.4);
-  --shadow-sm:0 2px 8px -2px rgba(0,0,0,0.45);
-  --shadow-md:0 8px 24px -8px rgba(0,0,0,0.55);
-  --shadow-lg:0 24px 48px -16px rgba(0,0,0,0.65);
+  --shadow-xs:0 1px 2px rgba(16,17,20,0.06);
+  --shadow-sm:0 2px 8px -2px rgba(16,17,20,0.08);
+  --shadow-md:0 8px 24px -8px rgba(16,17,20,0.12);
+  --shadow-lg:0 24px 48px -16px rgba(16,17,20,0.18);
   --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:20px;--sp-6:24px;--sp-7:32px;--sp-8:48px;--sp-9:64px;
   --container:1160px;
-  --font-sans:'Manrope', -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono:'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --font-sans:'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:ui-monospace, 'SFMono-Regular', Menlo, monospace;
   --ease:cubic-bezier(.2,.7,.3,1);
 }
 
 *{box-sizing:border-box;}
-html{color-scheme:dark;}
+html{color-scheme:light;}
 body{
   background:var(--bg);color:var(--text);font-family:var(--font-sans);
   font-size:14.5px;line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh;
@@ -93,7 +93,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .btn-ghost:hover{color:var(--text);background:var(--surface-2);}
 .btn-outline{background:transparent;color:var(--text);border-color:var(--border-strong);}
 .btn-outline:hover{border-color:var(--accent);color:var(--accent);}
-.btn-danger{background:transparent;color:var(--danger);border-color:rgba(229,72,77,0.35);}
+.btn-danger{background:transparent;color:var(--danger);border-color:rgba(185,28,28,0.35);}
 .btn-danger:hover{background:var(--danger-soft);}
 .btn-lg{padding:13px 24px;font-size:14.5px;}
 .btn-sm{padding:7px 12px;font-size:12.5px;border-radius:var(--radius-sm);}
@@ -108,19 +108,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
   border:1px solid transparent;font-weight:600;
 }
 .badge .dot{width:6px;height:6px;border-radius:50%;flex:none;}
-.badge-live{color:var(--live);background:var(--live-soft);border-color:rgba(251,75,75,0.3);}
-.badge-live .dot{background:var(--live);box-shadow:0 0 0 3px rgba(251,75,75,0.18);animation:pulse 1.6s infinite;}
-.badge-success{color:var(--success);background:var(--success-soft);border-color:rgba(46,204,143,0.3);}
+.badge-live{color:var(--live);background:var(--live-soft);border-color:rgba(220,38,38,0.3);}
+.badge-live .dot{background:var(--live);box-shadow:0 0 0 3px rgba(220,38,38,0.18);animation:pulse 1.6s infinite;}
+.badge-success{color:var(--success);background:var(--success-soft);border-color:rgba(21,128,61,0.3);}
 .badge-success .dot{background:var(--success);}
-.badge-warn{color:var(--warn);background:var(--warn-soft);border-color:rgba(240,169,62,0.3);}
+.badge-warn{color:var(--warn);background:var(--warn-soft);border-color:rgba(180,83,9,0.3);}
 .badge-warn .dot{background:var(--warn);}
-.badge-info{color:var(--info);background:var(--info-soft);border-color:rgba(59,130,246,0.3);}
+.badge-info{color:var(--info);background:var(--info-soft);border-color:rgba(27,63,196,0.3);}
 .badge-info .dot{background:var(--info);}
-.badge-danger{color:var(--danger);background:var(--danger-soft);border-color:rgba(229,72,77,0.3);}
+.badge-danger{color:var(--danger);background:var(--danger-soft);border-color:rgba(185,28,28,0.3);}
 .badge-danger .dot{background:var(--danger);}
 .badge-neutral{color:var(--neutral);background:var(--neutral-soft);border-color:var(--border);}
 .badge-neutral .dot{background:var(--neutral);}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(251,75,75,0.18);}50%{box-shadow:0 0 0 6px rgba(251,75,75,0.05);}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(220,38,38,0.18);}50%{box-shadow:0 0 0 6px rgba(220,38,38,0.05);}}
 
 .tag{
   display:inline-flex;align-items:center;gap:6px;font-family:var(--font-sans);font-size:11.5px;font-weight:600;
@@ -129,7 +129,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 }
 
 /* ============ TOPBAR / BREADCRUMB ============ */
-.topbar{position:sticky;top:0;z-index:30;background:rgba(10,10,12,0.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);}
+.topbar{position:sticky;top:0;z-index:30;background:rgba(255,255,255,0.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);}
 .topbar-inner{max-width:var(--container);margin:0 auto;padding:14px var(--sp-6);display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);}
 .logo{font-family:var(--font-sans);font-weight:800;font-size:17px;letter-spacing:-0.02em;cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px;}
 .logo .logo-mark{width:22px;height:22px;border-radius:6px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;flex:none;}
@@ -171,7 +171,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 
 .badge-fixed{
   position:fixed;left:var(--sp-4);bottom:var(--sp-4);z-index:40;font-family:var(--font-mono);font-size:10px;
-  color:var(--text-tertiary);background:rgba(19,19,22,0.9);border:1px solid var(--border);border-radius:var(--radius-full);
+  color:var(--text-tertiary);background:rgba(255,255,255,0.92);border:1px solid var(--border);border-radius:var(--radius-full);box-shadow:var(--shadow-sm);
   padding:7px 13px;display:flex;align-items:center;gap:7px;backdrop-filter:blur(6px);
 }
 .badge-fixed b{color:var(--text-secondary);font-weight:700;letter-spacing:0.05em;}
@@ -390,8 +390,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .op-timer .om-val.low{animation:pulse-text 1s infinite;}
 @keyframes pulse-text{0%,100%{opacity:1;}50%{opacity:0.5;}}
 .status-note{padding:11px 13px;border-radius:var(--radius-md);font-size:12.5px;margin-bottom:var(--sp-4);display:flex;gap:9px;align-items:flex-start;}
-.status-note.win{background:var(--success-soft);border:1px solid rgba(46,204,143,0.3);color:var(--success);}
-.status-note.warn{background:var(--live-soft);border:1px solid rgba(251,75,75,0.3);color:var(--live);}
+.status-note.win{background:var(--success-soft);border:1px solid rgba(21,128,61,0.3);color:var(--success);}
+.status-note.warn{background:var(--live-soft);border:1px solid rgba(220,38,38,0.3);color:var(--live);}
 
 /* ============ SIDE PANEL (Actividad / Chat) ============ */
 .side-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;height:480px;overflow:hidden;}
@@ -460,7 +460,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 @keyframes toastOut{to{opacity:0;transform:translateX(16px);}}
 
 /* ============ RESULT / ADJUDICADO ============ */
-.result-banner{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-4) var(--sp-5);background:var(--success-soft);border:1px solid rgba(46,204,143,0.3);border-radius:var(--radius-lg);margin-bottom:var(--sp-5);}
+.result-banner{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-4) var(--sp-5);background:var(--success-soft);border:1px solid rgba(21,128,61,0.3);border-radius:var(--radius-lg);margin-bottom:var(--sp-5);}
 .result-banner .rb-icon{font-size:20px;}
 .result-banner b{color:var(--success);}
 .adjudicado-hero{text-align:center;padding:var(--sp-8) var(--sp-5);}
@@ -581,7 +581,7 @@ function seedRemates(){
         {from:'Pedro', role:'comprador', text:'¿Se puede visitar antes del remate?', ts: now-90000}
       ],
       lotes:[
-        mkLote('L001','001','Toyota Hilux SRX 2022','4x4 · Diésel · Manual','vehiculos','camionetas','🚙','linear-gradient(135deg,#241f38,#3a2e5c)',25000000,184,8,'en_subasta',[
+        mkLote('L001','001','Toyota Hilux SRX 2022','4x4 · Diésel · Manual','vehiculos','camionetas','🚙','linear-gradient(135deg,#eef1fc,#dbe3fb)',25000000,184,8,'en_subasta',[
           {kind:'oferta', amount:28500000, bidder:'Usuario #182', ts: now-40000},
           {kind:'oferta', amount:28200000, bidder:'Usuario #091', ts: now-75000},
           {kind:'join', bidder:'Usuario #205', ts: now-95000},
@@ -589,11 +589,11 @@ function seedRemates(){
         ], {desc:'Pick-up mediana en excelente estado general, service oficial al día, único dueño. Ideal para uso mixto ciudad/ruta.',
             caracteristicas:{'Año':'2022','Kilómetros':'45.000 km','Motor':'2.8 TDI 4x4','Combustible':'Diésel','Transmisión':'Manual','Color':'Blanco perlado'},
             docs:['Cédula verde al día','VTV vigente','Libre de multas']}),
-        mkLote('L002','002','Ford Ranger XLT 2021','4x2 · Diésel · Automática','vehiculos','camionetas','🛻','linear-gradient(135deg,#1a2b2e,#254048)',19000000,96,6,'pendiente',[],
+        mkLote('L002','002','Ford Ranger XLT 2021','4x2 · Diésel · Automática','vehiculos','camionetas','🛻','linear-gradient(135deg,#eef6f4,#dcece7)',19000000,96,6,'pendiente',[],
           {desc:'Pick-up XLT con paquete de seguridad completo y baja utilización comercial.',
            caracteristicas:{'Año':'2021','Kilómetros':'62.000 km','Motor':'2.0 Bi-Turbo 4x2','Combustible':'Diésel','Transmisión':'Automática','Color':'Gris plata'},
            docs:['Cédula verde al día','VTV vigente']}),
-        mkLote('L003','003','Volkswagen Amarok 2022','4x4 · Diésel · Automática','vehiculos','camionetas','🚐','linear-gradient(135deg,#241a2c,#3a2a4a)',22000000,71,7,'pendiente',[],
+        mkLote('L003','003','Volkswagen Amarok 2022','4x4 · Diésel · Automática','vehiculos','camionetas','🚐','linear-gradient(135deg,#f5f0fb,#e6dbf5)',22000000,71,7,'pendiente',[],
           {desc:'Amarok tope de gama, cuero, techo eléctrico, service en concesionario oficial.',
            caracteristicas:{'Año':'2022','Kilómetros':'38.500 km','Motor':'3.0 V6 TDI 4x4','Combustible':'Diésel','Transmisión':'Automática','Color':'Negro profundo'},
            docs:['Cédula verde al día','VTV vigente','Libre de multas']})
@@ -606,9 +606,9 @@ function seedRemates(){
       descripcion:'Maquinaria vial e industrial en excelente estado, ideal para empresas constructoras.',
       chat:[],
       lotes:[
-        mkLote('L004','001','Retroexcavadora JCB 3CX','Vial · Diésel','maquinaria','pesada','🚜','linear-gradient(135deg,#1a2416,#2e4326)',32000000,0,5,'pendiente',[],
+        mkLote('L004','001','Retroexcavadora JCB 3CX','Vial · Diésel','maquinaria','pesada','🚜','linear-gradient(135deg,#eef6ea,#dcecd0)',32000000,0,5,'pendiente',[],
           {desc:'Retroexcavadora 3CX con bajo uso, mantenimiento al día.', caracteristicas:{'Año':'2021','Horas':'1.200 hs'}, docs:['Documentación pendiente de carga']}),
-        mkLote('L005','002','Motoniveladora Caterpillar 120K','Vial · Diésel','maquinaria','pesada','🏗️','linear-gradient(135deg,#241f16,#433a24)',45000000,0,4,'pendiente',[],
+        mkLote('L005','002','Motoniveladora Caterpillar 120K','Vial · Diésel','maquinaria','pesada','🏗️','linear-gradient(135deg,#fef6ea,#fbe8c9)',45000000,0,4,'pendiente',[],
           {desc:'Motoniveladora para obras viales, motor reconstruido.', caracteristicas:{'Año':'2019','Horas':'3.400 hs'}, docs:['Documentación pendiente de carga']})
       ]
     },
@@ -619,10 +619,10 @@ function seedRemates(){
       descripcion:'Remate de vehículos particulares finalizado el mes pasado.',
       chat:[],
       lotes:[
-        mkLote('L006','001','Chevrolet S10 2020','4x2 · Diésel','vehiculos','camionetas','🚗','linear-gradient(135deg,#1f1a24,#332a44)',16000000,88,5,'adjudicado',[
+        mkLote('L006','001','Chevrolet S10 2020','4x2 · Diésel','vehiculos','camionetas','🚗','linear-gradient(135deg,#f4f1fb,#e5ddf6)',16000000,88,5,'adjudicado',[
           {kind:'oferta', amount:18400000, bidder:'Usuario #077', ts: now-2600000000}
         ], {winPrice:18400000, winner:'Usuario #077', desc:'Vehículo particular con service oficial.', caracteristicas:{'Año':'2020'}, docs:['Cédula verde al día']}),
-        mkLote('L007','002','Renault Duster 2019','4x2 · Nafta','vehiculos','autos','🚗','linear-gradient(135deg,#1a2420,#25392f)',12000000,54,5,'adjudicado',[
+        mkLote('L007','002','Renault Duster 2019','4x2 · Nafta','vehiculos','autos','🚗','linear-gradient(135deg,#eef6f4,#dcece7)',12000000,54,5,'adjudicado',[
           {kind:'oferta', amount:13100000, bidder:'Usuario #033', ts: now-2600000000}
         ], {winPrice:13100000, winner:'Usuario #033', desc:'SUV compacta, primera mano.', caracteristicas:{'Año':'2019'}, docs:['Cédula verde al día']})
       ]
@@ -1501,7 +1501,7 @@ window.Actions = {
     if(!nombre || !base){ toast('Completá nombre y precio base', 'warning'); return; }
     var r = state.wizard.draft;
     var icons = ['📦','🚗','🏠','🚜','🛠️'];
-    var grads = ['linear-gradient(135deg,#241a2c,#3a2a4a)','linear-gradient(135deg,#1a2b2e,#254048)','linear-gradient(135deg,#241f38,#3a2e5c)'];
+    var grads = ['linear-gradient(135deg,#f5f0fb,#e6dbf5)','linear-gradient(135deg,#eef6f4,#dcece7)','linear-gradient(135deg,#eef1fc,#dbe3fb)'];
     var extra = {desc: descripcion || 'Lote agregado durante la demo interactiva.', caracteristicas:{'Estado':'A definir'}, docs:['Documentación pendiente de carga']};
     if(incremento){ extra.incremento = incremento; }
     r.lotes.push(mkLote('L'+(1000+r.lotes.length), String(r.lotes.length+1).padStart(3,'0'), nombre, 'Lote agregado en la demo', 'vehiculos', 'camionetas',
