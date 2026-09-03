@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { KeyRound } from 'lucide-react';
+import { useWideLayout } from '../../../app/layouts/useWideLayout';
 import { Alert } from '../../../shared/components/Alert';
 import { Button } from '../../../shared/components/Button';
 import { Card } from '../../../shared/components/Card';
@@ -62,6 +63,7 @@ function extractRemateId(url: string): string | null {
  * que funciona directo gracias al grant, sin volver a pedir el código).
  */
 export function RedeemPrivateAccessPage() {
+  useWideLayout();
   const navigate = useNavigate();
   const [url, setUrl] = useState('');
   const [code, setCode] = useState('');
@@ -93,19 +95,19 @@ export function RedeemPrivateAccessPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-10">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
-          Ingresar a remate privado
-        </h1>
-        <p className="mt-2 text-sm text-ink-muted">
-          Pegá la URL del remate y el código de acceso que te compartió la empresa
-          organizadora.
-        </p>
-      </div>
+    <div className="flex w-full flex-col gap-10">
+      <div className="flex flex-col gap-10 lg:flex-row lg:items-center lg:gap-12">
+        <div className="flex flex-1 flex-col gap-6">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+              Ingresar a remate privado
+            </h1>
+            <p className="mt-2 max-w-xl text-sm text-ink-muted">
+              Pegá la URL del remate y el código de acceso que te compartió la empresa
+              organizadora.
+            </p>
+          </div>
 
-      <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:gap-12">
-        <div className="flex flex-1 flex-col gap-6 lg:pt-1">
           {REDEEM_STEPS.map((step, index) => (
             <div key={step.title} className="flex gap-4">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-sm font-semibold text-brand-700">
