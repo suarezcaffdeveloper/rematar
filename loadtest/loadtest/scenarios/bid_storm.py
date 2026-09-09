@@ -19,12 +19,15 @@ import itertools
 import time
 from decimal import Decimal
 
+import sys
+
 import httpx
 
 from loadtest.client_http import HttpClient, wait_ready
 from loadtest.config import RunConfig
 from loadtest.fixtures import ensure_live_lote
-from loadtest.identity import ensure_identity_pool
+from loadtest.identity import ensure_identity_pool, get_admin_identity
+from loadtest.integrity import check_bid_integrity
 from loadtest.metrics import MetricsCollector
 from loadtest.scenarios._shared import try_start_monitoring
 
@@ -90,6 +93,34 @@ async def run(config: RunConfig, args: argparse.Namespace) -> dict:
         await poller.stop()
     collector.finish()
 
+    # Fase 6 del plan de pruebas de carga: "no te limites a comprobar HTTP 200 --
+    # verificá la integridad de los datos". Reusa el admin ya bootstrapeado (mismo
+    # criterio best-effort que try_start_monitoring): si el login falla, la corrida
+    # completa igual, solo sin esta sección del reporte.
+    integrity_dict: dict | None = None
+    try:
+        admin = await get_admin_identity(config)
+        report = await check_bid_integrity(
+            config,
+            admin_token=admin.access_token,
+            remate_id=live_lote.remate_id,
+            lote_id=live_lote.lote_id,
+            base_price=BASE_PRICE,
+            min_increment=INCREMENT,
+            expected_total=accepted + rejected,
+        )
+        integrity_dict = report.to_dict()
+        _print_integrity_report(report)
+    except Exception as exc:  # noqa: BLE001 -- la verificación no debe tumbar la corrida
+        print(
+            f"[loadtest] aviso: no se pudo verificar integridad de datos ({exc!r}).",
+            file=sys.stderr,
+        )
+
+    extra = {"ofertas_accepted": accepted, "ofertas_rejected": rejected}
+    if integrity_dict is not None:
+        extra["integrity"] = integrity_dict
+
     return collector.to_summary(
         scenario=NAME,
         config={
@@ -97,5 +128,20 @@ async def run(config: RunConfig, args: argparse.Namespace) -> dict:
             "duration_seconds": args.duration_seconds,
             "think_time_ms": args.think_time_ms,
         },
-        extra={"ofertas_accepted": accepted, "ofertas_rejected": rejected},
+        extra=extra,
     )
+
+
+def _print_integrity_report(report) -> None:  # type: ignore[no-untyped-def]
+    header = "INTEGRIDAD DE DATOS: OK" if report.passed else "INTEGRIDAD DE DATOS: FALLÓ"
+    print(f"\n{'=' * len(header)}\n{header}\n{'=' * len(header)}")
+    print(
+        f"  ofertas persistidas: {report.total_ofertas} "
+        f"(accepted={report.accepted_count} rejected={report.rejected_count} outbid={report.outbid_count})"
+    )
+    print(f"  ganador vigente: {report.winner_amount} (leading endpoint: {report.leading_amount})")
+    if report.issues:
+        print("  problemas encontrados:")
+        for issue in report.issues:
+            print(f"    - {issue}")
+    print()

@@ -29,6 +29,18 @@ backend/media_test/
 # Pruebas de carga (Épica 8, Módulo 8.2) -- credenciales sintéticas y reportes generados
 loadtest/.cache/
 loadtest/results/
+# Backups de la DB de desarrollo tomados antes de correr pruebas de carga (Fase 3 del
+# plan de pruebas de carga/estrés/concurrencia) -- datos reales del entorno local, no
+# se versionan.
+loadtest/db-backups/
+
+# Pruebas de carga HTTP-only (k6) -- reportes generados, ver k6/README.md
+k6/results/
+
+# Playwright (frontend/e2e/) -- reportes y artefactos generados por cada corrida
+frontend/e2e-report/
+frontend/test-results/
+frontend/playwright-report/
 
 semgrep-results.json
 
