@@ -275,13 +275,23 @@ fuente única de estos valores — no se repiten hardcodeados en cada escenario.
   Ejecutar varias corridas de debugging seguidas contra la misma cuenta puede agotar
   `LOGIN_RATE_LIMIT_MAX_ATTEMPTS` (10/900s) — se resuelve borrando la clave puntual en
   Redis (`DEL login:<email>`), nunca deshabilitando el rate limit en sí.
-- **El techo real de throughput HTTP (~45-75 req/s) es una limitación de la aplicación,
-  confirmada, no del entorno** — un solo proceso `uvicorn` sin `--workers`, sin
-  paralelismo real entre núcleos. Diagnosticado en profundidad en la Fase 13 (ver más
-  abajo); la corrección (multi-worker) queda pendiente de una decisión aparte porque
-  requiere mover a Redis dos guardas que hoy son en memoria por proceso
-  (`WS_MAX_CONNECTIONS_PER_USER`, contador de presencia) antes de poder activarla con
-  seguridad.
+- **Multi-worker (`--workers`, producción únicamente) reduce a la mitad el pool de
+  conexiones a Postgres por proceso (`DB_POOL_SIZE=7`/`DB_MAX_OVERFLOW=10`, antes
+  20/30) — margen ajustado, no generoso.** Se probó primero con los valores de un solo
+  proceso sin cambiar: Postgres (`max_connections=100` por defecto) devolvió `"sorry,
+  too many clients already"` y **cortó el acceso a la base para todo el stack**, no solo
+  para la instancia bajo prueba. Con el pool reducido, una corrida de 500 VUs llegó a
+  94/100 conexiones en el pico -- pasa, pero sin mucho margen para herramientas de
+  administración u otra carga concurrente real. Si se necesita más colchón, la palanca
+  es subir `max_connections` en la instancia de Postgres de producción (Neon/Railway),
+  no seguir bajando el pool de la app.
+- **El contador de "conectados" que ve el usuario en la sala se subcuenta con
+  multi-worker** (`RoomManager.connection_count`, en memoria por proceso) — cosmético,
+  no participa de la determinación del ganador de un lote. El techo de
+  `WS_MAX_CONNECTIONS_PER_USER` también se relaja a `× cantidad_de_workers` -- ambas ya
+  documentadas como degradación aceptable en `app/websocket/rate_limit.py` antes de esta
+  fase. Un registro distribuido de presencia en Redis (sorted-set con heartbeat +
+  limpieza) resolvería las dos, pero queda como trabajo futuro aparte, no bloqueante.
 - **Un único proceso de carga no escala a decenas de miles de conexiones simultáneas**
   (`loadtest/`, ver ADR-042) — suficiente para el techo pedido (cientos/miles), no
   pensado para más sin un modo distribuido.
@@ -293,10 +303,18 @@ Diagnóstico completo, con evidencia (no solo la sospecha) en cada punto:
 1. **CPU saturado en un solo proceso, confirmado que no es la base de datos**: bajo una
    carga que dejó al backend en 216.79% de CPU, Postgres estaba en 6.63% y Redis en
    1.32%. Se descartó `--reload` con una prueba A/B real (segundo backend idéntico sin
-   `--reload`, misma carga: CPU y latencia prácticamente idénticos). **Corregido
-   parcialmente**: `orjson` como serializador por defecto (`backend/app/core/responses.py`)
-   y `--limit-concurrency 2000` en uvicorn — la causa de fondo (proceso único) sigue
-   pendiente, ver limitación de arriba.
+   `--reload`, misma carga: CPU y latencia prácticamente idénticos). **Corregido**:
+   `orjson` como serializador por defecto (`backend/app/core/responses.py`),
+   `--limit-concurrency 2000`, y `--workers` en producción (`backend/docker-entrypoint.sh`).
+   Con 4 workers, la misma prueba de 500 VUs de la Fase 7/8 pasó de 61.3 a 120.0 req/s
+   (+96%), p95 de 8528ms a 2900ms (menos de la mitad), y la tasa de error bajó de 5.9% a
+   4.0% (no subió). El primer intento (4 workers con el pool de conexiones de un solo
+   proceso sin ajustar) tumbó el acceso a Postgres para todo el stack -- ver la
+   limitación de "multi-worker reduce el pool" más abajo, es la corrección que lo evitó
+   en el segundo intento. Se verificó también que ningún consumidor de eventos duplica
+   efectos secundarios entre workers (mensajes de sistema del chat, casos post-remate,
+   cierre de lote) -- ya protegidos con constraints únicos y el lock de fila de ADR-004,
+   sin necesitar ningún cambio de código para eso.
 2. **Recuperación lenta post-spike (75-90s)**: sin ningún mecanismo de descarte de carga,
    el proceso encolaba cada request en vez de rechazar rápido lo que ya no podía atender.
    **Corregido**: con `--limit-concurrency`, el mismo spike test se recupera en ~45-60s,

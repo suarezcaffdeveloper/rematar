@@ -60,5 +60,45 @@ if [ "$#" -gt 0 ]; then
 else
     # --limit-concurrency: mismo criterio y mismo valor que docker-compose.yml (dev) --
     # ver el comentario ahí para el porqué del número.
-    exec runuser -u appuser -- uvicorn app.main:app --host "${UVICORN_HOST:-0.0.0.0}" --port "${PORT:-10000}" --ws-max-size 65536 --limit-concurrency 2000
+    #
+    # --workers: Épica 8, remediación de rendimiento (reconsideración de la Fase 14 del
+    # plan de pruebas de carga) -- un solo proceso deja al backend 100% CPU-bound bajo
+    # carga concurrente (confirmado: Postgres/Redis casi ociosos en la misma corrida,
+    # ver docs/load-testing.md), sin usar más que un núcleo sin importar cuántos haya
+    # disponibles. `--reload` (docker-compose.yml, desarrollo) es incompatible con
+    # `--workers` > 1 -- por eso esto solo se activa acá, nunca en dev, donde de todos
+    # modos no hace falta paralelismo real para iterar.
+    #
+    # Multi-worker degrada con gracia (no rompe) dos guardas que hoy son en memoria por
+    # proceso, ya documentadas así antes de esta fase:
+    # - `WS_MAX_CONNECTIONS_PER_USER` (app/websocket/rate_limit.py) pasa de un techo
+    #   exacto a `WS_MAX_CONNECTIONS_PER_USER * cantidad_de_workers` -- sigue habiendo
+    #   un techo finito, documentado explícitamente ahí como degradación aceptable.
+    # - El contador de "conectados" que ve el usuario en la sala (`RoomManager.
+    #   connection_count`, app/websocket/rooms.py) se subcuenta -- cada worker solo ve
+    #   su propia porción de conexiones. Cosmético: no participa en absoluto de la
+    #   determinación del ganador de un lote (eso corre enteramente por el lock de fila
+    #   de Postgres + Redis Pub/Sub, ADR-004/ADR-022, verificado independiente del
+    #   número de instancias en la Fase 6 del plan de pruebas de carga).
+    # Corregir ambas con un registro distribuido en Redis queda como trabajo futuro
+    # aparte (ver docs/load-testing.md), no un bloqueante para activar esto ahora.
+    #
+    # DB_POOL_SIZE/DB_MAX_OVERFLOW por worker -- HALLAZGO REAL de la reconsideración de
+    # multi-worker (probado, no teórico): cada proceso de uvicorn crea su PROPIO engine
+    # de SQLAlchemy (app/db/session.py, a nivel de módulo) con su propio pool -- los
+    # defaults de Settings (20 + 30 = 50, pensados para UN proceso) multiplicados por
+    # `--workers` pueden pedirle a Postgres muchas más conexiones que las que tiene
+    # disponibles (`max_connections`, default 100) -- probando esto con 4 workers a los
+    # defaults, Postgres devolvió "sorry, too many clients already" y **tumbó el acceso
+    # a la base para todo el stack**, no solo para el proceso que lo causó. Presupuesto
+    # deliberadamente conservador: (pool + overflow) × workers ≈ 68, deja ~30 conexiones
+    # de margen sobre `max_connections=100` (herramientas de administración, conexiones
+    # reservadas de Postgres, corridas de carga en paralelo). Si `UVICORN_WORKERS` se
+    # cambia, estos dos valores TIENEN que recalcularse a mano -- no hay forma de
+    # derivarlos automáticamente sin coordinación entre procesos, y un default
+    # equivocado acá es exactamente el modo de falla que esto previene.
+    : "${DB_POOL_SIZE:=7}"
+    : "${DB_MAX_OVERFLOW:=10}"
+    export DB_POOL_SIZE DB_MAX_OVERFLOW
+    exec runuser -u appuser -- uvicorn app.main:app --host "${UVICORN_HOST:-0.0.0.0}" --port "${PORT:-10000}" --ws-max-size 65536 --limit-concurrency 2000 --workers "${UVICORN_WORKERS:-4}"
 fi
