@@ -58,7 +58,15 @@ services:
     # --ws-max-size: ver el mismo flag en backend/Dockerfile -- defensa en profundidad de
     # tamaño de frame a nivel de transporte (Fase 4 de remediación del WebSocket Security
     # Audit).
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--ws-max-size", "65536"]
+    # --limit-concurrency: Épica 8, remediación de rendimiento (Fase 13/14 del plan de
+    # pruebas de carga) -- sin esto, un pico de tráfico que supera lo que el proceso
+    # único puede procesar encola cada conexión nueva indefinidamente en vez de
+    # rechazarla rápido, lo que explica la recuperación lenta (~75-90s) medida después
+    # de un spike test aun con la carga ya vuelta a un nivel sano (ver docs/39). El
+    # valor (2000) es deliberadamente generoso -- por encima de las ~960 conexiones
+    # WebSocket concurrentes ya validadas como sanas (Fase 7/13), para que actúe solo
+    # como freno de emergencia ante un pico extremo, nunca como techo del uso normal.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--ws-max-size", "65536", "--limit-concurrency", "2000"]
 
   frontend:
     build:

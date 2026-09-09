@@ -58,5 +58,7 @@ echo "[entrypoint] Iniciando aplicación..."
 if [ "$#" -gt 0 ]; then
     exec runuser -u appuser -- "$@"
 else
-    exec runuser -u appuser -- uvicorn app.main:app --host "${UVICORN_HOST:-0.0.0.0}" --port "${PORT:-10000}" --ws-max-size 65536
+    # --limit-concurrency: mismo criterio y mismo valor que docker-compose.yml (dev) --
+    # ver el comentario ahí para el porqué del número.
+    exec runuser -u appuser -- uvicorn app.main:app --host "${UVICORN_HOST:-0.0.0.0}" --port "${PORT:-10000}" --ws-max-size 65536 --limit-concurrency 2000
 fi

@@ -85,6 +85,7 @@ from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
+from app.core.responses import ORJSONResponse
 from app.db.session import AsyncSessionLocal
 from app.events.redis_bus import RedisEventBus
 from app.moderation.realtime import ModerationEventDispatcher
@@ -265,6 +266,9 @@ def create_app() -> FastAPI:
         docs_url=f"{settings.API_V1_PREFIX}/docs",
         redoc_url=f"{settings.API_V1_PREFIX}/redoc",
         lifespan=_lifespan,
+        # Épica 8, remediación de rendimiento (Fase 13/14 del plan de pruebas de
+        # carga) -- ver docstring de app/core/responses.py.
+        default_response_class=ORJSONResponse,
     )
 
     app.add_middleware(
