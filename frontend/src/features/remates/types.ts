@@ -43,6 +43,14 @@ export interface RemateSettings {
   anti_sniping_extension_seconds: number;
   currency: string;
   lote_timer_seconds: number | null;
+  // Garantía económica (bloqueo de tarjeta vía Mercado Pago) -- opt-in por remate,
+  // `false`/`null` por defecto. `guarantee_amount` llega como **string**, no `number`
+  // (Decimal, mismo motivo que `base_price`/`min_increment` en `Lote` -- ver ese
+  // docstring). Opcionales a nivel de tipo por el mismo motivo pragmático que otros
+  // campos nuevos de esta interfaz: no romper los fixtures de prueba existentes que
+  // arman un `RemateSettings` a mano sin estos campos, nuevos en esta revisión.
+  guarantee_required?: boolean;
+  guarantee_amount?: string | null;
 }
 
 /** `RemateRead` -- `backend/app/modules/remates/schemas.py`. */

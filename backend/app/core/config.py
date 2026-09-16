@@ -246,6 +246,28 @@ class Settings(BaseSettings):
     # sin secreto propio.
     WHATSAPP_REDIRECT_TOKEN_TTL_DAYS: int = 30
 
+    # --- Garantía económica: preautorización de tarjeta vía Mercado Pago ---
+    # `MERCADOPAGO_ENABLED=false` (o sin `MERCADOPAGO_ACCESS_TOKEN`) desactiva la
+    # integración real: se usa un `NullMercadoPagoClient` que rechaza toda operación con
+    # un error claro, mismo criterio que `EMAIL_ENABLED`/`NullEmailSender` -- ver
+    # `app/modules/garantias/mercadopago_client.py`.
+    MERCADOPAGO_ENABLED: bool = False
+    MERCADOPAGO_ACCESS_TOKEN: str | None = None
+    MERCADOPAGO_PUBLIC_KEY: str | None = None
+    MERCADOPAGO_WEBHOOK_SECRET: str | None = None
+    MERCADOPAGO_API_BASE_URL: str = "https://api.mercadopago.com"
+    MERCADOPAGO_API_TIMEOUT_SECONDS: float = 10.0
+    # Ventana de validez de una captura diferida (preautorización) con tarjeta de
+    # crédito en Argentina -- verificar contra la documentación vigente de Mercado Pago
+    # antes de subir a producción, puede variar por emisor/adquirente. Se guarda como
+    # config, no hardcodeado, porque el propio proveedor puede cambiarlo. Alimenta
+    # `Garantia.expires_at` y la validación de duración máxima de un remate Timed con
+    # garantía requerida (ver `GarantiaExpiryScheduler`).
+    MERCADOPAGO_HOLD_VALIDITY_DAYS: int = 7
+    # Margen de seguridad: una garantía ACTIVE se considera "por vencer" (dispara aviso
+    # de re-autenticación al comprador) esta cantidad de horas antes del vencimiento real.
+    GUARANTEE_EXPIRY_WARNING_HOURS: int = 24
+
 
 @lru_cache
 def get_settings() -> Settings:

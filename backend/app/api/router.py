@@ -64,6 +64,11 @@ docs/42-moderacion-en-tiempo-real.md).
 `/remates/{remate_id}/bots/...` (selección y control de simulación por remate) — mismo
 criterio que `chat_router`, un módulo top-level propio (`app/modules/bots/`) que no vive
 dentro de `app/modules/remates/` pero cuelga del mismo prefijo efectivo.
+
+`garantias_router` (garantía económica -- bloqueo de tarjeta vía Mercado Pago) expone
+`/remates/{remate_id}/garantia*` -- mismo criterio que `snapshot_router`/`timer_router`,
+un paquete transversal (`app/modules/garantias/`) montado directamente acá -- y
+`/webhooks/mercadopago`, top-level, sin relación con ningún remate en el path.
 """
 
 from fastapi import APIRouter
@@ -75,6 +80,7 @@ from app.moderation.router import router as moderation_router
 from app.modules.auth.router import router as auth_router
 from app.modules.bots.router import router as bots_router
 from app.modules.chat.router import router as chat_router
+from app.modules.garantias.router import router as garantias_router
 from app.modules.remates.router import router as remates_router
 from app.modules.users.router import router as users_router
 from app.monitoring.router import router as monitoring_router
@@ -101,4 +107,5 @@ api_router.include_router(postauction_router, tags=["postauction"])
 api_router.include_router(notifications_router, tags=["notifications"])
 api_router.include_router(moderation_router, tags=["moderation"])
 api_router.include_router(bots_router, tags=["bots"])
+api_router.include_router(garantias_router, tags=["garantias"])
 api_router.include_router(websocket_router, tags=["websocket"])

@@ -131,6 +131,39 @@ describe('RemateFormModal', () => {
     expect(apiMocks.createRemateRequest.mock.calls[0][0].settings.lote_timer_seconds).toBe(45);
   });
 
+  it('garantía deshabilitada por default, no muestra el campo de monto', () => {
+    render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
+    expect(screen.queryByLabelText(/Monto de la garantía/)).not.toBeInTheDocument();
+  });
+
+  it('habilitar la garantía muestra el campo de monto y lo manda en el payload', async () => {
+    apiMocks.createRemateRequest.mockResolvedValue(makeRemate());
+    render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    await userEvent.type(screen.getByLabelText('Título'), 'Remate de prueba');
+    await userEvent.selectOptions(screen.getByLabelText('Categoría'), 'hacienda');
+    await userEvent.click(screen.getByLabelText('Exigir garantía económica para ofertar'));
+    const amountInput = screen.getByLabelText(/Monto de la garantía/);
+    await userEvent.type(amountInput, '50000');
+    await userEvent.click(screen.getByRole('button', { name: 'Crear remate' }));
+
+    await waitFor(() => expect(apiMocks.createRemateRequest).toHaveBeenCalledTimes(1));
+    const settings = apiMocks.createRemateRequest.mock.calls[0][0].settings;
+    expect(settings.guarantee_required).toBe(true);
+    expect(settings.guarantee_amount).toBe('50000');
+  });
+
+  it('garantía habilitada sin monto, muestra error de validación y no llama al backend', async () => {
+    render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText('Título'), 'Remate de prueba');
+    await userEvent.selectOptions(screen.getByLabelText('Categoría'), 'hacienda');
+    await userEvent.click(screen.getByLabelText('Exigir garantía económica para ofertar'));
+    await userEvent.click(screen.getByRole('button', { name: 'Crear remate' }));
+
+    expect(screen.getByText('Ingresá un monto de garantía mayor a cero.')).toBeInTheDocument();
+    expect(apiMocks.createRemateRequest).not.toHaveBeenCalled();
+  });
+
   it('en modo edición, precarga la cuenta regresiva ya configurada', () => {
     const remate = makeRemate({
       settings: { anti_sniping_enabled: false, anti_sniping_extension_seconds: 60, currency: 'ARS', lote_timer_seconds: 45 },

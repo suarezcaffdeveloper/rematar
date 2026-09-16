@@ -18,6 +18,9 @@ export interface SalaBidPanelProps {
    * (siempre enmascarado para un comprador, ADR-031). Se lo pasa a `PlaceBidButton` para
    * no invitarlo a sobreofertarse a sí mismo (pedido explícito). */
   isLeadingBidder: boolean;
+  /** Ver `PlaceBidButton` -- `false` únicamente si el remate exige garantía económica y
+   * el comprador todavía no tiene una `Garantia` `active` (`GarantiaGate`, `SalaPage`). */
+  hasRequiredGuarantee: boolean;
 }
 
 /**
@@ -42,6 +45,7 @@ export function SalaBidPanel({
   remateStatus,
   viewerRole,
   isLeadingBidder,
+  hasRequiredGuarantee,
 }: SalaBidPanelProps) {
   const currentOfferAmount = winningOffer?.amount ?? lote.base_price;
 
@@ -94,6 +98,7 @@ export function SalaBidPanel({
         remateStatus={remateStatus}
         viewerRole={viewerRole}
         isLeadingBidder={isLeadingBidder}
+        hasRequiredGuarantee={hasRequiredGuarantee}
       />
     </div>
   );

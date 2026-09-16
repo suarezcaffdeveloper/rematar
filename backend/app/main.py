@@ -69,6 +69,21 @@ puramente in-process, ver su docstring) y, **antes** de levantar este consumidor
 reconcilian las filas de `bot_simulation_runs` que hayan quedado `running`/`paused` de
 una instancia anterior del proceso -- sin tareas `asyncio` reales detrás tras un
 reinicio, se marcan `stopped` para que la UI nunca muestre una simulación fantasma.
+
+Un **sexto** `EventConsumer` (Garantía Económica -- bloqueo de tarjeta vía Mercado Pago)
+arranca junto a los anteriores, con `GarantiaEventDispatcher`
+(`app/modules/garantias/realtime.py`): reacciona a `postauction.case_created` para
+capturar la garantía del comprador que acaba de ganar un lote, y a
+`remate.finished`/`remate.cancelled` para liberar cualquier garantía que haya quedado
+`ACTIVE` sin ganador -- mismo patrón exacto que los anteriores, así que ni
+`app/postauction/` ni `app/modules/remates/` necesitan ningún cambio para que este
+módulo exista.
+
+Un **`GarantiaExpiryScheduler`** (misma feature, ver
+`app/modules/garantias/scheduler.py`) arranca junto al `TimerExpiryScheduler`/
+`TimedAuctionLifecycleScheduler` de arriba, mismo criterio de `session_factory`: expira
+localmente los holds cuya preautorización venció sin que el remate cerrara, y avisa al
+comprador (notificación in-app) cuando está por vencer para que la renueve.
 """
 
 from collections.abc import AsyncIterator
@@ -95,6 +110,9 @@ from app.modules.bots.dispatcher import BotEventDispatcher
 from app.modules.bots.repository import BotSimulationRunRepository
 from app.modules.bots.runner import BotRunnerRegistry
 from app.modules.chat.realtime import ChatSystemEventDispatcher
+from app.modules.garantias.dependencies import build_mercadopago_client
+from app.modules.garantias.realtime import GarantiaEventDispatcher
+from app.modules.garantias.scheduler import GarantiaExpiryScheduler
 from app.notify.dependencies import build_notification_service
 from app.postauction.realtime import PostAuctionEventDispatcher
 from app.realtime.consumer import EventConsumer
@@ -234,11 +252,36 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         retry_max_seconds=settings.REALTIME_CONSUMER_RETRY_MAX_SECONDS,
     )
     app.state.bot_event_consumer.start()
+
+    garantia_session_factory = getattr(app.state, "db_session_factory", None) or AsyncSessionLocal
+    garantia_dispatcher = GarantiaEventDispatcher(
+        garantia_session_factory,
+        RedisEventBus(RedisPubSub(app.state.redis)),
+        build_mercadopago_client(settings),
+        settings,
+    )
+    app.state.garantia_event_consumer = EventConsumer(
+        app.state.redis,
+        garantia_dispatcher,
+        retry_base_seconds=settings.REALTIME_CONSUMER_RETRY_BASE_SECONDS,
+        retry_max_seconds=settings.REALTIME_CONSUMER_RETRY_MAX_SECONDS,
+    )
+    app.state.garantia_event_consumer.start()
+
+    garantia_expiry_scheduler_session_factory = (
+        getattr(app.state, "db_session_factory", None) or AsyncSessionLocal
+    )
+    app.state.garantia_expiry_scheduler = GarantiaExpiryScheduler(
+        garantia_expiry_scheduler_session_factory, settings
+    )
+    app.state.garantia_expiry_scheduler.start()
     logger.info("app_started")
     try:
         yield
     finally:
         logger.info("app_shutting_down")
+        await app.state.garantia_expiry_scheduler.stop()
+        await app.state.garantia_event_consumer.stop()
         await app.state.bot_event_consumer.stop()
         await app.state.bot_runner_registry.shutdown()
         await app.state.session_invalidation_consumer.stop()

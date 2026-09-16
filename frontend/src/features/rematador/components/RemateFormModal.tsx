@@ -81,6 +81,7 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
   const prefersReducedMotion = useReducedMotion();
   const antiSnipingSwitchId = useId();
   const loteTimerSwitchId = useId();
+  const guaranteeSwitchId = useId();
 
   useEffect(() => {
     if (!isOpen) return;
@@ -348,6 +349,38 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
                       value={values.lote_timer_seconds}
                       onChange={(event) => setField('lote_timer_seconds', event.target.value)}
                       error={errors.lote_timer_seconds}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-line pt-4">
+              <Switch
+                id={guaranteeSwitchId}
+                label="Exigir garantía económica para ofertar"
+                description="El comprador debe bloquear este monto en su tarjeta antes de poder ofertar. Se libera si no gana ningún lote; se descuenta del precio final si gana."
+                checked={values.guarantee_required}
+                onChange={(checked) => setField('guarantee_required', checked)}
+              />
+              <AnimatePresence initial={false}>
+                {values.guarantee_required && (
+                  <motion.div
+                    key="guarantee-amount"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={revealTransition}
+                    className="overflow-hidden"
+                  >
+                    <Input
+                      label={`Monto de la garantía (${values.currency.trim().toUpperCase() || 'moneda'})`}
+                      type="number"
+                      min={0.01}
+                      step={0.01}
+                      value={values.guarantee_amount}
+                      onChange={(event) => setField('guarantee_amount', event.target.value)}
+                      error={errors.guarantee_amount}
                     />
                   </motion.div>
                 )}

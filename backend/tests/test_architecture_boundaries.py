@@ -492,6 +492,48 @@ def test_domain_never_imports_moderation_service_or_router() -> None:
     )
 
 
+def test_garantias_never_imports_websocket_realtime_snapshot_ofertas_or_postauction() -> None:
+    """`app/modules/garantias/` (garantía económica, bloqueo de tarjeta vía Mercado
+    Pago) nunca debe conocer el Gateway WebSocket, el Event Consumer ni el Snapshot
+    Service (el cierre de un hold se dispara reaccionando a `remate.finished` con su
+    propia instancia de `EventConsumer`, cableada en `app/main.py`, mismo criterio que
+    `PostAuctionEventDispatcher`/`ChatSystemEventDispatcher` -- no acá). Tampoco debe
+    importar `app.modules.ofertas` ni `app.postauction` -- son los bounded contexts que
+    SÍ pueden importar `app.modules.garantias` (el gate de `AuctionEngine.place_bid` y,
+    en el futuro, el descuento del monto ya capturado en `PostAuctionCase`), nunca al
+    revés."""
+    forbidden_prefixes = (
+        "app.websocket",
+        "app.realtime",
+        "app.snapshot",
+        "app.modules.ofertas",
+        "app.postauction",
+    )
+    garantias_dir = APP_DIR / "modules" / "garantias"
+    offenders = _find_forbidden_imports(
+        list(garantias_dir.glob("*.py")), forbidden_prefixes, relative_to=garantias_dir
+    )
+    assert offenders == {}, (
+        f"app/modules/garantias/ depende de transporte/tiempo real o de un bounded "
+        f"context que debería depender de él, nunca al revés: {offenders}"
+    )
+
+
+def test_remates_never_imports_garantias() -> None:
+    """`app/modules/remates/` (incluido `lotes/`) nunca debe importar
+    `app.modules.garantias` -- mismo criterio que
+    `test_domain_and_postauction_never_import_postauction_from_domain`: el Auction
+    Engine (`app.modules.ofertas`) es quien depende de `GarantiaService` para el gate de
+    "ofertar sin garantía activa", `app.modules.remates` no necesita saber que ese
+    módulo existe."""
+    forbidden_prefixes = ("app.modules.garantias",)
+    remates_dir = APP_DIR / "modules" / "remates"
+    offenders = _find_forbidden_imports(
+        list(remates_dir.rglob("*.py")), forbidden_prefixes, relative_to=remates_dir
+    )
+    assert offenders == {}, f"app/modules/remates/ depende de app.modules.garantias: {offenders}"
+
+
 def test_domain_and_postauction_never_import_postauction_from_domain() -> None:
     """`app/modules/remates/` (incluido `lotes/`) nunca debe importar `app.postauction`
     -- es la garantía de decoupling central del Módulo 7.5 (ADR-044): el Auction Engine

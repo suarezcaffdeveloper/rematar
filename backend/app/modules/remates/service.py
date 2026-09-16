@@ -172,7 +172,11 @@ class RemateService:
             location=data.location,
             starts_at=data.starts_at,
             ends_at=data.ends_at,
-            settings=data.settings.model_dump(),
+            # `mode="json"` -- `RemateSettings.guarantee_amount` es `Decimal`, que el
+            # serializador JSON estándar de la columna JSONB no sabe volcar; `mode="json"`
+            # lo deja como `str` (el resto de los campos son bool/int/str/None, sin
+            # cambio de comportamiento para ellos).
+            settings=data.settings.model_dump(mode="json"),
             access_type=data.access_type,
         )
         # Si el remate nace privado, el código se genera de una: el requisito es que la
@@ -508,6 +512,10 @@ class RemateService:
         changes = data.model_dump(exclude_unset=True)
         if changes.get("cover_image_url") is not None:
             changes["cover_image_url"] = str(changes["cover_image_url"])
+        if "settings" in changes and data.settings is not None:
+            # Mismo motivo que en `create`: `mode="json"` para que
+            # `guarantee_amount` (Decimal) quede serializable en la columna JSONB.
+            changes["settings"] = data.settings.model_dump(mode="json")
 
         starts_at = changes.get("starts_at", remate.starts_at)
         ends_at = changes.get("ends_at", remate.ends_at)

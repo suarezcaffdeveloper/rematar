@@ -31,6 +31,9 @@ export interface RemateFormValues {
    * (`ConsolaControlPanel`) pero no había forma de configurarlo desde este formulario. */
   lote_timer_enabled: boolean;
   lote_timer_seconds: string;
+  /** Garantía económica (bloqueo de tarjeta vía Mercado Pago). */
+  guarantee_required: boolean;
+  guarantee_amount: string;
 }
 
 export const DEFAULT_REMATE_FORM_VALUES: RemateFormValues = {
@@ -47,6 +50,8 @@ export const DEFAULT_REMATE_FORM_VALUES: RemateFormValues = {
   anti_sniping_extension_seconds: '60',
   lote_timer_enabled: false,
   lote_timer_seconds: '60',
+  guarantee_required: false,
+  guarantee_amount: '',
 };
 
 export type RemateFormErrors = Partial<Record<keyof RemateFormValues, string>>;
@@ -93,6 +98,8 @@ export function remateToFormValues(remate: Remate): RemateFormValues {
       remate.settings.lote_timer_seconds !== null
         ? String(remate.settings.lote_timer_seconds)
         : DEFAULT_REMATE_FORM_VALUES.lote_timer_seconds,
+    guarantee_required: remate.settings.guarantee_required ?? false,
+    guarantee_amount: remate.settings.guarantee_amount ?? '',
   };
 }
 
@@ -127,6 +134,12 @@ export function validateRemateForm(values: RemateFormValues): RemateFormErrors {
   if (!/^[A-Za-z]{3}$/.test(values.currency.trim())) {
     errors.currency = 'La moneda debe ser un código de 3 letras (por ejemplo, ARS).';
   }
+  if (values.guarantee_required) {
+    const amount = Number(values.guarantee_amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      errors.guarantee_amount = 'Ingresá un monto de garantía mayor a cero.';
+    }
+  }
   if (values.anti_sniping_enabled) {
     const seconds = Number(values.anti_sniping_extension_seconds);
     if (!Number.isFinite(seconds) || seconds < 10 || seconds > 600) {
@@ -160,6 +173,8 @@ export function buildRemateFormPayload(values: RemateFormValues): RemateFormPayl
         ? Number(values.anti_sniping_extension_seconds)
         : 60,
       lote_timer_seconds: values.lote_timer_enabled ? Number(values.lote_timer_seconds) : null,
+      guarantee_required: values.guarantee_required,
+      guarantee_amount: values.guarantee_required ? values.guarantee_amount.trim() : null,
     },
   };
 }

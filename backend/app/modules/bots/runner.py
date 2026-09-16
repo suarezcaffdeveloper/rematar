@@ -40,6 +40,7 @@ from app.modules.bots.repository import BotRemateSelectionRepository
 from app.modules.chat.repository import ChatMessageRepository
 from app.modules.chat.schemas import ChatMessageCreate
 from app.modules.chat.service import ChatService
+from app.modules.garantias.dependencies import build_garantia_service
 from app.modules.ofertas.engine import AuctionEngine
 from app.modules.ofertas.repository import OfertaRepository
 from app.modules.ofertas.schemas import OfertaCreate
@@ -221,8 +222,14 @@ class RemateBotRunner:
             remate_service = RemateService(
                 RemateRepository(db), lote_repository, self._event_bus, audit_repository
             )
+            garantia_service = build_garantia_service(db, remate_service, self._settings)
             engine = AuctionEngine(
-                oferta_repository, remate_service, lote_repository, self._event_bus, audit_repository
+                oferta_repository,
+                remate_service,
+                lote_repository,
+                self._event_bus,
+                audit_repository,
+                garantia_service,
             )
 
             buyer = await db.get(User, profile.user_id)

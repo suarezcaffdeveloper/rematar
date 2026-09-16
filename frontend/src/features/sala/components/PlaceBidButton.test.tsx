@@ -62,6 +62,7 @@ function makeProps(overrides: Partial<PlaceBidButtonProps> = {}): PlaceBidButton
     remateStatus: 'live',
     viewerRole: 'comprador',
     isLeadingBidder: false,
+    hasRequiredGuarantee: true,
     ...overrides,
   };
 }

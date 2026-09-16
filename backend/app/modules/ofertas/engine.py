@@ -55,6 +55,16 @@ síncronamente antes de `_save`, nunca vía el Event Bus (debe correr en la mism
 transacción que acepta la oferta, ver docstring de ese método). Si el lote no tiene
 timer corriendo o el remate no habilita anti-sniping, no hace nada -- comportamiento
 intacto.
+
+## Garantía económica (bloqueo de tarjeta vía Mercado Pago)
+
+Si `RemateSettings.guarantee_required` está activo, ofertar exige una `Garantia`
+`ACTIVE` para (remate, comprador) -- regla dura (`ForbiddenError`, nunca genera una fila,
+mismo trato que rol/cuenta suspendida), chequeada apenas se resuelve `remate` (es la
+primera regla que necesita conocer sus `settings`). Delega enteramente en
+`GarantiaService.assert_active_or_raise` -- el Auction Engine no sabe nada de Mercado
+Pago ni de captura diferida, solo pregunta "¿puede ofertar?". Dirección de dependencia
+`ofertas -> garantias`, nunca al revés (ver `tests/test_architecture_boundaries.py`).
 """
 
 import uuid
@@ -66,6 +76,7 @@ from app.audit.actions import AuditAction
 from app.audit.repository import AuditLogRepository
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.events.bus import EventBus
+from app.modules.garantias.service import GarantiaService
 from app.modules.ofertas.events import (
     OfertaAccepted,
     OfertaPlaced,
@@ -78,6 +89,7 @@ from app.modules.ofertas.schemas import OfertaCreate
 from app.modules.remates.lotes.models import Lote, LoteStatus
 from app.modules.remates.lotes.repository import LoteRepository
 from app.modules.remates.models import Remate, RemateStatus
+from app.modules.remates.schemas import RemateSettings
 from app.modules.remates.service import RemateService
 from app.modules.users.models import User, UserRole
 from app.timer.service import TimerService
@@ -91,12 +103,14 @@ class AuctionEngine:
         lote_repository: LoteRepository,
         event_bus: EventBus,
         audit_repository: AuditLogRepository,
+        garantia_service: GarantiaService,
     ) -> None:
         self._repository = repository
         self._remate_service = remate_service
         self._lote_repository = lote_repository
         self._event_bus = event_bus
         self._audit_repository = audit_repository
+        self._garantia_service = garantia_service
 
     async def place_bid(
         self, remate_id: uuid.UUID, lote_id: uuid.UUID, buyer: User, data: OfertaCreate
@@ -117,6 +131,11 @@ class AuctionEngine:
         # Visibilidad del remate: mismo criterio 404 (no 403) que el resto de la API —
         # reutiliza RemateService.get_visible_or_raise sin cambios.
         remate = await self._remate_service.get_visible_or_raise(remate_id, buyer)
+
+        # Garantía económica: regla dura, recién chequeable acá (necesita `remate.settings`).
+        settings = RemateSettings.model_validate(remate.settings)
+        if settings.guarantee_required:
+            await self._garantia_service.assert_active_or_raise(remate_id, buyer.id)
 
         # Lock de fila (ADR-004): serializa toda oferta concurrente sobre este lote.
         lote = await self._lote_repository.get_by_id_for_update(lote_id)

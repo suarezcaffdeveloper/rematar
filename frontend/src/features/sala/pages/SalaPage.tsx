@@ -8,6 +8,8 @@ import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
 import { useToastStore } from '../../../shared/toast/toastStore';
 import { useAuth } from '../../auth/hooks';
+import { GarantiaGate } from '../../garantias/components/GarantiaGate';
+import type { GarantiaStatus } from '../../garantias/types';
 import { NotificationBell } from '../../notifications/components/NotificationBell';
 import { GavelIcon } from '../../remates/components/icons';
 import { ActiveLotePanel } from '../components/ActiveLotePanel';
@@ -161,6 +163,10 @@ export function SalaPage() {
   // enmascarado, ver `types.ts`) -- consistente con la misma limitación que ya tenía el
   // cartel de "ganaste el lote".
   const [isLeadingBidder, setIsLeadingBidder] = useState(false);
+  // Garantía económica (bloqueo de tarjeta vía Mercado Pago) -- `null` mientras
+  // `GarantiaGate` todavía no resolvió el estado inicial, tratado igual que "sin
+  // garantía activa" (`hasRequiredGuarantee` de más abajo) hasta que sí lo haga.
+  const [garantiaStatus, setGarantiaStatus] = useState<GarantiaStatus | null>(null);
   useEffect(() => {
     return subscribeToRealtime((message) => {
       if (!isDomainEventMessage(message)) return;
@@ -244,6 +250,13 @@ export function SalaPage() {
 
   const { remate, active_lote: activeLote, winning_offer: winningOffer, recent_offers: recentOffers } = snapshot;
   const currency = remate.settings.currency;
+  const guaranteeRequired = Boolean(remate.settings.guarantee_required);
+  const guaranteeAmount = remate.settings.guarantee_amount;
+  // El gate solo aplica a un comprador autenticado -- un visitante anónimo/rematador/
+  // admin ya ve el botón de ofertar deshabilitado por otro motivo (rol), y `GarantiaGate`
+  // dispararía un 401 si se montara sin sesión.
+  const showGarantiaGate = guaranteeRequired && user?.role === 'comprador';
+  const hasRequiredGuarantee = !guaranteeRequired || garantiaStatus === 'active';
 
   return (
     <div className="mx-auto flex w-full max-w-[85rem] flex-col gap-4 font-display">
@@ -255,6 +268,15 @@ export function SalaPage() {
         connectionStatus={connectionStatus}
         notifications={isAuthenticated ? <NotificationBell /> : null}
       />
+
+      {showGarantiaGate && guaranteeAmount && (
+        <GarantiaGate
+          remateId={remate.id}
+          amount={guaranteeAmount}
+          currency={currency}
+          onStatusChange={setGarantiaStatus}
+        />
+      )}
 
       {/* Rediseño visual (ver prototipo aprobado): columna izquierda -- solo identidad
        * del lote (imagen/título/descripción, `ActiveLotePanel`); precio + formulario de
@@ -298,6 +320,7 @@ export function SalaPage() {
                 remateStatus={remate.status}
                 viewerRole={user?.role}
                 isLeadingBidder={isLeadingBidder}
+                hasRequiredGuarantee={hasRequiredGuarantee}
               />
               <hr className="border-t border-line" />
             </>

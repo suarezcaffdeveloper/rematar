@@ -7,6 +7,8 @@ from app.audit.repository import AuditLogRepository
 from app.db.session import get_db
 from app.events.bus import EventBus
 from app.events.dependencies import get_event_bus
+from app.modules.garantias.dependencies import get_garantia_service
+from app.modules.garantias.service import GarantiaService
 from app.modules.ofertas.engine import AuctionEngine
 from app.modules.ofertas.repository import OfertaRepository
 from app.modules.remates.dependencies import get_remate_service
@@ -25,7 +27,15 @@ def get_auction_engine(
     lote_repository: Annotated[LoteRepository, Depends(get_lote_repository)],
     event_bus: Annotated[EventBus, Depends(get_event_bus)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    garantia_service: Annotated[GarantiaService, Depends(get_garantia_service)],
 ) -> AuctionEngine:
     # LoteRepository, no LoteService: el motor solo necesita el lock de fila (ADR-004) y
     # lecturas puntuales del lote, nunca su lógica de negocio — ver ADR-020, sección F.
-    return AuctionEngine(repository, remate_service, lote_repository, event_bus, AuditLogRepository(db))
+    return AuctionEngine(
+        repository,
+        remate_service,
+        lote_repository,
+        event_bus,
+        AuditLogRepository(db),
+        garantia_service,
+    )

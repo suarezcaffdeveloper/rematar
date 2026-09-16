@@ -12,6 +12,7 @@ from app.db.base_class import Base
 from app.moderation.models import ModerationPinnedMessage, RemateBan
 from app.modules.auth.models import RefreshToken
 from app.modules.chat.models import ChatMessage
+from app.modules.garantias.models import Garantia, GarantiaEvent
 from app.modules.ofertas.models import Oferta
 from app.modules.remates.lotes.models import Lote
 from app.modules.remates.models import Remate
@@ -38,4 +39,6 @@ __all__ = [
     "Notification",
     "RemateBan",
     "ModerationPinnedMessage",
+    "Garantia",
+    "GarantiaEvent",
 ]

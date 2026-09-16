@@ -82,6 +82,9 @@ async def test_rematador_can_create_remate_in_draft(client: AsyncClient) -> None
         "anti_sniping_extension_seconds": 60,
         "currency": "ARS",
         "lote_timer_seconds": None,
+        # Garantía económica -- opt-in por remate, `False`/`None` por defecto.
+        "guarantee_required": False,
+        "guarantee_amount": None,
     }
     assert remate["ends_at"] is None
     assert remate["cancelled_at"] is None

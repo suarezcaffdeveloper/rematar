@@ -21,6 +21,15 @@ function readRequiredEnvVar(key: string): string {
   return value;
 }
 
+/** A diferencia de `readRequiredEnvVar`, no rompe el arranque de la app si falta --
+ * `VITE_MERCADOPAGO_PUBLIC_KEY` es opcional (mismo criterio opt-in que
+ * `MERCADOPAGO_ENABLED` del lado del backend): la mayoría de los entornos no van a
+ * tenerla configurada, y eso no debe impedir usar el resto de la aplicación. */
+function readOptionalEnvVar(key: string): string | null {
+  const value = import.meta.env[key];
+  return value ? value : null;
+}
+
 /**
  * `wsBaseUrl` -- derivada de `apiBaseUrl`, no una variable de entorno propia: el
  * Gateway WebSocket (Épica 3, Módulo 3.3) vive en el mismo host/puerto que la API HTTP,
@@ -37,4 +46,5 @@ export const env = {
   get wsBaseUrl() {
     return deriveWsBaseUrl(this.apiBaseUrl);
   },
+  mercadopagoPublicKey: readOptionalEnvVar('VITE_MERCADOPAGO_PUBLIC_KEY'),
 } as const;

@@ -79,6 +79,7 @@ export function PreviewSalaPage() {
               remateStatus="live"
               viewerRole="comprador"
               isLeadingBidder={isLeadingBidder}
+              hasRequiredGuarantee
             />
             <hr className="border-t border-line" />
             <SalaSidePanel

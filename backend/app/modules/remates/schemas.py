@@ -9,6 +9,7 @@ mínima del remate); `starts_at` es opcional al crear pero obligatorio para prog
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
@@ -29,6 +30,13 @@ class RemateSettings(BaseModel):
     # Cuenta regresiva por lote (Épica 8, "cuenta regresiva y cierre automático",
     # ADR-043) -- `None` es "sin timer" para este remate, opt-in explícito.
     lote_timer_seconds: int | None = Field(default=None, ge=5, le=3600)
+    # Garantía económica (bloqueo de tarjeta vía Mercado Pago, ver
+    # `app/modules/garantias/`). `guarantee_amount` usa la `currency` de este mismo
+    # modelo -- no tiene campo de moneda propio. La inmutabilidad una vez que existen
+    # holds activos para el remate la aplica `GarantiaService`, no este schema (acá solo
+    # se valida forma, no si ya hay garantías en curso).
+    guarantee_required: bool = False
+    guarantee_amount: Decimal | None = Field(default=None, gt=0)
 
     @field_validator("currency")
     @classmethod
@@ -37,6 +45,14 @@ class RemateSettings(BaseModel):
         if len(normalized) != 3 or not normalized.isalpha():
             raise ValueError("currency debe ser un código de 3 letras (ISO 4217), ej. 'ARS'.")
         return normalized
+
+    @model_validator(mode="after")
+    def _validate_guarantee(self) -> "RemateSettings":
+        if self.guarantee_required and self.guarantee_amount is None:
+            raise ValueError(
+                "Si se exige garantía económica hace falta indicar guarantee_amount."
+            )
+        return self
 
 
 class _RemateDateValidationMixin:

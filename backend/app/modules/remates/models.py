@@ -84,6 +84,10 @@ DEFAULT_REMATE_SETTINGS: dict = {
     # Segundos de cuenta regresiva por lote al abrirlo -- `None` es "sin timer" (opt-in,
     # Épica 8, Módulo "cuenta regresiva y cierre automático"). Ver ADR-007/ADR-043.
     "lote_timer_seconds": None,
+    # Garantía económica (Épica 9, bloqueo de tarjeta vía Mercado Pago) -- `False`/`None`
+    # por defecto, opt-in explícito de la empresa. Ver `app/modules/garantias/`.
+    "guarantee_required": False,
+    "guarantee_amount": None,
 }
 
 

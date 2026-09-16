@@ -64,6 +64,11 @@ export interface PlaceBidButtonProps {
    * reemplaza el valor sugerido/las ofertas rápidas por un aviso ("Vas liderando este
    * lote") en vez de invitarlo a ofertar contra sí mismo (pedido explícito). */
   isLeadingBidder: boolean;
+  /** `true` si este remate no exige garantía económica, o si el comprador ya tiene una
+   * `Garantia` `active` para él (ver `GarantiaGate`, `SalaPage`) -- el backend
+   * (`AuctionEngine.place_bid`) es el gate real, esto es solo UX para no dejar llegar al
+   * botón "Ofertar" a quien de todos modos va a recibir un 403. */
+  hasRequiredGuarantee: boolean;
 }
 
 /**
@@ -85,6 +90,7 @@ export function PlaceBidButton({
   remateStatus,
   viewerRole,
   isLeadingBidder,
+  hasRequiredGuarantee,
 }: PlaceBidButtonProps) {
   const minimumAmount = computeMinimumAmount(lote, winningOffer);
   const [amount, setAmount] = useState(minimumAmount);
@@ -105,7 +111,7 @@ export function PlaceBidButton({
   const isLoteOpen = lote.status === 'open';
   const isRemateLive = remateStatus === 'live';
   const isComprador = viewerRole === 'comprador';
-  const canBid = isLoteOpen && isRemateLive && isComprador;
+  const canBid = isLoteOpen && isRemateLive && isComprador && hasRequiredGuarantee;
   // Visitante anónimo (ADR-049): distinto de "sos rematador/empresa/admin mirando tu
   // propia sala" -- acá el problema no es el rol, es no tener sesión, así que la acción
   // es "iniciar sesión", no un mensaje de permisos.
@@ -185,7 +191,9 @@ export function PlaceBidButton({
       ? 'Solo los compradores pueden ofertar en la sala.'
       : !isRemateLive
         ? 'El remate no está en vivo -- no se puede ofertar en este momento.'
-        : 'El lote no está abierto para ofertar.';
+        : !isLoteOpen
+          ? 'El lote no está abierto para ofertar.'
+          : 'Este remate requiere una garantía económica activa para poder ofertar.';
 
     return (
       <div className="flex flex-col gap-2">
