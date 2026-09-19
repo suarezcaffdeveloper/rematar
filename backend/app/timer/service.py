@@ -37,7 +37,8 @@ from app.modules.remates.lotes.events import (
 )
 from app.modules.remates.lotes.models import Lote, LoteStatus
 from app.modules.remates.lotes.repository import LoteRepository
-from app.modules.remates.models import Remate
+from app.modules.remates.lotes.timer_ops import freeze_lote_timer, unfreeze_lote_timer
+from app.modules.remates.models import Remate, RemateAuctionType
 from app.modules.remates.schemas import RemateSettings
 from app.modules.remates.service import RemateService
 from app.modules.users.models import User
@@ -60,9 +61,30 @@ class TimerService:
 
     @staticmethod
     def start_for_lote(lote: Lote, remate: Remate) -> LoteTimerStarted | None:
-        """Llamado por `LoteService.open`/`open_next` antes de su commit. `None` si el
-        remate no configuró `settings.lote_timer_seconds` -- ningún campo se toca, el
-        lote queda exactamente como antes de este módulo."""
+        """Llamado por `LoteService.open`/`open_next` (LIVE) antes de su commit, y por
+        `TimedAuctionLifecycleScheduler` (TIMED, ver `app/timer/timed_scheduler.py`) al
+        abrir todos los lotes pendientes en paralelo al llegar `starts_at`.
+
+        LIVE: `None` si el remate no configuró `settings.lote_timer_seconds` -- ningún
+        campo se toca, el lote queda exactamente como antes de este módulo.
+
+        TIMED: `settings.lote_timer_seconds` no aplica (rechazado ya en
+        `RemateCreate`/`RemateUpdate`, ver schemas.py) -- el deadline es directamente
+        `remate.ends_at`, el mismo para todos los lotes del remate en V1 (no hay
+        cierres escalonados por lote todavía). `remate.ends_at` no puede ser `None` acá:
+        ya lo exige `RemateCreate`/`RemateService.schedule` para cualquier remate TIMED
+        antes de que pueda llegar a `LIVE`."""
+        if remate.auction_type == RemateAuctionType.TIMED:
+            assert remate.ends_at is not None
+            ends_at = remate.ends_at
+            lote.timer_ends_at = ends_at
+            lote.timer_paused_remaining_seconds = None
+            lote.timer_auto_close_enabled = True
+            duration = max(0, int((ends_at - datetime.now(UTC)).total_seconds()))
+            return LoteTimerStarted(
+                remate_id=remate.id, lote_id=lote.id, ends_at=ends_at, duration_seconds=duration
+            )
+
         settings = RemateSettings.model_validate(remate.settings)
         if settings.lote_timer_seconds is None:
             return None
@@ -80,26 +102,40 @@ class TimerService:
         """Llamado por `AuctionEngine.place_bid` (rama ACCEPTED) antes de su commit.
         `None` si el lote no tiene timer corriendo, si el remate no habilitó
         anti-sniping, o si la oferta llegó fuera de la ventana de extensión -- en
-        cualquiera de esos casos, el lote no se toca."""
+        cualquiera de esos casos, el lote no se toca.
+
+        TIMED lee `timed_extension_window_seconds`/`timed_extension_duration_seconds`
+        (valores independientes) en vez del único `anti_sniping_extension_seconds` de
+        LIVE (ventana == duración) -- el resto de la lógica es idéntica. Extiende
+        únicamente `lote` (ya bloqueado por el caller); los demás lotes del mismo
+        remate, si los hay, quedan intactos -- cada uno es una fila independiente."""
         if lote.timer_ends_at is None:
             return None
         settings = RemateSettings.model_validate(remate.settings)
         if not settings.anti_sniping_enabled:
             return None
 
-        window_seconds = settings.anti_sniping_extension_seconds
+        if remate.auction_type == RemateAuctionType.TIMED:
+            assert settings.timed_extension_window_seconds is not None
+            assert settings.timed_extension_duration_seconds is not None
+            window_seconds = settings.timed_extension_window_seconds
+            duration_seconds = settings.timed_extension_duration_seconds
+        else:
+            window_seconds = settings.anti_sniping_extension_seconds
+            duration_seconds = settings.anti_sniping_extension_seconds
+
         now = datetime.now(UTC)
         remaining = (lote.timer_ends_at - now).total_seconds()
         if remaining > window_seconds:
             return None
 
-        new_ends_at = now + timedelta(seconds=window_seconds)
+        new_ends_at = now + timedelta(seconds=duration_seconds)
         lote.timer_ends_at = new_ends_at
         return LoteTimerExtended(
             remate_id=remate.id,
             lote_id=lote.id,
             ends_at=new_ends_at,
-            extended_by_seconds=window_seconds,
+            extended_by_seconds=duration_seconds,
         )
 
     # --- Acciones del rematador (flujo completo) ----------------------------------
@@ -108,6 +144,15 @@ class TimerService:
         self, remate_id: uuid.UUID, lote_id: uuid.UUID, owner: User
     ) -> tuple[Remate, Lote]:
         remate = await self._remate_service.get_owned_or_raise(remate_id, owner)
+        if remate.auction_type == RemateAuctionType.TIMED:
+            # El timer de un lote TIMED no se controla lote por lote -- se abre solo al
+            # llegar `starts_at` y se cierra solo al vencer (`TimedAuctionLifecycleScheduler`/
+            # `TimerExpiryScheduler`). Pausar/reanudar TODOS los lotes abiertos a la vez
+            # es una acción de remate completo, ver `RemateService.pause`/`resume`.
+            raise BusinessRuleError(
+                "En un remate Timed el timer de cada lote no se controla individualmente; "
+                "pausá o reanudá el remate completo."
+            )
         lote = await self._repository.get_by_id(lote_id)
         if lote is None or lote.remate_id != remate_id:
             raise NotFoundError("Lote no encontrado.")
@@ -136,12 +181,9 @@ class TimerService:
 
     async def pause(self, remate_id: uuid.UUID, lote_id: uuid.UUID, owner: User) -> Lote:
         remate, lote = await self._get_owned_lote_with_timer(remate_id, lote_id, owner)
-        if lote.timer_ends_at is None:
+        remaining = freeze_lote_timer(lote)
+        if remaining is None:
             raise BusinessRuleError("El timer ya está pausado.")
-
-        remaining = max(0, int((lote.timer_ends_at - datetime.now(UTC)).total_seconds()))
-        lote.timer_paused_remaining_seconds = remaining
-        lote.timer_ends_at = None
         self._record(
             lote, remate_id, owner, AuditAction.LOTE_TIMER_PAUSED, {"remaining_seconds": remaining}
         )
@@ -154,12 +196,9 @@ class TimerService:
 
     async def resume(self, remate_id: uuid.UUID, lote_id: uuid.UUID, owner: User) -> Lote:
         remate, lote = await self._get_owned_lote_with_timer(remate_id, lote_id, owner)
-        if lote.timer_paused_remaining_seconds is None:
+        ends_at = unfreeze_lote_timer(lote)
+        if ends_at is None:
             raise BusinessRuleError("El timer no está pausado.")
-
-        ends_at = datetime.now(UTC) + timedelta(seconds=lote.timer_paused_remaining_seconds)
-        lote.timer_ends_at = ends_at
-        lote.timer_paused_remaining_seconds = None
         self._record(lote, remate_id, owner, AuditAction.LOTE_TIMER_RESUMED, {})
         await self._repository.commit()
         await self._repository.refresh(lote)

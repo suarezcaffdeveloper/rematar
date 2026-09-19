@@ -77,11 +77,16 @@ async def test_rematador_can_create_remate_in_draft(client: AsyncClient) -> None
     remate = await _create_remate(client, token)
 
     assert remate["status"] == "draft"
+    assert remate["auction_type"] == "live"
     assert remate["settings"] == {
         "anti_sniping_enabled": False,
         "anti_sniping_extension_seconds": 60,
         "currency": "ARS",
         "lote_timer_seconds": None,
+        # TIMED únicamente (Timed Auctions) -- `None` para cualquier remate LIVE, que
+        # nunca los lee ni los escribe.
+        "timed_extension_window_seconds": None,
+        "timed_extension_duration_seconds": None,
         # Garantía económica -- opt-in por remate, `False`/`None` por defecto.
         "guarantee_required": False,
         "guarantee_amount": None,

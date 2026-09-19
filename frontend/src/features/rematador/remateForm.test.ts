@@ -61,32 +61,59 @@ describe('validateRemateForm', () => {
     expect(validateRemateForm(makeValues({ currency: '123' }))).toHaveProperty('currency');
   });
 
-  it('anti-sniping habilitado con segundos fuera de rango', () => {
+  it('live: ignora anti-sniping y cuenta regresiva aunque tengan valores inválidos', () => {
     const result = validateRemateForm(
-      makeValues({ anti_sniping_enabled: true, anti_sniping_extension_seconds: '5' }),
+      makeValues({
+        anti_sniping_enabled: true,
+        anti_sniping_extension_seconds: '5',
+        lote_timer_enabled: true,
+        lote_timer_seconds: '4',
+      }),
     );
-    expect(result).toHaveProperty('anti_sniping_extension_seconds');
+    expect(result).toEqual({});
   });
 
-  it('anti-sniping deshabilitado, ignora los segundos aunque sean inválidos', () => {
+  it('timed: valores válidos, sin errores', () => {
     const result = validateRemateForm(
-      makeValues({ anti_sniping_enabled: false, anti_sniping_extension_seconds: 'no-numero' }),
+      makeValues({
+        auction_type: 'timed',
+        starts_at: '2026-08-01T14:00',
+        ends_at: '2026-08-08T14:00',
+      }),
     );
-    expect(result.anti_sniping_extension_seconds).toBeUndefined();
+    expect(result).toEqual({});
   });
 
-  it('cuenta regresiva habilitada con segundos fuera de rango', () => {
-    expect(
-      validateRemateForm(makeValues({ lote_timer_enabled: true, lote_timer_seconds: '4' })),
-    ).toHaveProperty('lote_timer_seconds');
-    expect(
-      validateRemateForm(makeValues({ lote_timer_enabled: true, lote_timer_seconds: '3601' })),
-    ).toHaveProperty('lote_timer_seconds');
+  it('timed: exige starts_at y ends_at (a diferencia de live, donde son opcionales)', () => {
+    const result = validateRemateForm(makeValues({ auction_type: 'timed' }));
+    expect(result).toHaveProperty('starts_at');
+    expect(result).toHaveProperty('ends_at');
   });
 
-  it('cuenta regresiva deshabilitada, ignora los segundos aunque sean inválidos', () => {
+  it('timed: anti-sniping habilitado exige ventana y duración dentro de rango', () => {
     const result = validateRemateForm(
-      makeValues({ lote_timer_enabled: false, lote_timer_seconds: 'no-numero' }),
+      makeValues({
+        auction_type: 'timed',
+        starts_at: '2026-08-01T14:00',
+        ends_at: '2026-08-08T14:00',
+        anti_sniping_enabled: true,
+        timed_extension_window_seconds: '5',
+        timed_extension_duration_seconds: '5000',
+      }),
+    );
+    expect(result).toHaveProperty('timed_extension_window_seconds');
+    expect(result).toHaveProperty('timed_extension_duration_seconds');
+  });
+
+  it('timed: ignora lote_timer_seconds/anti_sniping_extension_seconds de live', () => {
+    const result = validateRemateForm(
+      makeValues({
+        auction_type: 'timed',
+        starts_at: '2026-08-01T14:00',
+        ends_at: '2026-08-08T14:00',
+        lote_timer_enabled: true,
+        lote_timer_seconds: '4', // inválido para LIVE, pero TIMED ni lo mira
+      }),
     );
     expect(result.lote_timer_seconds).toBeUndefined();
   });
@@ -112,25 +139,59 @@ describe('buildRemateFormPayload', () => {
     expect(payload.starts_at).toBe(new Date('2026-08-01T14:00').toISOString());
   });
 
-  it('anti-sniping deshabilitado, siempre manda 60 como default', () => {
+  it('live: nunca manda anti-sniping ni cuenta regresiva, aunque el form los tenga cargados', () => {
     const payload = buildRemateFormPayload(
-      makeValues({ anti_sniping_enabled: false, anti_sniping_extension_seconds: 'lo que sea' }),
+      makeValues({
+        anti_sniping_enabled: true,
+        anti_sniping_extension_seconds: '90',
+        lote_timer_enabled: true,
+        lote_timer_seconds: '45',
+      }),
     );
-    expect(payload.settings?.anti_sniping_extension_seconds).toBe(60);
-  });
-
-  it('cuenta regresiva habilitada, manda los segundos configurados', () => {
-    const payload = buildRemateFormPayload(
-      makeValues({ lote_timer_enabled: true, lote_timer_seconds: '45' }),
-    );
-    expect(payload.settings?.lote_timer_seconds).toBe(45);
-  });
-
-  it('cuenta regresiva deshabilitada, manda null sin importar el valor del input', () => {
-    const payload = buildRemateFormPayload(
-      makeValues({ lote_timer_enabled: false, lote_timer_seconds: 'lo que sea' }),
-    );
+    expect(payload.settings?.anti_sniping_enabled).toBe(false);
     expect(payload.settings?.lote_timer_seconds).toBeNull();
+    expect(payload.settings?.anti_sniping_extension_seconds).toBeUndefined();
+  });
+
+  it('timed: manda auction_type y nunca lote_timer_seconds', () => {
+    const payload = buildRemateFormPayload(
+      makeValues({
+        auction_type: 'timed',
+        starts_at: '2026-08-01T14:00',
+        ends_at: '2026-08-08T14:00',
+        lote_timer_enabled: true,
+        lote_timer_seconds: '999', // ni siquiera se lee para TIMED
+      }),
+    );
+    expect(payload.auction_type).toBe('timed');
+    expect(payload.settings?.lote_timer_seconds).toBeNull();
+  });
+
+  it('timed: anti-sniping habilitado manda ventana y duración por separado', () => {
+    const payload = buildRemateFormPayload(
+      makeValues({
+        auction_type: 'timed',
+        anti_sniping_enabled: true,
+        timed_extension_window_seconds: '30',
+        timed_extension_duration_seconds: '90',
+      }),
+    );
+    expect(payload.settings?.timed_extension_window_seconds).toBe(30);
+    expect(payload.settings?.timed_extension_duration_seconds).toBe(90);
+    expect(payload.settings?.anti_sniping_extension_seconds).toBeUndefined();
+  });
+
+  it('timed: anti-sniping deshabilitado manda null en ventana y duración', () => {
+    const payload = buildRemateFormPayload(
+      makeValues({
+        auction_type: 'timed',
+        anti_sniping_enabled: false,
+        timed_extension_window_seconds: '30',
+        timed_extension_duration_seconds: '90',
+      }),
+    );
+    expect(payload.settings?.timed_extension_window_seconds).toBeNull();
+    expect(payload.settings?.timed_extension_duration_seconds).toBeNull();
   });
 });
 
@@ -147,7 +208,14 @@ describe('remateToFormValues', () => {
       starts_at: '2026-08-01T14:00:00Z',
       ends_at: null,
       status: 'draft',
-      settings: { anti_sniping_enabled: true, anti_sniping_extension_seconds: 90, currency: 'USD', lote_timer_seconds: 45 },
+      settings: {
+        anti_sniping_enabled: true,
+        anti_sniping_extension_seconds: 90,
+        currency: 'USD',
+        lote_timer_seconds: 45,
+        timed_extension_window_seconds: null,
+        timed_extension_duration_seconds: null,
+      },
       cancellation_reason: null,
       cancelled_at: null,
       finished_at: null,
@@ -160,10 +228,10 @@ describe('remateToFormValues', () => {
     expect(values.title).toBe('Mi remate');
     expect(values.category).toBe('vehiculos');
     expect(values.currency).toBe('USD');
-    expect(values.anti_sniping_enabled).toBe(true);
-    expect(values.anti_sniping_extension_seconds).toBe('90');
-    expect(values.lote_timer_enabled).toBe(true);
-    expect(values.lote_timer_seconds).toBe('45');
+    // LIVE ya no tiene anti-sniping ni cuenta regresiva: se ignoran aunque el remate
+    // guardado los tenga (remates viejos).
+    expect(values.anti_sniping_enabled).toBe(false);
+    expect(values.lote_timer_enabled).toBe(false);
     expect(values.starts_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
   });
 
@@ -179,7 +247,14 @@ describe('remateToFormValues', () => {
       starts_at: null,
       ends_at: null,
       status: 'draft',
-      settings: { anti_sniping_enabled: false, anti_sniping_extension_seconds: 60, currency: 'ARS', lote_timer_seconds: null },
+      settings: {
+        anti_sniping_enabled: false,
+        anti_sniping_extension_seconds: 60,
+        currency: 'ARS',
+        lote_timer_seconds: null,
+        timed_extension_window_seconds: null,
+        timed_extension_duration_seconds: null,
+      },
       cancellation_reason: null,
       cancelled_at: null,
       finished_at: null,
@@ -191,5 +266,40 @@ describe('remateToFormValues', () => {
 
     expect(values.lote_timer_enabled).toBe(false);
     expect(values.lote_timer_seconds).toBe(DEFAULT_REMATE_FORM_VALUES.lote_timer_seconds);
+  });
+
+  it('mapea un remate Timed, incluyendo ventana y duración de anti-sniping', () => {
+    const remate: Remate = {
+      id: 'r1',
+      owner_id: 'o1',
+      title: 'Remate timed',
+      description: null,
+      category: 'hacienda',
+      cover_image_url: null,
+      location: null,
+      starts_at: '2026-08-01T14:00:00Z',
+      ends_at: '2026-08-08T14:00:00Z',
+      status: 'draft',
+      auction_type: 'timed',
+      settings: {
+        anti_sniping_enabled: true,
+        anti_sniping_extension_seconds: 60,
+        currency: 'ARS',
+        lote_timer_seconds: null,
+        timed_extension_window_seconds: 45,
+        timed_extension_duration_seconds: 150,
+      },
+      cancellation_reason: null,
+      cancelled_at: null,
+      finished_at: null,
+      created_at: '2026-07-01T00:00:00Z',
+      updated_at: '2026-07-01T00:00:00Z',
+    };
+
+    const values = remateToFormValues(remate);
+
+    expect(values.auction_type).toBe('timed');
+    expect(values.timed_extension_window_seconds).toBe('45');
+    expect(values.timed_extension_duration_seconds).toBe('150');
   });
 });

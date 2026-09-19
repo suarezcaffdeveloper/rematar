@@ -262,6 +262,7 @@ async def test_get_highest_oferta_and_top_lote_return_none_without_offers(
     repo = AnalyticsRepository(db_session)
     assert await repo.get_highest_oferta(uuid.UUID(remate["id"])) is None
     assert await repo.get_top_lote_by_offer_count(uuid.UUID(remate["id"])) is None
+    assert await repo.get_offer_counts_by_lote(uuid.UUID(remate["id"])) == []
 
 
 # --- Línea de tiempo de eventos (lotes con opened_at/closed_at) ---------------------------
@@ -318,6 +319,9 @@ async def test_every_aggregate_is_scoped_to_the_correct_remate(
     assert top_lote_a is not None
     assert str(top_lote_a.lote_id) == lote_a["id"]
     assert top_lote_a.offer_count == 2
+
+    counts_a = await repo.get_offer_counts_by_lote(uuid.UUID(remate_a["id"]))
+    assert {(str(row.lote_id), row.offer_count) for row in counts_a} == {(lote_a["id"], 2)}
 
     agg_a = await repo.get_lote_status_aggregates(uuid.UUID(remate_a["id"]))
     agg_b = await repo.get_lote_status_aggregates(uuid.UUID(remate_b["id"]))

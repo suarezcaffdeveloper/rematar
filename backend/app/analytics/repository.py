@@ -119,6 +119,18 @@ class AnalyticsRepository:
         )
         return (await self._db.execute(stmt)).first()
 
+    async def get_offer_counts_by_lote(self, remate_id: uuid.UUID) -> list[Row]:
+        """Cantidad de ofertas por lote (solo lotes con al menos una) -- alimenta el
+        tablero de la empresa en remates Timed, donde todos los lotes reciben ofertas en
+        paralelo y "el lote con más ofertas" (`get_top_lote_by_offer_count`) no alcanza."""
+        stmt = (
+            select(Oferta.lote_id, func.count(Oferta.id).label("offer_count"))
+            .join(Lote, Oferta.lote_id == Lote.id)
+            .where(Lote.remate_id == remate_id)
+            .group_by(Oferta.lote_id)
+        )
+        return list((await self._db.execute(stmt)).all())
+
     async def get_bids_timeline(self, remate_id: uuid.UUID, since: datetime) -> list[Row]:
         """Bucketed por minuto (`date_trunc`) -- el servicio zero-fillea los minutos sin
         ofertas (esta consulta solo devuelve los que tuvieron al menos una)."""

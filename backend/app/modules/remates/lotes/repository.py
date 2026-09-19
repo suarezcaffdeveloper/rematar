@@ -89,6 +89,39 @@ class LoteRepository:
         )
         return (await self._db.execute(stmt)).scalar_one() > 0
 
+    async def list_pending_by_remate(self, remate_id: uuid.UUID) -> list[Lote]:
+        """Todos los `PENDING` de un remate, sin bloquear -- usado por
+        `LoteService.open_all_pending_for_timed_start` (Timed Auctions), que ya corre
+        dentro de una transacción con el `Remate` padre bloqueado
+        (`RemateRepository.get_by_id_for_update`): mientras esa fila esté tomada, ningún
+        otro caller puede haber tocado la estructura de lotes de este remate (crear un
+        lote exige que el remate NO esté LIVE, ver `_assert_structure_editable`, así que
+        no puede aparecer un PENDING nuevo concurrentemente acá)."""
+        stmt = select(Lote).where(
+            Lote.remate_id == remate_id,
+            Lote.status == LoteStatus.PENDING,
+            Lote.deleted_at.is_(None),
+        )
+        return list((await self._db.execute(stmt)).scalars().all())
+
+    async def list_open_lotes_for_update(self, remate_id: uuid.UUID) -> list[Lote]:
+        """Todos los lotes `OPEN` de un remate, bloqueados con `SELECT ... FOR UPDATE`
+        -- usado por `RemateService.pause`/`resume` para un remate TIMED, que necesita
+        congelar/reanudar el timer de TODOS sus lotes abiertos a la vez de forma
+        atómica (ver plan de Timed Auctions). Mismo mecanismo de lock que
+        `get_by_id_for_update` (ADR-004), aplicado a varias filas en una sola
+        sentencia."""
+        stmt = (
+            select(Lote)
+            .where(
+                Lote.remate_id == remate_id,
+                Lote.status == LoteStatus.OPEN,
+                Lote.deleted_at.is_(None),
+            )
+            .with_for_update()
+        )
+        return list((await self._db.execute(stmt)).scalars().all())
+
     async def get_next_pending_lote(self, remate_id: uuid.UUID) -> Lote | None:
         """RF-13: el `PENDING` de menor `display_order`, para `LoteService.open_next`."""
         stmt = (

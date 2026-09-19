@@ -7,6 +7,7 @@ incorrecto para la paginación (`total` quedaría mal) como lento.
 """
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +16,7 @@ from app.modules.remates.models import (
     Remate,
     RemateAccessGrant,
     RemateAccessType,
+    RemateAuctionType,
     RemateCategory,
     RemateStatus,
 )
@@ -30,6 +32,45 @@ class RemateRepository:
         if remate is not None and remate.deleted_at is not None:
             return None
         return remate
+
+    async def get_by_id_for_update(self, remate_id: uuid.UUID) -> Remate | None:
+        """`SELECT ... FOR UPDATE` sobre la fila del remate -- mismo mecanismo que
+        `LoteRepository.get_by_id_for_update` (ADR-004), usado por
+        `TimedAuctionLifecycleScheduler` (`app/timer/timed_scheduler.py`) para
+        serializar el auto-inicio/auto-finalización de un remate TIMED contra una
+        acción concurrente del rematador (ej. cancelar el remate justo cuando el
+        scheduler está por auto-iniciarlo)."""
+        stmt = (
+            select(Remate)
+            .where(Remate.id == remate_id, Remate.deleted_at.is_(None))
+            .with_for_update()
+        )
+        return (await self._db.execute(stmt)).scalar_one_or_none()
+
+    async def list_timed_remates_due_to_start(self, now: datetime) -> list[uuid.UUID]:
+        """Candidatos a auto-inicio (`TimedAuctionLifecycleScheduler`): remates TIMED en
+        `SCHEDULED` cuyo `starts_at` ya venció. Solo IDs, sin `FOR UPDATE` -- el
+        scheduler vuelve a buscar y bloquea cada uno individualmente, mismo criterio que
+        `LoteRepository.list_expired_open_lote_ids`."""
+        stmt = select(Remate.id).where(
+            Remate.auction_type == RemateAuctionType.TIMED,
+            Remate.status == RemateStatus.SCHEDULED,
+            Remate.starts_at.is_not(None),
+            Remate.starts_at <= now,
+            Remate.deleted_at.is_(None),
+        )
+        return list((await self._db.execute(stmt)).scalars().all())
+
+    async def list_live_timed_remate_ids(self) -> list[uuid.UUID]:
+        """Candidatos a auto-finalización (`TimedAuctionLifecycleScheduler`): remates
+        TIMED en `LIVE` -- el scheduler revisa, para cada uno bajo lock, si ya no le
+        queda ningún lote abierto (`LoteRepository.has_open_lote`)."""
+        stmt = select(Remate.id).where(
+            Remate.auction_type == RemateAuctionType.TIMED,
+            Remate.status == RemateStatus.LIVE,
+            Remate.deleted_at.is_(None),
+        )
+        return list((await self._db.execute(stmt)).scalars().all())
 
     async def list_for_viewer(
         self,

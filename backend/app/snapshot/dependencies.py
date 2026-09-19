@@ -79,4 +79,5 @@ def get_snapshot_service(
         recent_offers_limit=settings.SNAPSHOT_RECENT_OFFERS_LIMIT,
         cache_ttl_seconds=settings.SNAPSHOT_CACHE_TTL_SECONDS,
         bot_identity_resolver=bot_identity_resolver,
+        lote_repository=LoteRepository(db),
     )

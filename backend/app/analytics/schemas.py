@@ -77,6 +77,11 @@ class TopLoteByOffers(BaseModel):
         )
 
 
+class LoteOfferCount(BaseModel):
+    lote_id: uuid.UUID
+    offer_count: int
+
+
 class BidsTimelineBucket(BaseModel):
     bucket_start: datetime
     count: int
@@ -112,6 +117,9 @@ class RawAnalyticsAggregates(BaseModel):
     ofertas_last_minute: int
     highest_oferta: HighestOferta | None
     top_lote_by_offers: TopLoteByOffers | None
+    # Default vacío: una entrada de caché Redis escrita antes de que existiera este
+    # campo sigue validando (ver `AnalyticsService._read_cache`).
+    offers_by_lote: list[LoteOfferCount] = Field(default_factory=list)
     bids_timeline: list[BidsTimelineBucket] = Field(default_factory=list)
     recent_events: list[RecentAnalyticsEvent] = Field(default_factory=list)
 
@@ -131,6 +139,7 @@ class RemateAnalyticsSnapshot(BaseModel):
     ofertas_per_minute: int
     highest_oferta: HighestOferta | None
     top_lote_by_offers: TopLoteByOffers | None
+    offers_by_lote: list[LoteOfferCount]
     bids_timeline: list[BidsTimelineBucket]
     recent_events: list[RecentAnalyticsEvent]
     generated_at: datetime

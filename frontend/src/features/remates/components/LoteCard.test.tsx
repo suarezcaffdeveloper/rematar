@@ -139,4 +139,56 @@ describe('LoteCard', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Cerrar' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
+
+  it('modo timed + lote open: muestra precio líder y cuenta regresiva abajo a la derecha', () => {
+    render(
+      <LoteCard
+        lote={makeLote({
+          status: 'open',
+          timer_ends_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+        })}
+        currency="ARS"
+        auctionType="timed"
+        leadingAmount="1750.00"
+      />,
+    );
+
+    expect(screen.getByText('Precio actual')).toBeInTheDocument();
+    expect(screen.getByText(/1\.750/)).toBeInTheDocument();
+    expect(screen.getByRole('timer')).toBeInTheDocument();
+  });
+
+  it('modo timed + lote open sin ofertas todavía: muestra la base, no inventa una puja líder', () => {
+    render(
+      <LoteCard
+        lote={makeLote({ status: 'open', base_price: '1000.00' })}
+        currency="ARS"
+        auctionType="timed"
+        leadingAmount={null}
+      />,
+    );
+
+    expect(screen.getByText('Base')).toBeInTheDocument();
+    expect(screen.queryByText('Precio actual')).not.toBeInTheDocument();
+  });
+
+  it('modo live (default) no muestra el bloque timed aunque el lote esté open', () => {
+    render(<LoteCard lote={makeLote({ status: 'open' })} currency="ARS" leadingAmount="1750.00" />);
+
+    expect(screen.queryByText('Precio actual')).not.toBeInTheDocument();
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+  });
+
+  it('modo timed pero lote no abierto (pending/closed): sin bloque timed', () => {
+    render(
+      <LoteCard
+        lote={makeLote({ status: 'closed_sold', final_price: '2000.00' })}
+        currency="ARS"
+        auctionType="timed"
+        leadingAmount="2000.00"
+      />,
+    );
+
+    expect(screen.queryByText('Precio actual')).not.toBeInTheDocument();
+  });
 });

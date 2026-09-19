@@ -131,6 +131,22 @@ export async function fetchLoteByIdRequest(remateId: string, loteId: string): Pr
   return data;
 }
 
+/** `GET /remates/{remateId}/lotes/{loteId}/ofertas/leading` -- monto de la oferta
+ * vigente de un lote puntual, `null` si todavía no tiene ninguna. Visible también para
+ * un visitante anónimo (ADR-049). Lo usa el detalle de un remate TIMED
+ * (`RemateDetailPage`) para mostrar el "precio actual" de cada lote abierto sin entrar
+ * a la sala; la sala Timed (`features/timedSala/api.ts`) re-exporta esta misma función
+ * para no duplicar la llamada. */
+export async function fetchLeadingOfferAmountRequest(
+  remateId: string,
+  loteId: string,
+): Promise<string | null> {
+  const { data } = await apiClient.get<{ amount: string | null }>(
+    `/remates/${remateId}/lotes/${loteId}/ofertas/leading`,
+  );
+  return data.amount;
+}
+
 /**
  * Cuántos usuarios están conectados a la sala de un remate en este momento -- mismo
  * `GET /remates/{id}/snapshot` que usa `features/sala` (`useRemateSnapshot`), pero

@@ -17,9 +17,11 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import NotFoundError
 from app.modules.bots.lookup import BotIdentityResolver
 from app.modules.ofertas.repository import OfertaRepository
 from app.modules.remates.lotes.models import Lote, LoteStatus
+from app.modules.remates.lotes.repository import LoteRepository
 from app.modules.remates.lotes.schemas import LoteRead
 from app.modules.remates.models import Remate
 from app.modules.remates.schemas import RemateRead
@@ -46,6 +48,7 @@ class SnapshotService:
         recent_offers_limit: int = DEFAULT_RECENT_OFFERS_LIMIT,
         cache_ttl_seconds: float = DEFAULT_CACHE_TTL_SECONDS,
         bot_identity_resolver: BotIdentityResolver | None = None,
+        lote_repository: LoteRepository | None = None,
     ) -> None:
         self._db = db
         self._remate_service = remate_service
@@ -57,6 +60,10 @@ class SnapshotService:
         # ningún caller existente que todavía no lo pase explícitamente -- mismo
         # criterio permisivo que `cache: RedisCache | None`.
         self._bot_identity_resolver = bot_identity_resolver or BotIdentityResolver(db)
+        # Igual criterio para `lote_repository`: solo lo usa `get_lote_recent_offers`
+        # (Timed Auctions, historial de ofertas para compradores por lote puntual, en
+        # vez del único "lote OPEN" que asume `build`/`_get_open_lote`).
+        self._lote_repository = lote_repository or LoteRepository(db)
 
     async def assert_visible(self, remate_id: uuid.UUID, viewer: User | None) -> None:
         """Levanta `NotFoundError` (mismo criterio anti-enumeración que `build`, no
@@ -74,6 +81,48 @@ class SnapshotService:
         `ModerationService`, de los pocos paquetes "de negocio" que el Gateway sí tiene
         permitido conocer)."""
         await self._remate_service.get_visible_or_raise(remate_id, viewer)
+
+    async def get_lote_recent_offers(
+        self,
+        remate_id: uuid.UUID,
+        lote_id: uuid.UUID,
+        viewer: User | None,
+        *,
+        limit: int | None = None,
+    ) -> list[OfertaSnapshotEntry]:
+        """Últimas ofertas de UN lote puntual, enmascaradas para `viewer` -- versión de
+        `_load_raw_state`/`_mask_oferta` para Timed Auctions (Épica de Timed Auctions):
+        a diferencia de LIVE, acá pueden convivir varios lotes `open` a la vez (no existe
+        "el" lote activo del remate), así que el caller elige explícitamente `lote_id` en
+        vez de depender de `_get_open_lote`. Nunca pasa por la cache de `RawRemateState`
+        (esa cache es por `remate_id`, pensada para un único recorte por remate; acá el
+        recorte es por lote) -- consulta directa, igual de barata (mismo índice que ya
+        usa `_load_raw_state`).
+
+        Mismo criterio de visibilidad/enmascarado que `build`: `NotFoundError` si el
+        remate no es visible o el lote no le pertenece (anti-enumeración), `buyer_id`
+        anulado salvo para el dueño del remate o un admin."""
+        remate = await self._remate_service.get_visible_or_raise(remate_id, viewer)
+        lote = await self._lote_repository.get_by_id(lote_id)
+        if lote is None or lote.remate_id != remate_id:
+            raise NotFoundError("Lote no encontrado.")
+
+        is_privileged = self._is_privileged(remate, viewer)
+        offers, _total = await self._oferta_repository.list_by_lote(
+            lote_id=lote_id, offset=0, limit=limit or self._recent_offers_limit
+        )
+        entries = [OfertaSnapshotEntry.model_validate(o) for o in offers]
+
+        buyer_ids = {entry.buyer_id for entry in entries if entry.buyer_id is not None}
+        bot_user_ids = await self._bot_identity_resolver.resolve(list(buyer_ids))
+        entries = [
+            entry.model_copy(update={"is_bot": True}) if entry.buyer_id in bot_user_ids else entry
+            for entry in entries
+        ]
+
+        if is_privileged:
+            return entries
+        return [entry.model_copy(update={"buyer_id": None}) for entry in entries]
 
     async def build(
         self,

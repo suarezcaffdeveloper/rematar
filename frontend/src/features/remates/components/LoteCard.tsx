@@ -6,8 +6,9 @@ import clsx from 'clsx';
 import { Badge } from '../../../shared/components/Badge';
 import { useFocusTrap } from '../../../shared/hooks/useFocusTrap';
 import { formatCurrency } from '../../../shared/lib/format';
+import { LoteCountdown } from '../../sala/components/LoteCountdown';
 import { LOTE_STATUS_BADGE_VARIANTS, LOTE_STATUS_LABELS } from '../labels';
-import type { Lote } from '../types';
+import type { Lote, RemateAuctionType } from '../types';
 import { CoverPlaceholder } from './CoverPlaceholder';
 import { BoxIcon } from './icons';
 import { LoteCardCarousel } from './LoteCardCarousel';
@@ -15,6 +16,14 @@ import { LoteCardCarousel } from './LoteCardCarousel';
 export interface LoteCardProps {
   lote: Lote;
   currency: string;
+  /** Modalidad del remate padre -- default `'live'` (comportamiento de siempre, la card
+   * no cambia). En `'timed'`, un lote `open` muestra abajo a la derecha el precio que va
+   * liderando y la cuenta regresiva que le queda (`LoteCountdown`, tictac en vivo). */
+  auctionType?: RemateAuctionType;
+  /** Monto de la oferta vigente del lote (`GET .../ofertas/leading`, ya resuelto por
+   * `RemateDetailPage` para todos los lotes abiertos de una vez) -- `null` si todavía no
+   * tiene ofertas, `undefined` mientras se está cargando. Solo se usa en modo TIMED. */
+  leadingAmount?: string | null;
 }
 
 const OVERLAY_TRANSITION = { duration: 0.25, ease: [0.21, 0.47, 0.32, 0.98] as const };
@@ -118,13 +127,25 @@ function LoteDetailOverlay({
  * dónde lleva el click. Muestra precio inicial/incremento/reserva -- `reserve_price` ya
  * viene enmascarado a `null` por el backend para cualquier viewer que no sea el dueño del
  * remate (`LoteService._mask_reserve_price`), así que mostrarlo acá cuando no es nulo es
- * seguro. */
-export function LoteCard({ lote, currency }: LoteCardProps) {
+ * seguro.
+ *
+ * En un remate TIMED (`auctionType === 'timed'`), un lote `open` suma abajo a la derecha
+ * un bloque con el precio que va liderando (`leadingAmount`, o la base si todavía no hay
+ * ofertas -- mismo criterio que `QueueCard` de la Sala Timed) y la cuenta regresiva que
+ * le queda (`LoteCountdown`, tictac en vivo con `lote.timer_ends_at` como fuente de
+ * verdad). Pedido explícito: que se vea de un vistazo cómo viene cada lote sin entrar a
+ * la sala. */
+export function LoteCard({ lote, currency, auctionType = 'live', leadingAmount }: LoteCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const prefersReducedMotion = useReducedMotion();
   const sortedImages = [...lote.images].sort((a, b) => a.order - b.order);
   const mainImage = sortedImages[0];
   const canExpand = sortedImages.length > 0;
+  const showTimedLiveInfo = auctionType === 'timed' && lote.status === 'open';
+  const timedPrice =
+    leadingAmount != null
+      ? { label: 'Precio actual', value: formatCurrency(leadingAmount, currency) }
+      : { label: 'Base', value: formatCurrency(lote.base_price, currency) };
 
   function open() {
     if (canExpand) setIsExpanded(true);
@@ -193,6 +214,29 @@ export function LoteCard({ lote, currency }: LoteCardProps) {
             <div className="mt-1">
               <PriceRow lote={lote} currency={currency} />
             </div>
+
+            {showTimedLiveInfo && (
+              <div className="mt-2 flex items-end justify-between gap-3 border-t border-line pt-2.5">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+                    {timedPrice.label}
+                  </p>
+                  <p
+                    className={clsx(
+                      'truncate font-mono text-base font-bold tabular-nums',
+                      leadingAmount != null ? 'text-success-600' : 'text-ink',
+                    )}
+                  >
+                    {timedPrice.value}
+                  </p>
+                </div>
+                <LoteCountdown
+                  variant="inline"
+                  endsAt={lote.timer_ends_at}
+                  pausedRemainingSeconds={lote.timer_paused_remaining_seconds}
+                />
+              </div>
+            )}
           </div>
         </div>
       </motion.article>

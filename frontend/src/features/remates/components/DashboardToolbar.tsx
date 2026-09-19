@@ -1,6 +1,6 @@
-import { CATEGORY_LABELS, CATEGORY_OPTIONS, STATUS_LABELS, VISIBLE_STATUS_OPTIONS } from '../labels';
+import { AUCTION_TYPE_LABELS, AUCTION_TYPE_OPTIONS, CATEGORY_LABELS, CATEGORY_OPTIONS, STATUS_LABELS, VISIBLE_STATUS_OPTIONS } from '../labels';
 import type { RemateFilters, RemateSortOption } from '../filtering';
-import type { RemateCategory, RemateStatus } from '../types';
+import type { RemateAuctionType, RemateCategory, RemateStatus } from '../types';
 import { SearchIcon } from './icons';
 
 export interface DashboardToolbarProps {
@@ -8,8 +8,17 @@ export interface DashboardToolbarProps {
   onChange: (filters: RemateFilters) => void;
   /** Opciones del filtro de estado -- default `VISIBLE_STATUS_OPTIONS` (sin `draft`,
    * lo que ya usaba `CompradorDashboardPage`). El Dashboard del Rematador (Épica 5,
-   * Módulo 5.1) pasa `ALL_STATUS_OPTIONS` para poder filtrar también sus borradores. */
+   * Módulo 5.1) pasa `ALL_STATUS_OPTIONS` para poder filtrar también sus borradores.
+   * Solo tiene efecto cuando `showAuctionTypeFilter` es `false` -- si el filtro de tipo
+   * está activo, el de estado no se renderiza. */
   statusOptions?: RemateStatus[];
+  /** `true`: reemplaza el filtro de estado por el filtro de TIPO de remate
+   * (`auction_type`: live/timed) en la primera columna, y mueve el filtro de categoría
+   * a la columna del medio -- pedido explícito para el Dashboard del comprador una vez
+   * que coexisten remates en vivo tradicionales y Timed Auctions ("Todo tipo de remate /
+   * Remate en vivo / Remate timed auction"). `false` (default): layout original
+   * [Categoría | Estado | Orden] -- lo que sigue usando el Dashboard del Rematador. */
+  showAuctionTypeFilter?: boolean;
   /** `'boxed'` (default, sin cambios): caja blanca con borde/sombra -- lo que ya usaba
    * el Dashboard del Rematador, que no pasa esta prop. `'open'`: composición abierta con
    * tokens `ink`/`line` (rediseño visual del Dashboard del Comprador -- ver prototipo
@@ -63,15 +72,87 @@ const SELECT_CLASSES: Record<'boxed' | 'open', string> = {
  * Layout de dos filas (refinamiento visual, pedido explícito): buscador solo, a ancho
  * completo, arriba -- es el control que más se usa y el que antes competía por espacio
  * con los tres `<select>` en una sola fila `lg:flex-row`, quedando angosto en pantallas
- * medianas. Categoría/Estado/Orden abajo, en ese orden, en grilla de 3 columnas desde
- * `sm:` (una debajo de la otra en mobile).
+ * medianas. Filtros abajo, en grilla de 3 columnas desde `sm:` (una debajo de la otra en
+ * mobile). El orden de las columnas depende de `showAuctionTypeFilter`: con el filtro de
+ * tipo activo (comprador) es [Tipo | Categoría | Orden]; sin él (rematador, default) es
+ * [Categoría | Estado | Orden].
  */
 export function DashboardToolbar({
   filters,
   onChange,
   statusOptions = VISIBLE_STATUS_OPTIONS,
+  showAuctionTypeFilter = false,
   variant = 'boxed',
 }: DashboardToolbarProps) {
+  const categorySelect = (
+    <select
+      aria-label="Filtrar por categoría"
+      value={filters.category}
+      onChange={(event) =>
+        onChange({ ...filters, category: event.target.value as RemateCategory | 'all' })
+      }
+      className={SELECT_CLASSES[variant]}
+    >
+      <option value="all">Todas las categorías</option>
+      {CATEGORY_OPTIONS.map((category) => (
+        <option key={category} value={category}>
+          {CATEGORY_LABELS[category]}
+        </option>
+      ))}
+    </select>
+  );
+
+  const statusSelect = (
+    <select
+      aria-label="Filtrar por estado"
+      value={filters.status}
+      onChange={(event) =>
+        onChange({ ...filters, status: event.target.value as RemateStatus | 'all' })
+      }
+      className={SELECT_CLASSES[variant]}
+    >
+      <option value="all">Todos los estados</option>
+      {statusOptions.map((status) => (
+        <option key={status} value={status}>
+          {STATUS_LABELS[status]}
+        </option>
+      ))}
+    </select>
+  );
+
+  const auctionTypeSelect = (
+    <select
+      aria-label="Filtrar por tipo de remate"
+      value={filters.auctionType}
+      onChange={(event) =>
+        onChange({ ...filters, auctionType: event.target.value as RemateAuctionType | 'all' })
+      }
+      className={SELECT_CLASSES[variant]}
+    >
+      <option value="all">Todo tipo de remate</option>
+      {AUCTION_TYPE_OPTIONS.map((auctionType) => (
+        <option key={auctionType} value={auctionType}>
+          {AUCTION_TYPE_LABELS[auctionType]}
+        </option>
+      ))}
+    </select>
+  );
+
+  const sortSelect = (
+    <select
+      aria-label="Ordenar remates"
+      value={filters.sort}
+      onChange={(event) => onChange({ ...filters, sort: event.target.value as RemateSortOption })}
+      className={SELECT_CLASSES[variant]}
+    >
+      {(Object.keys(SORT_LABELS) as RemateSortOption[]).map((sort) => (
+        <option key={sort} value={sort}>
+          {SORT_LABELS[sort]}
+        </option>
+      ))}
+    </select>
+  );
+
   return (
     <div className={WRAPPER_CLASSES[variant]}>
       <div className={SEARCH_WRAPPER_CLASSES[variant]}>
@@ -87,50 +168,19 @@ export function DashboardToolbar({
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <select
-          aria-label="Filtrar por categoría"
-          value={filters.category}
-          onChange={(event) =>
-            onChange({ ...filters, category: event.target.value as RemateCategory | 'all' })
-          }
-          className={SELECT_CLASSES[variant]}
-        >
-          <option value="all">Todas las categorías</option>
-          {CATEGORY_OPTIONS.map((category) => (
-            <option key={category} value={category}>
-              {CATEGORY_LABELS[category]}
-            </option>
-          ))}
-        </select>
-
-        <select
-          aria-label="Filtrar por estado"
-          value={filters.status}
-          onChange={(event) =>
-            onChange({ ...filters, status: event.target.value as RemateStatus | 'all' })
-          }
-          className={SELECT_CLASSES[variant]}
-        >
-          <option value="all">Todos los estados</option>
-          {statusOptions.map((status) => (
-            <option key={status} value={status}>
-              {STATUS_LABELS[status]}
-            </option>
-          ))}
-        </select>
-
-        <select
-          aria-label="Ordenar remates"
-          value={filters.sort}
-          onChange={(event) => onChange({ ...filters, sort: event.target.value as RemateSortOption })}
-          className={SELECT_CLASSES[variant]}
-        >
-          {(Object.keys(SORT_LABELS) as RemateSortOption[]).map((sort) => (
-            <option key={sort} value={sort}>
-              {SORT_LABELS[sort]}
-            </option>
-          ))}
-        </select>
+        {showAuctionTypeFilter ? (
+          <>
+            {auctionTypeSelect}
+            {categorySelect}
+            {sortSelect}
+          </>
+        ) : (
+          <>
+            {categorySelect}
+            {statusSelect}
+            {sortSelect}
+          </>
+        )}
       </div>
     </div>
   );

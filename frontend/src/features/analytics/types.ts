@@ -35,6 +35,11 @@ export interface TopLoteByOffers {
   offer_count: number;
 }
 
+export interface LoteOfferCount {
+  lote_id: string;
+  offer_count: number;
+}
+
 export interface BidsTimelineBucket {
   bucket_start: string;
   count: number;
@@ -69,6 +74,8 @@ export interface RemateAnalyticsSnapshot {
   ofertas_per_minute: number;
   highest_oferta: HighestOferta | null;
   top_lote_by_offers: TopLoteByOffers | null;
+  /** Ofertas por lote (solo lotes con al menos una) -- tablero Timed de la empresa. */
+  offers_by_lote: LoteOfferCount[];
   bids_timeline: BidsTimelineBucket[];
   recent_events: RecentAnalyticsEvent[];
   generated_at: string;

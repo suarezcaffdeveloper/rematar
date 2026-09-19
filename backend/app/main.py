@@ -41,6 +41,14 @@ consumidores de arriba, mismo criterio de `session_factory` -- a diferencia de e
 no es un `EventConsumer` (no reacciona a un evento ya publicado): es una tarea que
 sondea periódicamente qué lotes tienen el timer vencido y los cierra automáticamente.
 
+Un **`TimedAuctionLifecycleScheduler`** (Timed Auctions, ver `app/timer/timed_scheduler.py`)
+arranca junto al `TimerExpiryScheduler` de arriba, mismo criterio de `session_factory` --
+sibling suyo, no una modificación: auto-inicia y auto-finaliza remates de modalidad
+TIMED (abrir todos los lotes pendientes al llegar `starts_at`, finalizar el remate
+cuando ya no queda ninguno abierto), mientras que el cierre de cada lote individual al
+vencer su timer lo sigue resolviendo, sin cambios, el `TimerExpiryScheduler` ya
+existente (es agnóstico a la modalidad).
+
 Un **tercer** `EventConsumer` (Épica 7, Módulo 7.5, ver docs/41-gestion-post-remate.md y
 ADR-044) arranca junto a los anteriores, con `PostAuctionEventDispatcher`: reacciona a
 `lote.winner_determined` para crear automáticamente el caso post-remate de un lote recién
@@ -121,6 +129,7 @@ from app.redis.client import build_redis_client
 from app.redis.pubsub import RedisPubSub
 from app.redis.rate_limit import RedisRateLimiter
 from app.timer.scheduler import TimerExpiryScheduler
+from app.timer.timed_scheduler import TimedAuctionLifecycleScheduler
 from app.websocket.close_codes import SERVER_SHUTTING_DOWN
 from app.websocket.manager import ConnectionManager
 from app.websocket.rooms import RoomManager
@@ -181,6 +190,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings,
     )
     app.state.timer_expiry_scheduler.start()
+
+    # Timed Auctions -- sibling de TimerExpiryScheduler (arriba), mismo criterio de
+    # session_factory: auto-inicia y auto-finaliza remates TIMED (ver
+    # app/timer/timed_scheduler.py), cierre de lotes vencidos sigue siendo
+    # TimerExpiryScheduler sin cambios, ya agnóstico a la modalidad.
+    timed_scheduler_session_factory = (
+        getattr(app.state, "db_session_factory", None) or AsyncSessionLocal
+    )
+    app.state.timed_auction_lifecycle_scheduler = TimedAuctionLifecycleScheduler(
+        timed_scheduler_session_factory,
+        RedisEventBus(RedisPubSub(app.state.redis)),
+        settings,
+    )
+    app.state.timed_auction_lifecycle_scheduler.start()
 
     postauction_session_factory = (
         getattr(app.state, "db_session_factory", None) or AsyncSessionLocal
@@ -287,6 +310,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await app.state.session_invalidation_consumer.stop()
         await app.state.moderation_event_consumer.stop()
         await app.state.postauction_event_consumer.stop()
+        await app.state.timed_auction_lifecycle_scheduler.stop()
         await app.state.timer_expiry_scheduler.stop()
         await app.state.chat_system_event_consumer.stop()
         await app.state.event_consumer.stop()

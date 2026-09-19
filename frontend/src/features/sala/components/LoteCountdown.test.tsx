@@ -19,33 +19,39 @@ describe('LoteCountdown', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('corriendo, muestra el tiempo restante en formato mm:ss', () => {
-    const endsAt = new Date(NOW.getTime() + 90_000).toISOString(); // 1:30
+  it('corriendo, muestra minutos grandes y segundos chicos por separado', () => {
+    const endsAt = new Date(NOW.getTime() + 90_000).toISOString(); // 1m30s
     render(<LoteCountdown endsAt={endsAt} pausedRemainingSeconds={null} />);
-    expect(screen.getByRole('timer')).toHaveTextContent('1:30');
+    expect(screen.getByRole('timer')).toHaveTextContent('1m30s');
     expect(screen.getByText('Tiempo restante')).toBeInTheDocument();
+  });
+
+  it('con días y horas, los antepone al minuto (todo en el número grande)', () => {
+    const endsAt = new Date(NOW.getTime() + (3 * 86_400 + 4 * 3_600 + 12 * 60 + 45) * 1000).toISOString();
+    render(<LoteCountdown endsAt={endsAt} pausedRemainingSeconds={null} />);
+    expect(screen.getByRole('timer')).toHaveTextContent('3d 04h 12m45s');
   });
 
   it('tictac local: al avanzar el reloj, el conteo baja sin nueva prop', () => {
     const endsAt = new Date(NOW.getTime() + 5_000).toISOString();
     render(<LoteCountdown endsAt={endsAt} pausedRemainingSeconds={null} />);
-    expect(screen.getByRole('timer')).toHaveTextContent('0:05');
+    expect(screen.getByRole('timer')).toHaveTextContent('0m05s');
 
     act(() => {
       vi.advanceTimersByTime(3000);
     });
-    expect(screen.getByRole('timer')).toHaveTextContent('0:02');
+    expect(screen.getByRole('timer')).toHaveTextContent('0m02s');
   });
 
   it('pausado, muestra el valor congelado y la etiqueta "Timer pausado", sin tictac', () => {
     render(<LoteCountdown endsAt={null} pausedRemainingSeconds={42} />);
     expect(screen.getByText('Timer pausado')).toBeInTheDocument();
-    expect(screen.getByRole('timer')).toHaveTextContent('0:42');
+    expect(screen.getByRole('timer')).toHaveTextContent('0m42s');
 
     act(() => {
       vi.advanceTimersByTime(5000);
     });
-    expect(screen.getByRole('timer')).toHaveTextContent('0:42');
+    expect(screen.getByRole('timer')).toHaveTextContent('0m42s');
   });
 
   it('bajo el umbral urgente (<=10s), aplica el estilo de urgencia', () => {
@@ -60,10 +66,10 @@ describe('LoteCountdown', () => {
     expect(screen.getByRole('timer')).not.toHaveClass('text-danger-600');
   });
 
-  it('nunca baja de 0:00 aunque el deadline ya haya pasado', () => {
+  it('nunca baja de 0m00s aunque el deadline ya haya pasado', () => {
     const endsAt = new Date(NOW.getTime() - 5_000).toISOString();
     render(<LoteCountdown endsAt={endsAt} pausedRemainingSeconds={null} />);
-    expect(screen.getByRole('timer')).toHaveTextContent('0:00');
+    expect(screen.getByRole('timer')).toHaveTextContent('0m00s');
   });
 
   it('el número grande no lleva aria-live (evita que un lector de pantalla anuncie el tictac cada segundo)', () => {
@@ -95,5 +101,63 @@ describe('LoteCountdown', () => {
       vi.advanceTimersByTime(2000);
     });
     expect(screen.getByText('Tiempo agotado.')).toBeInTheDocument();
+  });
+
+  describe('variant="boxed"', () => {
+    it('muestra cuatro cajas (días/horas/min/seg) con cero a la izquierda', () => {
+      const endsAt = new Date(NOW.getTime() + (3 * 86_400 + 4 * 3_600 + 12 * 60 + 5) * 1000).toISOString();
+      render(<LoteCountdown endsAt={endsAt} pausedRemainingSeconds={null} variant="boxed" />);
+
+      const timer = screen.getByRole('timer');
+      expect(timer).toHaveTextContent('03');
+      expect(timer).toHaveTextContent('04');
+      expect(timer).toHaveTextContent('12');
+      expect(timer).toHaveTextContent('05');
+      expect(screen.getByText('Días')).toBeInTheDocument();
+      expect(screen.getByText('Horas')).toBeInTheDocument();
+      expect(screen.getByText('Min')).toBeInTheDocument();
+      expect(screen.getByText('Seg')).toBeInTheDocument();
+    });
+
+    it('bajo el umbral urgente, aplica el estilo de urgencia', () => {
+      const endsAt = new Date(NOW.getTime() + 8_000).toISOString();
+      render(<LoteCountdown endsAt={endsAt} pausedRemainingSeconds={null} variant="boxed" />);
+      expect(screen.getByRole('timer')).toHaveClass('animate-pulse');
+    });
+
+    it('pausado, muestra el valor congelado en las cajas', () => {
+      render(<LoteCountdown endsAt={null} pausedRemainingSeconds={42} variant="boxed" />);
+      expect(screen.getByText('Timer pausado')).toBeInTheDocument();
+      expect(screen.getByRole('timer')).toHaveTextContent('42');
+    });
+  });
+
+  describe('variant="inline"', () => {
+    it('muestra el tiempo en una sola línea, sin label de tres renglones ni caja', () => {
+      const endsAt = new Date(NOW.getTime() + (2 * 3_600 + 5 * 60 + 9) * 1000).toISOString();
+      render(<LoteCountdown endsAt={endsAt} pausedRemainingSeconds={null} variant="inline" />);
+
+      const timer = screen.getByRole('timer');
+      expect(timer).toHaveTextContent('2h 05m');
+      expect(timer).toHaveTextContent('09s');
+      expect(screen.queryByText('Tiempo restante')).not.toBeInTheDocument();
+    });
+
+    it('bajo el umbral urgente, cambia a estilo de urgencia', () => {
+      const endsAt = new Date(NOW.getTime() + 8_000).toISOString();
+      render(<LoteCountdown endsAt={endsAt} pausedRemainingSeconds={null} variant="inline" />);
+      expect(screen.getByRole('timer').parentElement).toHaveClass('animate-pulse');
+    });
+
+    it('pausado, indica "Pausado" y muestra el valor congelado', () => {
+      render(<LoteCountdown endsAt={null} pausedRemainingSeconds={42} variant="inline" />);
+      expect(screen.getByText('Pausado')).toBeInTheDocument();
+      expect(screen.getByRole('timer')).toHaveTextContent('42s');
+    });
+
+    it('sin timer configurado, no renderiza nada', () => {
+      const { container } = render(<LoteCountdown endsAt={null} pausedRemainingSeconds={null} variant="inline" />);
+      expect(container).toBeEmptyDOMElement();
+    });
   });
 });

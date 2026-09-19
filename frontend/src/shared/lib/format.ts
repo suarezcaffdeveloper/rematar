@@ -115,3 +115,14 @@ export function formatFileSize(bytes: number): string {
   if (kb < 1024) return `${Math.round(kb)} KB`;
   return `${(kb / 1024).toFixed(1)} MB`;
 }
+
+/** "ahora"/"hace 5m"/"hace 2h"/"hace 3d" a partir de un ISO 8601 -- para el historial
+ * de ofertas del panel Timed, donde un timestamp absoluto ("14:32") sería ruido
+ * repetitivo cuando todo pasó en los últimos minutos. */
+export function formatRelativeTime(iso: string): string {
+  const diffSeconds = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (diffSeconds < 60) return 'ahora';
+  if (diffSeconds < 3600) return `hace ${Math.floor(diffSeconds / 60)}m`;
+  if (diffSeconds < 86400) return `hace ${Math.floor(diffSeconds / 3600)}h`;
+  return `hace ${Math.floor(diffSeconds / 86400)}d`;
+}

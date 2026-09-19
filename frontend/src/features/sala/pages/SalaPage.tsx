@@ -12,6 +12,7 @@ import { GarantiaGate } from '../../garantias/components/GarantiaGate';
 import type { GarantiaStatus } from '../../garantias/types';
 import { NotificationBell } from '../../notifications/components/NotificationBell';
 import { GavelIcon } from '../../remates/components/icons';
+import { TimedSalaPage } from '../../timedSala/pages/TimedSalaPage';
 import { ActiveLotePanel } from '../components/ActiveLotePanel';
 import { LoteWonOverlay, type WonLoteInfo } from '../components/LoteWonOverlay';
 import { SalaBidPanel } from '../components/SalaBidPanel';
@@ -246,6 +247,18 @@ export function SalaPage() {
         </Alert>
       </div>
     );
+  }
+
+  // Timed Auctions: modalidad distinta, experiencia distinta (spec, sección 28 -- "no
+  // reutilizar visualmente la sala de LIVE"). `TimedSalaPage` arma su propio estado
+  // (`useTimedSalaState`) en vez de `useLiveRemateState`/`RemateStateSnapshot`, que
+  // están armados alrededor de un único "lote activo" y no sirven para varios lotes
+  // abiertos en paralelo -- ver `features/timedSala/hooks.ts`. El pedido inicial del
+  // snapshot de acá arriba solo se usó para conocer la modalidad; `TimedSalaPage` pide
+  // lo que necesita por su cuenta, mismo criterio "cada pantalla pide lo suyo" que ya
+  // aplica el resto del proyecto.
+  if (snapshot.remate.auction_type === 'timed') {
+    return <TimedSalaPage />;
   }
 
   const { remate, active_lote: activeLote, winning_offer: winningOffer, recent_offers: recentOffers } = snapshot;

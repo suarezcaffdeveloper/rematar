@@ -11,7 +11,9 @@ import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
 import { AnalyticsPanel } from '../../analytics/components/AnalyticsPanel';
 import { useAuth } from '../../auth/hooks';
+import { TimedConsolaPage } from '../../timedConsola/pages/TimedConsolaPage';
 import { ConsolaBotsPanel } from '../../bots/components/ConsolaBotsPanel';
+import { useRemateDetail } from '../../remates/hooks';
 import { useLiveRemateState } from '../../sala/hooks';
 import { GavelIcon } from '../../remates/components/icons';
 import type { RemateStatus } from '../../remates/types';
@@ -137,6 +139,19 @@ function ConsolaSkeleton() {
  * arrancó el remate en vivo.
  */
 export function ConsolaOperativaPage() {
+  const { remateId } = useParams<{ remateId: string }>();
+  const { remate: remateDetail, isLoading: isRemateTypeLoading } = useRemateDetail(remateId ?? '');
+
+  // Un Timed no se opera lote por lote como un remate en vivo -- tiene su propio panel
+  // (tablero de lotes + analítica). El branch va acá, en el wrapper, para que
+  // `LiveConsolaOperativaPage` (todos los hooks de la consola en vivo, incluida la
+  // conexión WebSocket) nunca se monte para un Timed.
+  if (isRemateTypeLoading) return <ConsolaSkeleton />;
+  if (remateDetail?.auction_type === 'timed') return <TimedConsolaPage remateId={remateDetail.id} />;
+  return <LiveConsolaOperativaPage />;
+}
+
+function LiveConsolaOperativaPage() {
   const { remateId } = useParams<{ remateId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();

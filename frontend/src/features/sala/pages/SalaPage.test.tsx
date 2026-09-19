@@ -24,6 +24,13 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('../hooks', () => ({ useLiveRemateState: useLiveRemateStateMock }));
 
+// `TimedSalaPage` arma su propio estado (`useTimedSalaState`, ver
+// `features/timedSala/hooks.ts`) -- acá solo interesa que `SalaPage` delegue en ella
+// para un remate TIMED, no volver a probar esa pantalla completa desde este archivo.
+vi.mock('../../timedSala/pages/TimedSalaPage', () => ({
+  TimedSalaPage: () => <div data-testid="timed-sala-page" />,
+}));
+
 // Misma convención que `AppLayout.test.tsx`: la campana hace fetch de verdad
 // (`useNotifications`/`useUnreadNotificationCount`), no hace falta ejercitarla acá --
 // `SalaPage` ahora la remonta suelta (ver `FloatingNotificationBell`) porque oculta el
@@ -178,6 +185,15 @@ describe('SalaPage', () => {
     // Sin mock de sesión, `useAuth()` real devuelve un visitante anónimo (ADR-049) --
     // ve el llamado a iniciar sesión, no el botón deshabilitado por rol.
     expect(screen.getByRole('button', { name: 'Iniciá sesión para ofertar' })).toBeInTheDocument();
+  });
+
+  it('para un remate Timed, delega en TimedSalaPage en vez de la sala LIVE', () => {
+    mockLiveState({ snapshot: makeSnapshot({ remate: makeRemate({ auction_type: 'timed' }) }) });
+
+    renderPage();
+
+    expect(screen.getByTestId('timed-sala-page')).toBeInTheDocument();
+    expect(screen.queryByText('Toro Angus')).not.toBeInTheDocument();
   });
 
   it('mientras la conexión se reestablece, la cabecera muestra "Reconectando..."', () => {

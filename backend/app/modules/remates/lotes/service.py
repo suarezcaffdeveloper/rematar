@@ -96,6 +96,7 @@ from app.modules.remates.lotes.events import (
     LoteClosed,
     LoteOpened,
     LoteRequeued,
+    LoteTimerStarted,
     LoteWinnerDetermined,
 )
 from app.modules.remates.lotes.models import Lote, LoteRound, LoteStatus
@@ -107,7 +108,7 @@ from app.modules.remates.lotes.schemas import (
     LoteUpdate,
 )
 from app.modules.remates.lotes.state_machine import assert_transition_allowed
-from app.modules.remates.models import Remate, RemateStatus
+from app.modules.remates.models import Remate, RemateAuctionType, RemateStatus
 from app.modules.remates.service import RemateService
 from app.modules.users.models import User, UserRole
 from app.timer.service import TimerService
@@ -195,6 +196,11 @@ class LoteService:
         display_order = await self._repository.next_display_order(remate_id)
         lote = Lote(
             remate_id=remate_id,
+            # Copia inmutable del remate padre -- ver docstring de `Lote.auction_type`.
+            # Como la estructura de lotes queda congelada apenas el remate pasa a LIVE
+            # (`_assert_structure_editable`, arriba), ningún lote nace después de que su
+            # remate ya esté en curso -- por eso alcanza con copiarlo una sola vez acá.
+            auction_type=remate.auction_type,
             lot_number=data.lot_number,
             display_order=display_order,
             title=data.title,
@@ -371,6 +377,16 @@ class LoteService:
     # --- Motor de estados (Módulo 2.3, ver docs/16-motor-de-estados.md) --------------
 
     async def _assert_can_open(self, remate: Remate) -> None:
+        if remate.auction_type == RemateAuctionType.TIMED:
+            # En TIMED todos los lotes se abren juntos, automáticamente, al llegar
+            # `starts_at` (`TimedAuctionLifecycleScheduler.open_all_pending_for_start`,
+            # no este método) -- no hay "abrir un lote puntual" ni el invariante RF-12,
+            # que además el índice de base ya no impone para esta modalidad (ver
+            # `Lote.__table_args__`).
+            raise BusinessRuleError(
+                "En un remate Timed los lotes se abren automáticamente; no se puede "
+                "abrir uno manualmente."
+            )
         if remate.status != RemateStatus.LIVE:
             raise BusinessRuleError(
                 "Solo se puede abrir un lote mientras el remate está en curso (LIVE).",
@@ -448,6 +464,11 @@ class LoteService:
         final_price: Decimal | None,
     ) -> Lote:
         remate, lote = await self._get_operator_lote_or_raise(remate_id, lote_id, actor)
+        if remate.auction_type == RemateAuctionType.TIMED:
+            raise BusinessRuleError(
+                "En un remate Timed los lotes se cierran automáticamente al vencer su "
+                "cuenta regresiva; no se puede cerrar uno manualmente."
+            )
         if remate.status not in (RemateStatus.LIVE, RemateStatus.PAUSED):
             raise BusinessRuleError(
                 "Solo se puede cerrar un lote mientras el remate está en curso o "
@@ -620,6 +641,59 @@ class LoteService:
 
     # --- Lotes desiertos: reincorporación a la cola (ver docs/16-motor-de-estados.md) --
 
+    @staticmethod
+    def _assert_requeue_applicable(remate: Remate) -> None:
+        # Decisión de producto (plan de Timed Auctions, V1): un lote TIMED sin ofertas
+        # queda CLOSED_UNSOLD de forma permanente -- no hay rematador conduciendo
+        # nuevas rondas, y el remate ya tiene un cierre general definido. Reincorporarlo
+        # a PENDING lo dejaría inalcanzable (`TimedAuctionLifecycleScheduler` abre los
+        # pendientes una única vez, al llegar `starts_at`, no vuelve a mirar la cola).
+        if remate.auction_type == RemateAuctionType.TIMED:
+            raise BusinessRuleError(
+                "El reencolado de lotes desiertos no aplica a remates Timed en esta "
+                "versión."
+            )
+
+    async def open_all_pending_for_timed_start(
+        self, remate: Remate
+    ) -> list[tuple[Lote, LoteTimerStarted]]:
+        """Abre en paralelo todos los lotes `PENDING` de un remate TIMED al llegar
+        `starts_at` -- llamado únicamente por `TimedAuctionLifecycleScheduler`
+        (`app/timer/timed_scheduler.py`), que ya tiene `remate` cargado y bloqueado
+        (`RemateRepository.get_by_id_for_update`) en su propia sesión.
+
+        A diferencia de `open`/`open_next` (LIVE, un lote por vez, gated por
+        `_assert_can_open`), acá no hay invariante RF-12 que resguardar -- el índice de
+        base ya excluye a los lotes TIMED (ver `Lote.__table_args__`) y esta es la única
+        vía de apertura para esta modalidad, así que no hace falta re-chequear nada por
+        lote. Sin commit ni publish: el caller (el scheduler) hace uno solo para este
+        paso y el de `Remate.status -> LIVE`, en la misma transacción. Devuelve cada
+        lote junto con su evento `LoteTimerStarted` (siempre no-`None` acá: TIMED
+        siempre fija `timer_ends_at = remate.ends_at`, a diferencia de LIVE donde
+        depende de `settings.lote_timer_seconds`) para que el caller pueda publicar
+        `LoteOpened`/`LoteTimerStarted` de cada uno después de comitear."""
+        assert remate.auction_type == RemateAuctionType.TIMED
+        pending = await self._repository.list_pending_by_remate(remate.id)
+        now = datetime.now(UTC)
+        opened: list[tuple[Lote, LoteTimerStarted]] = []
+        for lote in pending:
+            lote.status = LoteStatus.OPEN
+            lote.opened_at = now
+            timer_started = TimerService.start_for_lote(lote, remate)
+            assert timer_started is not None
+            self._audit_repository.record(
+                actor_id=None,
+                actor_name=None,
+                actor_role=None,
+                action=AuditAction.LOTE_OPENED,
+                resource_type="lote",
+                resource_id=lote.id,
+                remate_id=remate.id,
+                details={"lot_number": lote.lot_number, "trigger": "auto"},
+            )
+            opened.append((lote, timer_started))
+        return opened
+
     async def requeue(
         self,
         remate_id: uuid.UUID,
@@ -636,6 +710,7 @@ class LoteService:
         que ya usa `create` para asignar posición, así que nunca puede "colarse" antes
         de un lote todavía no abierto."""
         remate, lote = await self._get_owned_lote_or_raise(remate_id, lote_id, owner)
+        self._assert_requeue_applicable(remate)
         if remate.status not in (RemateStatus.LIVE, RemateStatus.PAUSED):
             raise BusinessRuleError(
                 "Solo se puede reincorporar un lote mientras el remate está en curso o "
@@ -719,6 +794,7 @@ class LoteService:
         endpoint (le ahorra repetir el precio a mano), pero para reencolar con un precio
         distinto al preautorizado sigue estando `requeue()`, exclusivo de la empresa."""
         remate, lote = await self._get_operator_lote_or_raise(remate_id, lote_id, actor)
+        self._assert_requeue_applicable(remate)
         if remate.status not in (RemateStatus.LIVE, RemateStatus.PAUSED):
             raise BusinessRuleError(
                 "Solo se puede reincorporar un lote mientras el remate está en curso o "

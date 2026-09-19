@@ -110,7 +110,7 @@ export function CompradorDashboardPage() {
           <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Todos los remates</h2>
         )}
 
-        <DashboardToolbar filters={filters} onChange={handleFiltersChange} variant="open" />
+        <DashboardToolbar filters={filters} onChange={handleFiltersChange} variant="open" showAuctionTypeFilter />
 
         {error && (
           <Alert variant="error">

@@ -81,16 +81,24 @@ from app.modules.remates.events import (
     RemateScheduled,
     RemateStarted,
 )
+from app.modules.remates.lotes.events import LoteTimerPaused, LoteTimerResumed
 from app.modules.remates.lotes.repository import LoteRepository
+from app.modules.remates.lotes.timer_ops import freeze_lote_timer, unfreeze_lote_timer
 from app.modules.remates.models import (
     Remate,
     RemateAccessGrant,
     RemateAccessType,
+    RemateAuctionType,
     RemateCategory,
     RemateStatus,
 )
 from app.modules.remates.repository import RemateRepository
-from app.modules.remates.schemas import RemateCreate, RemateUpdate
+from app.modules.remates.schemas import (
+    RemateCreate,
+    RemateSettings,
+    RemateUpdate,
+    check_timed_settings_complete,
+)
 from app.modules.remates.state_machine import assert_transition_allowed
 from app.modules.users.models import User, UserRole
 from app.redis.rate_limit import RedisRateLimiter
@@ -178,6 +186,7 @@ class RemateService:
             # cambio de comportamiento para ellos).
             settings=data.settings.model_dump(mode="json"),
             access_type=data.access_type,
+            auction_type=data.auction_type,
         )
         # Si el remate nace privado, el código se genera de una: el requisito es que la
         # empresa lo tenga disponible apenas crea el remate, sin un segundo paso manual
@@ -522,8 +531,31 @@ class RemateService:
         if starts_at and ends_at and ends_at <= starts_at:
             raise BusinessRuleError("La fecha de finalización debe ser posterior a la de inicio.")
 
+        # Decisión de producto (plan de Timed Auctions): `ends_at` de un remate TIMED
+        # queda congelado apenas deja `DRAFT` -- solo las extensiones anti-sniping por
+        # lote pueden mover un cierre individual hacia adelante, nunca una edición
+        # manual del período general (`remate.status not in (DRAFT, SCHEDULED)` ya
+        # rechazó cualquier edición una vez LIVE, arriba; acá falta el caso SCHEDULED).
+        if (
+            remate.auction_type == RemateAuctionType.TIMED
+            and "ends_at" in changes
+            and remate.status == RemateStatus.SCHEDULED
+        ):
+            raise BusinessRuleError(
+                "La fecha de finalización de un remate Timed no se puede modificar "
+                "una vez programado."
+            )
+
         for field, value in changes.items():
             setattr(remate, field, value)
+
+        if "settings" in changes:
+            try:
+                check_timed_settings_complete(
+                    remate.auction_type, RemateSettings.model_validate(remate.settings)
+                )
+            except ValueError as exc:
+                raise BusinessRuleError(str(exc)) from exc
 
         audit_action = (
             AuditAction.REMATE_SETTINGS_CHANGED
@@ -555,6 +587,11 @@ class RemateService:
             )
         if remate.starts_at <= datetime.now(UTC):
             raise BusinessRuleError("La fecha de inicio debe ser futura.")
+        if remate.auction_type == RemateAuctionType.TIMED and remate.ends_at is None:
+            raise BusinessRuleError(
+                "Para programar un remate Timed hace falta definir también la fecha y "
+                "hora de finalización."
+            )
 
         remate.status = RemateStatus.SCHEDULED
         self._record_status_change(remate, owner, previous_status, trigger="manual")
@@ -628,6 +665,16 @@ class RemateService:
 
     async def start(self, remate_id: uuid.UUID, owner: User) -> Remate:
         remate = await self.get_owned_or_raise(remate_id, owner)
+        if remate.auction_type == RemateAuctionType.TIMED:
+            # Un remate Timed se inicia solo, al llegar `starts_at`
+            # (`TimedAuctionLifecycleScheduler`), y abre todos sus lotes pendientes en
+            # el mismo paso -- iniciarlo manualmente acá lo dejaría LIVE sin que nadie
+            # abra esos lotes (`LoteService.open`/`open_next` ya rechazan un remate
+            # TIMED, ver `_assert_can_open`).
+            raise BusinessRuleError(
+                "Un remate Timed se inicia automáticamente al llegar la fecha de "
+                "inicio; no se puede iniciar manualmente."
+            )
         assert_transition_allowed(remate.status, RemateStatus.LIVE)
         previous_status = remate.status
 
@@ -643,16 +690,46 @@ class RemateService:
         await self._event_bus.publish(RemateStarted(remate_id=remate.id))
         return remate
 
+    def apply_auto_start(self, remate: Remate) -> None:
+        """Mutación + auditoría del auto-inicio de un remate TIMED (SCHEDULED -> LIVE),
+        sin `commit()` ni publish -- llamada únicamente por
+        `TimedAuctionLifecycleScheduler` (`app/timer/timed_scheduler.py`), que combina
+        esto con `LoteService.open_all_pending_for_timed_start` en la MISMA transacción
+        (un solo commit) para que el remate nunca quede `LIVE` con sus lotes todavía
+        `PENDING` -- mismo criterio que `LoteService._apply_close` (mutación+auditoría
+        compartida, sin commit propio, el caller decide cuándo confirmar)."""
+        assert remate.auction_type == RemateAuctionType.TIMED
+        assert_transition_allowed(remate.status, RemateStatus.LIVE)
+        previous_status = remate.status
+        remate.status = RemateStatus.LIVE
+        self._record_status_change(remate, None, previous_status, trigger="auto")
+
     async def pause(self, remate_id: uuid.UUID, actor: User) -> Remate:
         remate = await self.get_operator_or_raise(remate_id, actor)
         assert_transition_allowed(remate.status, RemateStatus.PAUSED)
         previous_status = remate.status
 
         remate.status = RemateStatus.PAUSED
+        # Decisión de producto (plan de Timed Auctions): pausar un remate TIMED congela
+        # el timer de TODOS sus lotes abiertos a la vez -- a diferencia de LIVE (a lo
+        # sumo un lote abierto, cuyo timer el rematador ya podía pausar puntualmente vía
+        # `TimerService.pause`), acá no hay "el lote activo" al que pausarle el timer
+        # por separado, y bloquear ofertas/cierre automático sin congelar el reloj
+        # dejaría lotes con menos tiempo real del que la empresa pausó.
+        timer_paused_events: list[LoteTimerPaused] = []
+        if remate.auction_type == RemateAuctionType.TIMED:
+            for lote in await self._lote_repository.list_open_lotes_for_update(remate_id):
+                remaining = freeze_lote_timer(lote)
+                if remaining is not None:
+                    timer_paused_events.append(
+                        LoteTimerPaused(remate_id=remate.id, lote_id=lote.id, remaining_seconds=remaining)
+                    )
         self._record_status_change(remate, actor, previous_status, trigger="manual")
         await self._repository.commit()
         await self._repository.refresh(remate)
         await self._event_bus.publish(RematePaused(remate_id=remate.id))
+        for event in timer_paused_events:
+            await self._event_bus.publish(event)
         return remate
 
     async def resume(self, remate_id: uuid.UUID, actor: User) -> Remate:
@@ -661,10 +738,22 @@ class RemateService:
         previous_status = remate.status
 
         remate.status = RemateStatus.LIVE
+        # Inversa de la pausa masiva de arriba -- reanuda con el tiempo restante que
+        # cada lote tenía congelado, mismo criterio que `TimerService.resume` por lote.
+        timer_resumed_events: list[LoteTimerResumed] = []
+        if remate.auction_type == RemateAuctionType.TIMED:
+            for lote in await self._lote_repository.list_open_lotes_for_update(remate_id):
+                ends_at = unfreeze_lote_timer(lote)
+                if ends_at is not None:
+                    timer_resumed_events.append(
+                        LoteTimerResumed(remate_id=remate.id, lote_id=lote.id, ends_at=ends_at)
+                    )
         self._record_status_change(remate, actor, previous_status, trigger="manual")
         await self._repository.commit()
         await self._repository.refresh(remate)
         await self._event_bus.publish(RemateResumed(remate_id=remate.id))
+        for event in timer_resumed_events:
+            await self._event_bus.publish(event)
         return remate
 
     async def finish(self, remate_id: uuid.UUID, actor: User) -> Remate:
@@ -683,4 +772,30 @@ class RemateService:
         await self._repository.commit()
         await self._repository.refresh(remate)
         await self._event_bus.publish(RemateFinished(remate_id=remate.id, triggered_by="manual"))
+        return remate
+
+    async def auto_finish(self, remate: Remate) -> Remate:
+        """Finalización automática de un remate TIMED sin ningún lote `PENDING`/`OPEN`
+        (ver `has_open_lote` -- ningún lote TIMED puede volver a `PENDING`, el
+        reencolado de lotes desiertos no aplica a esta modalidad en V1, así que basta
+        con que no quede ninguno `OPEN`). Llamada únicamente por
+        `TimedAuctionLifecycleScheduler` (`app/timer/timed_scheduler.py`), que ya tiene
+        `remate` cargado y bloqueado (`RemateRepository.get_by_id_for_update`) en su
+        propia sesión -- acá no se vuelve a bloquear ni a chequear ownership (no hay un
+        actor humano), mismo criterio que `LoteService.auto_close`.
+
+        A propósito NO reintroduce el viejo RF-10/ADR-019 (auto-finalizar LIVE al
+        cerrarse el último lote, eliminado por el módulo de lotes desiertos) -- el
+        caller de este método filtra por `auction_type == TIMED` antes de llegar acá
+        (`RemateRepository.list_live_timed_remate_ids`), así que un remate LIVE nunca
+        pasa por este camino."""
+        assert remate.auction_type == RemateAuctionType.TIMED
+        assert_transition_allowed(remate.status, RemateStatus.FINISHED)
+        previous_status = remate.status
+        remate.status = RemateStatus.FINISHED
+        remate.finished_at = datetime.now(UTC)
+        self._record_status_change(remate, None, previous_status, trigger="auto")
+        await self._repository.commit()
+        await self._repository.refresh(remate)
+        await self._event_bus.publish(RemateFinished(remate_id=remate.id, triggered_by="auto"))
         return remate

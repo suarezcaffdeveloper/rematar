@@ -7,7 +7,7 @@
  * sin estado a propósito: se puede testear sin montar nada de React.
  */
 
-import type { Remate, RemateCategory, RemateStatus } from './types';
+import type { Remate, RemateAuctionType, RemateCategory, RemateStatus } from './types';
 
 export type RemateSortOption = 'proximos' | 'recientes' | 'en_vivo';
 
@@ -20,6 +20,12 @@ export interface RemateFilters {
   // `ALL_STATUS_OPTIONS` (ver `labels.ts`).
   status: RemateStatus | 'all';
   category: RemateCategory | 'all';
+  // Filtro por modalidad del remate (live / timed) -- reemplaza al filtro de estado en
+  // el Dashboard del comprador (`DashboardToolbar` con `showAuctionTypeFilter`), donde
+  // "en vivo / pausado / finalizado" dejaba de ser el eje útil una vez que coexisten
+  // remates en vivo tradicionales y Timed Auctions. `undefined` en un `Remate` se trata
+  // como `'live'` (default real del backend, ver `types.ts`).
+  auctionType: RemateAuctionType | 'all';
   sort: RemateSortOption;
 }
 
@@ -27,6 +33,7 @@ export const DEFAULT_FILTERS: RemateFilters = {
   search: '',
   status: 'all',
   category: 'all',
+  auctionType: 'all',
   sort: 'proximos',
 };
 
@@ -84,7 +91,8 @@ export function filterAndSortRemates(remates: Remate[], filters: RemateFilters):
     (remate) =>
       matchesSearch(remate, filters.search) &&
       (filters.status === 'all' || remate.status === filters.status) &&
-      (filters.category === 'all' || remate.category === filters.category),
+      (filters.category === 'all' || remate.category === filters.category) &&
+      (filters.auctionType === 'all' || (remate.auction_type ?? 'live') === filters.auctionType),
   );
   return moveFinishedLast(sortRemates(filtered, filters.sort));
 }

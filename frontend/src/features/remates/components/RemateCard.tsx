@@ -41,6 +41,11 @@ export function RemateCard({ remate }: RemateCardProps) {
         <div className="absolute left-3 top-3">
           <Badge variant={STATUS_BADGE_VARIANTS[remate.status]}>{STATUS_LABELS[remate.status]}</Badge>
         </div>
+        {(remate.auction_type ?? 'live') === 'timed' && (
+          <div className="absolute right-3 top-3">
+            <Badge variant="brand">Timed auction</Badge>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col gap-4 p-5">

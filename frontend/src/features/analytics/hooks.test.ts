@@ -23,6 +23,7 @@ function makeSnapshot(overrides: Partial<RemateAnalyticsSnapshot> = {}): RemateA
     ofertas_per_minute: 1,
     highest_oferta: null,
     top_lote_by_offers: null,
+    offers_by_lote: [],
     bids_timeline: [],
     recent_events: [],
     generated_at: '2026-07-21T00:00:00Z',

@@ -25,4 +25,31 @@ describe('DashboardToolbar', () => {
     await userEvent.selectOptions(screen.getByLabelText('Filtrar por estado'), 'draft');
     expect(onChange).toHaveBeenCalledWith({ ...DEFAULT_FILTERS, status: 'draft' });
   });
+
+  it('sin showAuctionTypeFilter, no renderiza el filtro de tipo (layout original categoría/estado/orden)', () => {
+    render(<DashboardToolbar filters={DEFAULT_FILTERS} onChange={vi.fn()} />);
+
+    expect(screen.queryByLabelText('Filtrar por tipo de remate')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Filtrar por categoría')).toBeInTheDocument();
+    expect(screen.getByLabelText('Filtrar por estado')).toBeInTheDocument();
+    expect(screen.getByLabelText('Ordenar remates')).toBeInTheDocument();
+  });
+
+  it('con showAuctionTypeFilter, reemplaza el filtro de estado por el de tipo (comprador)', async () => {
+    const onChange = vi.fn();
+    render(<DashboardToolbar filters={DEFAULT_FILTERS} onChange={onChange} showAuctionTypeFilter />);
+
+    // El filtro de estado desaparece; el de tipo aparece con las tres opciones pedidas.
+    expect(screen.queryByLabelText('Filtrar por estado')).not.toBeInTheDocument();
+    const typeSelect = within(screen.getByLabelText('Filtrar por tipo de remate'));
+    expect(typeSelect.getByText('Todo tipo de remate')).toBeInTheDocument();
+    expect(typeSelect.getByText('Remate en vivo')).toBeInTheDocument();
+    expect(typeSelect.getByText('Remate timed auction')).toBeInTheDocument();
+
+    // La categoría sigue existiendo (pasa a la columna del medio).
+    expect(screen.getByLabelText('Filtrar por categoría')).toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText('Filtrar por tipo de remate'), 'timed');
+    expect(onChange).toHaveBeenCalledWith({ ...DEFAULT_FILTERS, auctionType: 'timed' });
+  });
 });

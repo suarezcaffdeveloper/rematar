@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
 import { useAuth } from '../../auth/hooks';
@@ -6,6 +7,7 @@ import type { BreadcrumbItem } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
+import { fetchLeadingOfferAmountRequest } from '../api';
 import { GavelIcon } from '../components/icons';
 import { LoteCard } from '../components/LoteCard';
 import { LoteCardSkeleton } from '../components/LoteCardSkeleton';
@@ -52,6 +54,38 @@ export function RemateDetailPage() {
     reload: reloadRemate,
   } = useRemateDetail(remateId ?? '');
   const { lotes, isLoading: isLotesLoading, error: lotesError, reload: reloadLotes } = useLotes(remateId ?? '');
+
+  // En un remate TIMED, cada card de lote abierto muestra el precio que va liderando --
+  // una llamada `GET .../ofertas/leading` por lote `open`, best-effort y en paralelo
+  // (mismo patrón que `useTimedSalaState`): si falla una, esa card simplemente muestra
+  // el precio base. Sin WebSocket en esta pantalla -- el precio queda congelado hasta la
+  // próxima recarga (decisión explícita; la sala Timed sí lo mantiene vivo por eventos).
+  const [leadingAmounts, setLeadingAmounts] = useState<Record<string, string | null>>({});
+  const isTimed = (remate?.auction_type ?? 'live') === 'timed';
+
+  useEffect(() => {
+    if (!isTimed || !remateId) return;
+    const openLotes = lotes.filter((lote) => lote.status === 'open');
+    if (openLotes.length === 0) return;
+
+    let cancelled = false;
+    void Promise.all(
+      openLotes.map(async (lote) => {
+        try {
+          const amount = await fetchLeadingOfferAmountRequest(remateId, lote.id);
+          return [lote.id, amount] as const;
+        } catch {
+          return [lote.id, null] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (cancelled) return;
+      setLeadingAmounts((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isTimed, remateId, lotes]);
 
   const items: BreadcrumbItem[] = isRemateLoading
     ? []
@@ -138,7 +172,13 @@ export function RemateDetailPage() {
         {!isLotesLoading && !lotesError && lotes.length > 0 && (
           <div className="flex flex-col gap-4">
             {lotes.map((lote) => (
-              <LoteCard key={lote.id} lote={lote} currency={remate.settings.currency} />
+              <LoteCard
+                key={lote.id}
+                lote={lote}
+                currency={remate.settings.currency}
+                auctionType={remate.auction_type ?? 'live'}
+                leadingAmount={leadingAmounts[lote.id]}
+              />
             ))}
           </div>
         )}

@@ -23,7 +23,14 @@ function makeRemate(overrides: Partial<Remate> = {}): Remate {
     starts_at: null,
     ends_at: null,
     status: 'draft',
-    settings: { anti_sniping_enabled: false, anti_sniping_extension_seconds: 60, currency: 'ARS', lote_timer_seconds: null },
+    settings: {
+      anti_sniping_enabled: false,
+      anti_sniping_extension_seconds: 60,
+      currency: 'ARS',
+      lote_timer_seconds: null,
+      timed_extension_window_seconds: null,
+      timed_extension_duration_seconds: null,
+    },
     cancellation_reason: null,
     cancelled_at: null,
     finished_at: null,
@@ -99,36 +106,17 @@ describe('RemateFormModal', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('anti-sniping deshabilitado por default, no muestra el campo de segundos', () => {
+  it('en vivo no muestra anti-sniping ni cuenta regresiva por lote', () => {
     render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
-    expect(screen.queryByLabelText(/Segundos de extensión/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Habilitar anti-sniping')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Habilitar cuenta regresiva por lote')).not.toBeInTheDocument();
   });
 
-  it('habilitar anti-sniping muestra el campo de segundos', async () => {
+  it('la garantía aparece una sola vez, en ambas modalidades', async () => {
     render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
-    await userEvent.click(screen.getByLabelText('Habilitar anti-sniping'));
-    expect(screen.getByLabelText(/Segundos de extensión/)).toBeInTheDocument();
-  });
-
-  it('cuenta regresiva deshabilitada por default, no muestra el campo de segundos', () => {
-    render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
-    expect(screen.queryByLabelText(/cuenta regresiva al abrir/)).not.toBeInTheDocument();
-  });
-
-  it('habilitar la cuenta regresiva muestra el campo de segundos y lo manda en el payload', async () => {
-    apiMocks.createRemateRequest.mockResolvedValue(makeRemate());
-    render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
-
-    await userEvent.type(screen.getByLabelText('Título'), 'Remate de prueba');
-    await userEvent.selectOptions(screen.getByLabelText('Categoría'), 'hacienda');
-    await userEvent.click(screen.getByLabelText('Habilitar cuenta regresiva por lote'));
-    const secondsInput = screen.getByLabelText(/cuenta regresiva al abrir/);
-    await userEvent.clear(secondsInput);
-    await userEvent.type(secondsInput, '45');
-    await userEvent.click(screen.getByRole('button', { name: 'Crear remate' }));
-
-    await waitFor(() => expect(apiMocks.createRemateRequest).toHaveBeenCalledTimes(1));
-    expect(apiMocks.createRemateRequest.mock.calls[0][0].settings.lote_timer_seconds).toBe(45);
+    expect(screen.getAllByLabelText('Exigir garantía económica para ofertar')).toHaveLength(1);
+    await userEvent.click(screen.getByText('Timed Auction'));
+    expect(screen.getAllByLabelText('Exigir garantía económica para ofertar')).toHaveLength(1);
   });
 
   it('garantía deshabilitada por default, no muestra el campo de monto', () => {
@@ -164,13 +152,62 @@ describe('RemateFormModal', () => {
     expect(apiMocks.createRemateRequest).not.toHaveBeenCalled();
   });
 
-  it('en modo edición, precarga la cuenta regresiva ya configurada', () => {
+  it('en modo creación, elegir Timed muestra fecha de fin obligatoria y oculta la cuenta regresiva por lote', async () => {
+    render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    expect(screen.queryByLabelText('Fecha y hora de finalización')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByText('Timed Auction'));
+
+    expect(screen.getByLabelText('Fecha y hora de finalización')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Habilitar cuenta regresiva por lote')).not.toBeInTheDocument();
+  });
+
+  it('timed: habilitar anti-sniping muestra ventana y duración por separado', async () => {
+    render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
+    await userEvent.click(screen.getByText('Timed Auction'));
+    await userEvent.click(screen.getByLabelText('Habilitar anti-sniping'));
+
+    expect(screen.getByLabelText(/Ventana de extensión/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Duración de la extensión/)).toBeInTheDocument();
+  });
+
+  it('timed: sin fecha de fin, muestra error de validación y no llama al backend', async () => {
+    render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText('Título'), 'Remate timed');
+    await userEvent.selectOptions(screen.getByLabelText('Categoría'), 'hacienda');
+    await userEvent.click(screen.getByText('Timed Auction'));
+    await userEvent.click(screen.getByRole('button', { name: 'Crear remate' }));
+
+    expect(screen.getByText('Un remate Timed necesita fecha y hora de finalización.')).toBeInTheDocument();
+    expect(apiMocks.createRemateRequest).not.toHaveBeenCalled();
+  });
+
+  it('en modo edición de un remate Timed, no muestra el selector de modalidad pero sí sus campos', () => {
     const remate = makeRemate({
-      settings: { anti_sniping_enabled: false, anti_sniping_extension_seconds: 60, currency: 'ARS', lote_timer_seconds: 45 },
+      auction_type: 'timed',
+      starts_at: '2026-08-01T14:00:00Z',
+      ends_at: '2026-08-08T14:00:00Z',
     });
     render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} remate={remate} />);
 
-    expect(screen.getByLabelText('Habilitar cuenta regresiva por lote')).toBeChecked();
-    expect(screen.getByLabelText(/cuenta regresiva al abrir/)).toHaveValue(45);
+    expect(screen.queryByText('Timed Auction')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Fecha y hora de finalización')).toBeInTheDocument();
+  });
+
+  it('en modo edición de un remate en vivo viejo con cuenta regresiva, no la muestra', () => {
+    const remate = makeRemate({
+      settings: {
+        anti_sniping_enabled: true,
+        anti_sniping_extension_seconds: 60,
+        currency: 'ARS',
+        lote_timer_seconds: 45,
+        timed_extension_window_seconds: null,
+        timed_extension_duration_seconds: null,
+      },
+    });
+    render(<RemateFormModal isOpen onClose={vi.fn()} onSaved={vi.fn()} remate={remate} />);
+
+    expect(screen.queryByLabelText('Habilitar cuenta regresiva por lote')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Habilitar anti-sniping')).not.toBeInTheDocument();
   });
 });

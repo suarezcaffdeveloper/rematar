@@ -97,4 +97,33 @@ describe('RemateCard', () => {
 
     expect(navigateMock).toHaveBeenCalledWith('/remates/remate-1');
   });
+
+  it('un remate timed muestra el badge "Timed auction" para diferenciarlo del live tradicional', () => {
+    useLoteCountMock.mockReturnValue(1);
+
+    renderCard({ ...REMATE, auction_type: 'timed' });
+
+    expect(screen.getByText('Timed auction')).toBeInTheDocument();
+    // El badge de estado sigue estando -- el de tipo es adicional, no lo reemplaza.
+    expect(screen.getByText('Programado')).toBeInTheDocument();
+  });
+
+  it('un remate live (explícito o sin `auction_type`) NO muestra el badge de timed', () => {
+    useLoteCountMock.mockReturnValue(1);
+
+    const { rerender } = render(
+      <MemoryRouter>
+        <RemateCard remate={{ ...REMATE, auction_type: 'live' }} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText('Timed auction')).not.toBeInTheDocument();
+
+    // Sin `auction_type` (default del backend: 'live') -- mismo resultado.
+    rerender(
+      <MemoryRouter>
+        <RemateCard remate={REMATE} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText('Timed auction')).not.toBeInTheDocument();
+  });
 });

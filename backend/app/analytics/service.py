@@ -19,6 +19,7 @@ from app.analytics.repository import AnalyticsRepository
 from app.analytics.schemas import (
     BidsTimelineBucket,
     HighestOferta,
+    LoteOfferCount,
     LoteStatusCounts,
     RawAnalyticsAggregates,
     RecentAnalyticsEvent,
@@ -94,6 +95,7 @@ class AnalyticsService:
             ofertas_per_minute=raw.ofertas_last_minute,
             highest_oferta=raw.highest_oferta,
             top_lote_by_offers=raw.top_lote_by_offers,
+            offers_by_lote=raw.offers_by_lote,
             bids_timeline=raw.bids_timeline,
             recent_events=raw.recent_events,
             generated_at=datetime.now(UTC),
@@ -122,11 +124,11 @@ class AnalyticsService:
     async def _load_raw_aggregates(
         self, remate_id: uuid.UUID, remate: Remate
     ) -> RawAnalyticsAggregates:
-        """Siete consultas, todas sobre la misma `AsyncSession` de request --
+        """Ocho consultas, todas sobre la misma `AsyncSession` de request --
         **secuenciales**, nunca `asyncio.gather`: `AsyncSession` no admite operaciones
         concurrentes sobre la misma sesión. Cada una es simple e indexada; la caché
         Redis (`_get_raw_aggregates`) absorbe ráfagas de refetch (por ejemplo, durante
-        una guerra de ofertas) sin repetir las siete en cada request."""
+        una guerra de ofertas) sin repetir las ocho en cada request."""
         now = datetime.now(UTC)
         since_rate_window = now - timedelta(seconds=self._offers_rate_window_seconds)
         since_timeline = now - timedelta(minutes=self._bids_timeline_minutes)
@@ -138,6 +140,7 @@ class AnalyticsService:
         lote_row = await self._repository.get_lote_status_aggregates(remate_id)
         highest_row = await self._repository.get_highest_oferta(remate_id)
         top_lote_row = await self._repository.get_top_lote_by_offer_count(remate_id)
+        offer_count_rows = await self._repository.get_offer_counts_by_lote(remate_id)
         timeline_rows = await self._repository.get_bids_timeline(remate_id, since_timeline)
         transition_lotes = await self._repository.list_lote_transitions(
             remate_id, limit=self._recent_events_limit
@@ -151,6 +154,10 @@ class AnalyticsService:
             ofertas_last_minute=ofertas_last_minute,
             highest_oferta=HighestOferta.from_row(highest_row) if highest_row is not None else None,
             top_lote_by_offers=TopLoteByOffers.from_row(top_lote_row) if top_lote_row is not None else None,
+            offers_by_lote=[
+                LoteOfferCount(lote_id=row.lote_id, offer_count=row.offer_count)
+                for row in offer_count_rows
+            ],
             bids_timeline=self._build_bids_timeline(timeline_rows, since_timeline, now),
             recent_events=self._build_recent_events(transition_lotes, remate),
         )

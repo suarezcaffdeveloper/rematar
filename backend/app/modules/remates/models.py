@@ -74,16 +74,42 @@ class RemateAccessType(str, enum.Enum):
     PRIVATE = "private"
 
 
+class RemateAuctionType(str, enum.Enum):
+    """Modalidad del remate -- eje ortogonal a `RemateAccessType` (LIVE+PUBLIC,
+    LIVE+PRIVATE, TIMED+PUBLIC y TIMED+PRIVATE son las cuatro combinaciones válidas, ver
+    spec de Timed Auctions). Elegible solo al crear (RemateCreate), inmutable después --
+    mismo tratamiento que `access_type`. LIVE es el default para que ningún remate
+    existente cambie de comportamiento.
+
+    LIVE: un rematador abre un lote a la vez (invariante RF-12, ver
+    `Lote.uq_lotes_remate_id_open_status`); comportamiento preexistente, sin cambios.
+
+    TIMED: todos los lotes aceptan ofertas en paralelo durante `[starts_at, ends_at]`;
+    el ciclo de vida (apertura, extensión anti-sniping, cierre, finalización del
+    remate) es enteramente automático -- ver `app/timer/timed_scheduler.py`."""
+
+    LIVE = "live"
+    TIMED = "timed"
+
+
 # Valor por defecto de `Remate.settings` (ver ADR-012). Vive acá, no en schemas.py, para
 # que el modelo ORM tenga un default coherente incluso si algo lo instancia sin pasar
 # por RemateCreate (ej. un script, una migración de datos).
 DEFAULT_REMATE_SETTINGS: dict = {
     "anti_sniping_enabled": False,
+    # LIVE únicamente -- un solo valor sirve de ventana y de duración. Ver
+    # `RemateSettings` (schemas.py) para el porqué de los dos campos separados en TIMED.
     "anti_sniping_extension_seconds": 60,
     "currency": "ARS",
     # Segundos de cuenta regresiva por lote al abrirlo -- `None` es "sin timer" (opt-in,
-    # Épica 8, Módulo "cuenta regresiva y cierre automático"). Ver ADR-007/ADR-043.
+    # Épica 8, Módulo "cuenta regresiva y cierre automático"). LIVE únicamente: en un
+    # remate TIMED el cierre de cada lote lo define `Remate.ends_at`, no este campo.
     "lote_timer_seconds": None,
+    # TIMED únicamente -- ventana de disparo y duración de la extensión anti-sniping,
+    # como valores independientes (a diferencia de LIVE, ver arriba). `None` hasta que
+    # la empresa los configure explícitamente al crear un remate TIMED.
+    "timed_extension_window_seconds": None,
+    "timed_extension_duration_seconds": None,
     # Garantía económica (Épica 9, bloqueo de tarjeta vía Mercado Pago) -- `False`/`None`
     # por defecto, opt-in explícito de la empresa. Ver `app/modules/garantias/`.
     "guarantee_required": False,
@@ -108,6 +134,10 @@ class Remate(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
             name="ends_at_after_starts_at",
         ),
         Index("ix_remates_status_starts_at", "status", "starts_at"),
+        # Usado por `TimedAuctionLifecycleScheduler` (app/timer/timed_scheduler.py, ver
+        # RemateRepository.list_timed_remates_due_to_start/list_live_timed_remate_ids)
+        # para encontrar remates TIMED sin escanear los LIVE, que son la enorme mayoría.
+        Index("ix_remates_auction_type_status", "auction_type", "status"),
     )
 
     # RESTRICT, no CASCADE: a diferencia de una sesión (refresh_tokens, que sí cascadea
@@ -170,6 +200,20 @@ class Remate(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
     private_access_code_generated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+    # Modalidad del remate: elegida solo al crear (ver RemateCreate/RemateService.create),
+    # inmutable después -- mismo tratamiento que `access_type`, eje ortogonal a él. LIVE
+    # es el default para no alterar el comportamiento de ningún remate existente.
+    auction_type: Mapped[RemateAuctionType] = mapped_column(
+        Enum(
+            RemateAuctionType,
+            name="remate_auction_type",
+            native_enum=True,
+            values_callable=_enum_values,
+        ),
+        nullable=False,
+        default=RemateAuctionType.LIVE,
     )
 
     title: Mapped[str] = mapped_column(String(200), nullable=False)

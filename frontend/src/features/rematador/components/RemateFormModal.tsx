@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { ArrowRight, Globe, Lightbulb, Lock } from 'lucide-react';
+import { ArrowRight, Globe, Lightbulb, Lock, Radio, Timer } from 'lucide-react';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Alert } from '../../../shared/components/Alert';
 import { Button } from '../../../shared/components/Button';
@@ -51,11 +51,34 @@ const ACCESS_TYPE_OPTIONS = [
   },
 ];
 
-const HELP_TIPS = [
+const AUCTION_TYPE_OPTIONS = [
+  {
+    value: 'live' as const,
+    icon: Radio,
+    label: 'Remate en vivo',
+    description: 'La subasta se desarrolla en tiempo real: un rematador abre un lote a la vez.',
+  },
+  {
+    value: 'timed' as const,
+    icon: Timer,
+    label: 'Timed Auction',
+    description:
+      'Los compradores ofertan en todos los lotes en paralelo durante un período determinado; el sistema gestiona el cierre automáticamente.',
+  },
+];
+
+const HELP_TIPS_LIVE = [
   'Podrás agregar los lotes después de crear el remate.',
   'La imagen seleccionada será la portada del remate. Si no eliges imagen, el sistema automáticamente crea un collage con las imágenes de cada lote',
   'El horario final se determina automáticamente cuando termina el último lote.',
   'Estas configuraciones podrán modificarse antes de iniciar el remate.',
+];
+
+const HELP_TIPS_TIMED = [
+  'Podrás agregar los lotes después de crear el remate.',
+  'La imagen seleccionada será la portada del remate. Si no eliges imagen, el sistema automáticamente crea un collage con las imágenes de cada lote',
+  'El remate se activa solo al llegar la fecha de inicio, abriendo todos los lotes a la vez -- no hace falta iniciarlo manualmente.',
+  'Cada lote cierra por su cuenta al llegar la fecha de finalización, sin esperar a los demás.',
 ];
 
 /**
@@ -80,7 +103,6 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
   const [isSubmitting, setIsSubmitting] = useState(false);
   const prefersReducedMotion = useReducedMotion();
   const antiSnipingSwitchId = useId();
-  const loteTimerSwitchId = useId();
   const guaranteeSwitchId = useId();
 
   useEffect(() => {
@@ -114,6 +136,7 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
   }
 
   const revealTransition = prefersReducedMotion ? { duration: 0 } : REVEAL_TRANSITION;
+  const isTimed = values.auction_type === 'timed';
   const currencyOptions = COMMON_CURRENCIES.includes(values.currency.toUpperCase())
     ? COMMON_CURRENCIES
     : [...COMMON_CURRENCIES, values.currency.toUpperCase()].filter(Boolean);
@@ -238,6 +261,46 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
             </FormSection>
           )}
 
+          {!isEditMode && (
+            <FormSection title="Modalidad del remate">
+              <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <legend className="sr-only">Modalidad del remate</legend>
+                {AUCTION_TYPE_OPTIONS.map((option) => {
+                  const isSelected = values.auction_type === option.value;
+                  return (
+                    <label
+                      key={option.value}
+                      className={`flex cursor-pointer flex-col gap-1 rounded-lg border p-3 transition-all duration-200 ${
+                        isSelected
+                          ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-200'
+                          : 'border-line bg-white hover:border-brand-300 hover:bg-surface-subtle'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="auction_type"
+                        value={option.value}
+                        checked={isSelected}
+                        onChange={() => setField('auction_type', option.value)}
+                        className="sr-only"
+                      />
+                      <span className="flex items-center gap-1.5">
+                        <option.icon
+                          aria-hidden="true"
+                          className={`h-4 w-4 shrink-0 ${isSelected ? 'text-brand-600' : 'text-ink-faint'}`}
+                        />
+                        <span className={`text-sm font-semibold ${isSelected ? 'text-brand-700' : 'text-ink'}`}>
+                          {option.label}
+                        </span>
+                      </span>
+                      <span className="text-xs text-ink-muted">{option.description}</span>
+                    </label>
+                  );
+                })}
+              </fieldset>
+            </FormSection>
+          )}
+
           <FormSection title="Descripción">
             <div className="flex flex-col gap-1.5">
               <Textarea
@@ -265,15 +328,27 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
 
           <FormSection title="Fecha del remate">
             <Input
-              label=""
+              label={isTimed ? 'Fecha y hora de inicio' : ''}
               type="datetime-local"
               value={values.starts_at}
               onChange={(event) => setField('starts_at', event.target.value)}
               error={errors.starts_at}
+              required={isTimed}
             />
+            {isTimed ? (
+              <Input
+                label="Fecha y hora de finalización"
+                type="datetime-local"
+                value={values.ends_at}
+                onChange={(event) => setField('ends_at', event.target.value)}
+                error={errors.ends_at}
+                required
+              />
+            ) : null}
             <p className="-mt-2 text-xs text-ink-faint">
-              La fecha de inicio hace falta para publicar el remate más adelante -- no es obligatoria para
-              guardarlo como borrador.
+              {isTimed
+                ? 'Todos los lotes aceptan ofertas en paralelo durante este período. En esta versión, el período es el mismo para todos los lotes del remate.'
+                : 'La fecha de inicio hace falta para publicar el remate más adelante -- no es obligatoria para guardarlo como borrador.'}
             </p>
           </FormSection>
 
@@ -291,69 +366,48 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
               ))}
             </Select>
 
-            <div className="flex flex-col gap-3 border-t border-line pt-4">
-              <Switch
-                id={antiSnipingSwitchId}
-                label="Habilitar anti-sniping"
-                description="Extiende automáticamente el tiempo cuando se reciben ofertas durante los últimos segundos del temporizador."
-                checked={values.anti_sniping_enabled}
-                onChange={(checked) => setField('anti_sniping_enabled', checked)}
-              />
-              <AnimatePresence initial={false}>
-                {values.anti_sniping_enabled && (
-                  <motion.div
-                    key="anti-sniping-seconds"
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={revealTransition}
-                    className="overflow-hidden"
-                  >
-                    <Input
-                      label="Segundos de extensión ante una oferta de último momento"
-                      type="number"
-                      min={10}
-                      max={600}
-                      value={values.anti_sniping_extension_seconds}
-                      onChange={(event) => setField('anti_sniping_extension_seconds', event.target.value)}
-                      error={errors.anti_sniping_extension_seconds}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <div className="flex flex-col gap-3 border-t border-line pt-4">
-              <Switch
-                id={loteTimerSwitchId}
-                label="Habilitar cuenta regresiva por lote"
-                description="Cada lote iniciará con una cuenta regresiva configurable."
-                checked={values.lote_timer_enabled}
-                onChange={(checked) => setField('lote_timer_enabled', checked)}
-              />
-              <AnimatePresence initial={false}>
-                {values.lote_timer_enabled && (
-                  <motion.div
-                    key="lote-timer-seconds"
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={revealTransition}
-                    className="overflow-hidden"
-                  >
-                    <Input
-                      label="Segundos de cuenta regresiva al abrir cada lote"
-                      type="number"
-                      min={5}
-                      max={3600}
-                      value={values.lote_timer_seconds}
-                      onChange={(event) => setField('lote_timer_seconds', event.target.value)}
-                      error={errors.lote_timer_seconds}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            {isTimed ? (
+              <div className="flex flex-col gap-3 border-t border-line pt-4">
+                <Switch
+                  id={antiSnipingSwitchId}
+                  label="Habilitar anti-sniping"
+                  description="Una oferta recibida dentro de la ventana configurada extiende el cierre de ESE lote (nunca el de los demás)."
+                  checked={values.anti_sniping_enabled}
+                  onChange={(checked) => setField('anti_sniping_enabled', checked)}
+                />
+                <AnimatePresence initial={false}>
+                  {values.anti_sniping_enabled && (
+                    <motion.div
+                      key="timed-anti-sniping-seconds"
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={revealTransition}
+                      className="flex flex-col gap-4 overflow-hidden"
+                    >
+                      <Input
+                        label="Ventana de extensión (segundos antes del cierre)"
+                        type="number"
+                        min={10}
+                        max={3600}
+                        value={values.timed_extension_window_seconds}
+                        onChange={(event) => setField('timed_extension_window_seconds', event.target.value)}
+                        error={errors.timed_extension_window_seconds}
+                      />
+                      <Input
+                        label="Duración de la extensión (segundos)"
+                        type="number"
+                        min={10}
+                        max={3600}
+                        value={values.timed_extension_duration_seconds}
+                        onChange={(event) => setField('timed_extension_duration_seconds', event.target.value)}
+                        error={errors.timed_extension_duration_seconds}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ) : null}
 
             <div className="flex flex-col gap-3 border-t border-line pt-4">
               <Switch
@@ -396,7 +450,7 @@ export function RemateFormModal({ isOpen, onClose, remate, onSaved }: RemateForm
               <h3 className="text-sm font-semibold">Consejos</h3>
             </div>
             <ul className="flex flex-col gap-2.5">
-              {HELP_TIPS.map((tip) => (
+              {(isTimed ? HELP_TIPS_TIMED : HELP_TIPS_LIVE).map((tip) => (
                 <li key={tip} className="flex gap-2 text-xs leading-relaxed text-brand-900/80">
                   <span aria-hidden="true" className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-brand-500" />
                   {tip}

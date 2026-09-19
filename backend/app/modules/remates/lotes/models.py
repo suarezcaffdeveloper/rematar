@@ -43,7 +43,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base_class import Base
 from app.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
-from app.modules.remates.models import RemateCategory
+from app.modules.remates.models import RemateAuctionType, RemateCategory
 
 
 class LoteStatus(str, enum.Enum):
@@ -92,11 +92,18 @@ class Lote(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         ),
         # Invariante RF-12 (ADR-017): a lo sumo un lote OPEN por remate — garantizada por
         # la base como respaldo de la validación de aplicación en LoteService.open.
+        # Acotado a `auction_type = 'live'` (Timed Auctions): ADR-017 ya anticipaba que
+        # permitir pujas paralelas exigiría eliminar este índice en una migración nueva
+        # -- en vez de eliminarlo, se lo acota al predicado para que LIVE conserve el
+        # invariante byte a byte y un remate TIMED simplemente quede fuera de él (ahí no
+        # hay nada que deba ser único: todos sus lotes pueden estar OPEN a la vez).
         Index(
             "uq_lotes_remate_id_open_status",
             "remate_id",
             unique=True,
-            postgresql_where=text("status = 'open' AND deleted_at IS NULL"),
+            postgresql_where=text(
+                "status = 'open' AND deleted_at IS NULL AND auction_type = 'live'"
+            ),
         ),
         Index("ix_lotes_remate_id_display_order", "remate_id", "display_order"),
         # Usado por `TimerExpiryScheduler` (app/timer/scheduler.py) para encontrar
@@ -115,6 +122,21 @@ class Lote(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         ForeignKey("remates.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
+    )
+
+    # Copia inmutable de `Remate.auction_type`, fijada por `LoteService.create` al
+    # nacer y nunca mutada después -- mismo patrón que `category` reutilizando el enum
+    # de `remates` (ADR-014). Existe pura y exclusivamente para que el índice de más
+    # arriba pueda filtrar por modalidad sin un JOIN (un índice parcial de Postgres solo
+    # puede referenciar columnas de su propia tabla).
+    auction_type: Mapped[RemateAuctionType] = mapped_column(
+        PGEnum(
+            RemateAuctionType,
+            name="remate_auction_type",
+            values_callable=_enum_values,
+            create_type=False,
+        ),
+        nullable=False,
     )
 
     lot_number: Mapped[str] = mapped_column(String(20), nullable=False)

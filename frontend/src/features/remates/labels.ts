@@ -4,7 +4,7 @@
  * mostrar un estado o una categoría.
  */
 
-import type { LoteStatus, RemateCategory, RemateStatus, VisibleRemateStatus } from './types';
+import type { LoteStatus, RemateAuctionType, RemateCategory, RemateStatus, VisibleRemateStatus } from './types';
 
 type BadgeVariant = 'brand' | 'success' | 'danger' | 'warning' | 'neutral';
 
@@ -72,6 +72,17 @@ export const CATEGORY_OPTIONS: RemateCategory[] = [
   'nautica_y_aviacion',
   'mercaderia_e_indumentaria',
 ];
+
+/** Modalidad del remate -- eje ortogonal al estado (`RemateStatus`): un mismo remate
+ * puede estar `live` y ser `timed` a la vez (todos sus lotes abiertos en paralelo
+ * durante el período general). Reemplaza al filtro de estado en el Dashboard del
+ * comprador (ver `DashboardToolbar`, `showAuctionTypeFilter`). */
+export const AUCTION_TYPE_LABELS: Record<RemateAuctionType, string> = {
+  live: 'Remate en vivo',
+  timed: 'Remate timed auction',
+};
+
+export const AUCTION_TYPE_OPTIONS: RemateAuctionType[] = ['live', 'timed'];
 
 export const LOTE_STATUS_LABELS: Record<LoteStatus, string> = {
   pending: 'Pendiente',

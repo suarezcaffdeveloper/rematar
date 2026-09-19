@@ -21,6 +21,13 @@ export type VisibleRemateStatus = Exclude<RemateStatus, 'draft'>;
  * `RemateFormPayload` en modo edición. */
 export type RemateAccessType = 'public' | 'private';
 
+/** `RemateAuctionType` del backend -- `live` (comportamiento de siempre: un rematador
+ * abre un lote a la vez) o `timed` (Timed Auction: todos los lotes aceptan ofertas en
+ * paralelo durante un período general, cierre automático por lote). Eje ortogonal a
+ * `RemateAccessType`. Elegible solo al crear, inmutable después -- mismo tratamiento
+ * que `access_type`, no forma parte de `RemateFormPayload` en modo edición. */
+export type RemateAuctionType = 'live' | 'timed';
+
 /** `RemateCategory` del backend -- las mismas nueve categorías, ni una más. */
 export type RemateCategory =
   | 'inmuebles'
@@ -40,15 +47,27 @@ export type RemateCategory =
  * también tienen efecto real (ver `features/sala/components/LoteCountdown.tsx`). */
 export interface RemateSettings {
   anti_sniping_enabled: boolean;
+  // LIVE únicamente -- un solo valor sirve de ventana y de duración. Ver los dos
+  // campos `timed_extension_*` de abajo para el equivalente en TIMED.
   anti_sniping_extension_seconds: number;
   currency: string;
+  // LIVE únicamente -- cuenta regresiva por lote, `null` es "sin timer". En TIMED no
+  // aplica (el deadline de cada lote es `Remate.ends_at`, el mismo para todos en V1).
   lote_timer_seconds: number | null;
+  // TIMED únicamente -- a diferencia de LIVE (arriba), ventana de disparo y duración de
+  // la extensión son valores independientes. `null` hasta que la empresa los configura.
+  // Opcionales a nivel de tipo (aunque el backend siempre los manda, nuevos en esta
+  // revisión) por el mismo motivo pragmático que `Remate.rematador_id`/`access_type` --
+  // no romper los fixtures de prueba existentes que arman un `RemateSettings` a mano
+  // sin estos dos campos. `undefined` se trata igual que `null` en cualquier chequeo.
+  timed_extension_window_seconds?: number | null;
+  timed_extension_duration_seconds?: number | null;
   // Garantía económica (bloqueo de tarjeta vía Mercado Pago) -- opt-in por remate,
   // `false`/`null` por defecto. `guarantee_amount` llega como **string**, no `number`
   // (Decimal, mismo motivo que `base_price`/`min_increment` en `Lote` -- ver ese
-  // docstring). Opcionales a nivel de tipo por el mismo motivo pragmático que otros
-  // campos nuevos de esta interfaz: no romper los fixtures de prueba existentes que
-  // arman un `RemateSettings` a mano sin estos campos, nuevos en esta revisión.
+  // docstring). Opcionales a nivel de tipo por el mismo motivo pragmático que los dos
+  // campos `timed_extension_*` de arriba: no romper los fixtures de prueba existentes
+  // que arman un `RemateSettings` a mano sin estos campos, nuevos en esta revisión.
   guarantee_required?: boolean;
   guarantee_amount?: string | null;
 }
@@ -77,6 +96,10 @@ export interface Remate {
   // `undefined` se trata igual que `'public'` en cualquier chequeo (`remate.access_type
   // === 'private'` da `false`), que es el default real del backend.
   access_type?: RemateAccessType;
+  // Igual que `access_type`: opcional a nivel de tipo por el mismo motivo (no romper
+  // fixtures existentes), pero el backend siempre lo manda. `undefined` se trata como
+  // `'live'` (el default real del backend) en cualquier chequeo.
+  auction_type?: RemateAuctionType;
   // `null` hasta que se genera un código (o después de que el remate nace público). El
   // código en sí NUNCA viaja acá en texto plano -- solo en `RemateCreateResponse.
   // private_access_code`/`PrivateAccessCodeResponse.code` (`POST` o `GET
@@ -122,6 +145,9 @@ export interface RemateFormPayload {
   // Solo tiene efecto al crear (`RemateCreate.access_type`) -- el backend lo ignora en
   // un `PATCH` (`RemateUpdate` no lo incluye), así que da igual mandarlo también ahí.
   access_type?: RemateAccessType;
+  // Solo tiene efecto al crear (`RemateCreate.auction_type`), mismo criterio que
+  // `access_type` -- el backend lo ignora en un `PATCH`.
+  auction_type?: RemateAuctionType;
 }
 
 /** `LoteStatus` del backend (`lotes/models.py`) -- los mismos cinco valores, ni uno más. */

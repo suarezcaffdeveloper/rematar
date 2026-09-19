@@ -13,23 +13,45 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
-from app.modules.remates.models import RemateAccessType, RemateCategory, RemateStatus
+from app.modules.remates.models import (
+    RemateAccessType,
+    RemateAuctionType,
+    RemateCategory,
+    RemateStatus,
+)
 
 
 class RemateSettings(BaseModel):
-    """Ver ADR-012: esto es lo que se persiste en `remates.settings` (JSONB)."""
+    """Ver ADR-012: esto es lo que se persiste en `remates.settings` (JSONB).
+
+    Los campos de anti-sniping/timer están agrupados por modalidad (ver
+    `RemateAuctionType`), no compartidos: LIVE usa `anti_sniping_extension_seconds`
+    (un solo valor sirve de ventana y de duración) y `lote_timer_seconds`, sin cambios
+    de comportamiento; TIMED usa `timed_extension_window_seconds`/
+    `timed_extension_duration_seconds` como valores independientes y no tiene cuenta
+    regresiva por lote configurable (el cierre de cada lote lo define
+    `Remate.ends_at`). Que un remate TIMED complete efectivamente los campos que le
+    corresponden lo valida `RemateCreate`/`RemateUpdate` (que sí conocen
+    `auction_type`, un campo hermano fuera de este modelo) -- acá todos son opcionales
+    para que este modelo por sí solo nunca falle sin conocer la modalidad."""
 
     anti_sniping_enabled: bool = False
-    # Segundos que se extiende el cierre de un lote ante una oferta de último momento
-    # (ADR-007 de Fase 0, implementado en ADR-043). Solo tiene efecto si
+    # LIVE únicamente. Segundos que se extiende el cierre de un lote ante una oferta de
+    # último momento (ADR-007 de Fase 0, implementado en ADR-043). Solo tiene efecto si
     # anti_sniping_enabled es true -- mismo número sirve de umbral de disparo ("oferta
     # dentro de los últimos N segundos") y de segundos a extender.
     anti_sniping_extension_seconds: int = Field(default=60, ge=10, le=600)
     # Código ISO 4217 de 3 letras, ej. "ARS", "USD".
     currency: str = Field(default="ARS")
-    # Cuenta regresiva por lote (Épica 8, "cuenta regresiva y cierre automático",
-    # ADR-043) -- `None` es "sin timer" para este remate, opt-in explícito.
+    # LIVE únicamente. Cuenta regresiva por lote (Épica 8, "cuenta regresiva y cierre
+    # automático", ADR-043) -- `None` es "sin timer" para este remate, opt-in explícito.
     lote_timer_seconds: int | None = Field(default=None, ge=5, le=3600)
+    # TIMED únicamente. A diferencia de `anti_sniping_extension_seconds` (LIVE), acá la
+    # ventana de disparo y la duración de la extensión son valores independientes (ver
+    # spec de Timed Auctions, secciones 12-14) -- una auditoría que dura días puede
+    # querer una ventana/duración más largas que las de una sesión LIVE de minutos.
+    timed_extension_window_seconds: int | None = Field(default=None, ge=10, le=3600)
+    timed_extension_duration_seconds: int | None = Field(default=None, ge=10, le=3600)
     # Garantía económica (bloqueo de tarjeta vía Mercado Pago, ver
     # `app/modules/garantias/`). `guarantee_amount` usa la `currency` de este mismo
     # modelo -- no tiene campo de moneda propio. La inmutabilidad una vez que existen
@@ -55,6 +77,35 @@ class RemateSettings(BaseModel):
         return self
 
 
+def check_timed_settings_complete(
+    auction_type: RemateAuctionType, settings: RemateSettings
+) -> None:
+    """Compartida entre `RemateCreate` (a nivel de transporte, acá abajo) y
+    `RemateService.update`/`schedule` (a nivel de estado ya persistido, que puede quedar
+    incompleto tras una serie de PATCH parciales que la validación de transporte no
+    puede ver todos juntos) -- mismo criterio que
+    `_RemateDateValidationMixin._check_date_order`, pero sin el prefijo `_`: a
+    diferencia de esa (duplicada a propósito en cada schema que la necesita, ver
+    `_enum_values` en `models.py` para el mismo criterio), esta función tiene lógica de
+    negocio real, no boilerplate -- se importa desde `service.py` en vez de
+    reescribirla."""
+    if auction_type != RemateAuctionType.TIMED:
+        return
+    if settings.anti_sniping_enabled and (
+        settings.timed_extension_window_seconds is None
+        or settings.timed_extension_duration_seconds is None
+    ):
+        raise ValueError(
+            "Para habilitar anti-sniping en un remate Timed hace falta indicar la "
+            "ventana y la duración de extensión."
+        )
+    if settings.lote_timer_seconds is not None:
+        raise ValueError(
+            "La cuenta regresiva por lote no aplica a un remate Timed; el cierre de "
+            "cada lote lo define la fecha de finalización general del remate."
+        )
+
+
 class _RemateDateValidationMixin:
     """`starts_at`/`ends_at` viven en más de un schema (Create y Update); esta
     validación de orden de fechas es la misma en ambos, así que se factoriza acá en vez
@@ -76,12 +127,24 @@ class RemateCreate(BaseModel, _RemateDateValidationMixin):
     ends_at: datetime | None = None
     settings: RemateSettings = Field(default_factory=RemateSettings)
     # Elegible solo al crear -- RemateUpdate deliberadamente no lo incluye (ver
-    # docstring de RemateUpdate más abajo).
+    # docstring de RemateUpdate más abajo). Eje ortogonal a `access_type`: las cuatro
+    # combinaciones (LIVE/TIMED x PUBLIC/PRIVATE) son válidas.
     access_type: RemateAccessType = RemateAccessType.PUBLIC
+    auction_type: RemateAuctionType = RemateAuctionType.LIVE
 
     @model_validator(mode="after")
     def _validate_dates(self) -> "RemateCreate":
         self._check_date_order(self.starts_at, self.ends_at)
+        # TIMED necesita ambas fechas para saber cuándo abrir sus lotes en paralelo y
+        # cuándo cerrarlos -- a diferencia de LIVE, donde las dos son opcionales
+        # (`ends_at` siempre lo fue; `starts_at` recién se exige al programar).
+        if self.auction_type == RemateAuctionType.TIMED and (
+            self.starts_at is None or self.ends_at is None
+        ):
+            raise ValueError(
+                "Un remate Timed requiere fecha y hora de inicio y de finalización."
+            )
+        check_timed_settings_complete(self.auction_type, self.settings)
         return self
 
 
@@ -94,6 +157,13 @@ class RemateUpdate(BaseModel, _RemateDateValidationMixin):
 
     A propósito sin `access_type`: público/privado se elige solo al crear (spec); si más
     adelante se quiere permitir cambiarlo después, es un agregado chico y separado acá.
+    Tampoco incluye `auction_type` -- LIVE/TIMED es igual de inmutable después de crear.
+
+    Este schema no puede validar por sí solo que un remate TIMED mantenga completos sus
+    campos de anti-sniping (no conoce `auction_type`, que vive en la fila ya persistida,
+    no en este PATCH) -- esa validación la hace `RemateService.update` contra el estado
+    en base, mismo criterio que el orden de fechas contra un `starts_at`/`ends_at` que no
+    vino en este PATCH.
     """
 
     title: str | None = Field(default=None, min_length=3, max_length=200)
@@ -175,6 +245,7 @@ class RemateRead(BaseModel):
     ends_at: datetime | None
     status: RemateStatus
     access_type: RemateAccessType
+    auction_type: RemateAuctionType
     private_access_code_generated_at: datetime | None
     settings: RemateSettings
     cancellation_reason: str | None

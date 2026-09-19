@@ -1,11 +1,11 @@
 import { type ReactNode, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowRight, Info } from 'lucide-react';
+import { ArrowRight, Gavel, Info, ShieldCheck } from 'lucide-react';
 import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
-import { formatDateTime } from '../../../shared/lib/format';
+import { formatCurrency, formatDateTime } from '../../../shared/lib/format';
 import { pickLoteCoverImages } from '../collage';
-import { CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_LABELS } from '../labels';
+import { AUCTION_TYPE_LABELS, CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_LABELS } from '../labels';
 import type { Lote, Remate } from '../types';
 import { CalendarIcon, PinIcon } from './icons';
 import { LotesCollagePlaceholder } from './LotesCollagePlaceholder';
@@ -117,6 +117,9 @@ export function RemateDetailOverview({ remate, lotes = [], onEnterRoom }: Remate
           <h2 className="text-base font-semibold text-ink">Detalles</h2>
 
           <dl className="flex flex-col gap-4">
+            <DetailRow icon={<Gavel className="h-4 w-4" />} label="Tipo de remate">
+              {AUCTION_TYPE_LABELS[remate.auction_type ?? 'live']}
+            </DetailRow>
             {remate.starts_at && (
               <DetailRow icon={<CalendarIcon className="h-4 w-4" />} label="Fecha y hora de inicio">
                 {formatDateTime(remate.starts_at)}
@@ -127,6 +130,13 @@ export function RemateDetailOverview({ remate, lotes = [], onEnterRoom }: Remate
                 {remate.location}
               </DetailRow>
             )}
+            <DetailRow icon={<ShieldCheck className="h-4 w-4" />} label="Garantía para ofertar">
+              {remate.settings.guarantee_required
+                ? remate.settings.guarantee_amount
+                  ? `Sí · ${formatCurrency(remate.settings.guarantee_amount, remate.settings.currency)}`
+                  : 'Sí, se requiere garantía'
+                : 'No se requiere garantía'}
+            </DetailRow>
           </dl>
         </div>
       </div>

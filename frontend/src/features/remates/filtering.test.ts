@@ -83,6 +83,31 @@ describe('filterAndSortRemates', () => {
     expect(result.map((r) => r.id)).toEqual(['b']);
   });
 
+  it('filtra por tipo de remate: timed solo devuelve timed', () => {
+    const timed = makeRemate({ id: 't1', auction_type: 'timed', status: 'live' });
+    const live = makeRemate({ id: 'l1', auction_type: 'live', status: 'live' });
+    const result = filterAndSortRemates([timed, live], { ...DEFAULT_FILTERS, auctionType: 'timed' });
+    expect(result.map((r) => r.id)).toEqual(['t1']);
+  });
+
+  it('filtra por tipo de remate: live incluye los que no declaran auction_type (default del backend)', () => {
+    const explicitLive = makeRemate({ id: 'l1', auction_type: 'live' });
+    const implicitLive = makeRemate({ id: 'l2' }); // sin auction_type -- se trata como 'live'
+    const timed = makeRemate({ id: 't1', auction_type: 'timed' });
+    const result = filterAndSortRemates([explicitLive, implicitLive, timed], {
+      ...DEFAULT_FILTERS,
+      auctionType: 'live',
+    });
+    expect(result.map((r) => r.id).sort()).toEqual(['l1', 'l2']);
+  });
+
+  it('filtro de tipo "all" no descarta ninguno', () => {
+    const timed = makeRemate({ id: 't1', auction_type: 'timed' });
+    const live = makeRemate({ id: 'l1', auction_type: 'live' });
+    const result = filterAndSortRemates([timed, live], { ...DEFAULT_FILTERS, auctionType: 'all' });
+    expect(result).toHaveLength(2);
+  });
+
   it('combina búsqueda, estado y categoría (AND, no OR)', () => {
     const filters: RemateFilters = {
       ...DEFAULT_FILTERS,

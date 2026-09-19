@@ -98,6 +98,7 @@ async def test_analytics_endpoint_returns_full_shape_for_owner(client: AsyncClie
         "ofertas_per_minute",
         "highest_oferta",
         "top_lote_by_offers",
+        "offers_by_lote",
         "bids_timeline",
         "recent_events",
         "generated_at",

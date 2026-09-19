@@ -5,11 +5,12 @@ import { MemoryRouter } from 'react-router-dom';
 import { RemateDetailPage } from './RemateDetailPage';
 import type { Lote, Remate } from '../types';
 
-const { navigateMock, useRemateDetailMock, useLotesMock, useAuthMock } = vi.hoisted(() => ({
+const { navigateMock, useRemateDetailMock, useLotesMock, useAuthMock, fetchLeadingOfferAmountMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   useRemateDetailMock: vi.fn(),
   useLotesMock: vi.fn(),
   useAuthMock: vi.fn(),
+  fetchLeadingOfferAmountMock: vi.fn(),
 }));
 
 vi.mock('react-router-dom', async () => {
@@ -25,6 +26,8 @@ vi.mock('../hooks', () => ({
   useRemateDetail: useRemateDetailMock,
   useLotes: useLotesMock,
 }));
+
+vi.mock('../api', () => ({ fetchLeadingOfferAmountRequest: fetchLeadingOfferAmountMock }));
 
 vi.mock('../../auth/hooks', () => ({ useAuth: useAuthMock }));
 
@@ -87,6 +90,8 @@ function renderPage() {
 describe('RemateDetailPage', () => {
   beforeEach(() => {
     useAuthMock.mockReturnValue({ isAuthenticated: true });
+    fetchLeadingOfferAmountMock.mockReset();
+    fetchLeadingOfferAmountMock.mockResolvedValue(null);
   });
 
   it('mientras carga el remate, muestra esqueletos y no el contenido', () => {
@@ -215,6 +220,120 @@ describe('RemateDetailPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Entrar al remate' }));
     expect(navigateMock).toHaveBeenCalledWith('/remates/remate-1/sala');
+  });
+
+  it('muestra el tipo de remate en los Detalles (live por default)', () => {
+    useRemateDetailMock.mockReturnValue({ remate: makeRemate(), isLoading: false, error: null, reload: vi.fn() });
+    useLotesMock.mockReturnValue({ lotes: [], total: 0, isLoading: false, error: null, reload: vi.fn() });
+
+    renderPage();
+
+    expect(screen.getByText('Tipo de remate')).toBeInTheDocument();
+    expect(screen.getByText('Remate en vivo')).toBeInTheDocument();
+  });
+
+  it('un remate timed se anuncia como "Remate timed auction" en los Detalles', () => {
+    useRemateDetailMock.mockReturnValue({
+      remate: makeRemate({ auction_type: 'timed' }),
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+    useLotesMock.mockReturnValue({ lotes: [], total: 0, isLoading: false, error: null, reload: vi.fn() });
+
+    renderPage();
+
+    expect(screen.getByText('Tipo de remate')).toBeInTheDocument();
+    expect(screen.getByText('Remate timed auction')).toBeInTheDocument();
+  });
+
+  it('sin garantía configurada, los Detalles dicen que no se requiere', () => {
+    useRemateDetailMock.mockReturnValue({ remate: makeRemate(), isLoading: false, error: null, reload: vi.fn() });
+    useLotesMock.mockReturnValue({ lotes: [], total: 0, isLoading: false, error: null, reload: vi.fn() });
+
+    renderPage();
+
+    expect(screen.getByText('Garantía para ofertar')).toBeInTheDocument();
+    expect(screen.getByText('No se requiere garantía')).toBeInTheDocument();
+  });
+
+  it('con garantía exigida, los Detalles muestran el monto', () => {
+    useRemateDetailMock.mockReturnValue({
+      remate: makeRemate({
+        settings: {
+          anti_sniping_enabled: false,
+          anti_sniping_extension_seconds: 60,
+          currency: 'ARS',
+          lote_timer_seconds: null,
+          guarantee_required: true,
+          guarantee_amount: '50000',
+        },
+      }),
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+    useLotesMock.mockReturnValue({ lotes: [], total: 0, isLoading: false, error: null, reload: vi.fn() });
+
+    renderPage();
+
+    expect(screen.getByText('Garantía para ofertar')).toBeInTheDocument();
+    expect(screen.getByText(/50\.000/)).toBeInTheDocument();
+  });
+
+  it('en un remate TIMED, pide el monto líder de cada lote abierto (best-effort, en paralelo)', async () => {
+    fetchLeadingOfferAmountMock.mockImplementation((_remateId: string, loteId: string) =>
+      Promise.resolve(loteId === '1' ? '1750.00' : null),
+    );
+    useRemateDetailMock.mockReturnValue({
+      remate: makeRemate({ auction_type: 'timed' }),
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+    useLotesMock.mockReturnValue({
+      lotes: [
+        { ...makeLote('1'), status: 'open' },
+        { ...makeLote('2'), status: 'open' },
+        { ...makeLote('3'), status: 'pending' }, // no abierto: no se pide
+      ],
+      total: 3,
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(fetchLeadingOfferAmountMock).toHaveBeenCalledWith('remate-1', '1');
+      expect(fetchLeadingOfferAmountMock).toHaveBeenCalledWith('remate-1', '2');
+    });
+    expect(fetchLeadingOfferAmountMock).not.toHaveBeenCalledWith('remate-1', '3');
+
+    // El lote con oferta líder la muestra; el que no tiene, muestra la base.
+    await screen.findByText('Precio actual');
+    expect(screen.getByText(/1\.750/)).toBeInTheDocument();
+  });
+
+  it('en un remate LIVE, no pide montos líderes (sin llamadas extra)', () => {
+    useRemateDetailMock.mockReturnValue({
+      remate: makeRemate({ auction_type: 'live' }),
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+    useLotesMock.mockReturnValue({
+      lotes: [{ ...makeLote('1'), status: 'open' }],
+      total: 1,
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(fetchLeadingOfferAmountMock).not.toHaveBeenCalled();
   });
 
   it('"Entrar al remate" en un remate "scheduled" muestra el cartel de "todavía no empezó" en vez de navegar', async () => {

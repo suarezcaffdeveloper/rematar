@@ -45,6 +45,7 @@ function makeSnapshot(overrides: Partial<RemateAnalyticsSnapshot> = {}): RemateA
       lote_title: 'Toro Angus',
       offer_count: 4,
     },
+    offers_by_lote: [{ lote_id: 'lote-1', offer_count: 4 }],
     bids_timeline: [{ bucket_start: '2026-07-21T10:00:00Z', count: 2 }],
     recent_events: [
       {

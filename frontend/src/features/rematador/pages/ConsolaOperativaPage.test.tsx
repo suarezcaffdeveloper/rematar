@@ -9,10 +9,11 @@ import type { Lote, Remate } from '../../remates/types';
 import type { UseLiveRemateStateResult } from '../../sala/hooks';
 import type { RemateStateSnapshot } from '../../sala/types';
 
-const { navigateMock, useLiveRemateStateMock, useAuthMock } = vi.hoisted(() => ({
+const { navigateMock, useLiveRemateStateMock, useAuthMock, useRemateDetailMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   useLiveRemateStateMock: vi.fn(),
   useAuthMock: vi.fn(),
+  useRemateDetailMock: vi.fn(),
 }));
 
 vi.mock('react-router-dom', async () => {
@@ -26,6 +27,12 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('../../sala/hooks', () => ({ useLiveRemateState: useLiveRemateStateMock }));
 vi.mock('../../auth/hooks', () => ({ useAuth: useAuthMock }));
+// El wrapper de `ConsolaOperativaPage` decide LIVE vs. Timed con `useRemateDetail`; estos
+// tests cubren la consola LIVE, así que devuelve siempre un remate de esa modalidad.
+vi.mock('../../remates/hooks', () => ({ useRemateDetail: useRemateDetailMock }));
+vi.mock('../../timedConsola/pages/TimedConsolaPage', () => ({
+  TimedConsolaPage: () => <div>Panel Timed (mock)</div>,
+}));
 
 // Paneles exclusivos del dueño (empresa) -- antes de este archivo nunca se ejercitaban
 // (ningún test mockeaba `useAuth` con un `user.id` igual al `owner_id` del remate), así
@@ -139,6 +146,19 @@ describe('ConsolaOperativaPage', () => {
     // logueado) -- el rematador operador es el caso por defecto de casi todos los tests
     // de este archivo; el caso "empresa dueña" se mockea aparte, más abajo.
     useAuthMock.mockReturnValue({ user: undefined });
+    useRemateDetailMock.mockReturnValue({ remate: makeRemate(), isLoading: false, error: null, reload: vi.fn() });
+  });
+
+  it('un remate Timed muestra su propio panel, no la consola en vivo', () => {
+    useRemateDetailMock.mockReturnValue({
+      remate: makeRemate({ auction_type: 'timed' }),
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByText('Panel Timed (mock)')).toBeInTheDocument();
+    expect(useLiveRemateStateMock).not.toHaveBeenCalled();
   });
 
   it('mientras carga, muestra esqueletos', () => {
