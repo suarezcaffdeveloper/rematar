@@ -8,6 +8,7 @@ import { CompradorMockup } from '../components/CompradorMockup';
 import { HowItWorksSection } from '../components/HowItWorksSection';
 import { ScreenshotsSection } from '../components/ScreenshotsSection';
 import { FeaturesSection } from '../components/FeaturesSection';
+import { FaqSection } from '../components/FaqSection';
 import { CTASection } from '../components/CTASection';
 import { LandingFooter } from '../components/LandingFooter';
 import { EMPRESA_BENEFITS, REMATADOR_BENEFITS, COMPRADOR_BENEFITS } from '../data';
@@ -52,6 +53,7 @@ export function LandingPage() {
         <HowItWorksSection />
         <ScreenshotsSection />
         <FeaturesSection />
+        <FaqSection />
         <CTASection />
       </main>
       <LandingFooter />

@@ -42,6 +42,7 @@ export const NAV_LINKS: NavLink[] = [
   { label: 'Funcionalidades', href: '#plataforma' },
   { label: 'Cómo funciona', href: '#como-funciona' },
   { label: 'Características', href: '#caracteristicas' },
+  { label: 'FAQ', href: '#faq' },
 ];
 
 export interface RubroItem {
@@ -181,4 +182,91 @@ export const FEATURES: FeatureCard[] = [
   { icon: Layers, title: 'Múltiples rubros', description: 'Inmuebles, vehículos, hacienda, arte y más: un mismo sistema para cualquier categoría.' },
   { icon: Timer, title: 'Seguimiento post-remate', description: 'El comprador sigue el progreso de su compra hasta la entrega final.' },
   { icon: Monitor, title: 'Desde cualquier dispositivo', description: 'Pensado para participar y administrar remates desde celular, tablet o computadora.' },
+];
+
+export interface FaqItem {
+  question: string;
+  answer: string;
+}
+
+export interface FaqGroup {
+  eyebrow: string;
+  items: FaqItem[];
+}
+
+/** Preguntas frecuentes de la landing, agrupadas por audiencia/tema (pedido explícito:
+ * "aclarando para qué usuario va"). Responden dudas que las secciones anteriores
+ * (features, timeline, screenshots) no cubren -- la idea es desactivar objeciones
+ * antes del CTA final, no repetir lo que ya se mostró arriba. */
+export const FAQ_GROUPS: FaqGroup[] = [
+  {
+    eyebrow: 'Para compradores',
+    items: [
+      {
+        question: '¿Cómo entro a un remate privado?',
+        answer:
+          'Los remates privados no aparecen en el listado público. La empresa te comparte un enlace y un código de acceso: lo ingresás una sola vez y quedás habilitado para entrar a la sala y ofertar.',
+      },
+      {
+        question: '¿Qué es la garantía y cuándo la tengo que pagar?',
+        answer:
+          'Algunos remates exigen una garantía económica para participar. Se bloquea un monto en tu tarjeta vía Mercado Pago antes de ofertar -- no es un pago, solo una retención. Si no ganás ningún lote, se libera automáticamente.',
+      },
+      {
+        question: '¿Qué pasa después de que gano un lote?',
+        answer:
+          'El lote queda registrado a tu nombre y la empresa gestiona el cobro y la entrega. Podés seguir el estado de tu compra desde tu dashboard, en "Mis compras", hasta la entrega final.',
+      },
+    ],
+  },
+  {
+    eyebrow: 'Para empresas',
+    items: [
+      {
+        question: '¿Puedo hacer un remate solo para clientes invitados?',
+        answer:
+          'Sí. Al crear el remate elegís si es público (visible para cualquiera) o privado (solo accesible con URL y código que generás y compartís vos). La modalidad no se puede cambiar después -- si necesitás otra, creás un remate nuevo.',
+      },
+      {
+        question: '¿Qué pasa si un lote no recibe ofertas?',
+        answer:
+          'Queda como "desierto". Podés reincorporarlo a la cola con el mismo o distinto precio base, sin crear un lote nuevo. Todo queda registrado en el historial de rondas.',
+      },
+      {
+        question: '¿Puedo ver quién está participando en tiempo real?',
+        answer:
+          'Sí. El panel de la empresa muestra cuántos compradores están conectados, quién va liderando cada lote y el historial completo de ofertas, todo actualizado al instante.',
+      },
+    ],
+  },
+  {
+    eyebrow: 'Para martilleros',
+    items: [
+      {
+        question: '¿Necesito instalar algo para conducir un remate?',
+        answer:
+          'No. La consola operativa funciona desde el navegador, en cualquier dispositivo. La empresa te asigna el remate y vos entrás con tus credenciales -- sin descargas ni configuración.',
+      },
+      {
+        question: '¿Puedo pausar o extender el tiempo de un lote?',
+        answer:
+          'Sí. Desde la consola podés pausar el timer, agregar tiempo, o pausar el remate completo si hay un problema. Cada acción queda registrada en el log de auditoría.',
+      },
+    ],
+  },
+  {
+    eyebrow: 'Sobre la plataforma',
+    items: [
+      {
+        question: '¿RematAR cobra comisión por venta?',
+        answer:
+          'Contactanos para conocer los planes. El modelo se adapta al volumen y tipo de remates de cada empresa -- no hay una tarifa única que aplique a todos por igual.',
+      },
+      {
+        question: '¿Puedo probar la plataforma antes de comprometerme?',
+        answer:
+          'Sí. Contactanos y coordinamos una demo guiada con un remate de prueba, para que veas la experiencia completa de empresa, martillero y comprador.',
+      },
+    ],
+  },
 ];
