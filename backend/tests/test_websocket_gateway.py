@@ -29,7 +29,6 @@ from app.core.security import hash_password
 from app.db.session import get_db
 from app.main import create_app
 from app.modules.users.models import User, UserRole
-from app.snapshot.dependencies import get_snapshot_service
 from app.snapshot.messages import SNAPSHOT_UNAVAILABLE
 from app.websocket import close_codes
 from app.websocket.rooms import ERROR_ALREADY_IN_ROOM, ERROR_INVALID_ROOM_ID, ERROR_NOT_IN_ROOM
@@ -908,7 +907,7 @@ async def test_rejected_join_does_not_publish_presence_connected_event(
 
 
 async def test_snapshot_build_failure_after_authorized_join_keeps_room_membership(
-    ws_client: TestClient,
+    ws_client: TestClient, monkeypatch
 ) -> None:
     """Test obligatorio de la Fase 2 (sección 6/12): una excepción inesperada DENTRO de
     `SnapshotService.build` -- para un usuario ya autorizado, ya miembro de la sala --
@@ -916,7 +915,12 @@ async def test_snapshot_build_failure_after_authorized_join_keeps_room_membershi
     Postgres momentáneamente caído, etc.). No corresponde deshacer una membresía válida
     por eso (sería una "transacción artificial" que el propio audit pidió evitar si no
     hace falta) -- la conexión sigue en la sala, recibe un error recuperable, y puede
-    seguir operando con normalidad (acá: `leave_room` responde con normalidad)."""
+    seguir operando con normalidad (acá: `leave_room` responde con normalidad).
+
+    `SnapshotService` ya no se inyecta por `Depends()` (ver docstring de
+    `app/websocket/router.py`, "Sesiones de Postgres de corta duración") -- se construye
+    a demanda vía `build_snapshot_service`, así que el seam de este test es parchear esa
+    función en el módulo del router, no `app.dependency_overrides`."""
     remate_id = _create_visible_remate(ws_client, suffix="snapfail")
 
     class _BrokenSnapshotService:
@@ -926,34 +930,34 @@ async def test_snapshot_build_failure_after_authorized_join_keeps_room_membershi
         async def build(self, *args, **kwargs):
             raise RuntimeError("Redis caído, simulado para este test")
 
-    ws_client.app.dependency_overrides[get_snapshot_service] = lambda: _BrokenSnapshotService()
-    try:
-        token = _register_and_login(ws_client, email="snapfail-buyer@example.com")
-        room_manager = ws_client.app.state.room_manager
+    monkeypatch.setattr(
+        "app.websocket.router.build_snapshot_service",
+        lambda db, redis_client, settings: _BrokenSnapshotService(),
+    )
+    token = _register_and_login(ws_client, email="snapfail-buyer@example.com")
+    room_manager = ws_client.app.state.room_manager
 
-        with ws_client.websocket_connect(WS_URL) as websocket:
-            websocket.send_json({"type": "auth", "token": token})
-            connected = websocket.receive_json()
-            websocket.send_json({"type": "join_room", "remate_id": remate_id})
+    with ws_client.websocket_connect(WS_URL) as websocket:
+        websocket.send_json({"type": "auth", "token": token})
+        connected = websocket.receive_json()
+        websocket.send_json({"type": "join_room", "remate_id": remate_id})
 
-            joined = _receive_protocol_message(websocket)
-            error = _receive_protocol_message(websocket)
+        joined = _receive_protocol_message(websocket)
+        error = _receive_protocol_message(websocket)
 
-            assert joined["type"] == "room_joined"
-            assert error["type"] == "error"
-            assert error["code"] == SNAPSHOT_UNAVAILABLE
+        assert joined["type"] == "room_joined"
+        assert error["type"] == "error"
+        assert error["code"] == SNAPSHOT_UNAVAILABLE
 
-            connection_id = uuid.UUID(connected["connection_id"])
-            assert room_manager.room_id_for_connection(connection_id) == uuid.UUID(remate_id)
-            assert room_manager.connection_count(uuid.UUID(remate_id)) == 1
+        connection_id = uuid.UUID(connected["connection_id"])
+        assert room_manager.room_id_for_connection(connection_id) == uuid.UUID(remate_id)
+        assert room_manager.connection_count(uuid.UUID(remate_id)) == 1
 
-            # La conexión sigue funcionando con normalidad después del fallo puntual.
-            websocket.send_json({"type": "leave_room"})
-            left = _receive_protocol_message(websocket)
-            assert left["type"] == "room_left"
-            assert room_manager.room_count() == 0
-    finally:
-        ws_client.app.dependency_overrides.pop(get_snapshot_service, None)
+        # La conexión sigue funcionando con normalidad después del fallo puntual.
+        websocket.send_json({"type": "leave_room"})
+        left = _receive_protocol_message(websocket)
+        assert left["type"] == "room_left"
+        assert room_manager.room_count() == 0
 
 
 async def test_snapshot_connected_users_reflects_current_room_size(ws_client: TestClient) -> None:

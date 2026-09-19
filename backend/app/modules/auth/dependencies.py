@@ -10,6 +10,7 @@ from typing import Annotated
 
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.dependencies import get_audit_log_repository
@@ -21,6 +22,7 @@ from app.email.renderer import EmailTemplateRenderer
 from app.email.sender import EmailSender
 from app.events.bus import EventBus
 from app.events.dependencies import get_event_bus
+from app.events.redis_bus import RedisEventBus
 from app.modules.auth.notifications import AuthEmailNotifier
 from app.modules.auth.repository import PasswordResetTokenRepository, RefreshTokenRepository
 from app.modules.auth.service import AuthService
@@ -28,8 +30,9 @@ from app.modules.users.dependencies import get_user_repository, get_user_service
 from app.modules.users.models import User, UserRole
 from app.modules.users.repository import UserRepository
 from app.modules.users.service import UserService
-from app.notify.dependencies import get_email_sender
+from app.notify.dependencies import _build_email_sender, get_email_sender
 from app.redis.dependencies import get_rate_limiter
+from app.redis.pubsub import RedisPubSub
 from app.redis.rate_limit import RedisRateLimiter
 
 _settings = get_settings()
@@ -86,6 +89,29 @@ def get_auth_service(
         audit_repository=audit_repository,
         email_notifier=email_notifier,
         rate_limiter=rate_limiter,
+        event_bus=event_bus,
+        settings=settings,
+    )
+
+
+def build_auth_service(db: AsyncSession, redis_client: Redis, settings: Settings) -> AuthService:
+    """Fábrica sin `Depends()`, mismo criterio que `build_notification_service`
+    (`app/notify/dependencies.py`) -- para el Gateway WebSocket (`app/websocket/router.py`),
+    que ya no comparte una única sesión de Postgres para toda la vida de la conexión:
+    necesita poder construir un `AuthService` a demanda (una sesión de corta duración,
+    abierta solo para autenticar el primer mensaje) sin pasar por el árbol de
+    dependencias de FastAPI, pensado para vivir durante un único request/conexión, no
+    para reconstruirse varias veces dentro del mismo `websocket_gateway`."""
+    user_repository = UserRepository(db)
+    event_bus = RedisEventBus(RedisPubSub(redis_client))
+    return AuthService(
+        user_repository=user_repository,
+        user_service=UserService(user_repository, event_bus),
+        refresh_token_repository=RefreshTokenRepository(db),
+        password_reset_token_repository=PasswordResetTokenRepository(db),
+        audit_repository=AuditLogRepository(db),
+        email_notifier=AuthEmailNotifier(_build_email_sender(settings), EmailTemplateRenderer()),
+        rate_limiter=RedisRateLimiter(redis_client),
         event_bus=event_bus,
         settings=settings,
     )

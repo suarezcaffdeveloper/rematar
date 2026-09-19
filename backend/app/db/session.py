@@ -24,6 +24,9 @@ ssl_context = False if settings.ENVIRONMENT == "local" else ssl.create_default_c
 engine = create_async_engine(
     database_url,
     pool_pre_ping=True,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
+    pool_timeout=settings.DB_POOL_TIMEOUT_SECONDS,
     echo=False,
     connect_args={
         "ssl": ssl_context,

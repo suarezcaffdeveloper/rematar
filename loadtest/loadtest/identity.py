@@ -28,6 +28,14 @@ EMAIL_DOMAIN = "rematar.io"
 BUYER_PASSWORD = "loadtest-buyer-pass-1234"
 AUCTIONEER_PASSWORD = "loadtest-auctioneer-pass-1234"
 
+# ADR-047/048 (posterior a la construcción original de este módulo, ver julio 2026):
+# `POST /remates` ahora exige rol `empresa` (dueña comercial del remate) -- `rematador`
+# quedó acotado a operar en vivo un remate ya asignado por código (`claim-operator`).
+# El "auctioneer" de este pool sigue siendo quien crea/programa/inicia/abre todo vía la
+# API (mismo flujo de fixtures.py, sin cambios), solo que ahora con rol `empresa` en vez
+# de `rematador` -- `get_owned_or_raise` ya le da a la dueña permiso sobre las mismas
+# acciones que antes ejercía el rematador que la creaba.
+
 
 @dataclass
 class Identity:
@@ -69,11 +77,19 @@ async def _register_or_login(
     role: str,
     *,
     already_registered: bool,
+    phone: str,
 ) -> Identity:
     if not already_registered:
         register_response = await client.post(
             "/auth/register",
-            json={"email": email, "password": password, "full_name": full_name, "role": role},
+            json={
+                "email": email,
+                "password": password,
+                "confirm_password": password,
+                "full_name": full_name,
+                "phone": phone,
+                "role": role,
+            },
             label="register",
         )
         if register_response.status_code not in (201, 409):
@@ -112,7 +128,9 @@ async def ensure_identity_pool(config: RunConfig, num_buyers: int) -> IdentityPo
 
     async with HttpClient(config.api_base_url) as client:
 
-        async def resolve(email: str, password: str, full_name: str, role: str) -> Identity:
+        async def resolve(
+            email: str, password: str, full_name: str, role: str, phone: str
+        ) -> Identity:
             async with semaphore:
                 return await _register_or_login(
                     client,
@@ -121,17 +139,28 @@ async def ensure_identity_pool(config: RunConfig, num_buyers: int) -> IdentityPo
                     full_name,
                     role,
                     already_registered=email in known_emails,
+                    phone=phone,
                 )
 
-        auctioneer_email = f"loadtest-auctioneer@{EMAIL_DOMAIN}"
+        auctioneer_email = f"loadtest-empresa@{EMAIL_DOMAIN}"
         auctioneer = await resolve(
-            auctioneer_email, AUCTIONEER_PASSWORD, "LoadTest Rematador", "rematador"
+            auctioneer_email,
+            AUCTIONEER_PASSWORD,
+            "LoadTest Empresa",
+            "empresa",
+            "+5490000000000",
         )
 
         buyer_emails = [f"loadtest-buyer-{i:05d}@{EMAIL_DOMAIN}" for i in range(num_buyers)]
         buyers = await asyncio.gather(
             *(
-                resolve(email, BUYER_PASSWORD, f"LoadTest Comprador {i:05d}", "comprador")
+                resolve(
+                    email,
+                    BUYER_PASSWORD,
+                    f"LoadTest Comprador {i:05d}",
+                    "comprador",
+                    f"+549{i:011d}",
+                )
                 for i, email in enumerate(buyer_emails)
             )
         )

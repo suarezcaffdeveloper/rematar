@@ -25,7 +25,16 @@ del cambio de firma, no una reescritura de estos tests: `_AlwaysAllowRateLimiter
 doble que nunca rechaza, para que estos tests unitarios sigan aislando exclusivamente la
 autorización de dominio (Fase 2), no el rate limiting (que tiene su propia suite, ver
 `tests/test_websocket_rate_limiting.py`).
-"""
+
+`SnapshotService`/`ModerationService` ya no se inyectan como parámetros directos de
+`_handle_join_room` -- se construyen a demanda dentro de una sesión de Postgres de corta
+duración (`build_snapshot_service`/`build_moderation_service`, ver docstring de
+`app/websocket/router.py`, "Sesiones de Postgres de corta duración"). Estos tests siguen
+aislando la misma lógica de orquestación parcheando esas dos fábricas (vía `monkeypatch`)
+para que devuelvan los dobles de prueba de siempre, en vez de pasarlos como argumento
+directo -- `manager`/`room_manager`/`redis_client` quedan en `None` (nunca se usan más
+allá de reenviarse a la fábrica ya parcheada) y `_FakeSessionFactory` sostiene el
+`async with session_factory() as db:` sin ninguna sesión real."""
 
 import json
 import uuid
@@ -35,6 +44,7 @@ from app.core.exceptions import NotFoundError
 from app.moderation.schemas import ERROR_BANNED_FROM_ROOM
 from app.presence.service import PresenceService
 from app.snapshot.messages import SNAPSHOT_UNAVAILABLE
+from app.websocket import router as ws_router
 from app.websocket.manager import ConnectionContext, ConnectionManager
 from app.websocket.messages import JoinRoomMessage
 from app.websocket.rooms import RoomManager
@@ -107,6 +117,21 @@ class _StubSnapshotService:
         raise NotFoundError("sin snapshot real en este test unitario")
 
 
+class _FakeSessionFactory:
+    """Sostiene el `async with session_factory() as db:` de `_handle_join_room` sin
+    ninguna sesión de Postgres real -- `build_snapshot_service`/`build_moderation_service`
+    están parcheados (ver `_join`) y no usan el `db` que reciben."""
+
+    def __call__(self) -> "_FakeSessionFactory":
+        return self
+
+    async def __aenter__(self) -> None:
+        return None
+
+    async def __aexit__(self, *exc_info: object) -> bool:
+        return False
+
+
 def _raw_join(remate_id: uuid.UUID) -> str:
     return JoinRoomMessage(remate_id=remate_id).model_dump_json()
 
@@ -125,18 +150,27 @@ async def _join(
     user: _FakeUser,
     presence_service: PresenceService,
     remate_id: uuid.UUID,
+    monkeypatch,
     authorized: bool = True,
     banned: bool = False,
 ) -> tuple[_StubSnapshotService, _StubModerationService]:
     snapshot_service = _StubSnapshotService(authorized=authorized)
     moderation_service = _StubModerationService(banned=banned)
+    monkeypatch.setattr(ws_router, "build_snapshot_service", lambda db, redis_client, settings: snapshot_service)
+    monkeypatch.setattr(
+        ws_router,
+        "build_moderation_service",
+        lambda db, redis_client, connection_manager, room_manager, presence_service, settings: moderation_service,
+    )
     await _handle_join_room(
         _raw_join(remate_id),
         context,
         ws,
         presence_service,
-        snapshot_service,
-        moderation_service,
+        None,  # manager (ConnectionManager): irrelevante, build_moderation_service ya está parcheado
+        None,  # room_manager: ídem
+        _FakeSessionFactory(),
+        None,  # redis_client: ídem
         _AlwaysAllowRateLimiter(),
         get_settings(),
         user,
@@ -147,7 +181,7 @@ async def _join(
 # --- Test 1/2 (equivalentes unitarios): autorización ANTES de RoomManager.join --------
 
 
-async def test_unauthorized_join_never_calls_room_manager_join() -> None:
+async def test_unauthorized_join_never_calls_room_manager_join(monkeypatch) -> None:
     connection_manager = ConnectionManager()
     room_manager = RoomManager()
     presence_service = PresenceService(room_manager, connection_manager, _FakeEventBus())
@@ -158,6 +192,7 @@ async def test_unauthorized_join_never_calls_room_manager_join() -> None:
     snapshot_service, _ = await _join(
         context=context, ws=ws, user=user, presence_service=presence_service,
         remate_id=remate_id, authorized=False,
+        monkeypatch=monkeypatch,
     )
 
     assert snapshot_service.assert_visible_calls == [remate_id]  # sí se consultó
@@ -174,7 +209,7 @@ async def test_unauthorized_join_never_calls_room_manager_join() -> None:
 # --- Test 3: usuario autorizado sigue funcionando exactamente igual que antes ---------
 
 
-async def test_authorized_join_calls_room_manager_join_and_confirms() -> None:
+async def test_authorized_join_calls_room_manager_join_and_confirms(monkeypatch) -> None:
     connection_manager = ConnectionManager()
     room_manager = RoomManager()
     presence_service = PresenceService(room_manager, connection_manager, _FakeEventBus())
@@ -185,6 +220,7 @@ async def test_authorized_join_calls_room_manager_join_and_confirms() -> None:
     snapshot_service, _ = await _join(
         context=context, ws=ws, user=user, presence_service=presence_service,
         remate_id=remate_id, authorized=True,
+        monkeypatch=monkeypatch,
     )
 
     assert snapshot_service.assert_visible_calls == [remate_id]
@@ -196,7 +232,7 @@ async def test_authorized_join_calls_room_manager_join_and_confirms() -> None:
 # --- Test 4: el chequeo de ban sigue funcionando y corre ANTES que la autorización ----
 
 
-async def test_ban_check_rejects_before_authorization_is_even_consulted() -> None:
+async def test_ban_check_rejects_before_authorization_is_even_consulted(monkeypatch) -> None:
     connection_manager = ConnectionManager()
     room_manager = RoomManager()
     presence_service = PresenceService(room_manager, connection_manager, _FakeEventBus())
@@ -210,6 +246,7 @@ async def test_ban_check_rejects_before_authorization_is_even_consulted() -> Non
     snapshot_service, moderation_service = await _join(
         context=context, ws=ws, user=user, presence_service=presence_service,
         remate_id=remate_id, authorized=True, banned=True,
+        monkeypatch=monkeypatch,
     )
 
     assert moderation_service.calls == [remate_id]
@@ -223,7 +260,7 @@ async def test_ban_check_rejects_before_authorization_is_even_consulted() -> Non
 # --- Test 5 (obligatorio): un join rechazado a B no saca al usuario de A --------------
 
 
-async def test_unauthorized_join_to_room_b_does_not_evict_valid_room_a() -> None:
+async def test_unauthorized_join_to_room_b_does_not_evict_valid_room_a(monkeypatch) -> None:
     connection_manager = ConnectionManager()
     room_manager = RoomManager()
     presence_service = PresenceService(room_manager, connection_manager, _FakeEventBus())
@@ -235,12 +272,14 @@ async def test_unauthorized_join_to_room_b_does_not_evict_valid_room_a() -> None
     await _join(
         context=context, ws=ws, user=user, presence_service=presence_service,
         remate_id=room_a, authorized=True,
+        monkeypatch=monkeypatch,
     )
     assert room_manager.room_id_for_connection(context.connection_id) == room_a
 
     await _join(
         context=context, ws=ws, user=user, presence_service=presence_service,
         remate_id=room_b, authorized=False,
+        monkeypatch=monkeypatch,
     )
 
     assert room_manager.room_id_for_connection(context.connection_id) == room_a
@@ -251,7 +290,7 @@ async def test_unauthorized_join_to_room_b_does_not_evict_valid_room_a() -> None
 # --- Test 7 (regresión): una sala por conexión sigue funcionando ----------------------
 
 
-async def test_authorized_join_to_a_different_room_while_already_in_one_is_rejected() -> None:
+async def test_authorized_join_to_a_different_room_while_already_in_one_is_rejected(monkeypatch) -> None:
     """Mismo mecanismo que antes de la Fase 2 (`RoomManager.join`, sin cambios): estar
     ya en A rechaza un intento de B aunque B sea perfectamente autorizado -- hay que
     salir de A primero. La Fase 2 no altera esta regla en absoluto."""
@@ -265,12 +304,14 @@ async def test_authorized_join_to_a_different_room_while_already_in_one_is_rejec
     await _join(
         context=context, ws=ws, user=user, presence_service=presence_service,
         remate_id=room_a, authorized=True,
+        monkeypatch=monkeypatch,
     )
     ws.sent.clear()
 
     snapshot_service, _ = await _join(
         context=context, ws=ws, user=user, presence_service=presence_service,
         remate_id=room_b, authorized=True,  # B autorizado, pero ya está en A
+        monkeypatch=monkeypatch,
     )
 
     assert snapshot_service.assert_visible_calls == [room_b]  # sí se consultó...
@@ -283,7 +324,7 @@ async def test_authorized_join_to_a_different_room_while_already_in_one_is_rejec
 # --- Test 8 (obligatorio): un join rechazado no publica presencia --------------------
 
 
-async def test_unauthorized_join_does_not_publish_presence_connected() -> None:
+async def test_unauthorized_join_does_not_publish_presence_connected(monkeypatch) -> None:
     connection_manager = ConnectionManager()
     room_manager = RoomManager()
     event_bus = _FakeEventBus()
@@ -295,12 +336,13 @@ async def test_unauthorized_join_does_not_publish_presence_connected() -> None:
     await _join(
         context=context, ws=ws, user=user, presence_service=presence_service,
         remate_id=remate_id, authorized=False,
+        monkeypatch=monkeypatch,
     )
 
     assert event_bus.published == []
 
 
-async def test_authorized_join_does_publish_presence_connected() -> None:
+async def test_authorized_join_does_publish_presence_connected(monkeypatch) -> None:
     """Contraste directo con el test anterior -- confirma que la ausencia de evento de
     presencia en el rechazo no es porque `_FakeEventBus`/`PresenceService` estén rotos,
     sino específicamente porque el join rechazado nunca llega a `RoomManager.join`."""
@@ -315,6 +357,7 @@ async def test_authorized_join_does_publish_presence_connected() -> None:
     await _join(
         context=context, ws=ws, user=user, presence_service=presence_service,
         remate_id=remate_id, authorized=True,
+        monkeypatch=monkeypatch,
     )
 
     assert event_bus.published == ["presencia.usuario_conectado"]

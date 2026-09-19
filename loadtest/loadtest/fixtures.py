@@ -29,7 +29,7 @@ async def _create_and_open_one(
         "/remates",
         json={
             "title": title,
-            "category": "otros",
+            "category": "mercaderia_e_indumentaria",
             "starts_at": starts_at,
         },
         headers=headers,
@@ -43,7 +43,7 @@ async def _create_and_open_one(
         json={
             "lot_number": "1",
             "title": lot_title,
-            "category": "otros",
+            "category": "mercaderia_e_indumentaria",
             "base_price": "100.00",
             "min_increment": "1.00",
         },

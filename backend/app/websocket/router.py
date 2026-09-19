@@ -23,6 +23,37 @@ directamente, para que cada unión/salida real publique su evento de presencia. 
 expulsado no puede reingresar mientras el remate siga activo). Ninguno de los tres
 servicios sabe que existe un Gateway; acá solo se los invoca.
 
+## Sesiones de Postgres de corta duración, no una por conexión (remediación de
+## rendimiento, ver docs/39-pruebas-de-carga-y-rendimiento.md)
+
+Antes, `auth_service`/`snapshot_service`/`moderation_service` se inyectaban vía
+`Depends(...)` de FastAPI, que resuelve el árbol de dependencias UNA sola vez por
+llamada a `websocket_gateway` -- como esta función no retorna hasta que el socket se
+cierra, la sesión de Postgres subyacente (`Depends(get_db)`, transitiva en los tres)
+quedaba retenida del pool durante TODA la vida de la conexión, la usara o no en ese
+instante. Confirmado en la práctica: con el pool default de SQLAlchemy (5 + 10 de
+overflow = 15), a partir de ~15 compradores conectados simultáneamente el pool se
+agotaba por completo (`sqlalchemy.exc.TimeoutError: QueuePool limit... reached`),
+bloqueando cualquier otra operación que necesitara Postgres (una oferta, un login).
+
+Ahora estos tres servicios se construyen a demanda (`build_auth_service`,
+`build_snapshot_service`, `build_moderation_service` -- mismo criterio sin-`Depends()`
+que `build_notification_service`, `app/notify/dependencies.py`, para consumidores que no
+pasan por la inyección de dependencias de FastAPI) dentro de un `async with
+session_factory() as db:` de corta duración: una vez al autenticar, y una vez por cada
+`join_room` (que es también donde se resuelve `snapshot_service`/`moderation_service`).
+El resto del tiempo -- la mayor parte de la vida de una conexión típica, esperando el
+próximo mensaje o heartbeat -- no hay ninguna conexión de Postgres retenida por este
+archivo. `session_factory` se resuelve como `websocket.app.state.db_session_factory` si
+ya existe, `AsyncSessionLocal` si no -- mismo criterio que el resto de los consumidores
+de fondo (ver docstring de `app/main.py`), necesario para que los tests puedan
+sobreescribirlo sin tocar este archivo.
+
+`presence_service` es la única excepción que sigue viviendo como `Depends(...)` durante
+toda la conexión: no toca Postgres (Redis + estado en memoria, ver
+`app/presence/dependencies.py`), así que no retiene ningún recurso escaso por tenerlo
+abierto todo ese tiempo.
+
 ## Autorización de `join_room` (Fase 2 de remediación del WebSocket Security Audit)
 
 Antes de esta fase, `RoomManager.join()` se llamaba (haciendo miembro de la sala a la
@@ -109,23 +140,23 @@ from typing import Annotated
 import structlog
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
+from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings, get_settings
 from app.core.exceptions import NotFoundError
-from app.moderation.dependencies import get_moderation_service
+from app.db.session import AsyncSessionLocal
+from app.moderation.dependencies import build_moderation_service
 from app.moderation.schemas import ERROR_BANNED_FROM_ROOM
-from app.moderation.service import ModerationService
-from app.modules.auth.dependencies import get_auth_service
-from app.modules.auth.service import AuthService
+from app.modules.auth.dependencies import build_auth_service
 from app.modules.users.models import User
 from app.presence.dependencies import get_presence_service
 from app.presence.service import PresenceService
-from app.snapshot.dependencies import get_snapshot_service
+from app.snapshot.dependencies import build_snapshot_service
 from app.snapshot.messages import SNAPSHOT_UNAVAILABLE, SnapshotMessage
-from app.snapshot.service import SnapshotService
 from app.websocket import close_codes
 from app.websocket.auth import authenticate_connection
-from app.websocket.dependencies import get_connection_manager
+from app.websocket.dependencies import get_connection_manager, get_room_manager
 from app.websocket.manager import ConnectionContext, ConnectionManager
 from app.websocket.messages import (
     ConnectedMessage,
@@ -149,6 +180,7 @@ from app.websocket.rooms import (
     ERROR_INVALID_ROOM_ID,
     ERROR_NOT_IN_ROOM,
     ERROR_RATE_LIMITED,
+    RoomManager,
 )
 from app.websocket.utils import safe_close
 
@@ -160,15 +192,20 @@ router = APIRouter()
 @router.websocket("/ws")
 async def websocket_gateway(
     websocket: WebSocket,
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
     manager: Annotated[ConnectionManager, Depends(get_connection_manager)],
+    room_manager: Annotated[RoomManager, Depends(get_room_manager)],
     presence_service: Annotated[PresenceService, Depends(get_presence_service)],
-    snapshot_service: Annotated[SnapshotService, Depends(get_snapshot_service)],
-    moderation_service: Annotated[ModerationService, Depends(get_moderation_service)],
     rate_limiter: Annotated[WSRateLimiter, Depends(get_ws_rate_limiter)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> None:
     await websocket.accept()
+
+    # Ver docstring del módulo ("Sesiones de Postgres de corta duración"): `auth_service`/
+    # `snapshot_service`/`moderation_service` ya no se inyectan por `Depends()` -- se
+    # construyen a demanda, cada uno con su propia sesión de corta duración, en vez de
+    # una compartida por toda la conexión.
+    session_factory = getattr(websocket.app.state, "db_session_factory", None) or AsyncSessionLocal
+    redis_client: Redis = websocket.app.state.redis
 
     # Fase 4 de remediación del WebSocket Security Audit -- única identidad disponible
     # antes de autenticar (ver docstring del módulo). `websocket.client` puede ser `None`
@@ -190,12 +227,14 @@ async def websocket_gateway(
         )
         return
 
-    auth_result = await authenticate_connection(
-        websocket,
-        auth_service,
-        timeout_seconds=settings.WS_AUTH_TIMEOUT_SECONDS,
-        max_message_bytes=settings.WS_MAX_MESSAGE_BYTES,
-    )
+    async with session_factory() as db:
+        auth_service = build_auth_service(db, redis_client, settings)
+        auth_result = await authenticate_connection(
+            websocket,
+            auth_service,
+            timeout_seconds=settings.WS_AUTH_TIMEOUT_SECONDS,
+            max_message_bytes=settings.WS_MAX_MESSAGE_BYTES,
+        )
     if auth_result is None:
         return  # ya se cerró la conexión con el código correspondiente (ver auth.py)
     user, session_id = auth_result
@@ -243,8 +282,10 @@ async def websocket_gateway(
             context,
             settings,
             presence_service,
-            snapshot_service,
-            moderation_service,
+            manager,
+            room_manager,
+            session_factory,
+            redis_client,
             rate_limiter,
             user,
         )
@@ -263,8 +304,10 @@ async def _run_connection_loop(
     context: ConnectionContext,
     settings: Settings,
     presence_service: PresenceService,
-    snapshot_service: SnapshotService,
-    moderation_service: ModerationService,
+    manager: ConnectionManager,
+    room_manager: RoomManager,
+    session_factory: async_sessionmaker[AsyncSession],
+    redis_client: Redis,
     rate_limiter: WSRateLimiter,
     user: User | None,
 ) -> None:
@@ -322,8 +365,10 @@ async def _run_connection_loop(
             context,
             websocket,
             presence_service,
-            snapshot_service,
-            moderation_service,
+            manager,
+            room_manager,
+            session_factory,
+            redis_client,
             rate_limiter,
             settings,
             user,
@@ -337,8 +382,10 @@ async def _handle_message(
     context: ConnectionContext,
     websocket: WebSocket,
     presence_service: PresenceService,
-    snapshot_service: SnapshotService,
-    moderation_service: ModerationService,
+    manager: ConnectionManager,
+    room_manager: RoomManager,
+    session_factory: async_sessionmaker[AsyncSession],
+    redis_client: Redis,
     rate_limiter: WSRateLimiter,
     settings: Settings,
     user: User | None,
@@ -397,8 +444,10 @@ async def _handle_message(
             context,
             websocket,
             presence_service,
-            snapshot_service,
-            moderation_service,
+            manager,
+            room_manager,
+            session_factory,
+            redis_client,
             rate_limiter,
             settings,
             user,
@@ -413,8 +462,10 @@ async def _handle_join_room(
     context: ConnectionContext,
     websocket: WebSocket,
     presence_service: PresenceService,
-    snapshot_service: SnapshotService,
-    moderation_service: ModerationService,
+    manager: ConnectionManager,
+    room_manager: RoomManager,
+    session_factory: async_sessionmaker[AsyncSession],
+    redis_client: Redis,
     rate_limiter: WSRateLimiter,
     settings: Settings,
     user: User | None,
@@ -447,34 +498,44 @@ async def _handle_join_room(
     # nunca va a coincidir con ninguna fila de moderación -- esto es, a propósito, lo que
     # hace que la moderación de invitados quede fuera de alcance por ahora (ADR-049): ni
     # bypassea nada (la consulta corre igual) ni requiere una rama especial acá.
-    if await moderation_service.is_banned(join_message.remate_id, context.user_id):
-        await websocket.send_text(
-            ErrorMessage(
-                code=ERROR_BANNED_FROM_ROOM,
-                message="Fuiste expulsado de este remate y no podés volver a ingresar.",
-            ).model_dump_json()
+    #
+    # `moderation_service`/`snapshot_service` se construyen acá, con una sesión de
+    # Postgres de corta duración (ver docstring del módulo) -- viven solo mientras dura
+    # este chequeo de autorización, no toda la conexión.
+    async with session_factory() as db:
+        moderation_service = build_moderation_service(
+            db, redis_client, manager, room_manager, presence_service, settings
         )
-        return
+        if await moderation_service.is_banned(join_message.remate_id, context.user_id):
+            await websocket.send_text(
+                ErrorMessage(
+                    code=ERROR_BANNED_FROM_ROOM,
+                    message="Fuiste expulsado de este remate y no podés volver a ingresar.",
+                ).model_dump_json()
+            )
+            return
 
-    # Fase 2 de remediación del WebSocket Security Audit: autorización ANTES de que la
-    # conexión se convierta en miembro de la sala -- misma política de visibilidad que
-    # ya aplican SnapshotService/ChatService/AuctionEngine por HTTP
-    # (RemateService.get_visible_or_raise, reutilizada acá vía
-    # SnapshotService.assert_visible -- ver docstring del módulo para el porqué),
-    # nunca una regla nueva. `NotFoundError` cubre tanto "no existe" como "existe pero
-    # no es visible para este usuario" -- no se distingue a propósito (mismo criterio
-    # anti-enumeración que ya sigue HTTP), y se reutiliza el mismo código de error que
-    # ya usaba una falla tardía del snapshot (`_send_snapshot` más abajo), no uno nuevo.
-    try:
-        await snapshot_service.assert_visible(join_message.remate_id, user)
-    except NotFoundError:
-        await websocket.send_text(
-            ErrorMessage(
-                code=SNAPSHOT_UNAVAILABLE,
-                message="No se pudo obtener el estado del remate.",
-            ).model_dump_json()
-        )
-        return
+        # Fase 2 de remediación del WebSocket Security Audit: autorización ANTES de que
+        # la conexión se convierta en miembro de la sala -- misma política de
+        # visibilidad que ya aplican SnapshotService/ChatService/AuctionEngine por HTTP
+        # (RemateService.get_visible_or_raise, reutilizada acá vía
+        # SnapshotService.assert_visible -- ver docstring del módulo para el porqué),
+        # nunca una regla nueva. `NotFoundError` cubre tanto "no existe" como "existe
+        # pero no es visible para este usuario" -- no se distingue a propósito (mismo
+        # criterio anti-enumeración que ya sigue HTTP), y se reutiliza el mismo código
+        # de error que ya usaba una falla tardía del snapshot (`_send_snapshot` más
+        # abajo), no uno nuevo.
+        snapshot_service = build_snapshot_service(db, redis_client, settings)
+        try:
+            await snapshot_service.assert_visible(join_message.remate_id, user)
+        except NotFoundError:
+            await websocket.send_text(
+                ErrorMessage(
+                    code=SNAPSHOT_UNAVAILABLE,
+                    message="No se pudo obtener el estado del remate.",
+                ).model_dump_json()
+            )
+            return
 
     joined = await presence_service.join_room(
         join_message.remate_id, context.connection_id, context.user_id
@@ -492,13 +553,15 @@ async def _handle_join_room(
         RoomJoinedMessage(remate_id=join_message.remate_id).model_dump_json()
     )
     await _send_snapshot(
-        websocket, snapshot_service, join_message.remate_id, user, presence_service
+        websocket, session_factory, redis_client, settings, join_message.remate_id, user, presence_service
     )
 
 
 async def _send_snapshot(
     websocket: WebSocket,
-    snapshot_service: SnapshotService,
+    session_factory: async_sessionmaker[AsyncSession],
+    redis_client: Redis,
+    settings: Settings,
     remate_id: uuid.UUID,
     user: User | None,
     presence_service: PresenceService,
@@ -508,15 +571,20 @@ async def _send_snapshot(
     eventos que reenvía el Event Consumer (Módulo 3.5, sin modificar). Un fallo acá
     (remate no encontrado/no visible, o cualquier error inesperado) se informa con un
     `ErrorMessage` sin cerrar la conexión ni deshacer el `join_room` ya confirmado — el
-    cliente sigue en la sala y puede reintentar."""
+    cliente sigue en la sala y puede reintentar.
+
+    Sesión de Postgres propia, de corta duración (ver docstring del módulo) -- distinta
+    de la que `_handle_join_room` ya usó y cerró para `assert_visible`."""
     try:
         connected_users_detail = presence_service.connected_users_summary(remate_id)
-        snapshot = await snapshot_service.build(
-            remate_id,
-            user,
-            connected_users=len(connected_users_detail),
-            connected_users_detail=connected_users_detail,
-        )
+        async with session_factory() as db:
+            snapshot_service = build_snapshot_service(db, redis_client, settings)
+            snapshot = await snapshot_service.build(
+                remate_id,
+                user,
+                connected_users=len(connected_users_detail),
+                connected_users_detail=connected_users_detail,
+            )
     except NotFoundError:
         await websocket.send_text(
             ErrorMessage(

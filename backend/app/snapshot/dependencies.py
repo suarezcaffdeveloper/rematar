@@ -25,6 +25,7 @@ método futuro sin sorpresas.
 from typing import Annotated
 
 from fastapi import Depends
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import HTTPConnection
 
@@ -79,5 +80,27 @@ def get_snapshot_service(
         recent_offers_limit=settings.SNAPSHOT_RECENT_OFFERS_LIMIT,
         cache_ttl_seconds=settings.SNAPSHOT_CACHE_TTL_SECONDS,
         bot_identity_resolver=bot_identity_resolver,
+        lote_repository=LoteRepository(db),
+    )
+
+
+def build_snapshot_service(db: AsyncSession, redis_client: Redis, settings: Settings) -> SnapshotService:
+    """Fábrica sin `Depends()`, mismo criterio que `build_auth_service`
+    (`app/modules/auth/dependencies.py`) -- para el Gateway WebSocket, que construye un
+    `SnapshotService` a demanda (una sesión de corta duración por `join_room`, no una
+    compartida por toda la conexión) en vez de a través del árbol de dependencias de
+    FastAPI."""
+    event_bus = RedisEventBus(RedisPubSub(redis_client))
+    remate_service = RemateService(
+        RemateRepository(db), LoteRepository(db), event_bus, AuditLogRepository(db)
+    )
+    return SnapshotService(
+        db,
+        remate_service,
+        OfertaRepository(db),
+        cache=RedisCache(redis_client),
+        recent_offers_limit=settings.SNAPSHOT_RECENT_OFFERS_LIMIT,
+        cache_ttl_seconds=settings.SNAPSHOT_CACHE_TTL_SECONDS,
+        bot_identity_resolver=BotIdentityResolver(db),
         lote_repository=LoteRepository(db),
     )

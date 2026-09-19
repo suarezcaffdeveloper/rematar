@@ -50,6 +50,17 @@ class Settings(BaseSettings):
     # --- Base de datos ---
     # Formato esperado: postgresql+asyncpg://usuario:password@host:puerto/nombre_db
     DATABASE_URL: str
+    # Sin estos dos, SQLAlchemy usa sus defaults (5 + 10 = 15 conexiones totales) --
+    # insuficiente para el objetivo de escalabilidad de RNF-04 (ver
+    # docs/39-pruebas-de-carga-y-rendimiento.md, hallazgo confirmado con `loadtest/
+    # connected_buyers`: a partir de ~15 WebSockets concurrentes el pool se agota y
+    # cualquier operación que necesite Postgres -- una oferta, un login -- queda
+    # encolada hasta agotar `DB_POOL_TIMEOUT_SECONDS`). En Neon (producción), ajustar
+    # contra el límite de conexiones del plan contratado antes de subir mucho estos
+    # valores ahí -- en local/Docker no hay ese techo práctico.
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 30
+    DB_POOL_TIMEOUT_SECONDS: float = 30.0
 
     # --- Redis (Épica 3, Módulo 3.1) ---
     # Formato esperado: redis://[:password@]host:puerto/db. Ver docs/18-integracion-redis.md.

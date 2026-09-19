@@ -119,3 +119,36 @@ def get_moderation_service(
         event_bus,
         settings,
     )
+
+
+def build_moderation_service(
+    db: AsyncSession,
+    redis_client: Redis,
+    connection_manager: ConnectionManager,
+    room_manager: RoomManager,
+    presence_service: PresenceService,
+    settings: Settings,
+) -> ModerationService:
+    """Fábrica sin `Depends()`, mismo criterio que `build_auth_service`/
+    `build_snapshot_service` -- para el Gateway WebSocket, que construye un
+    `ModerationService` a demanda (una sesión de corta duración por `join_room`) en vez
+    de a través del árbol de dependencias de FastAPI. `connection_manager`/
+    `room_manager`/`presence_service` SÍ vienen ya resueltos (no dependen de Postgres,
+    pueden vivir durante toda la conexión sin retener ningún recurso escaso)."""
+    event_bus = RedisEventBus(RedisPubSub(redis_client))
+    remate_repository = RemateRepository(db)
+    return ModerationService(
+        ModerationRepository(db),
+        ModerationRedisGateway(redis_client),
+        connection_manager,
+        room_manager,
+        presence_service,
+        RemateService(remate_repository, LoteRepository(db), event_bus, AuditLogRepository(db)),
+        remate_repository,
+        get_chat_message_repository(db),
+        UserRepository(db),
+        AuditLogRepository(db),
+        get_notification_repository(db),
+        event_bus,
+        settings,
+    )
