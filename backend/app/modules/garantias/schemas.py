@@ -16,6 +16,32 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.modules.garantias.models import GarantiaStatus
 
 
+
+# Claves de tarjeta cruda que el Payment Brick JAMÁS produce (tokeniza todo dentro de su
+# propio iframe) -- si aparecen acá es porque algo (o alguien) está mandando datos de
+# tarjeta sin tokenizar directo a esta API, evitando el Brick por completo. Rechazarlas
+# es defensa en profundidad, no una validación "normal": el frontend legítimo nunca
+# dispara esto. Sin este chequeo, el endpoint queda técnicamente en condiciones de
+# transportar un PAN/CVV crudo (aunque en la práctica nunca lo haga), lo que alcanza
+# para que quede en alcance de PCI DSS como si pudiera manejarlos -- justo lo que
+# `_require_token` no cubre por sí solo (solo exige que el token *esté*, no que los
+# campos crudos *no estén*).
+_RAW_CARD_DATA_KEYS = frozenset(
+    {
+        "card_number",
+        "cardnumber",
+        "security_code",
+        "securitycode",
+        "cvv",
+        "cvc",
+        "expiration_month",
+        "expirationmonth",
+        "expiration_year",
+        "expirationyear",
+    }
+)
+
+
 class GarantiaCreateRequest(BaseModel):
     # Tal cual lo arma el Payment Brick de Mercado Pago en el frontend (`token`,
     # `payment_method_id`, `issuer_id`, `installments`, `payer`, ...) -- este backend
@@ -30,6 +56,17 @@ class GarantiaCreateRequest(BaseModel):
         if not value.get("token"):
             raise ValueError(
                 "card_payment_data debe incluir el token generado por el Payment Brick."
+            )
+        return value
+
+    @field_validator("card_payment_data")
+    @classmethod
+    def _reject_raw_card_data(cls, value: dict[str, Any]) -> dict[str, Any]:
+        present = {key.lower() for key in value} & _RAW_CARD_DATA_KEYS
+        if present:
+            raise ValueError(
+                "card_payment_data no debe incluir datos de tarjeta sin tokenizar "
+                f"({', '.join(sorted(present))}). Usá el token que devuelve el Payment Brick."
             )
         return value
 

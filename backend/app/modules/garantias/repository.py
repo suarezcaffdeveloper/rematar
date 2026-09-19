@@ -58,6 +58,9 @@ class GarantiaRepository:
     async def flush(self) -> None:
         await self._db.flush()
 
+    async def rollback(self) -> None:
+        await self._db.rollback()
+
     async def commit(self) -> None:
         await self._db.commit()
 

@@ -21,6 +21,7 @@ from decimal import Decimal
 from typing import Any
 
 import structlog
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import Settings
 from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
@@ -63,6 +64,14 @@ class GarantiaService:
         if buyer.role != UserRole.COMPRADOR:
             raise ForbiddenError("Solo los compradores pueden constituir una garantía.")
 
+        # Capturado ANTES de cualquier operación de base -- si más abajo hace falta un
+        # `rollback()` (carrera de doble submit), este objeto `buyer` queda con sus
+        # atributos expirados por el propio rollback; releerlo recién ahí como
+        # `buyer.id` dispararía una recarga perezosa fuera de un contexto async válido
+        # (`MissingGreenlet`). Un `uuid.UUID` plano no tiene ese problema.
+        buyer_id = buyer.id
+        buyer_email = buyer.email
+
         remate = await self._remate_service.get_visible_or_raise(remate_id, buyer)
         settings = RemateSettings.model_validate(remate.settings)
         if not settings.guarantee_required:
@@ -71,28 +80,40 @@ class GarantiaService:
         # true, `guarantee_amount` no puede ser `None`.
         assert settings.guarantee_amount is not None
 
-        existing = await self._repository.get_by_remate_and_buyer(remate_id, buyer.id)
+        existing = await self._repository.get_by_remate_and_buyer(remate_id, buyer_id)
         if existing is not None and existing.status in (
             GarantiaStatus.ACTIVE,
             GarantiaStatus.PENDING_AUTHORIZATION,
         ):
             return existing  # idempotente: ya hay un hold vivo, no se llama a MP de nuevo.
 
-        garantia = existing or Garantia(remate_id=remate_id, buyer_id=buyer.id)
+        garantia = existing or Garantia(remate_id=remate_id, buyer_id=buyer_id)
         garantia.amount = settings.guarantee_amount
         garantia.currency = settings.currency
         garantia.failure_reason = None
         if existing is None:
             self._repository.add(garantia)
-        await self._repository.flush()  # asegura garantia.id para el evento, si es nueva.
+        try:
+            await self._repository.flush()  # asegura garantia.id para el evento, si es nueva.
+        except IntegrityError:
+            # Doble click / dos pestañas: otra request concurrente ganó la carrera e
+            # insertó la fila para este (remate_id, buyer_id) entre nuestro SELECT y este
+            # INSERT (viola `uq_garantias_remate_id_buyer_id`). No es un error real -- ya
+            # hay un hold en curso, mismo criterio idempotente que el chequeo de arriba,
+            # solo que la carrera lo esconde de esa lectura inicial. Sin este manejo,
+            # esto se propagaba como un 500 genérico en vez de devolver el resultado real.
+            await self._repository.rollback()
+            winner = await self._repository.get_by_remate_and_buyer(remate_id, buyer_id)
+            assert winner is not None  # tiene que existir: eso es justo lo que violó el unique.
+            return winner
 
         try:
             result = await self._mp_client.create_hold(
                 amount=settings.guarantee_amount,
                 currency=settings.currency,
                 description=f"Garantía económica -- remate {remate.title}",
-                external_reference=f"garantia:{remate_id}:{buyer.id}",
-                payer_email=buyer.email,
+                external_reference=f"garantia:{remate_id}:{buyer_id}",
+                payer_email=buyer_email,
                 card_payment_data=card_payment_data,
             )
         except MercadoPagoError as exc:

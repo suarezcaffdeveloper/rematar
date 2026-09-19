@@ -94,9 +94,13 @@ export async function mountCardPaymentBrick(params: {
   const controller = await mp.bricks().create('cardPayment', params.containerId, {
     initialization: { amount: params.amount },
     callbacks: {
-      onReady: params.callbacks.onReady,
+      // El SDK de Mercado Pago exige que `onReady`/`onError` sean funciones reales --
+      // pasar `undefined` (cuando `GarantiaGate` no necesita reaccionar a alguno de los
+      // dos) hace fallar `create()` con "Callbacks onReady and/or onError are
+      // required.". No-ops acá, nunca `undefined`.
+      onReady: params.callbacks.onReady ?? (() => {}),
       onSubmit: (cardFormData: Record<string, unknown>) => params.callbacks.onSubmit(cardFormData),
-      onError: params.callbacks.onError,
+      onError: params.callbacks.onError ?? (() => {}),
     },
   });
 

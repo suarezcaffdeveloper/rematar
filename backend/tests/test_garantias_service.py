@@ -9,7 +9,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.audit.repository import AuditLogRepository
 from app.core.config import get_settings
@@ -17,7 +17,7 @@ from app.core.exceptions import BusinessRuleError, ForbiddenError
 from app.core.security import hash_password
 from app.events.base import DomainEvent
 from app.modules.garantias.mercadopago_client import MercadoPagoError, MercadoPagoPaymentResult
-from app.modules.garantias.models import GarantiaStatus
+from app.modules.garantias.models import Garantia, GarantiaStatus
 from app.modules.garantias.repository import GarantiaRepository
 from app.modules.garantias.service import GarantiaService
 from app.modules.remates.lotes.repository import LoteRepository
@@ -218,6 +218,54 @@ async def test_create_or_retry_is_idempotent_while_active(db_session: AsyncSessi
 
     assert first.id == second.id
     assert len(mp_client.calls) == 1  # segunda llamada no volvió a golpear a Mercado Pago.
+
+
+async def test_create_or_retry_recovers_from_concurrent_duplicate_insert(
+    db_session: AsyncSession, db_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Doble click / dos pestañas sobre una garantía nueva: otra sesión gana la carrera
+    e inserta y confirma la fila para este (remate_id, buyer_id) exactamente en el
+    instante en que esta sesión, cuyo propio SELECT ya había corrido, intenta insertar
+    la suya -- viola `uq_garantias_remate_id_buyer_id`. Antes de este fix, eso se
+    propagaba como una excepción no controlada (500 genérico); ahora `create_or_retry`
+    se recupera devolviendo la fila real, sin volver a golpear a Mercado Pago."""
+    owner = await _create_user(db_session, role=UserRole.EMPRESA)
+    buyer = await _create_user(db_session, role=UserRole.COMPRADOR)
+    remate = await _create_remate(db_session, owner)
+
+    # La "otra pestaña" gana la carrera: inserta y confirma en una sesión independiente.
+    other_session_factory = async_sessionmaker(bind=db_engine, expire_on_commit=False)
+    async with other_session_factory() as other_session:
+        winner = Garantia(
+            remate_id=remate.id, buyer_id=buyer.id, amount=Decimal("50000.00"), currency="ARS"
+        )
+        other_session.add(winner)
+        await other_session.commit()
+        winner_id = winner.id
+
+    mp_client = _FakeMercadoPagoClient()
+    service = _make_service(db_session, mp_client)
+    # Simula que el SELECT inicial de esta request corrió una fracción de segundo antes
+    # del commit de la otra -- la única forma determinística de forzar la carrera sin
+    # dos tasks async reales pisándose por timing. Solo la PRIMERA llamada miente
+    # (devuelve `None`); el segundo lookup, el de recuperación tras el `IntegrityError`,
+    # usa el método real -- para entonces la fila de la otra sesión ya está confirmada.
+    original_lookup = GarantiaRepository.get_by_remate_and_buyer
+    call_count = 0
+
+    async def _lookup_lies_once(self: GarantiaRepository, remate_id: uuid.UUID, buyer_id: uuid.UUID):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return None
+        return await original_lookup(self, remate_id, buyer_id)
+
+    monkeypatch.setattr(GarantiaRepository, "get_by_remate_and_buyer", _lookup_lies_once)
+
+    result = await service.create_or_retry(remate_id=remate.id, buyer=buyer, card_payment_data={})
+
+    assert result.id == winner_id
+    assert mp_client.calls == []  # nunca llegó a pedir un hold nuevo -- la carrera se resolvió antes.
 
 
 async def test_create_or_retry_reuses_row_after_failure(db_session: AsyncSession) -> None:

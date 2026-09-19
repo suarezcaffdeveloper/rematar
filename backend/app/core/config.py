@@ -278,6 +278,14 @@ class Settings(BaseSettings):
     # Margen de seguridad: una garantía ACTIVE se considera "por vencer" (dispara aviso
     # de re-autenticación al comprador) esta cantidad de horas antes del vencimiento real.
     GUARANTEE_EXPIRY_WARNING_HOURS: int = 24
+    # Mismo mecanismo/motivo que LOGIN_RATE_LIMIT_*/PASSWORD_RESET_RATE_LIMIT_* --
+    # defensa contra "card testing" (probar muchas tarjetas robadas contra este
+    # endpoint hasta encontrar una que pase). Por comprador autenticado, no por IP: acá
+    # sí hay un `current_user` de confianza a esta altura. Más laxo que login (5 en vez
+    # de 10) porque cada intento le cuesta una llamada real a Mercado Pago, a diferencia
+    # de un intento de contraseña.
+    GARANTIA_RATE_LIMIT_MAX_ATTEMPTS: int = 5
+    GARANTIA_RATE_LIMIT_WINDOW_SECONDS: int = 900
 
 
 @lru_cache

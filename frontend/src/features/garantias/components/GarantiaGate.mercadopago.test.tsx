@@ -6,6 +6,7 @@
  * ni renderizan un iframe real, solo verifican que `GarantiaGate` le pasa los datos
  * correctos y reacciona bien a sus callbacks (`onSubmit`/`onError`).
  */
+import { StrictMode } from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -155,5 +156,25 @@ describe('GarantiaGate -- con Mercado Pago configurado', () => {
 
     await waitFor(() => expect(onStatusChange).toHaveBeenCalledWith('active'));
     vi.useRealTimers();
+  });
+
+  it('bajo StrictMode (doble montaje de efectos), monta el Brick una sola vez', async () => {
+    // Regresión: sin el guard de `hasStartedMountRef` en `GarantiaGate`, el doble
+    // disparo de efectos que simula StrictMode en desarrollo iniciaba dos llamadas a
+    // `mountCardPaymentBrick` en paralelo sobre el mismo contenedor -- causaba
+    // "Failed to execute 'removeChild'" en el SDK real (acá no se reproduce el error
+    // del SDK real, mockeado, pero si el componente volviera a llamar dos veces esta
+    // prueba lo detecta).
+    fetchMyGarantiaRequestMock.mockResolvedValue(null);
+    captureBrickCallbacks();
+    render(
+      <StrictMode>
+        <GarantiaGate remateId="remate-1" amount="50000.00" currency="ARS" />
+      </StrictMode>,
+    );
+
+    await openCardStep();
+
+    await waitFor(() => expect(mountCardPaymentBrickMock).toHaveBeenCalledTimes(1));
   });
 });

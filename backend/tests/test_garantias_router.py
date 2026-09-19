@@ -16,6 +16,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import create_app
 from app.modules.garantias.dependencies import get_mercadopago_client
@@ -113,6 +114,24 @@ async def test_create_garantia_requires_token_in_payload(client: AsyncClient) ->
     response = await client.post(
         f"{REMATES_URL}/{remate_id}/garantia",
         json={"card_payment_data": {}},
+        headers=_auth(buyer_token),
+    )
+    assert response.status_code == 422, response.text
+
+
+async def test_create_garantia_rejects_raw_card_number(client: AsyncClient) -> None:
+    """Defensa en profundidad: el Payment Brick nunca manda un `card_number` crudo, pero
+    el endpoint en sí debe rechazarlo explícitamente si algo (o alguien) lo intenta --
+    ver el docstring de `_reject_raw_card_data` en `schemas.py`."""
+    owner_token = await _register_and_login(client, email="gar-r3c@example.com", role="empresa")
+    buyer_token = await _register_and_login(client, email="gar-r3d@example.com", role="comprador")
+    remate_id = await _create_scheduled_remate(
+        client, owner_token, guarantee_required=True, guarantee_amount="50000.00"
+    )
+
+    response = await client.post(
+        f"{REMATES_URL}/{remate_id}/garantia",
+        json={"card_payment_data": {"token": "tok-1", "card_number": "4509953566233704"}},
         headers=_auth(buyer_token),
     )
     assert response.status_code == 422, response.text
@@ -218,3 +237,53 @@ async def test_create_garantia_success_sets_active(client_with_fake_mp: AsyncCli
     # Nunca expone identificadores/estado crudo de Mercado Pago.
     assert "mp_payment_id" not in body
     assert "mp_status" not in body
+
+
+async def test_create_garantia_is_rate_limited_per_buyer(db_engine: AsyncEngine) -> None:
+    """Defensa contra "card testing" (probar muchas tarjetas robadas contra este
+    endpoint): un mismo comprador no puede intentar constituir/reintentar una garantía
+    de forma ilimitada -- ver `GARANTIA_RATE_LIMIT_*` en `core/config.py`."""
+    session_factory = async_sessionmaker(bind=db_engine, expire_on_commit=False)
+
+    async def _override_get_db():
+        async with session_factory() as session:
+            yield session
+
+    limited_settings = get_settings().model_copy(
+        update={"GARANTIA_RATE_LIMIT_MAX_ATTEMPTS": 1, "GARANTIA_RATE_LIMIT_WINDOW_SECONDS": 60}
+    )
+
+    app = create_app()
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_mercadopago_client] = lambda: _FakeMercadoPagoClient()
+    app.dependency_overrides[get_settings] = lambda: limited_settings
+    app.state.db_session_factory = session_factory
+
+    async with app.router.lifespan_context(app):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            owner_token = await _register_and_login(
+                client, email="gar-rl1@example.com", role="empresa"
+            )
+            buyer_token = await _register_and_login(
+                client, email="gar-rl1b@example.com", role="comprador"
+            )
+            remate_id = await _create_scheduled_remate(
+                client, owner_token, guarantee_required=True, guarantee_amount="50000.00"
+            )
+
+            first = await client.post(
+                f"{REMATES_URL}/{remate_id}/garantia",
+                json={"card_payment_data": {"token": "tok-1"}},
+                headers=_auth(buyer_token),
+            )
+            assert first.status_code == 201, first.text
+
+            second = await client.post(
+                f"{REMATES_URL}/{remate_id}/garantia",
+                json={"card_payment_data": {"token": "tok-1"}},
+                headers=_auth(buyer_token),
+            )
+            assert second.status_code == 429, second.text
+
+    app.dependency_overrides.clear()

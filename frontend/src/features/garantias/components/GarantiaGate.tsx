@@ -215,6 +215,10 @@ function CardPaymentStep({
   const [isProcessing, setIsProcessing] = useState(false);
   const brickRef = useRef<MountedCardPaymentBrick | null>(null);
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ver el efecto de más abajo que monta el Brick -- este ref sobrevive al doble
+  // montaje/desmontaje que `React.StrictMode` simula en desarrollo, a diferencia de
+  // cualquier variable declarada dentro del efecto.
+  const hasStartedMountRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -262,7 +266,22 @@ function CardPaymentStep({
 
   useEffect(() => {
     if (!env.mercadopagoPublicKey) return;
-    let cancelled = false;
+    // `React.StrictMode` (desarrollo) simula un montaje -> desmontaje -> montaje
+    // apenas se monta el componente, disparando este efecto dos veces casi
+    // sincrónicamente. `mountCardPaymentBrick` es async (carga el SDK, llama a
+    // `create()`) -- para cuando la limpieza del primer disparo corre, esa llamada
+    // todavía no resolvió, así que un simple flag `cancelled` (declarado adentro del
+    // efecto, no sobrevive al segundo disparo) no alcanza para evitar que el SEGUNDO
+    // disparo arranque una SEGUNDA llamada a `create()` sobre el mismo contenedor en
+    // paralelo -- eso es lo que producía "Failed to execute 'removeChild'": dos Bricks
+    // manipulando el mismo `<div>` a la vez, cada uno pisando los nodos del otro.
+    // `hasStartedMountRef` sí sobrevive (es un ref): el segundo disparo lo ve en `true`
+    // y no vuelve a llamar a `mountCardPaymentBrick`, así que como máximo se crea un
+    // Brick real por instancia de este componente. El desmontaje real (no el
+    // fantasma de StrictMode) lo resuelve el efecto de arriba, que sí llama a
+    // `unmount()` sobre `brickRef.current` una vez que la promesa haya resuelto.
+    if (hasStartedMountRef.current) return;
+    hasStartedMountRef.current = true;
 
     mountCardPaymentBrick({
       containerId,
@@ -270,25 +289,16 @@ function CardPaymentStep({
       amount: Number(amount),
       callbacks: {
         onSubmit: handleBrickSubmit,
-        onError: (error) => {
-          if (!cancelled) setSubmitError(normalizeApiError(error).message);
-        },
+        onError: (error) => setSubmitError(normalizeApiError(error).message),
       },
     })
       .then((mounted) => {
-        if (cancelled) {
-          mounted.unmount();
-          return;
-        }
         brickRef.current = mounted;
       })
       .catch((err: unknown) => {
-        if (!cancelled) setSubmitError(err instanceof Error ? err.message : 'No se pudo cargar el formulario de tarjeta.');
+        hasStartedMountRef.current = false;
+        setSubmitError(err instanceof Error ? err.message : 'No se pudo cargar el formulario de tarjeta.');
       });
-
-    return () => {
-      cancelled = true;
-    };
     // `handleBrickSubmit` cierra sobre `remateId`/`onResolved`, estables durante la
     // vida de este paso del modal; re-montar el Brick en cada render lo reiniciaría
     // innecesariamente.

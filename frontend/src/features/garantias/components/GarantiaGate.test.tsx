@@ -17,6 +17,13 @@ vi.mock('../api', () => ({
 vi.mock('../../../shared/toast/toastStore', () => ({
   useToastStore: { getState: () => ({ push: toastPushMock }) },
 }));
+// `mercadopagoPublicKey: null` explícito -- este archivo prueba el camino SIN clave
+// configurada; depender del `.env` real del desarrollador (que puede tenerla cargada
+// para probar el flujo real, ver `GarantiaGate.mercadopago.test.tsx`) haría este test
+// no determinístico según la máquina.
+vi.mock('../../../shared/config/env', () => ({
+  env: { apiBaseUrl: 'http://test.local', wsBaseUrl: 'ws://test.local', mercadopagoPublicKey: null },
+}));
 
 function makeGarantia(overrides: Partial<Garantia> = {}): Garantia {
   return {

@@ -20,7 +20,7 @@ import structlog
 from fastapi import APIRouter, Depends, Request
 
 from app.core.config import Settings, get_settings
-from app.core.exceptions import UnauthorizedError
+from app.core.exceptions import RateLimitError, UnauthorizedError
 from app.modules.auth.dependencies import get_current_user
 from app.modules.garantias.dependencies import get_garantia_repository, get_garantia_service
 from app.modules.garantias.models import Garantia
@@ -29,6 +29,8 @@ from app.modules.garantias.schemas import GarantiaCreateRequest, GarantiaRead
 from app.modules.garantias.service import GarantiaService
 from app.modules.garantias.webhook_signature import verify_mp_webhook_signature
 from app.modules.users.models import User
+from app.redis.dependencies import get_rate_limiter
+from app.redis.rate_limit import RedisRateLimiter
 
 logger = structlog.get_logger(__name__)
 
@@ -46,7 +48,24 @@ async def create_garantia(
     data: GarantiaCreateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     service: Annotated[GarantiaService, Depends(get_garantia_service)],
+    rate_limiter: Annotated[RedisRateLimiter, Depends(get_rate_limiter)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> Garantia:
+    # Por comprador autenticado (no por IP, ya hay un `current_user` de confianza acá) --
+    # mismo mecanismo que `AuthService.authenticate`/`request_password_reset`. Defensa
+    # contra "card testing": probar muchas tarjetas robadas contra este endpoint hasta
+    # que una pase, cada intento le cuesta una llamada real a Mercado Pago.
+    allowed = await rate_limiter.check_and_increment(
+        f"garantia:{current_user.id}",
+        limit=settings.GARANTIA_RATE_LIMIT_MAX_ATTEMPTS,
+        window_seconds=settings.GARANTIA_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    if not allowed:
+        raise RateLimitError(
+            "Demasiados intentos de constituir la garantía. Esperá unos minutos antes "
+            "de volver a intentar."
+        )
+
     # Siempre 201, el resultado (incluido un rechazo de tarjeta -> `status=failed`) va
     # en el cuerpo -- mismo criterio que `POST .../ofertas` (RF-17): un rechazo es un
     # resultado de negocio esperable, no un error HTTP.
