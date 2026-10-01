@@ -25,3 +25,15 @@ export const RECENT_EVENT_BADGE_VARIANTS: Record<RecentAnalyticsEventType, Badge
   'remate.finished': 'success',
   'remate.cancelled': 'danger',
 };
+
+/** Color del punto de `EventsTimeline`/`EventsLegend` para cada `BadgeVariant` -- vive
+ * acá (no en `EventsTimeline.tsx`) para que ambos componentes lo importen desde un
+ * archivo que no es de componente (evita el warning de React Fast Refresh por exportar
+ * un valor no-componente desde un archivo de componente). */
+export const EVENT_DOT_COLOR_CLASSES: Record<BadgeVariant, string> = {
+  brand: 'bg-brand-500',
+  success: 'bg-success-500',
+  danger: 'bg-danger-500',
+  warning: 'bg-amber-500',
+  neutral: 'bg-slate-400',
+};

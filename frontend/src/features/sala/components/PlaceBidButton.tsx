@@ -65,10 +65,17 @@ export interface PlaceBidButtonProps {
    * lote") en vez de invitarlo a ofertar contra sí mismo (pedido explícito). */
   isLeadingBidder: boolean;
   /** `true` si este remate no exige garantía económica, o si el comprador ya tiene una
-   * `Garantia` `active` para él (ver `GarantiaGate`, `SalaPage`) -- el backend
+   * `Garantia` `active` para él (ver `useGarantiaStatus`, `SalaPage`) -- el backend
    * (`AuctionEngine.place_bid`) es el gate real, esto es solo UX para no dejar llegar al
    * botón "Ofertar" a quien de todos modos va a recibir un 403. */
   hasRequiredGuarantee: boolean;
+  /** Abre el diálogo para constituir la garantía (`GarantiaModal`, montado por la página
+   * -- ver `SalaPage`). Cuando está presente y `hasRequiredGuarantee` es `false`, el
+   * formulario de oferta se reemplaza por un botón amarillo "Construir garantía" que lo
+   * abre (pedido explícito -- antes esto era un botón deshabilitado + la card amarilla
+   * del `GarantiaGate` arriba de la sala). Si falta la prop, el comportamiento de siempre
+   * (botón deshabilitado con el motivo) se conserva. */
+  onBuildGuarantee?: () => void;
 }
 
 /**
@@ -91,6 +98,7 @@ export function PlaceBidButton({
   viewerRole,
   isLeadingBidder,
   hasRequiredGuarantee,
+  onBuildGuarantee,
 }: PlaceBidButtonProps) {
   const minimumAmount = computeMinimumAmount(lote, winningOffer);
   const [amount, setAmount] = useState(minimumAmount);
@@ -187,6 +195,25 @@ export function PlaceBidButton({
   }
 
   if (!canBid) {
+    // La garantía es el ÚNICO motivo que no es un estado estático de la sala (rol,
+    // remate no live, lote cerrado): se resuelve acá mismo, en el momento, abriendo el
+    // diálogo para constituirla -- por eso en vez del botón deshabilitado de siempre se
+    // muestra la acción que lo resuelve, amarilla y habilitada (pedido explícito). Los
+    // demás motivos siguen mostrando el botón deshabilitado con su explicación abajo.
+    const isOnlyGuaranteeMissing = isComprador && isRemateLive && isLoteOpen && !hasRequiredGuarantee;
+    if (isOnlyGuaranteeMissing && onBuildGuarantee) {
+      return (
+        <Button
+          type="button"
+          variant="warning"
+          onClick={onBuildGuarantee}
+          className="w-full py-2 text-sm font-semibold"
+        >
+          Construir garantía
+        </Button>
+      );
+    }
+
     const disabledReason = !isComprador
       ? 'Solo los compradores pueden ofertar en la sala.'
       : !isRemateLive
@@ -291,7 +318,7 @@ export function PlaceBidButton({
                 variant="chip"
                 onClick={() => handleSelectSuggestion(suggestedAmount)}
                 disabled={isSubmitting}
-                className="min-w-0 whitespace-normal break-words px-1.5 py-2 text-center font-mono text-xs font-semibold leading-tight tabular-nums"
+                className="min-w-0 whitespace-normal break-words rounded-xl! px-1.5 py-2.5 text-center font-mono text-xs font-semibold leading-tight tabular-nums"
               >
                 {formatCurrency(suggestedAmount, currency)}
               </Button>
@@ -303,7 +330,7 @@ export function PlaceBidButton({
             variant="hero"
             isLoading={isSubmitting}
             disabled={Boolean(validationError)}
-            className="mt-1 w-full py-2 text-sm font-semibold"
+            className="mt-1 w-full rounded-full! bg-brand-600! py-3 text-base font-semibold hover:bg-brand-500! disabled:bg-line-strong! disabled:text-ink-faint!"
           >
             Ofertar
           </Button>

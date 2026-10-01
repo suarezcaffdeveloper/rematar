@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
+import { Clock3 } from 'lucide-react';
 
 export interface LoteCountdownProps {
   /** Deadline absoluto (ISO 8601, UTC) mientras el timer corre -- `null` si está
@@ -10,10 +11,14 @@ export interface LoteCountdownProps {
   /** `'compact'` (default): número grande + segundero, como en la Sala LIVE. `'boxed'`:
    * cuatro cajas separadas (días/horas/min/seg), pedidas para la Sala Timed -- mismo
    * estado/lógica de urgencia y anuncios, solo cambia el render. */
-  variant?: 'compact' | 'boxed' | 'inline';
+  variant?: 'compact' | 'boxed' | 'inline' | 'strip';
   /** Solo `variant="inline"`. `'sm'` (default): píldora de una línea, para meter dentro
    * de una card. `'md'`: texto suelto un poco más grande, para una cabecera. */
   size?: 'sm' | 'md';
+  /** Cuántos segundos antes del cierre pasa a rojo y se anuncia a lectores de pantalla.
+   * Default: 10 (un martillo en vivo). La Sala Timed usa 5 minutos: ahí "urgente" es
+   * "todavía hay tiempo de ofertar, pero ya no de pensarlo". */
+  urgentThresholdSeconds?: number;
 }
 
 const URGENT_THRESHOLD_SECONDS = 10;
@@ -74,10 +79,30 @@ function formatCountdownParts(totalSeconds: number): { major: string; seconds: s
  * importan: al cruzar el umbral urgente (una vez, no en cada segundo posterior) y al
  * llegar a cero.
  */
-export function LoteCountdown({ endsAt, pausedRemainingSeconds, variant = 'compact', size = 'sm' }: LoteCountdownProps) {
+export function LoteCountdown({
+  endsAt,
+  pausedRemainingSeconds,
+  variant = 'compact',
+  size = 'sm',
+  urgentThresholdSeconds = URGENT_THRESHOLD_SECONDS,
+}: LoteCountdownProps) {
   const [now, setNow] = useState(() => Date.now());
   const [announcement, setAnnouncement] = useState('');
   const hasAnnouncedUrgentRef = useRef(false);
+
+  // Anti-sniping: si el cierre se corre hacia adelante (alguien ofertó sobre el final),
+  // `variant="strip"` lo avisa unos segundos.
+  const [wasExtended, setWasExtended] = useState(false);
+  const previousEndsAtRef = useRef(endsAt);
+  useEffect(() => {
+    const previous = previousEndsAtRef.current;
+    previousEndsAtRef.current = endsAt;
+    if (previous === null || endsAt === null) return;
+    if (new Date(endsAt).getTime() <= new Date(previous).getTime()) return;
+    setWasExtended(true);
+    const timeoutId = setTimeout(() => setWasExtended(false), 4000);
+    return () => clearTimeout(timeoutId);
+  }, [endsAt]);
 
   useEffect(() => {
     if (endsAt === null) return;
@@ -93,7 +118,7 @@ export function LoteCountdown({ endsAt, pausedRemainingSeconds, variant = 'compa
         ? Math.max(0, Math.round((new Date(endsAt).getTime() - now) / 1000))
         : 0;
 
-  const isUrgent = pausedRemainingSeconds === null && endsAt !== null && remainingSeconds <= URGENT_THRESHOLD_SECONDS;
+  const isUrgent = pausedRemainingSeconds === null && endsAt !== null && remainingSeconds <= urgentThresholdSeconds;
 
   useEffect(() => {
     if (endsAt === null || pausedRemainingSeconds !== null) return;
@@ -101,7 +126,11 @@ export function LoteCountdown({ endsAt, pausedRemainingSeconds, variant = 'compa
       setAnnouncement('Tiempo agotado.');
     } else if (isUrgent && !hasAnnouncedUrgentRef.current) {
       hasAnnouncedUrgentRef.current = true;
-      setAnnouncement(`Quedan ${remainingSeconds} segundos.`);
+      setAnnouncement(
+        remainingSeconds >= 60
+          ? `Quedan ${Math.round(remainingSeconds / 60)} minutos.`
+          : `Quedan ${remainingSeconds} segundos.`,
+      );
     } else if (!isUrgent) {
       hasAnnouncedUrgentRef.current = false;
     }
@@ -145,6 +174,64 @@ export function LoteCountdown({ endsAt, pausedRemainingSeconds, variant = 'compa
           {announcement}
         </span>
       </span>
+    );
+  }
+
+  if (variant === 'strip') {
+    // La cuenta regresiva del lote en la Sala Timed: una franja con los números en línea,
+    // neutra mientras sobra tiempo y roja cuando queda poco. Las unidades que todavía no
+    // corresponden (días, horas) no se muestran.
+    const units = splitCountdownUnits(remainingSeconds);
+    const isPaused = pausedRemainingSeconds !== null;
+    const segments = [
+      { value: units.days, label: 'días', show: remainingSeconds >= 86400 },
+      { value: units.hours, label: 'horas', show: remainingSeconds >= 3600 },
+      { value: units.minutes, label: 'min', show: true },
+      { value: units.seconds, label: 'seg', show: true },
+    ].filter((segment) => segment.show);
+
+    return (
+      <div
+        className={clsx(
+          'rounded-xl border px-4 py-3.5 transition-colors',
+          isUrgent ? 'border-danger-200 bg-danger-50' : 'border-line bg-surface-subtle',
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span
+            className={clsx(
+              'inline-flex items-center gap-1.5 text-xs font-semibold',
+              isUrgent ? 'text-danger-600' : 'text-ink-muted',
+            )}
+          >
+            <Clock3 aria-hidden="true" className="h-3.5 w-3.5" />
+            {isPaused ? label : isUrgent ? 'Está por cerrar' : 'Cierra en'}
+          </span>
+          {wasExtended && (
+            <span className="rounded-full bg-warning-50 px-2 py-0.5 text-[11px] font-semibold text-warning-700">
+              +1 min por oferta final
+            </span>
+          )}
+        </div>
+        <div
+          role="timer"
+          aria-label={label}
+          className={clsx(
+            'mt-1.5 flex items-end gap-3 font-mono tabular-nums',
+            isUrgent ? 'text-danger-600' : 'text-ink',
+          )}
+        >
+          {segments.map((segment) => (
+            <div key={segment.label} className="flex items-baseline gap-1">
+              <span className="text-[2rem] font-extrabold leading-none">{segment.value}</span>
+              <span className="font-display text-[11px] font-medium text-ink-faint">{segment.label}</span>
+            </div>
+          ))}
+        </div>
+        <span className="sr-only" aria-live="polite" aria-atomic="true">
+          {announcement}
+        </span>
+      </div>
     );
   }
 

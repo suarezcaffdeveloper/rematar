@@ -8,6 +8,8 @@ import { RecentModerationActions } from '../../moderation/components/RecentModer
 import { isModerationDomainEventMessage } from '../../moderation/realtime/events';
 import { OfferHistoryPanel } from '../../sala/components/OfferHistoryPanel';
 import type { OfertaSnapshotEntry } from '../../sala/types';
+import { ConsolaQuickPanels } from './ConsolaQuickPanels';
+import type { Remate } from '../../remates/types';
 
 export interface ConsolaSidebarProps {
   remateId: string;
@@ -17,6 +19,12 @@ export interface ConsolaSidebarProps {
   winningOffer: OfertaSnapshotEntry | null;
   recentOffers: OfertaSnapshotEntry[];
   currency: string;
+  /** Remate completo + si el viewer es la empresa dueña -- solo para los botones
+   * plegables de `ConsolaQuickPanels` ("Transmisión"/"Martillero") que arrancan arriba
+   * de este sidebar, a la misma altura que `ConsolaHeader`. */
+  remate: Remate;
+  isOwner: boolean;
+  onRemateChange: (remate: Remate) => void;
 }
 
 type TabId = 'chat' | 'conectados' | 'moderacion';
@@ -33,19 +41,22 @@ const TABS = [
  * `ModerationPanel`/`AnalyticsPanel` a lo ancho completo (el rematador tenía que hacer
  * scroll más allá del chat y la moderación para llegar a los controles/analítica).
  *
- * "Modo Remate" pide historial de ofertas + chat "siempre visibles" -- a diferencia de la
- * versión anterior (cuatro pestañas iguales, Ofertas era una más), acá el historial de
- * ofertas se saca de las pestañas y queda fijo arriba; solo Chat/Conectados/Moderación
- * siguen en pestañas (Chat por default) porque son de uso más ocasional o necesitan más
- * alto que lo que queda debajo de la oferta.
+ * "Modo Remate" pide historial de ofertas visible sin entrar a una pestaña -- a
+ * diferencia de la versión anterior (cuatro pestañas iguales, Ofertas era una más), acá
+ * el historial de ofertas se saca de las pestañas y queda arriba de ellas; solo Chat/
+ * Conectados/Moderación siguen en pestañas (Chat por default) porque son de uso más
+ * ocasional. Pedido posterior (vista de la empresa): ofertas + pestañas quedan `sticky`
+ * al scrollear (bajan con el scroll hasta pegarse arriba, frenando contra la sección de
+ * analítica -- ver el comentario del `return`) -- la empresa quiere ver siempre eso
+ * mientras recorre la página; los botones de arriba (`ConsolaQuickPanels`) y el header,
+ * en cambio, se van con el scroll.
  *
  * El historial de ofertas reusa `OfferHistoryPanel` de `features/sala/` tal cual, la
  * misma tarjeta que ya ve el comprador en la Sala (pedido explícito: "quiero que el
  * rematador vea la misma card con todo igual") -- ya no hay una versión propia de la
  * Consola con su resaltado de fila ganadora/`maxHistory` (existían antes de este pedido).
  * Mismo alto fijo por default (`h-72 shrink-0`, sin pasar `className`) que ya usa la Sala
- * para su propio sidebar -- este sidebar tiene la misma estructura (tarjeta de oferta fija
- * arriba, chat abajo con `flex-1`), así que el mismo alto encaja igual.
+ * para su propio sidebar.
  *
  * "Compradores conectados" reusa `ConnectedBuyersList` (Moderación, con búsqueda y
  * acciones de silenciar/expulsar) en vez del `ConnectedUsersList` genérico y
@@ -66,6 +77,17 @@ const TABS = [
  * que ya usa `SalaSidePanel`: la pestaña "Chat" ya funciona como encabezado, repetir
  * "Chat del remate" + el contador de conectados debajo (que además ya se ve en
  * `ConsolaHeader`) era redundante -- ver prototipo aprobado.
+ *
+ * `ConsolaQuickPanels` ("Transmisión"/"Martillero", diseño aprobado) va como primer
+ * elemento acá arriba, antes de la oferta líder -- reemplaza a las cards a todo lo
+ * ancho que antes vivían sueltas encima de este grid (`StreamPanel`/`OperatorCodePanel`
+ * `variant="card"`, que siguen existiendo tal cual para los estados no operativos, sin
+ * sidebar al que anclarse). Al ser el primer hijo de esta columna, arranca a la misma
+ * altura que `ConsolaHeader` (el primer -- y único -- hijo de la columna izquierda) sin
+ * necesidad de coordinar alturas entre ambos. Pedido posterior (vista de la empresa):
+ * ya NO queda `sticky` -- es contenido normal que se va con el scroll de la página,
+ * igual que `ConsolaHeader`; lo que sí queda fijo es el bloque ofertas + pestañas de
+ * más abajo (ver el comentario del `return`).
  */
 export function ConsolaSidebar({
   remateId,
@@ -75,6 +97,9 @@ export function ConsolaSidebar({
   winningOffer,
   recentOffers,
   currency,
+  remate,
+  isOwner,
+  onRemateChange,
 }: ConsolaSidebarProps) {
   const [activeTab, setActiveTab] = useState<TabId>('chat');
   const [reloadToken, setReloadToken] = useState(0);
@@ -88,65 +113,87 @@ export function ConsolaSidebar({
   }, [subscribeToRealtime]);
 
   return (
-    // Alto capado al viewport (`xl:max-h-[calc(100vh-2rem)]`, mismo offset que ya usa
-    // `SalaPage` para su propio sidebar sticky) en vez de un `h-` fijo -- pedido explícito:
-    // que oferta+chat tengan "un tamaño definido... ocupando todo el alto de la pantalla"
-    // en vez de encogerse al tamaño de su contenido (eso fue lo que causaba el hueco en
-    // blanco antes de la analítica: sin `xl:self-stretch` en el wrapper de
-    // `ConsolaOperativaPage`, esta columna medía menos que la del lote/control/próximos
-    // lotes de al lado, y quedaba más corta que esa celda del grid). `self-stretch` hace
-    // que el wrapper mida el alto completo de la celda (la del grupo izquierdo, más alto);
-    // `max-h` capa ese alto al viewport para que `sticky` tenga lugar de sobra para
-    // "viajar" antes de toparse con el borde inferior de la celda, que es justo donde
-    // arranca la analítica -- si la celda es más baja que el viewport (remate con poco
-    // contenido a la izquierda), el `max-h` no fuerza nada de más porque nunca se llega a
-    // ese tope. `xl:h-full` + `flex` reparte ese alto entre la oferta (arriba, alto fijo
-    // por `OfferHistoryPanel`) y las pestañas de abajo (`xl:flex-1`, ver más abajo) -- el
-    // chat ocupa lo que sobra en vez de un `h-[26rem]` fijo, así que no se encoge ni deja
-    // hueco sea cual sea el alto disponible. Por debajo de `xl:` nada de esto aplica (`flex
-    // flex-col gap-3` a secas): layout de una sola columna, cada card con su alto fijo de
-    // siempre. Cada card sigue con su propio scroll interno (pedido explícito: "solo
-    // scroll interno dentro de cada uno") -- el historial de `OfferHistoryPanel` y los
-    // mensajes de `ChatPanel` scrollean cada uno dentro de su propia caja (ver su
-    // `overflow-y-auto` interno), nunca el wrapper completo.
-    <div className="flex flex-col gap-3 xl:sticky xl:top-4 xl:h-full xl:max-h-[calc(100vh-2rem)]">
+    // Pedido explícito (vista de la empresa, última vuelta): de todo lo que se ve al
+    // entrar a la consola, lo único que tiene que seguir viéndose al scrollear hacia
+    // abajo es el bloque de ofertas recientes + pestañas (Chat/Conectados/Moderación) --
+    // "la empresa debería ver eso siempre". La botonera (`ConsolaQuickPanels`,
+    // "Transmisión"/"Martillero") y el `ConsolaHeader` (título, estado, fecha, tiempo,
+    // conectados) quedan arriba, sin verse una vez que se scrollea: son contenido
+    // normal del flujo, sin ningún `sticky`.
+    //
+    // El comportamiento pedido para ofertas+chat es el `sticky` estándar, con sus dos
+    // topes naturales: el bloque BAJA JUNTO CON EL SCROLL (seguimiento visible) hasta
+    // que su borde superior llega a `top-4` del viewport -- justo donde estaban los
+    // botones, que para entonces ya se fueron -- y ahí se pega mientras le quede caja
+    // donde viajar; al agotarse la celda del grid (donde empieza la sección de
+    // "Analítica en tiempo real", que vive FUERA del grid, debajo), se despega y se va
+    // con el resto de la página. Todo con CSS, sin medir nada por JS.
+    //
+    // CLAVE: el bloque sticky va con su ALTO NATURAL (ofertas `h-72` + pestañas
+    // `h-[26rem]`, los mismos de siempre) -- sin el `xl:h-[calc(100vh-2rem)]` que se le
+    // había puesto en el primer intento de este cambio, copiando el patrón de la Sala
+    // del comprador. Allá el sidebar sticky arranca en el TOPE de la página (no hay
+    // nada arriba suyo) y sí necesita ese alto fijo para no desbordar la pantalla; acá
+    // en cambio el bloque arranca debajo de la botonera, y ese alto fijo lo dejaba
+    // exactamente del tamaño de la pantalla y ya pegado al tope desde el primer pixel
+    // -- un elemento sticky solo puede "viajar" dentro del espacio que le sobra a su
+    // contenedor, así que sin espacio sobrante no bajaba NUNCA (el bug reportado: "el
+    // chat y las ofertas quedan fijas arriba por más que scrollee"). Con alto natural,
+    // los ~60px que le ganan los botones por arriba son justamente el recorrido en el
+    // que se lo ve bajar con el scroll antes de pegarse arriba. Por la misma razón las
+    // pestañas vuelven a su `h-[26rem]` fijo (el reparto `xl:flex-1`/`xl:h-full` solo
+    // existía para llenar el alto de viewport que ya no se usa).
+    //
+    // La celda del grid en `ConsolaOperativaPage` sigue SIN `xl:self-stretch` (lo
+    // necesitaba la botonera cuando era el sticky, para tener caja de sobra hasta el
+    // final de la columna izquierda): ahora la caja contenida es justamente lo que
+    // acota el recorrido del bloque y lo hace frenar contra la analítica. Y este
+    // `<div>` raíz queda con su alto de contenido (el `h-full` del intento anterior ya
+    // no hace falta: era para que el sticky de alto fijo no desbordara la celda).
+    <div className="flex flex-col gap-3">
       <div className="shrink-0">
-        <OfferHistoryPanel winningOffer={winningOffer} recentOffers={recentOffers} currency={currency} />
+        <ConsolaQuickPanels remate={remate} isOwner={isOwner} onRemateChange={onRemateChange} />
       </div>
 
-      <div className="flex flex-col gap-2 xl:min-h-0 xl:flex-1">
-        <Tabs tabs={TABS} activeId={activeTab} onChange={(id) => setActiveTab(id as TabId)} className="shrink-0" />
+      <div className="flex flex-col gap-3 xl:sticky xl:top-4">
+        <div className="shrink-0">
+          <OfferHistoryPanel winningOffer={winningOffer} recentOffers={recentOffers} currency={currency} />
+        </div>
 
-        {activeTab === 'chat' && (
-          <ChatPanel
-            remateId={remateId}
-            subscribeToRealtime={subscribeToRealtime}
-            currentUserId={currentUserId}
-            connectedUsers={connectedUsers}
-            canModerate
-            chrome="flat"
-            className="h-[26rem] xl:h-auto xl:min-h-0 xl:flex-1"
-          />
-        )}
+        <div className="flex flex-col gap-2">
+          <Tabs tabs={TABS} activeId={activeTab} onChange={(id) => setActiveTab(id as TabId)} className="shrink-0" />
 
-        {activeTab === 'conectados' && (
-          <div className="h-[26rem] overflow-y-auto xl:h-auto xl:min-h-0 xl:flex-1">
-            <ConnectedBuyersList remateId={remateId} reloadToken={reloadToken} />
-          </div>
-        )}
+          {activeTab === 'chat' && (
+            <ChatPanel
+              remateId={remateId}
+              subscribeToRealtime={subscribeToRealtime}
+              currentUserId={currentUserId}
+              connectedUsers={connectedUsers}
+              canModerate
+              chrome="flat"
+              className="h-[26rem]"
+            />
+          )}
 
-        {activeTab === 'moderacion' && (
-          <div className="flex h-[26rem] flex-col gap-3 overflow-y-auto xl:h-auto xl:min-h-0 xl:flex-1">
-            <div className="flex items-center justify-between rounded-xl border border-line bg-white p-3 shadow-sm">
-              <span className="flex items-center gap-2 text-sm font-semibold text-ink">
-                <ShieldAlert aria-hidden="true" className="h-4 w-4 text-ink-faint" />
-                Moderación
-              </span>
-              <LockChatButton remateId={remateId} onLocked={() => setReloadToken((token) => token + 1)} />
+          {activeTab === 'conectados' && (
+            <div className="h-[26rem] overflow-y-auto">
+              <ConnectedBuyersList remateId={remateId} reloadToken={reloadToken} />
             </div>
-            <RecentModerationActions remateId={remateId} key={reloadToken} />
-          </div>
-        )}
+          )}
+
+          {activeTab === 'moderacion' && (
+            <div className="flex h-[26rem] flex-col gap-3 overflow-y-auto">
+              <div className="flex items-center justify-between rounded-xl border border-line bg-white p-3 shadow-sm">
+                <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+                  <ShieldAlert aria-hidden="true" className="h-4 w-4 text-ink-faint" />
+                  Moderación
+                </span>
+                <LockChatButton remateId={remateId} onLocked={() => setReloadToken((token) => token + 1)} />
+              </div>
+              <RecentModerationActions remateId={remateId} key={reloadToken} />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

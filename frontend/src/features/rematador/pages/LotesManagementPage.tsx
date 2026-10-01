@@ -1,60 +1,83 @@
-import { type DragEvent, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowUpDown, Filter, PackageOpen } from 'lucide-react';
+import { type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Calendar, Eye, Globe, LayoutGrid, List, Lock, Plus, Radio, Search, ShieldCheck, Timer } from 'lucide-react';
 import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
+import { useTopNavLayout } from '../../../app/layouts/useTopNavLayout';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Alert } from '../../../shared/components/Alert';
 import type { BreadcrumbItem } from '../../../shared/components/Breadcrumb';
 import { Button } from '../../../shared/components/Button';
 import { ConfirmModal } from '../../../shared/components/ConfirmModal';
-import { EmptyState } from '../../../shared/components/EmptyState';
-import { FIELD_CONTROL_CLASSES } from '../../../shared/components/FieldWrapper';
 import { Skeleton } from '../../../shared/components/Skeleton';
+import { formatDateTime } from '../../../shared/lib/format';
 import { useToastStore } from '../../../shared/toast/toastStore';
-import {
-  deleteLoteRequest,
-  deleteRemateRequest,
-  reorderLotesRequest,
-  scheduleRemateRequest,
-} from '../../remates/api';
-import { SearchIcon } from '../../remates/components/icons';
+import { deleteLoteRequest, deleteRemateRequest, reorderLotesRequest, scheduleRemateRequest } from '../../remates/api';
 import { useLotes, useRemateDetail } from '../../remates/hooks';
 import type { Lote } from '../../remates/types';
-import { AddLoteButton } from '../components/AddLoteButton';
 import { CancelRemateModal } from '../components/CancelRemateModal';
-import { SendIcon } from '../components/icons';
-import { LoteFormModal } from '../components/LoteFormModal';
-import { LoteManagementCard } from '../components/LoteManagementCard';
+import { LoteDrawer } from '../components/LoteDrawer';
 import { LoteManagementCardSkeleton } from '../components/LoteManagementCardSkeleton';
-import { LotesSummaryChips } from '../components/LotesSummaryChips';
 import { RemateFormModal } from '../components/RemateFormModal';
-import { RemateManagementSidebar } from '../components/RemateManagementSidebar';
+import { RemateSettingsMenu } from '../components/RemateSettingsMenu';
 import { RematePublicadoOverlay } from '../components/RematePublicadoOverlay';
+import { RemateStatusPill } from '../components/dashboard/RemateStatusPill';
+import { SendIcon } from '../components/icons';
+import { CatalogNumbers } from '../components/preparation/CatalogNumbers';
+import { LoteCatalogCard } from '../components/preparation/LoteCatalogCard';
+import { LoteOrderRow } from '../components/preparation/LoteOrderRow';
+import { PreparationChecklist } from '../components/preparation/PreparationChecklist';
 import { duplicateLote, duplicateRemate } from '../duplication';
+import {
+  buildPreparation,
+  buildPreparationHeadline,
+  filterLotes,
+  type ChecklistAction,
+  type LoteFilter,
+} from '../preparation';
 
 const LOTE_SKELETON_COUNT = 3;
+const NEW_LOTE_HIGHLIGHT_MS = 1600;
+const GRID_CLASSES = 'grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4';
+
+const FILTERS: Array<{ value: LoteFilter; label: string }> = [
+  { value: 'all', label: 'Todos' },
+  { value: 'without-photo', label: 'Sin foto' },
+  { value: 'with-reserve', label: 'Con reserva' },
+];
+
+type LoteDrawerState = { mode: 'create' } | { mode: 'edit'; lote: Lote } | null;
+
+function SectionHeading({ id, title, description }: { id: string; title: string; description?: string }) {
+  return (
+    <div className="mb-6">
+      <h2 id={id} className="text-2xl font-semibold tracking-tight sm:text-3xl">
+        {title}
+      </h2>
+      {description && <p className="mt-1.5 max-w-[60ch] text-ink-muted">{description}</p>}
+    </div>
+  );
+}
 
 /**
- * Gestión de Remates y Lotes (Épica 5, Módulo 5.3) -- donde el rematador prepara un
- * remate completo antes de que empiece: editar sus datos, publicarlo, y cargar/editar/
- * duplicar/reordenar sus lotes. Reusa `useRemateDetail`/`useLotes` de
- * `features/remates/hooks.ts` tal cual (Épica 4.4, sin modificarlos) -- misma fuente de
- * datos que ya usa `RemateDetailPage` para el comprador.
+ * Preparación del remate (Épica 5, Módulo 5.3; rediseño editorial sobre el mismo sistema
+ * visual del panel principal de la empresa) -- donde se prepara un remate completo antes de
+ * que empiece: sus lotes y su publicación. Reusa `useRemateDetail`/`useLotes` de
+ * `features/remates/hooks.ts` tal cual -- misma fuente de datos que `RemateDetailPage`.
+ *
+ * De arriba a abajo: un titular que dice cuánto falta para publicar, "Antes de publicar"
+ * (checklist de lo obligatorio y lo recomendado, ver `buildPreparation`), el catálogo en
+ * números con el precio base de cada lote, y "Tus lotes" como galería (o lista en orden de
+ * salida) con filtros y búsqueda. Crear y editar un lote se hace en `LoteDrawer`, un panel
+ * lateral de tres pasos con la vista previa del comprador.
  *
  * La estructura de lotes (crear/editar/eliminar/reordenar) solo se habilita mientras el
- * remate está `draft`/`scheduled` (`LoteService._assert_structure_editable`, backend) --
- * una vez `live`, queda congelada; esta pantalla lo refleja deshabilitando esas acciones
- * en vez de dejar que el backend las rechace con un 422.
- *
- * Rediseño a "centro de preparación del remate": toda la pantalla gira alrededor de los
- * lotes. Las acciones de ciclo de vida del remate (editar/duplicar/auditoría/cancelar/
- * eliminar) se agrupan en `RemateManagementSidebar` bajo "Configuración del remate";
- * "Agregar lote" y "Publicar remate" son las dos únicas acciones con peso visual propio.
- * El buscador filtra client-side sobre los `lotes` ya cargados -- "Filtrar"/"Ordenar"
- * quedan como controles deshabilitados, a propósito (pedido explícito: dejar la interfaz
- * preparada para esas mejoras sin inventar comportamiento que el backend no soporta).
+ * remate está `draft`/`scheduled` (`LoteService._assert_structure_editable`, backend) -- una
+ * vez en vivo queda congelada; la pantalla lo refleja pasando a solo lectura en vez de dejar
+ * que el backend rechace esas acciones con un 422. Las acciones de ciclo de vida del remate
+ * viven en `RemateSettingsMenu`.
  */
 export function LotesManagementPage() {
+  useTopNavLayout();
   const { remateId } = useParams<{ remateId: string }>();
   const navigate = useNavigate();
   const id = remateId ?? '';
@@ -67,7 +90,9 @@ export function LotesManagementPage() {
     setLotes(fetchedLotes);
   }, [fetchedLotes]);
 
+  const [filter, setFilter] = useState<LoteFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [view, setView] = useState<'grid' | 'list'>('grid');
 
   const [isRemateModalOpen, setIsRemateModalOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
@@ -76,31 +101,23 @@ export function LotesManagementPage() {
   const [isPublishedOverlayOpen, setIsPublishedOverlayOpen] = useState(false);
   const [isDuplicatingRemate, setIsDuplicatingRemate] = useState(false);
 
-  const [loteModalState, setLoteModalState] = useState<{ mode: 'create' } | { mode: 'edit'; lote: Lote } | null>(
-    null,
-  );
+  const [drawerState, setDrawerState] = useState<LoteDrawerState>(null);
   const [deletingLote, setDeletingLote] = useState<Lote | null>(null);
   const [duplicatingLoteId, setDuplicatingLoteId] = useState<string | null>(null);
+  const [newLoteId, setNewLoteId] = useState<string | null>(null);
 
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
+  const [showStickyPublish, setShowStickyPublish] = useState(false);
+  const heroPublishRef = useRef<HTMLDivElement>(null);
+  const [now] = useState(() => Date.now());
+
   const isStructureEditable = remate?.status === 'draft' || remate?.status === 'scheduled';
   const isDraft = remate?.status === 'draft';
-  const canPublish = isDraft && Boolean(remate?.starts_at) && lotes.length > 0;
-  const publishBlockedReason = !remate?.starts_at
-    ? 'Definí una fecha de inicio (Configuración del remate → Editar remate) antes de publicar.'
-    : lotes.length === 0
-      ? 'Debés cargar al menos un lote para publicar el remate.'
-      : undefined;
-
-  const filteredLotes = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return lotes;
-    return lotes.filter(
-      (lote) => lote.title.toLowerCase().includes(query) || lote.lot_number.toLowerCase().includes(query),
-    );
-  }, [lotes, searchQuery]);
+  const preparation = useMemo(() => (remate ? buildPreparation(remate, lotes, now) : null), [remate, lotes, now]);
+  const canPublish = Boolean(preparation?.canPublish);
+  const filteredLotes = useMemo(() => filterLotes(lotes, filter, searchQuery), [lotes, filter, searchQuery]);
 
   const breadcrumbItems: BreadcrumbItem[] = isRemateLoading
     ? []
@@ -108,6 +125,45 @@ export function LotesManagementPage() {
       ? [{ label: 'Mis remates', to: '/' }, { label: 'Remate no encontrado' }]
       : [{ label: 'Mis remates', to: '/' }, { label: remate.title }];
   useBreadcrumb(breadcrumbItems);
+
+  // La barra de "Publicar remate" solo aparece cuando el botón del encabezado ya salió de
+  // la pantalla: mientras se ve el original, no hace falta un segundo.
+  useEffect(() => {
+    const target = heroPublishRef.current;
+    if (!target || !isDraft || typeof IntersectionObserver === 'undefined') {
+      setShowStickyPublish(false);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      setShowStickyPublish(!entry.isIntersecting && entry.boundingClientRect.top < 0);
+    });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [isDraft, isRemateLoading]);
+
+  function markAsNew(loteId: string) {
+    setNewLoteId(loteId);
+    window.setTimeout(() => setNewLoteId((current) => (current === loteId ? null : current)), NEW_LOTE_HIGHLIGHT_MS);
+  }
+
+  function scrollToLote(loteId: string) {
+    setFilter('all');
+    setSearchQuery('');
+    window.requestAnimationFrame(() => {
+      const element = document.querySelector<HTMLElement>(`[data-lote-id="${loteId}"]`);
+      element?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+      element?.focus?.();
+    });
+  }
+
+  function handleChecklistAction(action: ChecklistAction) {
+    if (action === 'edit-remate') setIsRemateModalOpen(true);
+    else if (action === 'add-lote') setDrawerState({ mode: 'create' });
+    else {
+      setFilter('without-photo');
+      document.getElementById('lotes-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
 
   async function persistReorder(newOrder: Lote[]) {
     const previous = lotes;
@@ -195,12 +251,13 @@ export function LotesManagementPage() {
   async function handleDuplicateLote(lote: Lote) {
     setDuplicatingLoteId(lote.id);
     try {
-      await duplicateLote(
+      const created = await duplicateLote(
         id,
         lote,
         lotes.map((existing) => existing.lot_number),
       );
       useToastStore.getState().push('success', 'Se duplicó el lote.');
+      if (created?.id) markAsNew(created.id);
       reloadLotes();
     } catch (err) {
       useToastStore.getState().push('error', normalizeApiError(err).message);
@@ -211,11 +268,11 @@ export function LotesManagementPage() {
 
   if (isRemateLoading) {
     return (
-      <div className="flex flex-col gap-6">
-        <Skeleton className="h-4 w-48" />
-        <div className="flex flex-col gap-5 lg:flex-row">
-          <Skeleton className="h-80 w-full lg:w-72" />
-          <div className="flex flex-1 flex-col gap-3">
+      <div className="min-h-screen bg-white">
+        <div className="mx-auto flex w-full max-w-[110rem] flex-col gap-8 px-3 py-8 sm:px-6 lg:px-10">
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-32 w-full max-w-3xl rounded-2xl" />
+          <div className={GRID_CLASSES}>
             {Array.from({ length: LOTE_SKELETON_COUNT }, (_, index) => (
               <LoteManagementCardSkeleton key={index} />
             ))}
@@ -225,9 +282,9 @@ export function LotesManagementPage() {
     );
   }
 
-  if (remateError || !remate) {
+  if (remateError || !remate || !preparation) {
     return (
-      <div className="flex flex-col gap-6">
+      <div className="mx-auto w-full max-w-[110rem] px-3 py-8 sm:px-6 lg:px-10">
         <Alert variant="error">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{remateError?.message ?? 'No se pudo cargar este remate.'}</span>
@@ -245,41 +302,165 @@ export function LotesManagementPage() {
     );
   }
 
+  const currency = remate.settings.currency;
+  const timed = remate.auction_type === 'timed';
+  const guaranteeAmount = remate.settings.guarantee_required ? remate.settings.guarantee_amount : null;
+  const headline = buildPreparationHeadline(remate, preparation.blockers.length, canPublish);
+  const hasLotes = !isLotesLoading && !lotesError && lotes.length > 0;
+  const closeDrawer = () => setDrawerState(null);
+  const addLote = () => setDrawerState({ mode: 'create' });
+
+  function dragProps(lote: Lote) {
+    return {
+      onDragStart: (event: DragEvent<HTMLElement>) => {
+        setDraggedId(lote.id);
+        event.dataTransfer.effectAllowed = 'move';
+      },
+      onDragEnter: () => setDragOverId(lote.id),
+      onDragOver: (event: DragEvent<HTMLElement>) => event.preventDefault(),
+      onDrop: handleDrop(lote.id),
+      onDragEnd: () => {
+        setDraggedId(null);
+        setDragOverId(null);
+      },
+      isDragOver: dragOverId === lote.id && draggedId !== lote.id,
+      isDragging: draggedId === lote.id,
+    };
+  }
+
   return (
-    <div className="flex flex-col gap-8 pb-28 font-display sm:pb-20">
-      <div className="flex flex-col gap-3 border-b border-line pb-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Preparación del Remate</h1>
-          <p className="mt-1 max-w-2xl text-sm text-ink-muted">
-            Complete y organice los lotes que formarán parte del remate. Cuando todo esté listo podrá publicarlo y
-            comenzar la subasta.
-          </p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-white pb-28 font-display text-ink">
+      <div className="mx-auto w-full max-w-[110rem] px-3 py-8 sm:px-6 lg:px-10">
+        <Link
+          to="/"
+          className="mb-6 inline-flex items-center gap-1.5 rounded-lg text-sm font-medium text-ink-muted transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        >
+          <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+          Mis remates
+        </Link>
 
-      <div className="flex flex-col gap-5 lg:flex-row">
-        <RemateManagementSidebar
-          remate={remate}
-          onEdit={() => setIsRemateModalOpen(true)}
-          onCancel={() => setIsCancelModalOpen(true)}
-          onDelete={() => setIsDeleteRemateModalOpen(true)}
-          onDuplicate={handleDuplicateRemate}
-          onViewAudit={() => navigate(`/remates/${id}/auditoria`)}
-          isDuplicating={isDuplicatingRemate}
-        />
-
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-ink">Lotes</h2>
-            {isStructureEditable && <AddLoteButton onClick={() => setLoteModalState({ mode: 'create' })} />}
+        <header className="flex flex-col gap-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <RemateStatusPill remate={remate} />
+            <span className="font-semibold">{remate.title}</span>
           </div>
+          <h1 className="max-w-[20ch] text-balance text-4xl font-semibold leading-[1.02] tracking-tight sm:text-6xl">{headline}</h1>
+          <p className="max-w-[56ch] text-lg text-ink-muted">
+            {!isStructureEditable
+              ? 'El remate ya empezó: podés revisar los lotes, pero no agregar, editar ni reordenar.'
+              : isDraft
+                ? canPublish
+                  ? `${lotes.length} ${lotes.length === 1 ? 'lote cargado' : 'lotes cargados'}. Revisá el orden de salida y publicá cuando quieras.`
+                  : 'Completá lo que falta y después publicalo para que los compradores lo vean.'
+                : 'Podés seguir ajustando los lotes hasta que empiece el remate.'}
+          </p>
+          <dl className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-ink-muted">
+            <div className="flex items-center gap-1.5">
+              <dt className="sr-only">Modalidad</dt>
+              {timed ? <Timer aria-hidden="true" className="h-3.5 w-3.5" /> : <Radio aria-hidden="true" className="h-3.5 w-3.5" />}
+              <dd>{timed ? 'Timed Auction' : 'En vivo con rematador'}</dd>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <dt className="sr-only">Acceso</dt>
+              {remate.access_type === 'private' ? <Lock aria-hidden="true" className="h-3.5 w-3.5" /> : <Globe aria-hidden="true" className="h-3.5 w-3.5" />}
+              <dd>{remate.access_type === 'private' ? 'Privado' : 'Público'}</dd>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <dt className="sr-only">Fecha</dt>
+              <Calendar aria-hidden="true" className="h-3.5 w-3.5" />
+              <dd>{remate.starts_at ? formatDateTime(remate.starts_at) : 'Sin fecha'}</dd>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <dt className="sr-only">Garantía</dt>
+              <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5" />
+              <dd>{guaranteeAmount ? `Garantía ${new Intl.NumberFormat('es-AR', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Number(guaranteeAmount))}` : 'Sin garantía'}</dd>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <dt className="sr-only">Moneda</dt>
+              <dd>{currency}</dd>
+            </div>
+          </dl>
 
-          {!isStructureEditable && (
+          <div className="flex flex-wrap items-center gap-3">
+            <div ref={heroPublishRef}>
+              {isDraft ? (
+                <Button
+                  variant="hero"
+                  onClick={handlePublish}
+                  isLoading={isPublishing}
+                  disabled={!canPublish}
+                  aria-describedby={!canPublish ? 'publish-why' : undefined}
+                  className="px-7 py-3.5 text-[15px]"
+                >
+                  <SendIcon className="h-[18px] w-[18px]" />
+                  Publicar remate
+                </Button>
+              ) : (
+                <Link
+                  to={`/remates/${id}`}
+                  className="inline-flex items-center gap-2 rounded-full border border-line-strong bg-white px-7 py-3.5 text-[15px] font-semibold transition-colors hover:border-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+                >
+                  <Eye aria-hidden="true" className="h-[18px] w-[18px]" />
+                  Ver como comprador
+                </Link>
+              )}
+            </div>
+            {isStructureEditable && (
+              <Button variant="secondary" onClick={addLote} className="rounded-full px-7 py-3.5 text-[15px]">
+                <Plus aria-hidden="true" className="h-[18px] w-[18px]" />
+                Agregar lote
+              </Button>
+            )}
+            <RemateSettingsMenu
+              remate={remate}
+              onEdit={() => setIsRemateModalOpen(true)}
+              onCancel={() => setIsCancelModalOpen(true)}
+              onDelete={() => setIsDeleteRemateModalOpen(true)}
+              onDuplicate={handleDuplicateRemate}
+              onViewAudit={() => navigate(`/remates/${id}/auditoria`)}
+              isDuplicating={isDuplicatingRemate}
+            />
+          </div>
+          {isDraft && (
+            <p id="publish-why" className={`text-sm ${canPublish ? 'text-ink-muted' : 'font-semibold text-danger-600'}`}>
+              {canPublish ? 'Los compradores lo ven apenas lo publiques.' : preparation.blockedReason}
+            </p>
+          )}
+        </header>
+
+        {!isStructureEditable && (
+          <div className="mt-8">
             <Alert variant="info">
               La estructura de lotes está congelada porque el remate ya está{' '}
               {remate.status === 'live' || remate.status === 'paused' ? 'en vivo' : 'finalizado o cancelado'}.
             </Alert>
-          )}
+          </div>
+        )}
+
+        {isDraft && (
+          <section aria-labelledby="checklist-title" className="mt-14">
+            <SectionHeading id="checklist-title" title="Antes de publicar" description="Lo obligatorio para publicar y lo recomendado para que el remate se vea bien." />
+            <PreparationChecklist items={preparation.items} onAction={handleChecklistAction} />
+          </section>
+        )}
+
+        {hasLotes && (
+          <section aria-labelledby="numbers-title" className="mt-20">
+            <SectionHeading id="numbers-title" title="Tu catálogo en números" description="Un vistazo a lo que cargaste hasta ahora." />
+            <CatalogNumbers lotes={lotes} currency={currency} onSelectLote={scrollToLote} />
+          </section>
+        )}
+
+        <section aria-labelledby="lotes-title" className="mt-20">
+          <SectionHeading
+            id="lotes-title"
+            title="Tus lotes"
+            description={
+              isStructureEditable
+                ? 'El orden de la galería es el orden de salida. Arrastrá un lote o usá su menú para moverlo.'
+                : 'Solo lectura mientras el remate está en curso.'
+            }
+          />
 
           {lotesError && (
             <Alert variant="error">
@@ -293,7 +474,7 @@ export function LotesManagementPage() {
           )}
 
           {isLotesLoading && !lotesError && (
-            <div className="flex flex-col gap-3">
+            <div className={GRID_CLASSES}>
               {Array.from({ length: LOTE_SKELETON_COUNT }, (_, index) => (
                 <LoteManagementCardSkeleton key={index} />
               ))}
@@ -301,101 +482,160 @@ export function LotesManagementPage() {
           )}
 
           {!isLotesLoading && !lotesError && lotes.length === 0 && (
-            <EmptyState
-              icon={<PackageOpen className="h-10 w-10" aria-hidden="true" />}
-              title="Aún no agregaste ningún lote"
-              description="Los lotes son los productos que participarán del remate. Comenzá creando el primero."
-              action={
-                isStructureEditable ? (
-                  <AddLoteButton onClick={() => setLoteModalState({ mode: 'create' })} label="Crear primer lote" />
-                ) : undefined
-              }
-            />
+            <div className="grid justify-items-center gap-3 rounded-3xl border border-dashed border-line-strong px-6 py-16 text-center">
+              <h3 className="text-2xl font-semibold tracking-tight">Aún no agregaste ningún lote</h3>
+              <p className="max-w-[48ch] text-ink-muted">
+                Un lote es lo que se vende en el remate: un grupo de animales, una máquina, un inmueble. Cargá el primero en tres pasos:
+                fotos, datos y precios.
+              </p>
+              {isStructureEditable && (
+                <Button variant="hero" onClick={addLote} className="mt-2 px-6 py-3">
+                  <Plus aria-hidden="true" className="h-4 w-4" />
+                  Crear primer lote
+                </Button>
+              )}
+            </div>
           )}
 
-          {!isLotesLoading && !lotesError && lotes.length > 0 && (
+          {hasLotes && (
             <>
-              <div className="flex flex-col flex-wrap gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <LotesSummaryChips lotes={lotes} />
-
-                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                  <div className="relative w-full sm:w-48 md:w-56">
-                    <label htmlFor="lote-search" className="sr-only">
-                      Buscar lote
-                    </label>
-                    <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <input
-                      id="lote-search"
-                      type="search"
-                      value={searchQuery}
-                      onChange={(event) => setSearchQuery(event.target.value)}
-                      placeholder="Buscar lote..."
-                      className={`${FIELD_CONTROL_CLASSES} w-full border-slate-300 pl-9`}
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="secondary" disabled title="Próximamente" className="!px-3">
-                      <Filter className="h-4 w-4" aria-hidden="true" />
-                      Filtrar
-                    </Button>
-                    <Button variant="secondary" disabled title="Próximamente" className="!px-3">
-                      <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
-                      Ordenar
-                    </Button>
-                  </div>
+              <div className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-3">
+                <div role="group" aria-label="Filtrar lotes" className="flex flex-wrap gap-1.5">
+                  {FILTERS.map((option) => {
+                    const count = filterLotes(lotes, option.value, '').length;
+                    const isActive = filter === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={isActive}
+                        onClick={() => setFilter(option.value)}
+                        className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                          isActive ? 'border-ink bg-ink text-white' : 'border-line bg-white text-ink-muted hover:border-ink hover:text-ink'
+                        }`}
+                      >
+                        {option.label}
+                        <span className="ml-1.5 font-medium tabular-nums opacity-65">{count}</span>
+                      </button>
+                    );
+                  })}
                 </div>
+                <div role="group" aria-label="Vista" className="inline-flex rounded-full border border-line bg-surface-subtle p-0.5">
+                  {(
+                    [
+                      { value: 'grid', label: 'Galería', icon: LayoutGrid },
+                      { value: 'list', label: 'Orden de salida', icon: List },
+                    ] as const
+                  ).map(({ value, label, icon: Icon }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={view === value}
+                      onClick={() => setView(value)}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                        view === value ? 'bg-ink text-white' : 'text-ink-muted hover:text-ink'
+                      }`}
+                    >
+                      <Icon aria-hidden="true" className="h-4 w-4" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <label className="relative ml-auto w-full sm:w-56">
+                  <span className="sr-only">Buscar lote</span>
+                  <Search aria-hidden="true" className="pointer-events-none absolute left-0 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Buscar lote"
+                    className="w-full border-0 border-b border-line-strong bg-transparent py-2 pl-6 pr-1 text-sm text-ink placeholder:text-ink-faint focus:border-ink focus:outline-none"
+                  />
+                </label>
               </div>
 
-              {filteredLotes.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-line-strong bg-white py-8 text-center text-sm text-ink-muted">
-                  No encontramos lotes que coincidan con &quot;{searchQuery}&quot;.
-                </p>
-              ) : (
-                <div className="flex flex-col gap-3">
+              {view === 'grid' ? (
+                <div className={GRID_CLASSES}>
+                  {isStructureEditable && filter === 'all' && searchQuery.trim() === '' && (
+                    <button
+                      type="button"
+                      onClick={addLote}
+                      className="group flex min-h-[20rem] flex-col items-center justify-center gap-3 rounded-2xl border-[1.5px] border-dashed border-line-strong bg-white p-6 text-center transition-colors hover:border-brand-600 hover:bg-brand-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    >
+                      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-ink text-white">
+                        <Plus aria-hidden="true" className="h-6 w-6 transition-transform duration-200 group-hover:rotate-90" />
+                      </span>
+                      <span className="text-xl font-semibold tracking-tight">Agregar lote</span>
+                      <span className="max-w-[26ch] text-sm text-ink-muted">Fotos, datos y precios, con vista previa para el comprador.</span>
+                    </button>
+                  )}
                   {filteredLotes.map((lote) => {
                     const index = lotes.findIndex((l) => l.id === lote.id);
                     return (
-                      <LoteManagementCard
+                      <LoteCatalogCard
                         key={lote.id}
                         lote={lote}
-                        currency={remate.settings.currency}
+                        currency={currency}
+                        position={index + 1}
+                        total={lotes.length}
                         isEditable={isStructureEditable}
-                        canMoveUp={index > 0}
-                        canMoveDown={index < lotes.length - 1}
-                        onEdit={() => setLoteModalState({ mode: 'edit', lote })}
+                        isNew={newLoteId === lote.id}
+                        onOpen={() => setDrawerState({ mode: 'edit', lote })}
                         onDuplicate={() => void handleDuplicateLote(lote)}
                         onDelete={() => setDeletingLote(lote)}
-                        onMoveUp={() => moveLote(lote.id, -1)}
-                        onMoveDown={() => moveLote(lote.id, 1)}
-                        onDragStart={(event) => {
-                          setDraggedId(lote.id);
-                          event.dataTransfer.effectAllowed = 'move';
-                        }}
-                        onDragEnter={() => setDragOverId(lote.id)}
-                        onDragOver={(event) => event.preventDefault()}
-                        onDrop={handleDrop(lote.id)}
-                        onDragEnd={() => {
-                          setDraggedId(null);
-                          setDragOverId(null);
-                        }}
-                        isDragOver={dragOverId === lote.id && draggedId !== lote.id}
-                        isDragging={draggedId === lote.id}
+                        onMoveBefore={() => moveLote(lote.id, -1)}
+                        onMoveAfter={() => moveLote(lote.id, 1)}
+                        {...dragProps(lote)}
                       />
                     );
                   })}
                 </div>
+              ) : (
+                <ul className="border-t border-ink">
+                  {filteredLotes.map((lote) => {
+                    const index = lotes.findIndex((l) => l.id === lote.id);
+                    return (
+                      <LoteOrderRow
+                        key={lote.id}
+                        lote={lote}
+                        currency={currency}
+                        position={index + 1}
+                        total={lotes.length}
+                        isEditable={isStructureEditable}
+                        isNew={newLoteId === lote.id}
+                        onOpen={() => setDrawerState({ mode: 'edit', lote })}
+                        onMoveUp={() => moveLote(lote.id, -1)}
+                        onMoveDown={() => moveLote(lote.id, 1)}
+                        {...dragProps(lote)}
+                      />
+                    );
+                  })}
+                </ul>
+              )}
+
+              {filteredLotes.length === 0 && (
+                <div className="mt-2 grid justify-items-start gap-3">
+                  <p className="text-lg font-semibold">No encontramos lotes que coincidan</p>
+                  <p className="text-ink-muted">
+                    {searchQuery.trim() ? `Ningún lote coincide con “${searchQuery}”.` : 'No hay lotes con ese filtro.'}
+                  </p>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setFilter('all');
+                      setSearchQuery('');
+                    }}
+                  >
+                    Limpiar filtros
+                  </Button>
+                </div>
               )}
             </>
           )}
-        </div>
+        </section>
       </div>
 
-      <RemateFormModal
-        isOpen={isRemateModalOpen}
-        onClose={() => setIsRemateModalOpen(false)}
-        remate={remate}
-        onSaved={() => reloadRemate()}
-      />
+      <RemateFormModal isOpen={isRemateModalOpen} onClose={() => setIsRemateModalOpen(false)} remate={remate} onSaved={() => reloadRemate()} />
 
       <CancelRemateModal
         isOpen={isCancelModalOpen}
@@ -414,15 +654,19 @@ export function LotesManagementPage() {
         variant="danger"
       />
 
-      {loteModalState && (
-        <LoteFormModal
-          isOpen
-          onClose={() => setLoteModalState(null)}
-          remateId={id}
-          lote={loteModalState.mode === 'edit' ? loteModalState.lote : undefined}
-          onSaved={() => reloadLotes()}
-        />
-      )}
+      <LoteDrawer
+        isOpen={drawerState !== null}
+        onClose={closeDrawer}
+        remateId={id}
+        currency={currency}
+        lote={drawerState?.mode === 'edit' ? drawerState.lote : undefined}
+        readOnly={!isStructureEditable}
+        existingLotNumbers={lotes.map((lote) => lote.lot_number)}
+        onSaved={(saved, isNew) => {
+          if (isNew) markAsNew(saved.id);
+          reloadLotes();
+        }}
+      />
 
       <ConfirmModal
         isOpen={Boolean(deletingLote)}
@@ -442,31 +686,23 @@ export function LotesManagementPage() {
 
       {isDraft && (
         <div
-          className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 p-3 shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.18)] backdrop-blur-sm sm:inset-x-auto sm:bottom-6 sm:right-6 sm:rounded-2xl sm:border sm:p-3 sm:pl-4 sm:shadow-xl"
+          className={`fixed bottom-4 right-4 z-30 flex w-[min(30rem,calc(100vw-2rem))] items-center gap-4 rounded-3xl border border-line bg-white/95 p-3 pl-5 shadow-[0_24px_50px_-16px_rgba(16,17,20,0.35)] backdrop-blur-md transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] max-sm:bottom-3 ${
+            showStickyPublish ? 'translate-y-0' : 'pointer-events-none translate-y-[160%]'
+          }`}
           style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+          aria-hidden={!showStickyPublish}
         >
-          <div className="mx-auto flex max-w-md items-center gap-3 sm:mx-0 sm:max-w-none">
-            <span className="hidden text-sm text-ink-muted sm:block">
-              {canPublish ? 'Todo listo para comenzar' : publishBlockedReason}
-            </span>
-            <Button
-              onClick={handlePublish}
-              isLoading={isPublishing}
-              disabled={!canPublish}
-              title={!canPublish ? publishBlockedReason : undefined}
-              className="w-full shadow-lg shadow-brand-600/20 sm:w-auto"
-            >
-              <SendIcon className="h-4 w-4" />
-              Publicar remate
-            </Button>
-          </div>
+          <span className={`flex-1 text-sm ${canPublish ? 'text-ink-muted' : 'font-semibold text-danger-600'}`}>
+            {canPublish ? 'Todo listo para publicar.' : 'Completá lo que falta para publicar.'}
+          </span>
+          <Button variant="hero" onClick={handlePublish} isLoading={isPublishing} disabled={!canPublish} tabIndex={showStickyPublish ? 0 : -1}>
+            <SendIcon className="h-4 w-4" />
+            Publicar remate
+          </Button>
         </div>
       )}
 
-      <RematePublicadoOverlay
-        isOpen={isPublishedOverlayOpen}
-        onDone={() => navigate('/', { state: { highlightRemateId: id } })}
-      />
+      <RematePublicadoOverlay isOpen={isPublishedOverlayOpen} onDone={() => navigate('/', { state: { highlightRemateId: id } })} />
     </div>
   );
 }

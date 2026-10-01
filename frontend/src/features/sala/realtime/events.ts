@@ -30,6 +30,12 @@ export interface RemateResumedEvent extends DomainEventBase {
   event_type: 'remate.resumed';
 }
 
+export interface RemateStreamUpdatedEvent extends DomainEventBase {
+  event_type: 'remate.stream_updated';
+  stream_provider: string | null;
+  stream_video_id: string | null;
+}
+
 export interface RemateFinishedEvent extends DomainEventBase {
   event_type: 'remate.finished';
   triggered_by: 'manual' | 'auto';
@@ -82,12 +88,16 @@ export interface LoteRequeuedEvent extends DomainEventBase {
  * Adjudicación automática (Épica 8, "cuenta regresiva y cierre automático") -- solo se
  * publica cuando `TimerExpiryScheduler` cierra un lote como `sold` (nunca en un cierre
  * manual, ver `backend/app/modules/remates/lotes/events.py::LoteWinnerDetermined`).
+ *
+ * `buyer_id` llega enmascarado por destinatario (WebSocket Security Audit, Fase 1 --
+ * `backend/app/realtime/privilege.py::MASKERS["lote.winner_determined"]`): el propio id
+ * real si el ganador es quien recibe el evento, `null` si es otro comprador.
  */
 export interface LoteWinnerDeterminedEvent extends DomainEventBase {
   event_type: 'lote.winner_determined';
   lote_id: string;
   oferta_id: string;
-  buyer_id: string;
+  buyer_id: string | null;
   amount: string;
 }
 
@@ -157,34 +167,44 @@ export interface OfertaPlacedEvent extends DomainEventBase {
   status: string;
 }
 
+/** `buyer_id` llega enmascarado por destinatario (WebSocket Security Audit, Fase 1 --
+ * `backend/app/realtime/privilege.py::MASKERS["oferta.accepted"]`): el propio id real
+ * si la oferta es de quien recibe el evento, `null` si es de otro comprador -- mismo
+ * criterio que ya aplica `SnapshotService._mask_oferta` al snapshot inicial. El reducer
+ * (`reducer.ts::toOfertaSnapshotEntry`) vuelca este valor tal cual, sin re-enmascararlo. */
 export interface OfertaAcceptedEvent extends DomainEventBase {
   event_type: 'oferta.accepted';
   oferta_id: string;
   lote_id: string;
-  buyer_id: string;
+  buyer_id: string | null;
   amount: string;
 }
 
-/** `buyer_id` real (sin enmascarar) -- a diferencia del snapshot, el Event Dispatcher
- * del backend no aplica `SnapshotService._mask_oferta` a los eventos crudos (ver
- * ADR-031, sección sobre anonimato). El reducer (`reducer.ts`) nunca vuelca este campo a
- * la interfaz. */
+/** `buyer_id` enmascarado igual que `OfertaAcceptedEvent` (ver arriba) -- el propio id
+ * real solo para quien hizo esa oferta rechazada, `null` para el resto de la sala. El
+ * reducer (`reducer.ts`) todavía no vuelca este campo a la interfaz (ver ADR-031,
+ * sección D: sin un caso de uso legítimo hasta que exista una superficie que muestre el
+ * propio rechazo). */
 export interface OfertaRejectedEvent extends DomainEventBase {
   event_type: 'oferta.rejected';
   oferta_id: string;
   lote_id: string;
-  buyer_id: string;
+  buyer_id: string | null;
   amount: string;
   reason: string;
 }
 
+/** `previous_buyer_id`/`new_buyer_id` enmascarados por separado, cada uno contra el
+ * propio id del destinatario (`_mask_oferta_winner_changed`, ver
+ * `backend/app/realtime/privilege.py`) -- un comprador puede verse a sí mismo en
+ * cualquiera de los dos roles (superado o nuevo líder) sin ver la identidad del otro. */
 export interface OfertaWinnerChangedEvent extends DomainEventBase {
   event_type: 'oferta.winner_changed';
   lote_id: string;
   previous_oferta_id: string;
-  previous_buyer_id: string;
+  previous_buyer_id: string | null;
   new_oferta_id: string;
-  new_buyer_id: string;
+  new_buyer_id: string | null;
   new_amount: string;
 }
 
@@ -215,6 +235,7 @@ export type SalaDomainEvent =
   | RemateStartedEvent
   | RematePausedEvent
   | RemateResumedEvent
+  | RemateStreamUpdatedEvent
   | RemateFinishedEvent
   | RemateCancelledEvent
   | LoteOpenedEvent

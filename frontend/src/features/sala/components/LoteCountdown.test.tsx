@@ -160,4 +160,61 @@ describe('LoteCountdown', () => {
       expect(container).toBeEmptyDOMElement();
     });
   });
+
+  describe('variant="strip" (Sala Timed)', () => {
+    const at = (seconds: number) => new Date(NOW.getTime() + seconds * 1000).toISOString();
+
+    it('muestra solo las unidades que corresponden: sin días ni horas bajo la hora', () => {
+      render(<LoteCountdown endsAt={at(52 * 60 + 9)} pausedRemainingSeconds={null} variant="strip" />);
+
+      const timer = screen.getByRole('timer', { name: 'Tiempo restante' });
+      expect(timer).toHaveTextContent('52min09seg');
+      expect(timer).not.toHaveTextContent('horas');
+      expect(screen.getByText('Cierra en')).toBeInTheDocument();
+    });
+
+    it('con días, muestra las cuatro unidades', () => {
+      render(
+        <LoteCountdown endsAt={at(2 * 86_400 + 3 * 3_600 + 10 * 60 + 5)} pausedRemainingSeconds={null} variant="strip" />,
+      );
+
+      expect(screen.getByRole('timer')).toHaveTextContent('02días03horas10min05seg');
+    });
+
+    it('bajo el umbral indicado pasa a "Está por cerrar"; sobre el umbral, no', () => {
+      const { rerender } = render(
+        <LoteCountdown endsAt={at(6 * 60)} pausedRemainingSeconds={null} variant="strip" urgentThresholdSeconds={300} />,
+      );
+      expect(screen.queryByText('Está por cerrar')).not.toBeInTheDocument();
+
+      rerender(
+        <LoteCountdown endsAt={at(4 * 60)} pausedRemainingSeconds={null} variant="strip" urgentThresholdSeconds={300} />,
+      );
+      expect(screen.getByText('Está por cerrar')).toBeInTheDocument();
+    });
+
+    it('si el cierre se corre hacia adelante (oferta sobre el final), avisa "+1 min por oferta final" unos segundos', () => {
+      const { rerender } = render(
+        <LoteCountdown endsAt={at(30)} pausedRemainingSeconds={null} variant="strip" urgentThresholdSeconds={300} />,
+      );
+      expect(screen.queryByText('+1 min por oferta final')).not.toBeInTheDocument();
+
+      rerender(
+        <LoteCountdown endsAt={at(90)} pausedRemainingSeconds={null} variant="strip" urgentThresholdSeconds={300} />,
+      );
+      expect(screen.getByText('+1 min por oferta final')).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(4_100);
+      });
+      expect(screen.queryByText('+1 min por oferta final')).not.toBeInTheDocument();
+    });
+
+    it('pausado, dice "Timer pausado" y muestra el valor congelado', () => {
+      render(<LoteCountdown endsAt={null} pausedRemainingSeconds={125} variant="strip" />);
+
+      expect(screen.getByText('Timer pausado')).toBeInTheDocument();
+      expect(screen.getByRole('timer')).toHaveTextContent('02min05seg');
+    });
+  });
 });

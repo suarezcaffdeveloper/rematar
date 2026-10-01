@@ -191,6 +191,18 @@ export async function finishRemateRequest(remateId: string): Promise<Remate> {
   return data;
 }
 
+/** Transmisión en vivo: carga/cambia (`PUT`) o quita (`DELETE`) el video de YouTube, en
+ * cualquier estado no terminal. Lo pueden usar la empresa dueña y el rematador asignado. */
+export async function setRemateStreamRequest(remateId: string, url: string): Promise<Remate> {
+  const { data } = await apiClient.put<Remate>(`/remates/${remateId}/stream`, { url });
+  return data;
+}
+
+export async function clearRemateStreamRequest(remateId: string): Promise<Remate> {
+  const { data } = await apiClient.delete<Remate>(`/remates/${remateId}/stream`);
+  return data;
+}
+
 /**
  * Asignación de operador (ADR-048): la empresa dueña genera/regenera el código
  * (`generateOperatorCodeRequest`, texto plano devuelto una única vez -- el backend nunca

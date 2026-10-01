@@ -1,16 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import {
-  Bot,
-  Gavel,
-  History,
-  KeyRound,
-  LayoutDashboard,
-  LogOut,
-  Package,
-  ShoppingBag,
-  type LucideIcon,
-} from 'lucide-react';
+import { LogOut, type LucideIcon } from 'lucide-react';
 import clsx from 'clsx';
 import logoRematar from '../../assets/brand/logo-rematar.png';
 import { useAuth, useAuthActions } from '../../features/auth/hooks';
@@ -19,6 +9,7 @@ import { Button } from '../../shared/components/Button';
 import { UserAvatar } from '../../shared/components/UserAvatar';
 import { useFocusTrap } from '../../shared/hooks/useFocusTrap';
 import { LogoutConfirmDialog } from './LogoutConfirmDialog';
+import { NAV_ITEMS_BY_ROLE, PUBLIC_NAV_ITEMS } from './navItems';
 
 export interface SidebarProps {
   role: UserRole | undefined;
@@ -27,42 +18,6 @@ export interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
-interface NavItem {
-  label: string;
-  to: string;
-  icon: LucideIcon;
-}
-
-/**
- * Navegación por rol (Épica 9, Etapa 2 -- rediseño; ampliada en ADR-047/ADR-048 con los
- * roles `empresa`/`rematador` acotado). `comprador`/`empresa` tienen su dashboard real
- * en `/` (`HomePage` ya rutea por rol, sin cambios); `admin` no tiene dashboard propio,
- * así que su único ítem apunta directo a `/admin` -- reemplaza el link condicional que
- * antes vivía suelto en el header (Épica 8.0). `empresa` hereda exactamente la
- * navegación que antes tenía `rematador` (crear/gestionar remates es ahora su
- * responsabilidad, ver ADR-047); `rematador` quedó sin remates propios que listar --
- * su único destino es `/` (`OperatorClaimPage`, canjear un código de operador).
- */
-const PUBLIC_NAV_ITEMS: NavItem[] = [{ label: 'Todos los remates', to: '/remates', icon: Gavel }];
-
-const NAV_ITEMS_BY_ROLE: Record<UserRole, NavItem[]> = {
-  comprador: [
-    { label: 'Remates', to: '/', icon: Gavel },
-    { label: 'Ingresar a remate privado', to: '/remates-privados/ingresar', icon: KeyRound },
-    { label: 'Mis compras', to: '/mis-compras', icon: ShoppingBag },
-  ],
-  empresa: [
-    { label: 'Mis remates', to: '/', icon: Gavel },
-    { label: 'Ventas adjudicadas', to: '/ventas-adjudicadas', icon: Package },
-    { label: 'Historial', to: '/historial', icon: History },
-  ],
-  rematador: [
-    { label: 'Unirme a un remate', to: '/', icon: Gavel },
-    { label: 'Simuladores', to: '/simuladores', icon: Bot },
-  ],
-  admin: [{ label: 'Panel de administrador', to: '/admin', icon: LayoutDashboard }],
-};
 
 /** Label que se recorta a lo ancho del riel colapsado (`compact`) y aparece con un fade
  * al expandirse por hover/foco (`group-hover`/`group-focus-within` sobre el `<aside>`) --

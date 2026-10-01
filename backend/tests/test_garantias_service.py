@@ -70,6 +70,17 @@ class _FakeMercadoPagoClient:
         return self.get_status_result
 
 
+class _RecordingGarantiaEmailNotifier:
+    """Reemplaza a `GarantiaEmailNotifier` en los tests -- no habla SMTP, solo registra
+    cada llamada para poder verificar cuándo `GarantiaService` decide mandar el email."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    async def send_garantia_autorizada(self, **kwargs) -> None:
+        self.calls.append(kwargs)
+
+
 async def _create_user(db_session: AsyncSession, *, role: UserRole) -> User:
     user = User(
         email=f"{uuid.uuid4()}@example.com",
@@ -121,7 +132,11 @@ def _make_service(
         AuditLogRepository(db_session),
     )
     return GarantiaService(
-        GarantiaRepository(db_session), remate_service, mp_client, get_settings()
+        GarantiaRepository(db_session),
+        remate_service,
+        mp_client,
+        get_settings(),
+        _RecordingGarantiaEmailNotifier(),
     )
 
 
@@ -172,6 +187,16 @@ async def test_create_or_retry_success_sets_active_with_expiry(db_session: Async
     assert abs((garantia.expires_at - expected_expiry).total_seconds()) < 1
     assert mp_client.calls[0][0] == "create_hold"
 
+    notifier: _RecordingGarantiaEmailNotifier = service._notifier
+    assert len(notifier.calls) == 1
+    sent = notifier.calls[0]
+    assert sent["to"] == buyer.email
+    assert sent["to_name"] == buyer.full_name
+    assert sent["remate_title"] == remate.title
+    assert sent["amount"] == garantia.amount
+    assert sent["authorized_at"] == garantia.authorized_at
+    assert sent["expires_at"] == garantia.expires_at
+
 
 async def test_create_or_retry_marks_failed_on_mercadopago_error(db_session: AsyncSession) -> None:
     owner = await _create_user(db_session, role=UserRole.EMPRESA)
@@ -204,6 +229,8 @@ async def test_create_or_retry_marks_failed_on_rejected_status(db_session: Async
 
     assert garantia.status == GarantiaStatus.FAILED
     assert garantia.mp_payment_id == "mp-2"
+    notifier: _RecordingGarantiaEmailNotifier = service._notifier
+    assert notifier.calls == []  # tarjeta rechazada -- no se manda el email de autorización.
 
 
 async def test_create_or_retry_is_idempotent_while_active(db_session: AsyncSession) -> None:
@@ -218,6 +245,8 @@ async def test_create_or_retry_is_idempotent_while_active(db_session: AsyncSessi
 
     assert first.id == second.id
     assert len(mp_client.calls) == 1  # segunda llamada no volvió a golpear a Mercado Pago.
+    notifier: _RecordingGarantiaEmailNotifier = service._notifier
+    assert len(notifier.calls) == 1  # tampoco se manda el email de nuevo.
 
 
 async def test_create_or_retry_recovers_from_concurrent_duplicate_insert(
@@ -370,6 +399,10 @@ async def test_reconcile_updates_pending_to_active(db_session: AsyncSession) -> 
 
     assert reconciled.status == GarantiaStatus.ACTIVE
     assert reconciled.authorized_at is not None
+    # El email de autorización solo cubre la confirmación síncrona en `create_or_retry`
+    # (ver su docstring) -- una confirmación tardía por webhook/`reconcile` no lo dispara.
+    notifier: _RecordingGarantiaEmailNotifier = service._notifier
+    assert notifier.calls == []
 
 
 async def test_reconcile_skips_terminal_garantias(db_session: AsyncSession) -> None:

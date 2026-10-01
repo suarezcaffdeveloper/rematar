@@ -28,8 +28,8 @@ export interface Garantia {
   created_at: string;
 }
 
-/** Tal cual lo arma el Payment Brick de Mercado Pago en el navegador (`token`,
- * `payment_method_id`, `issuer_id`, `installments`, `payer`, ...) -- ver
- * `mercadopagoBrick.ts`. Este frontend nunca ve ni valida un número de tarjeta crudo, el
- * Brick lo tokeniza dentro de su propio iframe. */
-export type CardPaymentBrickData = Record<string, unknown>;
+/** Tal cual lo arma `mercadopagoFields.ts` con los Secure Fields de Mercado Pago en el
+ * navegador (`token`, `payment_method_id`, `issuer_id`, `installments`, `payer`). Este
+ * frontend nunca ve ni valida un número de tarjeta crudo, los campos seguros lo tokenizan
+ * dentro de sus propios iframes. */
+export type CardPaymentData = Record<string, unknown>;

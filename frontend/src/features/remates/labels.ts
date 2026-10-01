@@ -61,6 +61,20 @@ export const CATEGORY_LABELS: Record<RemateCategory, string> = {
   mercaderia_e_indumentaria: 'Lotes de mercadería e indumentaria',
 };
 
+/** Nombres cortos de cada rubro, para espacios chicos (fichas del mosaico, filas del
+ * índice del inicio) donde los de `CATEGORY_LABELS` no entran. */
+export const CATEGORY_SHORT_LABELS: Record<RemateCategory, string> = {
+  inmuebles: 'Inmuebles',
+  vehiculos: 'Vehículos',
+  maquinaria_pesada_y_agricola: 'Maquinaria',
+  hacienda: 'Hacienda',
+  arte_antiguedades_y_coleccionables: 'Arte y antigüedades',
+  joyas_relojeria_y_numismatica: 'Joyas y relojería',
+  tecnologia_electrodomesticos_y_hogar: 'Tecnología y hogar',
+  nautica_y_aviacion: 'Náutica y aviación',
+  mercaderia_e_indumentaria: 'Mercadería',
+};
+
 export const CATEGORY_OPTIONS: RemateCategory[] = [
   'inmuebles',
   'vehiculos',

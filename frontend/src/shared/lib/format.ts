@@ -51,6 +51,15 @@ export function formatDateTimeCompact(iso: string): string {
   return `${dateOnly} · ${COMPACT_TIME_FORMATTER.format(date)}`;
 }
 
+const DATE_SHORT_FORMATTER = new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short' });
+
+/** `"22 sep"` a partir de un ISO 8601 -- sin hora ni año, para etiquetas de separador de
+ * día en el timeline horario de un remate Timed (`BidsTimelineChart`), donde un remate de
+ * varios días no cabe en el año en curso como para que valga la pena mostrarlo. */
+export function formatDateShort(iso: string): string {
+  return DATE_SHORT_FORMATTER.format(new Date(iso));
+}
+
 const currencyFormatterCache = new Map<string, Intl.NumberFormat>();
 
 /**

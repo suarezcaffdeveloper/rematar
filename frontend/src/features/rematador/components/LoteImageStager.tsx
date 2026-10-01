@@ -24,7 +24,7 @@ export interface LoteImageStagerProps {
  * archivos elegidos con una vista previa inmediata (`URL.createObjectURL`, igual criterio
  * que `RemateCoverImageField`/`LoteGalleryManager`) y deja reordenarlos/quitarlos antes de
  * guardar. El primero de la lista es la imagen principal. La subida real ocurre recién al
- * crear el lote (`LoteFormModal`, con `uploadLoteImageRequest`/`updateLoteImagesRequest`,
+ * crear el lote (`LoteDrawer`, con `uploadLoteImageRequest`/`updateLoteImagesRequest`,
  * el mismo par de endpoints que ya usa `LoteGalleryManager` en modo edición) -- acá no se
  * sube nada todavía, por eso no hay barra de progreso ni confirmación de borrado.
  */

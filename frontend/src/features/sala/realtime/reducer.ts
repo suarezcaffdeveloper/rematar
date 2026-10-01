@@ -97,19 +97,23 @@ export function applyDomainEventToLotes(lotes: Lote[], event: SalaDomainEvent): 
 }
 
 /** Construye la entrada de historial que corresponde a una oferta aceptada. `buyer_id`
- * se fuerza a `null` siempre -- el Event Dispatcher del backend reenvía el evento crudo
- * sin enmascarar (a diferencia del Snapshot Service), así que este es el único punto
- * donde el frontend re-aplica la misma política de anonimato entre postores que ya rige
- * el resto de la sala (`docs/27-sala-del-remate.md`, "Anonimato de compradores"; ver
- * ADR-031 para la justificación completa). */
+ * se usa tal cual llega en el evento -- desde la remediación del WebSocket Security
+ * Audit (Fase 1, `backend/app/realtime/privilege.py`) el Event Dispatcher ya enmascara
+ * `oferta.accepted` por destinatario (`MASKERS["oferta.accepted"]`,
+ * `_hide_unless_self_or_privileged`): un comprador recibe su propio `buyer_id` real si
+ * la oferta es suya, `null` si es de otro. Volver a forzarlo a `null` acá (como hacía
+ * este código antes de esa remediación, ver historial) le ocultaría a cada comprador que
+ * la oferta ganadora es la suya -- exactamente el bug reportado ("recargo la Sala
+ * mientras lidero un lote y ya no me aparece que lidero"). */
 function toOfertaSnapshotEntry(event: {
   oferta_id: string;
+  buyer_id: string | null;
   amount: string;
   occurred_at: string;
 }): OfertaSnapshotEntry {
   return {
     id: event.oferta_id,
-    buyer_id: null,
+    buyer_id: event.buyer_id,
     amount: event.amount,
     status: 'winning',
     created_at: event.occurred_at,
@@ -134,6 +138,16 @@ export function applyDomainEventToSnapshot(
 
     case 'remate.resumed':
       return { ...snapshot, remate: { ...snapshot.remate, status: 'live' } };
+
+    case 'remate.stream_updated':
+      return {
+        ...snapshot,
+        remate: {
+          ...snapshot.remate,
+          stream_provider: event.stream_provider,
+          stream_video_id: event.stream_video_id,
+        },
+      };
 
     case 'remate.finished':
       return {

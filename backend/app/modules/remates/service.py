@@ -80,6 +80,7 @@ from app.modules.remates.events import (
     RemateResumed,
     RemateScheduled,
     RemateStarted,
+    RemateStreamUpdated,
 )
 from app.modules.remates.lotes.events import LoteTimerPaused, LoteTimerResumed
 from app.modules.remates.lotes.repository import LoteRepository
@@ -100,6 +101,11 @@ from app.modules.remates.schemas import (
     check_timed_settings_complete,
 )
 from app.modules.remates.state_machine import assert_transition_allowed
+from app.modules.remates.stream import (
+    STREAM_PROVIDER_YOUTUBE,
+    InvalidStreamUrlError,
+    extract_youtube_video_id,
+)
 from app.modules.users.models import User, UserRole
 from app.redis.rate_limit import RedisRateLimiter
 
@@ -574,6 +580,54 @@ class RemateService:
         )
         await self._repository.commit()
         await self._repository.refresh(remate)
+        return remate
+
+    async def set_stream(self, remate_id: uuid.UUID, actor: User, url: str | None) -> Remate:
+        """Carga, cambia (`url` con valor) o quita (`url=None`) la transmisión en vivo.
+
+        A diferencia de `update`, se permite en cualquier estado no terminal (la URL del
+        stream recién existe cuando arranca la transmisión, con el remate ya LIVE) y
+        también al rematador asignado, que es quien está operando en ese momento."""
+        remate = await self.get_operator_or_raise(remate_id, actor)
+        # Un Timed se maneja por imágenes y dura días: nunca lleva video en vivo.
+        if remate.auction_type == RemateAuctionType.TIMED:
+            raise BusinessRuleError("Los remates Timed no admiten transmisión en vivo.")
+        if remate.status in (RemateStatus.FINISHED, RemateStatus.CANCELLED):
+            raise BusinessRuleError(
+                "No se puede modificar la transmisión de un remate finalizado o cancelado.",
+                current_status=remate.status.value,
+            )
+
+        if url is None:
+            provider, video_id = None, None
+        else:
+            try:
+                video_id = extract_youtube_video_id(url)
+            except InvalidStreamUrlError as exc:
+                raise BusinessRuleError(str(exc)) from exc
+            provider = STREAM_PROVIDER_YOUTUBE
+
+        previous_video_id = remate.stream_video_id
+        remate.stream_provider = provider
+        remate.stream_video_id = video_id
+
+        self._audit_repository.record(
+            actor_id=actor.id,
+            actor_name=actor.full_name,
+            actor_role=actor.role.value,
+            action=AuditAction.REMATE_STREAM_CHANGED,
+            resource_type="remate",
+            resource_id=remate.id,
+            remate_id=remate.id,
+            details={"previous_video_id": previous_video_id, "video_id": video_id},
+        )
+        await self._repository.commit()
+        await self._repository.refresh(remate)
+        await self._event_bus.publish(
+            RemateStreamUpdated(
+                remate_id=remate.id, stream_provider=provider, stream_video_id=video_id
+            )
+        )
         return remate
 
     async def schedule(self, remate_id: uuid.UUID, owner: User) -> Remate:

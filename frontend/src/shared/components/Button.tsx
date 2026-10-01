@@ -12,6 +12,7 @@ type ButtonVariant =
   | 'warning-soft'
   | 'brand-soft'
   | 'hero'
+  | 'warning'
   | 'chip'
   | 'success-outline'
   | 'warning-outline'
@@ -49,6 +50,13 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
    * para la acción más importante de una pantalla (ej. "Ofertar"), distinto del `primary`
    * azul liso que se usa para el resto de las acciones principales de la app. */
   hero: 'bg-ink text-white shadow-sm hover:bg-brand-600 active:bg-brand-700 focus-visible:ring-brand-500',
+  /** CTA con la fuerza visual de `hero` pero en amarillo sólido: la acción bloqueante de
+   * un flujo (ej. "Construir garantía", que reemplaza al "Ofertar" cuando el remate la
+   * exige y el comprador todavía no la constituyó) -- a diferencia de `warning-soft`
+   * (pastel, baja jerarquía), acá el amarillo es el fondo entero porque ES la acción que
+   * se necesita que el comprador vea y toque antes de poder seguir. */
+  warning:
+    'bg-warning-400 text-warning-900 shadow-sm hover:bg-warning-500 active:bg-warning-600 focus-visible:ring-warning-500',
   /** Sugerencia seleccionable de bajo compromiso (ej. montos rápidos de oferta): sin
    * fondo hasta el hover, a diferencia de `secondary` (que siempre tiene fondo blanco +
    * borde) -- mismo lenguaje que el resto del rediseño visual (ver prototipo aprobado). */

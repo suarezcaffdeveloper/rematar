@@ -1,7 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { useLayoutPreferencesStore } from '../../../app/layouts/layoutPreferencesStore';
 import { RemateDetailPage } from './RemateDetailPage';
 import type { Lote, Remate } from '../types';
 
@@ -88,6 +90,12 @@ function renderPage() {
 }
 
 describe('RemateDetailPage', () => {
+  afterEach(() => {
+    act(() => {
+      useLayoutPreferencesStore.setState({ isTopNav: false });
+    });
+  });
+
   beforeEach(() => {
     useAuthMock.mockReturnValue({ isAuthenticated: true });
     fetchLeadingOfferAmountMock.mockReset();
@@ -362,5 +370,166 @@ describe('RemateDetailPage', () => {
       expect(screen.queryByRole('heading', { name: 'Todavía no empezó' })).not.toBeInTheDocument(),
     );
     expect(navigateMock.mock.calls.length).toBe(callsBeforeClick);
+  });
+
+  function mockLoaded(remate: Remate, lotes: Lote[]) {
+    useRemateDetailMock.mockReturnValue({ remate, isLoading: false, error: null, reload: vi.fn() });
+    useLotesMock.mockReturnValue({ lotes, total: lotes.length, isLoading: false, error: null, reload: vi.fn() });
+  }
+
+  const withImages = (id: string, urls: string[], overrides: Partial<Lote> = {}): Lote => ({
+    ...makeLote(id),
+    images: urls.map((url, order) => ({ url, order, caption: null })),
+    ...overrides,
+  });
+
+  it('le pide a AppLayout la barra superior mientras está montada y la suelta al salir', () => {
+    mockLoaded(makeRemate(), []);
+
+    const { unmount } = renderPage();
+    expect(useLayoutPreferencesStore.getState().isTopNav).toBe(true);
+
+    unmount();
+    expect(useLayoutPreferencesStore.getState().isTopNav).toBe(false);
+  });
+
+  it('el link para volver lleva al inicio con sesión y al listado público sin sesión', () => {
+    mockLoaded(makeRemate(), []);
+    const { unmount } = renderPage();
+    expect(screen.getByRole('link', { name: 'Remates' })).toHaveAttribute('href', '/');
+    unmount();
+
+    useAuthMock.mockReturnValue({ isAuthenticated: false });
+    renderPage();
+    expect(screen.getByRole('link', { name: 'Remates' })).toHaveAttribute('href', '/remates');
+  });
+
+  it('un remate timed se anuncia también en la portada', () => {
+    mockLoaded(makeRemate({ auction_type: 'timed' }), []);
+
+    renderPage();
+
+    expect(screen.getByText('Timed auction')).toBeInTheDocument();
+  });
+
+  it('una garantía exigida sin monto configurado dice "Requerida"', () => {
+    mockLoaded(
+      makeRemate({
+        settings: {
+          anti_sniping_enabled: false,
+          anti_sniping_extension_seconds: 60,
+          currency: 'ARS',
+          lote_timer_seconds: null,
+          guarantee_required: true,
+          guarantee_amount: null,
+        },
+      }),
+      [],
+    );
+
+    renderPage();
+
+    expect(screen.getByText('Requerida')).toBeInTheDocument();
+  });
+
+  it('sin ubicación ni fecha de inicio, la franja de datos dice "A confirmar"', () => {
+    mockLoaded(makeRemate({ location: null, starts_at: null }), []);
+
+    renderPage();
+
+    expect(screen.getAllByText('A confirmar')).toHaveLength(2);
+  });
+
+  it('el mosaico de la portada junta la portada del remate y las fotos de los primeros lotes', () => {
+    mockLoaded(makeRemate({ cover_image_url: 'https://img.test/portada.jpg' }), [
+      withImages('1', ['https://img.test/a.jpg']),
+      withImages('2', ['https://img.test/b.jpg']),
+    ]);
+
+    renderPage();
+
+    const hero = screen.getByRole('region', { name: 'Portada del remate' });
+    const sources = Array.from(hero.querySelectorAll('img')).map((img) => img.getAttribute('src'));
+    expect(sources).toEqual(['https://img.test/portada.jpg', 'https://img.test/a.jpg', 'https://img.test/b.jpg']);
+  });
+
+  it('el filtro por estado deja solo los lotes de ese estado', async () => {
+    mockLoaded(makeRemate({ status: 'live' }), [
+      { ...makeLote('1'), status: 'open' },
+      { ...makeLote('2'), status: 'pending' },
+      { ...makeLote('3'), status: 'closed_sold', final_price: '2500.00' },
+    ]);
+
+    renderPage();
+    expect(screen.getByRole('button', { name: /Lote 1:/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Lote 2:/ })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^Pendiente/ }));
+
+    expect(screen.queryByRole('button', { name: /Lote 1:/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Lote 2:/ })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^Todos/ }));
+    expect(screen.getByRole('button', { name: /Lote 1:/ })).toBeInTheDocument();
+  });
+
+  it('un lote vendido muestra el precio en que se vendió', () => {
+    mockLoaded(makeRemate({ status: 'finished' }), [{ ...makeLote('1'), status: 'closed_sold', final_price: '2500.00' }]);
+
+    renderPage();
+
+    expect(screen.getByText('Vendido en')).toBeInTheDocument();
+    expect(screen.getByText(/2\.500/)).toBeInTheDocument();
+  });
+
+  it('tocar un lote abre el visor con sus fotos ordenadas por order y se navega con las flechas', async () => {
+    mockLoaded(makeRemate(), [
+      {
+        ...makeLote('1'),
+        description: 'Descripción del lote.',
+        reserve_price: '1800.00',
+        // Desordenadas a propósito: el visor tiene que mostrar primero la de `order: 0`.
+        images: [
+          { url: 'https://img.test/segunda.jpg', order: 1, caption: null },
+          { url: 'https://img.test/primera.jpg', order: 0, caption: null },
+        ],
+      },
+    ]);
+
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: /Lote 1:/ }));
+
+    const dialog = await screen.findByRole('dialog', { name: /Lote 1:/ });
+    expect(within(dialog).getByRole('img')).toHaveAttribute('src', 'https://img.test/primera.jpg');
+    expect(within(dialog).getByText('1 de 2')).toBeInTheDocument();
+    expect(within(dialog).getByText('Descripción del lote.')).toBeInTheDocument();
+    expect(within(dialog).getByText('Reserva')).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Foto siguiente' }));
+    expect(within(dialog).getByRole('img')).toHaveAttribute('src', 'https://img.test/segunda.jpg');
+    expect(within(dialog).getByText('2 de 2')).toBeInTheDocument();
+  });
+
+  it('el visor se cierra con Escape', async () => {
+    mockLoaded(makeRemate(), [withImages('1', ['https://img.test/a.jpg'])]);
+
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: /Lote 1:/ }));
+    await screen.findByRole('dialog');
+
+    await userEvent.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('un lote sin fotos se puede abrir igual y muestra sus datos', async () => {
+    mockLoaded(makeRemate(), [makeLote('1')]);
+
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: /Lote 1:/ }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Precio base')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Foto siguiente' })).not.toBeInTheDocument();
   });
 });

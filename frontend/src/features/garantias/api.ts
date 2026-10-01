@@ -5,7 +5,7 @@
  */
 
 import { apiClient } from '../../shared/api/client';
-import type { CardPaymentBrickData, Garantia } from './types';
+import type { CardPaymentData, Garantia } from './types';
 
 /** `GET /remates/{id}/garantia/me` -- `null` en el cuerpo si el comprador todavía no
  * constituyó ninguna garantía para este remate (no es un 404: es un estado válido). */
@@ -19,7 +19,7 @@ export async function fetchMyGarantiaRequest(remateId: string): Promise<Garantia
  * `placeBidRequest`, ver `backend/app/modules/garantias/router.py`). */
 export async function createGarantiaRequest(
   remateId: string,
-  cardPaymentData: CardPaymentBrickData,
+  cardPaymentData: CardPaymentData,
 ): Promise<Garantia> {
   const { data } = await apiClient.post<Garantia>(`/remates/${remateId}/garantia`, {
     card_payment_data: cardPaymentData,

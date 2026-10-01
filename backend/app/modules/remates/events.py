@@ -45,6 +45,14 @@ class RemateFinished(RemateScopedEvent):
     triggered_by: Literal["manual", "auto"]
 
 
+class RemateStreamUpdated(RemateScopedEvent):
+    """La empresa/operador cargó, cambió o quitó la transmisión en vivo. `None` = quitada."""
+
+    event_type: Literal["remate.stream_updated"] = "remate.stream_updated"
+    stream_provider: str | None
+    stream_video_id: str | None
+
+
 class RemateCancelled(RemateScopedEvent):
     event_type: Literal["remate.cancelled"] = "remate.cancelled"
     reason: str

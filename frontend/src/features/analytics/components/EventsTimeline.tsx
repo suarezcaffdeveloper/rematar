@@ -1,15 +1,7 @@
 import clsx from 'clsx';
 import { formatTime } from '../../../shared/lib/format';
-import { RECENT_EVENT_BADGE_VARIANTS, RECENT_EVENT_LABELS } from '../labels';
+import { EVENT_DOT_COLOR_CLASSES, RECENT_EVENT_BADGE_VARIANTS, RECENT_EVENT_LABELS } from '../labels';
 import type { RecentAnalyticsEvent } from '../types';
-
-const DOT_COLOR_CLASSES: Record<string, string> = {
-  brand: 'bg-brand-500',
-  success: 'bg-success-500',
-  danger: 'bg-danger-500',
-  warning: 'bg-amber-500',
-  neutral: 'bg-slate-400',
-};
 
 export interface EventsTimelineProps {
   events: RecentAnalyticsEvent[];
@@ -35,7 +27,7 @@ export function EventsTimeline({ events }: EventsTimelineProps) {
             aria-hidden="true"
             className={clsx(
               'mt-1.5 h-2 w-2 shrink-0 rounded-full',
-              DOT_COLOR_CLASSES[RECENT_EVENT_BADGE_VARIANTS[event.event_type]],
+              EVENT_DOT_COLOR_CLASSES[RECENT_EVENT_BADGE_VARIANTS[event.event_type]],
             )}
           />
           <span className="flex-1 text-slate-700">

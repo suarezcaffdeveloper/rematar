@@ -18,15 +18,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
+from app.email.renderer import EmailTemplateRenderer
+from app.email.sender import EmailSender
 from app.modules.garantias.mercadopago_client import (
     MercadoPagoClient,
     NullMercadoPagoClient,
     RealMercadoPagoClient,
 )
+from app.modules.garantias.notifications import GarantiaEmailNotifier
 from app.modules.garantias.repository import GarantiaRepository
 from app.modules.garantias.service import GarantiaService
 from app.modules.remates.dependencies import get_remate_service
 from app.modules.remates.service import RemateService
+from app.notify.dependencies import _build_email_sender, get_email_sender
 
 logger = structlog.get_logger(__name__)
 
@@ -54,11 +58,18 @@ def get_garantia_repository(
     return GarantiaRepository(db)
 
 
+def get_garantia_email_notifier(
+    email_sender: Annotated[EmailSender, Depends(get_email_sender)],
+) -> GarantiaEmailNotifier:
+    return GarantiaEmailNotifier(email_sender, EmailTemplateRenderer())
+
+
 def build_garantia_service(
     db: AsyncSession, remate_service: RemateService, settings: Settings
 ) -> GarantiaService:
+    notifier = GarantiaEmailNotifier(_build_email_sender(settings), EmailTemplateRenderer())
     return GarantiaService(
-        GarantiaRepository(db), remate_service, build_mercadopago_client(settings), settings
+        GarantiaRepository(db), remate_service, build_mercadopago_client(settings), settings, notifier
     )
 
 
@@ -67,5 +78,6 @@ def get_garantia_service(
     remate_service: Annotated[RemateService, Depends(get_remate_service)],
     mp_client: Annotated[MercadoPagoClient, Depends(get_mercadopago_client)],
     settings: Annotated[Settings, Depends(get_settings)],
+    notifier: Annotated[GarantiaEmailNotifier, Depends(get_garantia_email_notifier)],
 ) -> GarantiaService:
-    return GarantiaService(repository, remate_service, mp_client, settings)
+    return GarantiaService(repository, remate_service, mp_client, settings, notifier)

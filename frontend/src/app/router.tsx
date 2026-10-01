@@ -36,10 +36,24 @@ import { CompradorDashboardPage } from '../features/remates/pages/CompradorDashb
 import { RedeemPrivateAccessPage } from '../features/remates/pages/RedeemPrivateAccessPage';
 import { SalaPage } from '../features/sala/pages/SalaPage';
 import { HomePage } from './pages/HomePage';
-import { PreviewSalaPage } from './pages/PreviewSalaPage';
 import { AdminAuditLogPage } from './pages/AdminAuditLogPage';
 import { ForbiddenPage } from './pages/ForbiddenPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { PreviewInicioAPage } from './pages/PreviewInicioAPage';
+import { PreviewInicioBPage } from './pages/PreviewInicioBPage';
+import { PreviewComprasAPage } from './pages/PreviewComprasAPage';
+import { PreviewComprasBPage } from './pages/PreviewComprasBPage';
+import { PreviewDetalleAPage } from './pages/PreviewDetalleAPage';
+import { PreviewDetalleBPage } from './pages/PreviewDetalleBPage';
+import { PreviewConsolaAPage } from './pages/PreviewConsolaAPage';
+import { PreviewConsolaA2Page } from './pages/PreviewConsolaA2Page';
+import { PreviewConsolaBPage } from './pages/PreviewConsolaBPage';
+import { PreviewPrivadoAPage } from './pages/PreviewPrivadoAPage';
+import { PreviewPrivadoBPage } from './pages/PreviewPrivadoBPage';
+import { PreviewRemateAPage } from './pages/PreviewRemateAPage';
+import { PreviewRemateBPage } from './pages/PreviewRemateBPage';
+import { PreviewTimedAPage } from './pages/PreviewTimedAPage';
+import { PreviewTimedBPage } from './pages/PreviewTimedBPage';
 
 export const router = createBrowserRouter([
   {
@@ -57,12 +71,28 @@ export const router = createBrowserRouter([
           { path: '/reset-password', element: <ResetPasswordPage /> },
         ],
       },
-      // Herramienta de desarrollo -- vista previa de los componentes de la Sala del
-      // Remate con datos de prueba, sin backend. Pública mismo criterio que
-      // login/register, pero SIN `AuthLayout` (contenedor angosto pensado para
-      // formularios) -- necesita el ancho real que usa `SalaPage` en `AppLayout` para
-      // que la vista previa sirva para comparar proporciones/tamaños de verdad.
-      { path: '/preview-sala', element: <PreviewSalaPage /> },
+      // Propuestas de rediseño del inicio del comprador (datos de prueba, sin backend).
+      { path: '/preview-inicio-a', element: <PreviewInicioAPage /> },
+      { path: '/preview-inicio-b', element: <PreviewInicioBPage /> },
+      // Propuestas de "Mis compras" (datos de prueba, sin backend).
+      { path: '/preview-compras-a', element: <PreviewComprasAPage /> },
+      { path: '/preview-compras-b', element: <PreviewComprasBPage /> },
+      // Propuestas del detalle de una compra (datos de prueba, sin backend; `?estado=`).
+      { path: '/preview-detalle-a', element: <PreviewDetalleAPage /> },
+      { path: '/preview-detalle-b', element: <PreviewDetalleBPage /> },
+      // Propuestas de "Ingresar a remate privado" (datos de prueba, canje simulado).
+      { path: '/preview-privado-a', element: <PreviewPrivadoAPage /> },
+      { path: '/preview-privado-b', element: <PreviewPrivadoBPage /> },
+      // Propuestas de la Consola Operativa del rematador (simulación sin backend, ofertas y chat en vivo).
+      { path: '/preview-consola-a', element: <PreviewConsolaAPage /> },
+      { path: '/preview-consola-a2', element: <PreviewConsolaA2Page /> },
+      { path: '/preview-consola-b', element: <PreviewConsolaBPage /> },
+      // Propuestas de la ficha de un remate (datos de prueba, sin backend; `?estado=`, `?tipo=`).
+      { path: '/preview-remate-a', element: <PreviewRemateAPage /> },
+      { path: '/preview-remate-b', element: <PreviewRemateBPage /> },
+      // Propuestas de la Sala de un remate Timed (simulación sin backend; `?modo=`, `?largo=1`, `?lotes=N`, `?vivo=0`).
+      { path: '/preview-timed-a', element: <PreviewTimedAPage /> },
+      { path: '/preview-timed-b', element: <PreviewTimedBPage /> },
       // Protegidas: todo lo que cuelga de acá exige sesión iniciada.
       {
         element: <RequireAuth />,

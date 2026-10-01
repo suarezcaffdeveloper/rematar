@@ -87,6 +87,34 @@ export function useMisCompras(
   );
 }
 
+// Mismo tope de página que `/postauction/ventas` (`Query(..., le=100)` en el backend).
+const COMPRAS_PAGE_SIZE = 100;
+const MAX_COMPRAS = 300;
+
+async function fetchAllMisCompras(): Promise<PostAuctionCase[]> {
+  const collected: PostAuctionCase[] = [];
+  let page = 1;
+  while (collected.length < MAX_COMPRAS) {
+    const result = await fetchMisComprasRequest({}, page, COMPRAS_PAGE_SIZE);
+    collected.push(...result.items);
+    const gotFullPage = result.items.length === COMPRAS_PAGE_SIZE;
+    const moreRemain = collected.length < result.total;
+    if (!gotFullPage || !moreRemain) break;
+    page += 1;
+  }
+  return collected;
+}
+
+export type UseAllMisComprasResult = UseAsyncResourceResult<PostAuctionCase[]>;
+
+/** Todas las compras del usuario, sin paginar en la UI: la pantalla "Mis compras" arma su
+ * resumen (compra destacada, novedades, etapas) sobre la lista completa y filtra/busca en
+ * el cliente -- mismo criterio que `useRemates` en el inicio. Tope defensivo, no un límite
+ * de negocio. */
+export function useAllMisCompras(): UseAllMisComprasResult {
+  return useAsyncResource(() => fetchAllMisCompras(), [], []);
+}
+
 export type UseMiCompraDetailResult = UseAsyncResourceResult<PostAuctionCaseDetail | null>;
 
 export function useMiCompraDetail(caseId: string): UseMiCompraDetailResult {

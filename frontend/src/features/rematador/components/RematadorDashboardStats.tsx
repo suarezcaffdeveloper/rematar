@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import clsx from 'clsx';
 import { CalendarClock, CheckCircle2, FileEdit, Gavel, PauseCircle, Radio, XCircle, type LucideIcon } from 'lucide-react';
 import { DashboardStatCard } from './DashboardStatCard';
 import { STATUS_LABELS } from '../../remates/labels';
@@ -44,20 +45,23 @@ const STATS_ORDER: RemateStatus[] = ['live', 'paused', 'scheduled', 'draft', 'fi
  * métricas tipo Linear/Vercel. Fila sin wrap (`flex` + `overflow-x-auto`, no `grid`): con
  * `divide-x` un grid que wrappea deja una línea vertical de más en el primer ítem de cada
  * fila nueva -- en mobile la franja scrollea horizontal en vez de wrappear, así los
- * hairlines quedan siempre prolijos. Sin `justify-center` (se sacó a propósito): con el
- * contenido desbordado, centrarlo deja scrollLeft=0 apuntando al medio de la tira -- la
- * primera celda arranca cortada, sin forma de volver atrás. El degradé del borde derecho
- * (`canScrollRight`) es el único indicio de que hay más celdas para descubrir scrolleando.
+ * hairlines quedan siempre prolijos. `justify-center` sólo se aplica cuando la franja
+ * entra completa en el contenedor (`!needsScroll`): con contenido desbordado, centrar el
+ * `flex` deja scrollLeft=0 apuntando al medio de la tira -- la primera celda arranca
+ * cortada, sin forma de volver atrás. El degradé del borde derecho (`canScrollRight`) es
+ * el único indicio de que hay más celdas para descubrir scrolleando en ese caso.
  */
 export function RematadorDashboardStats({ remates }: RematadorDashboardStatsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [needsScroll, setNeedsScroll] = useState(false);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const updateFade = () => {
       setCanScrollRight(el.scrollWidth - el.clientWidth - el.scrollLeft > 4);
+      setNeedsScroll(el.scrollWidth > el.clientWidth);
     };
     updateFade();
     el.addEventListener('scroll', updateFade, { passive: true });
@@ -87,7 +91,10 @@ export function RematadorDashboardStats({ remates }: RematadorDashboardStatsProp
     <div className="relative">
       <div
         ref={scrollRef}
-        className="flex divide-x divide-line overflow-x-auto rounded-xl border border-line"
+        className={clsx(
+          'flex divide-x divide-line overflow-x-auto rounded-xl border border-line',
+          !needsScroll && 'justify-center',
+        )}
       >
         <DashboardStatCard
           label="Total"

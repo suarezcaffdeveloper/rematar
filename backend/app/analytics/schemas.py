@@ -87,6 +87,12 @@ class BidsTimelineBucket(BaseModel):
     count: int
 
 
+# LIVE usa "minute" (ventana móvil de los últimos N minutos, comportamiento preexistente);
+# TIMED usa "hour" (todo el rango `[starts_at, min(now, ends_at)]`, puede cubrir varios días
+# -- ver `AnalyticsService._resolve_timeline_window`).
+BidsTimelineGranularity = Literal["minute", "hour"]
+
+
 RecentAnalyticsEventType = Literal[
     "lote.opened",
     "lote.closed_sold",
@@ -121,6 +127,9 @@ class RawAnalyticsAggregates(BaseModel):
     # campo sigue validando (ver `AnalyticsService._read_cache`).
     offers_by_lote: list[LoteOfferCount] = Field(default_factory=list)
     bids_timeline: list[BidsTimelineBucket] = Field(default_factory=list)
+    # Default "minute": una entrada de caché Redis escrita antes de que existiera este
+    # campo sigue validando (mismo criterio que `offers_by_lote`/`bids_timeline` arriba).
+    bids_timeline_granularity: BidsTimelineGranularity = "minute"
     recent_events: list[RecentAnalyticsEvent] = Field(default_factory=list)
 
 
@@ -141,5 +150,6 @@ class RemateAnalyticsSnapshot(BaseModel):
     top_lote_by_offers: TopLoteByOffers | None
     offers_by_lote: list[LoteOfferCount]
     bids_timeline: list[BidsTimelineBucket]
+    bids_timeline_granularity: BidsTimelineGranularity
     recent_events: list[RecentAnalyticsEvent]
     generated_at: datetime

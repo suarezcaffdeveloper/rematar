@@ -101,13 +101,15 @@ class SnapshotService:
 
         Mismo criterio de visibilidad/enmascarado que `build`: `NotFoundError` si el
         remate no es visible o el lote no le pertenece (anti-enumeración), `buyer_id`
-        anulado salvo para el dueño del remate o un admin."""
+        anulado salvo para el dueño del remate, un admin, o el propio autor de esa
+        oferta puntual (ver `_mask_oferta`)."""
         remate = await self._remate_service.get_visible_or_raise(remate_id, viewer)
         lote = await self._lote_repository.get_by_id(lote_id)
         if lote is None or lote.remate_id != remate_id:
             raise NotFoundError("Lote no encontrado.")
 
         is_privileged = self._is_privileged(remate, viewer)
+        viewer_id = viewer.id if viewer is not None else None
         offers, _total = await self._oferta_repository.list_by_lote(
             lote_id=lote_id, offset=0, limit=limit or self._recent_offers_limit
         )
@@ -120,9 +122,7 @@ class SnapshotService:
             for entry in entries
         ]
 
-        if is_privileged:
-            return entries
-        return [entry.model_copy(update={"buyer_id": None}) for entry in entries]
+        return [self._mask_oferta(entry, is_privileged, viewer_id) for entry in entries]
 
     async def build(
         self,
@@ -143,14 +143,17 @@ class SnapshotService:
         acopla a cómo cada transporte lleva la cuenta de conexiones."""
         remate = await self._remate_service.get_visible_or_raise(remate_id, viewer)
         is_privileged = self._is_privileged(remate, viewer)
+        viewer_id = viewer.id if viewer is not None else None
 
         raw = await self._get_raw_state(remate_id)
 
         snapshot = RemateStateSnapshot(
             remate=RemateRead.model_validate(remate),
             active_lote=self._mask_lote(raw.active_lote, is_privileged),
-            winning_offer=self._mask_oferta(raw.winning_offer, is_privileged),
-            recent_offers=[self._mask_oferta(o, is_privileged) for o in raw.recent_offers],
+            winning_offer=self._mask_oferta(raw.winning_offer, is_privileged, viewer_id),
+            recent_offers=[
+                self._mask_oferta(o, is_privileged, viewer_id) for o in raw.recent_offers
+            ],
             connected_users=connected_users,
             connected_users_detail=self._mask_connected_users_detail(
                 connected_users_detail, is_privileged
@@ -299,9 +302,17 @@ class SnapshotService:
 
     @staticmethod
     def _mask_oferta(
-        oferta: OfertaSnapshotEntry | None, is_privileged: bool
+        oferta: OfertaSnapshotEntry | None,
+        is_privileged: bool,
+        viewer_id: uuid.UUID | None,
     ) -> OfertaSnapshotEntry | None:
-        if oferta is None or is_privileged:
+        """El anonimato es entre postores (ADR-031), no de uno mismo: un comprador
+        siempre ve su propio `buyer_id` en su propia oferta -- sin esto, no tiene forma
+        de saber que la oferta que va ganando es la suya (bug reportado: recargar la
+        Sala mientras se lidera un lote lo mostraba como si nadie estuviera liderando,
+        habilitando una sobre-oferta contra uno mismo). Cualquier otra oferta ajena
+        sigue enmascarada igual que antes."""
+        if oferta is None or is_privileged or oferta.buyer_id == viewer_id:
             return oferta
         return oferta.model_copy(update={"buyer_id": None})
 

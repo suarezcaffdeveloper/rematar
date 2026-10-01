@@ -100,9 +100,11 @@ async def test_analytics_endpoint_returns_full_shape_for_owner(client: AsyncClie
         "top_lote_by_offers",
         "offers_by_lote",
         "bids_timeline",
+        "bids_timeline_granularity",
         "recent_events",
         "generated_at",
     }
+    assert data["bids_timeline_granularity"] == "minute"
 
 
 async def test_analytics_endpoint_on_remate_without_activity_is_all_zeroes_no_500(

@@ -223,10 +223,79 @@ async def test_get_bids_timeline_excludes_ofertas_older_than_the_window(
 
     repo = AnalyticsRepository(db_session)
     since = datetime.now(UTC) - timedelta(minutes=5)
-    rows = await repo.get_bids_timeline(uuid.UUID(remate["id"]), since)
+    until = datetime.now(UTC)
+    rows = await repo.get_bids_timeline(
+        uuid.UUID(remate["id"]), since, until, granularity="minute"
+    )
 
     assert len(rows) == 1
     assert rows[0].count == 1
+
+
+async def test_get_bids_timeline_excludes_ofertas_after_the_upper_bound(
+    client: AsyncClient, db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    """`until` acota el límite superior explícitamente -- necesario para un remate TIMED
+    ya finalizado, donde "ahora" puede estar bien después de `ends_at`."""
+    _, owner_token = await _owner(client, "an-repo4b@example.com")
+    _, buyer_token = await _buyer(client, "an-repo4b-buyer@example.com")
+    remate = await _create_remate(client, owner_token)
+    lote = await _create_lote(client, owner_token, remate["id"])
+    await _start_remate(client, owner_token, remate["id"])
+    await _open_lote(client, owner_token, remate["id"], lote["id"])
+
+    in_window = await _bid(client, buyer_token, remate["id"], lote["id"], "1000.00")
+    in_window_row = await db_session.get(Oferta, in_window["id"])
+    in_window_row.created_at = datetime.now(UTC) - timedelta(minutes=10)
+
+    after_window = await _bid(client, buyer_token, remate["id"], lote["id"], "2000.00")
+    after_window_row = await db_session.get(Oferta, after_window["id"])
+    after_window_row.created_at = datetime.now(UTC) + timedelta(minutes=10)
+    await db_session.commit()
+
+    repo = AnalyticsRepository(db_session)
+    since = datetime.now(UTC) - timedelta(hours=1)
+    until = datetime.now(UTC)
+    rows = await repo.get_bids_timeline(uuid.UUID(remate["id"]), since, until, granularity="minute")
+
+    assert sum(row.count for row in rows) == 1
+
+
+async def test_get_bids_timeline_buckets_by_hour_when_granularity_is_hour(
+    client: AsyncClient, db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    _, owner_token = await _owner(client, "an-repo4c@example.com")
+    _, buyer_token = await _buyer(client, "an-repo4c-buyer@example.com")
+    remate = await _create_remate(client, owner_token)
+    lote = await _create_lote(client, owner_token, remate["id"])
+    await _start_remate(client, owner_token, remate["id"])
+    await _open_lote(client, owner_token, remate["id"], lote["id"])
+
+    first = await _bid(client, buyer_token, remate["id"], lote["id"], "1000.00")
+    first_row = await db_session.get(Oferta, first["id"])
+    first_row.created_at = datetime(2027, 1, 1, 10, 5, tzinfo=UTC)
+
+    # Mismo bucket horario que la anterior (10:00-10:59) pese a caer en otro minuto.
+    second = await _bid(client, buyer_token, remate["id"], lote["id"], "2000.00")
+    second_row = await db_session.get(Oferta, second["id"])
+    second_row.created_at = datetime(2027, 1, 1, 10, 45, tzinfo=UTC)
+
+    third = await _bid(client, buyer_token, remate["id"], lote["id"], "3000.00")
+    third_row = await db_session.get(Oferta, third["id"])
+    third_row.created_at = datetime(2027, 1, 2, 9, 0, tzinfo=UTC)
+    await db_session.commit()
+
+    repo = AnalyticsRepository(db_session)
+    rows = await repo.get_bids_timeline(
+        uuid.UUID(remate["id"]),
+        datetime(2027, 1, 1, tzinfo=UTC),
+        datetime(2027, 1, 3, tzinfo=UTC),
+        granularity="hour",
+    )
+
+    buckets = {row.bucket_start: row.count for row in rows}
+    assert buckets[datetime(2027, 1, 1, 10, tzinfo=UTC)] == 2
+    assert buckets[datetime(2027, 1, 2, 9, tzinfo=UTC)] == 1
 
 
 # --- Oferta más alta / lote con más ofertas -------------------------------------------------

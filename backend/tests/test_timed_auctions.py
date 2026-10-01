@@ -570,19 +570,26 @@ async def _open_two_lotes_with_a_bid(
     return remate, lote1, lote2, buyer_token
 
 
-async def test_lote_recent_offers_masks_buyer_id_for_a_buyer(
-    client: AsyncClient, db_session: AsyncSession, timed_session_factory: async_sessionmaker[AsyncSession]
+async def test_lote_recent_offers_masks_buyer_id_for_a_bystander_buyer(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    timed_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     owner_token = await _register_and_login(client, email="timed-r1@example.com", role="empresa")
-    remate, lote1, _lote2, buyer_token = await _open_two_lotes_with_a_bid(
+    remate, lote1, _lote2, _buyer_token = await _open_two_lotes_with_a_bid(
         client,
         db_session,
         timed_session_factory,
         owner_token,
         buyer_email="timed-recent-buyer1@example.com",
     )
+    stranger_token = await _register_and_login(
+        client, email="timed-r1-stranger@example.com", role="comprador"
+    )
 
-    response = await client.get(_recent_offers_url(remate["id"], lote1["id"]), headers=_auth(buyer_token))
+    response = await client.get(
+        _recent_offers_url(remate["id"], lote1["id"]), headers=_auth(stranger_token)
+    )
 
     assert response.status_code == 200, response.text
     offers = response.json()
@@ -590,6 +597,33 @@ async def test_lote_recent_offers_masks_buyer_id_for_a_buyer(
     assert offers[0]["amount"] == "1100.00"
     assert offers[0]["buyer_id"] is None
     assert offers[0]["status"] == "accepted"
+
+
+async def test_lote_recent_offers_reveals_own_buyer_id_to_its_author(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    timed_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Mismo bug/fix que `SnapshotService._mask_oferta` (Sala LIVE): el anonimato de
+    ADR-031 es entre postores, no de uno mismo -- ver `test_snapshot_service.py::
+    test_snapshot_reveals_own_buyer_id_to_the_leading_bidder`."""
+    owner_token = await _register_and_login(client, email="timed-r1b@example.com", role="empresa")
+    remate, lote1, _lote2, buyer_token = await _open_two_lotes_with_a_bid(
+        client,
+        db_session,
+        timed_session_factory,
+        owner_token,
+        buyer_email="timed-recent-buyer1b@example.com",
+    )
+
+    response = await client.get(
+        _recent_offers_url(remate["id"], lote1["id"]), headers=_auth(buyer_token)
+    )
+
+    assert response.status_code == 200, response.text
+    offers = response.json()
+    assert len(offers) == 1
+    assert offers[0]["buyer_id"] is not None
 
 
 async def test_lote_recent_offers_only_includes_that_lote(

@@ -287,6 +287,7 @@ async def test_snapshot_masks_reserve_price_and_buyer_id_for_non_privileged_view
 ) -> None:
     owner_id, owner_token = await _owner(client, "snap6@example.com")
     buyer_id, buyer_token = await _buyer(client, "snap6-buyer@example.com")
+    stranger_id, _stranger_token = await _buyer(client, "snap6-stranger@example.com")
     remate = await _create_remate(client, owner_token)
     lote = await _create_lote(client, owner_token, remate["id"], reserve_price="9999.00")
     await _start_remate(client, owner_token, remate["id"])
@@ -294,19 +295,48 @@ async def test_snapshot_masks_reserve_price_and_buyer_id_for_non_privileged_view
     await _bid(client, buyer_token, remate["id"], lote["id"], "1000.00")
 
     owner = await _fetch_user(db_engine, owner_id)
-    buyer = await _fetch_user(db_engine, buyer_id)
+    stranger = await _fetch_user(db_engine, stranger_id)
 
     service = _make_service(db_session)
     owner_snapshot = await service.build(remate["id"], owner)
-    buyer_snapshot = await service.build(remate["id"], buyer)
+    stranger_snapshot = await service.build(remate["id"], stranger)
 
     assert owner_snapshot.active_lote.reserve_price == Decimal("9999.00")
     assert str(owner_snapshot.winning_offer.buyer_id) == buyer_id
     assert str(owner_snapshot.recent_offers[0].buyer_id) == buyer_id
 
+    # Un comprador que no es dueño del remate ni el autor de esta oferta nunca ve de
+    # quién es (anonimato entre postores, ADR-031).
+    assert stranger_snapshot.active_lote.reserve_price is None
+    assert stranger_snapshot.winning_offer.buyer_id is None
+    assert stranger_snapshot.recent_offers[0].buyer_id is None
+
+
+async def test_snapshot_reveals_own_buyer_id_to_the_leading_bidder(
+    client: AsyncClient, db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    """Bug reportado: recargar la Sala (o reconectar el WebSocket, que reusa el mismo
+    `SnapshotService.build`) mientras se lidera un lote no debe perder el cartel de
+    "vas liderando" -- el anonimato de ADR-031 es entre postores, nunca de uno mismo.
+    Ver `SnapshotService._mask_oferta`."""
+    owner_id, owner_token = await _owner(client, "snap6b@example.com")
+    buyer_id, buyer_token = await _buyer(client, "snap6b-buyer@example.com")
+    remate = await _create_remate(client, owner_token)
+    lote = await _create_lote(client, owner_token, remate["id"], reserve_price="9999.00")
+    await _start_remate(client, owner_token, remate["id"])
+    await _open_lote(client, owner_token, remate["id"], lote["id"])
+    await _bid(client, buyer_token, remate["id"], lote["id"], "1000.00")
+
+    buyer = await _fetch_user(db_engine, buyer_id)
+
+    service = _make_service(db_session)
+    buyer_snapshot = await service.build(remate["id"], buyer)
+
+    # El propio comprador sigue sin ver `reserve_price` (no lo pierde, sigue sin ser
+    # privilegiado) pero sí reconoce que la oferta ganadora es la suya.
     assert buyer_snapshot.active_lote.reserve_price is None
-    assert buyer_snapshot.winning_offer.buyer_id is None
-    assert buyer_snapshot.recent_offers[0].buyer_id is None
+    assert str(buyer_snapshot.winning_offer.buyer_id) == buyer_id
+    assert str(buyer_snapshot.recent_offers[0].buyer_id) == buyer_id
 
 
 async def test_snapshot_does_not_mask_for_admin_viewer(

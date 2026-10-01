@@ -1,6 +1,6 @@
 /**
  * Valores, validación y mapeo del formulario de Lote (Épica 5, Módulo 5.3) -- un único
- * formulario reutilizable para crear y editar (`LoteFormModal`), reflejando las mismas
+ * formulario reutilizable para crear y editar (`LoteDrawer`), reflejando las mismas
  * reglas que `backend/app/modules/remates/lotes/schemas.py::LoteCreate`/`LoteUpdate`.
  *
  * Simplificación visual (rediseño del flujo de creación de lotes): la UI ya no expone
@@ -83,14 +83,29 @@ export function loteToFormValues(lote: Lote): LoteFormValues {
   };
 }
 
-/** Mismas reglas que el backend (`LoteCreate`/`LoteUpdate`, ver docstring del archivo). */
-export function validateLoteForm(values: LoteFormValues): LoteFormErrors {
+/** Siguiente número de lote sugerido: el mayor número entero ya usado + 1 (`7-copia` cuenta como 7; los
+ * que no empiezan con un número no cuentan). Sin lotes, arranca en `1`. */
+export function suggestNextLotNumber(existing: string[]): string {
+  const numbers = existing
+    .map((value) => Number.parseInt(value, 10))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return String((numbers.length > 0 ? Math.max(...numbers) : 0) + 1);
+}
+
+/**
+ * Mismas reglas que el backend (`LoteCreate`/`LoteUpdate`, ver docstring del archivo).
+ * `takenLotNumbers` (opcional): números de lote que otro lote del remate ya usa -- el backend
+ * los rechaza con una restricción de unicidad, acá se avisa antes de enviar.
+ */
+export function validateLoteForm(values: LoteFormValues, takenLotNumbers: string[] = []): LoteFormErrors {
   const errors: LoteFormErrors = {};
   const lotNumber = values.lot_number.trim();
   const title = values.title.trim();
 
   if (lotNumber.length < 1 || lotNumber.length > 20) {
     errors.lot_number = 'El número de lote debe tener entre 1 y 20 caracteres.';
+  } else if (takenLotNumbers.some((taken) => taken.trim().toLowerCase() === lotNumber.toLowerCase())) {
+    errors.lot_number = `Ya existe un lote ${lotNumber}. Elegí otro número.`;
   }
   if (title.length < 3 || title.length > 200) {
     errors.title = 'El nombre debe tener entre 3 y 200 caracteres.';

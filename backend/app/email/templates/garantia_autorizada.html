@@ -1,0 +1,87 @@
+{% extends "_layout.html" %}
+{% block title %}Garantía autorizada - {{ remate_title }} - RematAR{% endblock %}
+{% block content %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:13px; font-weight:600; color:#15803d; text-transform:uppercase; letter-spacing:0.5px; padding-bottom:8px;">
+      Garantía autorizada
+    </td>
+  </tr>
+  <tr>
+    <td style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:24px; font-weight:700; color:#0f172a; padding-bottom:16px;">
+      ¡Listo, {{ buyer_name }}!
+    </td>
+  </tr>
+  <tr>
+    <td style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:15px; line-height:24px; color:#334155; padding-bottom:24px;">
+      Autorizamos el bloqueo de tu tarjeta como garantía económica para ofertar en <strong>{{ remate_title }}</strong>. Ya podés participar de la puja.
+    </td>
+  </tr>
+
+  <!-- Card de la garantía -->
+  <tr>
+    <td style="padding-bottom:24px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;">
+        <tr>
+          <td style="padding:20px 24px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:12px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.4px; padding-bottom:4px;">
+                  Monto bloqueado
+                </td>
+              </tr>
+              <tr>
+                <td class="rematar-price" style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:32px; font-weight:700; color:#15803d; padding-bottom:16px;">
+                  {{ amount }}
+                </td>
+              </tr>
+              <tr>
+                <td style="border-top:1px solid #e2e8f0; padding-top:16px;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td width="50%" style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:13px; color:#64748b; padding-bottom:2px;">Remate</td>
+                      <td width="50%" style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:13px; color:#64748b; padding-bottom:2px;">Autorizado el</td>
+                    </tr>
+                    <tr>
+                      <td width="50%" style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; color:#0f172a; padding-bottom:{{ '12px' if expires_at else '0' }};">{{ remate_title }}</td>
+                      <td width="50%" style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; color:#0f172a; padding-bottom:{{ '12px' if expires_at else '0' }};">{{ authorized_at }}</td>
+                    </tr>
+                    {% if expires_at %}
+                    <tr>
+                      <td width="50%" style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:13px; color:#64748b; padding-bottom:2px;">Válida hasta</td>
+                      <td width="50%"></td>
+                    </tr>
+                    <tr>
+                      <td width="50%" style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; color:#0f172a;">{{ expires_at }}</td>
+                      <td width="50%"></td>
+                    </tr>
+                    {% endif %}
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Qué significa esto -->
+  <tr>
+    <td style="padding:20px 24px; background-color:#eff6ff; border-left:4px solid #1d4ed8; border-radius:6px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:14px; font-weight:700; color:#1e40af; padding-bottom:6px;">
+            ¿Qué significa esto?
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family:'Segoe UI',Helvetica,Arial,sans-serif; font-size:14px; line-height:22px; color:#334155;">
+            Esto es una <strong>preautorización</strong>, no un cobro: el monto queda retenido en tu tarjeta, pero todavía no se te cobró nada. Si ganás un lote, se te cobra la garantía como parte de la operación. Si no ganás, o el remate se cancela, el bloqueo se libera automáticamente y el monto vuelve a estar disponible en tu tarjeta.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+{% endblock %}

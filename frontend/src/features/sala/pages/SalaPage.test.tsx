@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useLayoutPreferencesStore } from '../../../app/layouts/layoutPreferencesStore';
@@ -29,14 +29,6 @@ vi.mock('../hooks', () => ({ useLiveRemateState: useLiveRemateStateMock }));
 // para un remate TIMED, no volver a probar esa pantalla completa desde este archivo.
 vi.mock('../../timedSala/pages/TimedSalaPage', () => ({
   TimedSalaPage: () => <div data-testid="timed-sala-page" />,
-}));
-
-// Misma convención que `AppLayout.test.tsx`: la campana hace fetch de verdad
-// (`useNotifications`/`useUnreadNotificationCount`), no hace falta ejercitarla acá --
-// `SalaPage` ahora la remonta suelta (ver `FloatingNotificationBell`) porque oculta el
-// `Header` global que antes la contenía.
-vi.mock('../../notifications/components/NotificationBell', () => ({
-  NotificationBell: () => null,
 }));
 
 function makeRemate(overrides: Partial<Remate> = {}): Remate {
@@ -173,18 +165,64 @@ describe('SalaPage', () => {
 
     renderPage();
 
-    expect(screen.getByRole('heading', { name: 'Remate de hacienda' })).toBeInTheDocument();
-    // Aparece dos veces: en SalaHeader y en el header del ChatPanel (ambos usan PresenceCounter).
+    expect(screen.getByRole('heading', { level: 1, name: 'Remate de hacienda' })).toBeInTheDocument();
     expect(screen.getAllByText('3 conectados').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Conectado')).toBeInTheDocument();
+    // Con la conexión abierta no hay aviso de conexión: solo aparece si algo anda mal.
+    expect(screen.queryByText('Conectado')).not.toBeInTheDocument();
     expect(screen.getByText('Toro Angus')).toBeInTheDocument();
-    // "Comprador líder" (heading suelto de `OfferHistoryPanel`) ya no se usa en la Sala
-    // -- el rediseño lo reemplazó por pestañas fijas Historial/Chat (`SalaSidePanel`).
-    expect(screen.getByRole('tab', { name: 'Historial de ofertas' })).toBeInTheDocument();
+    // Sin pestañas: las ofertas recientes y el chat se ven a la vez.
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^Ofertas recientes/ })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Chat del remate' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Próximos lotes' })).toBeInTheDocument();
     expect(screen.getByText('Vaquillona')).toBeInTheDocument();
     // Sin mock de sesión, `useAuth()` real devuelve un visitante anónimo (ADR-049) --
     // ve el llamado a iniciar sesión, no el botón deshabilitado por rol.
     expect(screen.getByRole('button', { name: 'Iniciá sesión para ofertar' })).toBeInTheDocument();
+  });
+
+  it('sin transmisión cargada, no muestra ningún video (la sala queda como siempre)', () => {
+    mockLiveState();
+
+    renderPage();
+
+    expect(screen.queryByTitle(/Transmisión en vivo/)).not.toBeInTheDocument();
+    expect(screen.getByText('Toro Angus')).toBeInTheDocument();
+  });
+
+  it('con transmisión cargada, muestra el video fijo y el lote actual debajo', () => {
+    mockLiveState({
+      snapshot: makeSnapshot({
+        remate: makeRemate({ stream_provider: 'youtube', stream_video_id: 'dQw4w9WgXcQ' }),
+      }),
+    });
+
+    renderPage();
+
+    const iframe = screen.getByTitle('Transmisión en vivo: Remate de hacienda');
+    expect(iframe).toHaveAttribute(
+      'src',
+      'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?rel=0&playsinline=1',
+    );
+    const lote = screen.getByText('Toro Angus');
+    expect(lote).toBeInTheDocument();
+    // El video va ANTES que el lote en el documento (arriba, en la misma columna).
+    expect(iframe.compareDocumentPosition(lote) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /^Ofertas recientes/ })).toBeInTheDocument();
+  });
+
+  it('con transmisión y sin lote activo, deja el video y muestra el estado vacío debajo', () => {
+    mockLiveState({
+      snapshot: makeSnapshot({
+        active_lote: null,
+        remate: makeRemate({ stream_provider: 'youtube', stream_video_id: 'dQw4w9WgXcQ' }),
+      }),
+    });
+
+    renderPage();
+
+    expect(screen.getByTitle('Transmisión en vivo: Remate de hacienda')).toBeInTheDocument();
+    expect(screen.getByText('No hay ningún lote abierto en este momento')).toBeInTheDocument();
   });
 
   it('para un remate Timed, delega en TimedSalaPage en vez de la sala LIVE', () => {
@@ -212,6 +250,68 @@ describe('SalaPage', () => {
 
     unmount();
     expect(useLayoutPreferencesStore.getState().isFocusMode).toBe(false);
+  });
+
+  it('usa la barra superior fija (nav completo al principio de la página) en un remate en vivo', () => {
+    mockLiveState();
+
+    const { unmount } = renderPage();
+    expect(useLayoutPreferencesStore.getState().isTopNav).toBe(true);
+    expect(useLayoutPreferencesStore.getState().isTopNavStatic).toBe(true);
+
+    unmount();
+    expect(useLayoutPreferencesStore.getState().isTopNav).toBe(false);
+    expect(useLayoutPreferencesStore.getState().isTopNavStatic).toBe(false);
+  });
+
+  it('un remate Timed también usa la barra superior fija', () => {
+    mockLiveState({ snapshot: makeSnapshot({ remate: makeRemate({ auction_type: 'timed' }) }) });
+
+    renderPage();
+
+    expect(useLayoutPreferencesStore.getState().isTopNav).toBe(true);
+    expect(useLayoutPreferencesStore.getState().isTopNavStatic).toBe(true);
+    expect(useLayoutPreferencesStore.getState().isFocusMode).toBe(true);
+  });
+
+  it('la flecha de la cabecera vuelve a la ficha del remate', () => {
+    mockLiveState();
+
+    renderPage();
+
+    expect(screen.getByRole('link', { name: 'Volver al remate' })).toHaveAttribute('href', '/remates/remate-1');
+  });
+
+  it('las ofertas recientes marcan la ganadora arriba y las demás como superadas', () => {
+    const winner = { id: 'o2', buyer_id: null, amount: '1100.00', status: 'winning' as const, created_at: '2026-07-01T00:00:10Z' };
+    const older = { id: 'o1', buyer_id: null, amount: '1050.00', status: 'outbid' as const, created_at: '2026-07-01T00:00:00Z' };
+    mockLiveState({ snapshot: makeSnapshot({ winning_offer: winner, recent_offers: [winner, older] }) });
+
+    renderPage();
+
+    const offers = screen.getByRole('heading', { name: /^Ofertas recientes/ }).closest('section')!;
+    expect(within(offers).getByText('Ganadora')).toBeInTheDocument();
+    expect(within(offers).getByText('Superada')).toBeInTheDocument();
+    expect(within(offers).getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('sin ofertas todavía, lo dice', () => {
+    mockLiveState();
+
+    renderPage();
+
+    expect(screen.getByText('Sin ofertas todavía.')).toBeInTheDocument();
+  });
+
+  it('sin lote activo, la mesa de ofertas avisa que el formulario aparece cuando se abra uno', () => {
+    mockLiveState({ snapshot: makeSnapshot({ active_lote: null }) });
+
+    renderPage();
+
+    expect(
+      screen.getByText('Cuando el martillero abra un lote, el precio y el formulario para ofertar aparecen acá.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /^Ofertas recientes/ })).not.toBeInTheDocument();
   });
 
   it('pide el layout ancho (Épica 9, Etapa 4 -- sidebar de ofertas/chat)', () => {

@@ -11,12 +11,13 @@ from datetime import UTC, datetime, timedelta
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.db.session import get_db
 from app.main import create_app
 from app.modules.garantias.dependencies import get_mercadopago_client
 from app.modules.garantias.mercadopago_client import MercadoPagoPaymentResult
+from app.modules.garantias.repository import GarantiaRepository
 from tests._role_test_helpers import activate_pending_account
 
 REGISTER_URL = "/api/v1/auth/register"
@@ -161,6 +162,59 @@ async def test_bid_allowed_with_active_garantia(
     assert create.json()["status"] == "active"
 
     response = await _bid(client, buyer_token, remate_id, lote_id, "1000.00")
+
+    assert response.status_code == 201, response.text
+    assert response.json()["status"] == "accepted"
+
+
+async def test_bid_allowed_with_active_garantia_after_return_visit_hours_later(
+    client_with_fake_mp: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Reproduce el escenario reportado: el comprador constituye la garantía, se va del
+    remate y vuelve horas después a ofertar -- eso NO tiene que exigirle constituirla de
+    nuevo. `Garantia.expires_at` (por defecto `authorized_at` + 7 días, ver
+    `MERCADOPAGO_HOLD_VALIDITY_DAYS`) deja un margen muchísimo mayor a un par de horas, y
+    `GarantiaService.assert_active_or_raise`/`GET .../garantia/me` solo miran el status
+    persistido -- ninguno de los dos vuelve a golpear a Mercado Pago ni depende de que la
+    sesión HTTP siga viva, así que una sesión nueva (login nuevo, como si el access token
+    de `ACCESS_TOKEN_EXPIRE_MINUTES` hubiera vencido de verdad) tiene que ver la misma
+    garantía ACTIVE y poder ofertar con ella tal cual está."""
+    client = client_with_fake_mp
+    _owner_token, remate_id, lote_id = await _setup_open_lote_with_guarantee(
+        client, "gar-gate-4@example.com"
+    )
+    buyer_email = "gar-gate-4b@example.com"
+    buyer_token = await _register_and_login(client, email=buyer_email, role="comprador")
+
+    create = await client.post(
+        f"{REMATES_URL}/{remate_id}/garantia",
+        json={"card_payment_data": {"token": "tok-1"}},
+        headers=_auth(buyer_token),
+    )
+    assert create.status_code == 201, create.text
+    garantia_id = uuid.UUID(create.json()["id"])
+
+    # Simula el paso de 2 horas desde que se autorizó -- muy por debajo de la ventana de
+    # validez real, para dejar en claro que nada la vence prematuramente en ese lapso.
+    repository = GarantiaRepository(db_session)
+    garantia = await repository.get_by_id(garantia_id)
+    assert garantia is not None
+    assert garantia.expires_at is not None
+    assert garantia.expires_at > datetime.now(UTC) + timedelta(hours=2)
+    garantia.authorized_at = datetime.now(UTC) - timedelta(hours=2)
+    await db_session.commit()
+
+    # "Vuelve" con una sesión nueva -- no reutiliza `buyer_token`.
+    return_token = await _register_and_login(client, email=buyer_email, role="comprador")
+
+    status_response = await client.get(
+        f"{REMATES_URL}/{remate_id}/garantia/me", headers=_auth(return_token)
+    )
+    assert status_response.status_code == 200, status_response.text
+    assert status_response.json()["status"] == "active"
+    assert status_response.json()["id"] == str(garantia_id)  # misma fila, no una nueva.
+
+    response = await _bid(client, return_token, remate_id, lote_id, "1000.00")
 
     assert response.status_code == 201, response.text
     assert response.json()["status"] == "accepted"

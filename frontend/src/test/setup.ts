@@ -24,8 +24,8 @@ vi.stubGlobal('IntersectionObserver', IntersectionObserverStub);
 /**
  * jsdom tampoco implementa `ResizeObserver` -- lo usan los carruseles que miden el alto
  * real de una card para posicionar el resto por `transform` (ver
- * `features/timedSala/components/LoteQueueList.tsx` y
- * `features/remates/components/LiveRemateCarousel.tsx`). Mismo criterio que el stub de
+ * `features/remates/components/LiveRemateCarousel.tsx`) y las descripciones que miden si
+ * se recortan (`ExpandableDescription`). Mismo criterio que el stub de
  * `IntersectionObserver` de arriba: no hace falta que dispare el callback de verdad, los
  * tests de esta app no verifican medidas en píxeles, sólo que el contenido esté
  * presente.

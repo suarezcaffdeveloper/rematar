@@ -13,7 +13,7 @@ import { RequeueLoteForm } from './RequeueLoteForm';
 
 /**
  * Reencolado preautorizado (ADR-048): cuando la empresa dejó cargado un precio/
- * incremento de antemano (`Lote.requeue_preset_*`, ver `LoteFormModal`), "Volver a
+ * incremento de antemano (`Lote.requeue_preset_*`, ver `LoteDrawer`), "Volver a
  * rematar" se resuelve en un solo click contra `requeue-preset` -- sin abrir el
  * formulario de precio libre, para que el rematador operador (que el backend no deja
  * fijar un precio distinto) pueda usarlo igual que la empresa. La empresa sigue

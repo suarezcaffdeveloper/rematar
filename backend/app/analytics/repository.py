@@ -16,6 +16,7 @@ sin límite), así que el join no es un cuello de botella real -- ver ADR-038, s
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from sqlalchemy import Row, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -131,15 +132,31 @@ class AnalyticsRepository:
         )
         return list((await self._db.execute(stmt)).all())
 
-    async def get_bids_timeline(self, remate_id: uuid.UUID, since: datetime) -> list[Row]:
-        """Bucketed por minuto (`date_trunc`) -- el servicio zero-fillea los minutos sin
-        ofertas (esta consulta solo devuelve los que tuvieron al menos una)."""
-        bucket = func.date_trunc("minute", Oferta.created_at).label("bucket_start")
+    async def get_bids_timeline(
+        self,
+        remate_id: uuid.UUID,
+        since: datetime,
+        until: datetime,
+        *,
+        granularity: Literal["minute", "hour"],
+    ) -> list[Row]:
+        """Bucketed por `granularity` (`date_trunc`) -- el servicio zero-fillea los
+        buckets sin ofertas (esta consulta solo devuelve los que tuvieron al menos una).
+        `granularity` es un `Literal` de solo dos valores fijos (nunca un string
+        arbitrario del caller), así que pasarlo directo a `date_trunc` no arriesga
+        inyección SQL. `until` acota el límite superior explícitamente -- para un remate
+        TIMED ya finalizado, "ahora" puede estar bien después de `ends_at`, y las ofertas
+        posteriores al cierre del remate (si las hubiera) no deben contarse acá."""
+        bucket = func.date_trunc(granularity, Oferta.created_at).label("bucket_start")
         stmt = (
             select(bucket, func.count(Oferta.id).label("count"))
             .select_from(Oferta)
             .join(Lote, Oferta.lote_id == Lote.id)
-            .where(Lote.remate_id == remate_id, Oferta.created_at >= since)
+            .where(
+                Lote.remate_id == remate_id,
+                Oferta.created_at >= since,
+                Oferta.created_at <= until,
+            )
             .group_by(bucket)
             .order_by(bucket)
         )

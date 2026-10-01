@@ -1,10 +1,8 @@
 import { formatCurrency } from '../../../shared/lib/format';
 import type { UserRole } from '../../auth/types';
-import { GarantiaGate } from '../../garantias/components/GarantiaGate';
-import type { GarantiaStatus } from '../../garantias/types';
 import type { Lote, RemateStatus } from '../../remates/types';
 import { LoteCountdown } from '../../sala/components/LoteCountdown';
-import { PlaceBidButton } from '../../sala/components/PlaceBidButton';
+import { SalaBidPanel } from '../../sala/components/SalaBidPanel';
 import type { OfertaSnapshotEntry } from '../../sala/types';
 
 export interface TimedLoteBidRailProps {
@@ -14,54 +12,34 @@ export interface TimedLoteBidRailProps {
   remateId: string;
   remateStatus: RemateStatus;
   viewerRole: UserRole | undefined;
-  /** `true` si quien está mirando la pantalla es quien va liderando ESTE lote ahora
-   * mismo (`TimedSalaPage`, a partir de `leadingBuyerIds`). Se lo pasa tal cual a
-   * `PlaceBidButton`, que reemplaza el form por un aviso ("Vas liderando este lote")
-   * para no dejar que se sobreoferte a sí mismo. */
+  /** `true` si quien mira la pantalla es quien va liderando ESTE lote ahora mismo
+   * (`TimedSalaPage`, a partir de `leadingBuyerIds`). */
   isLeadingBidder: boolean;
   /** Ver `PlaceBidButton` -- `false` únicamente si el remate exige garantía económica y
-   * el comprador todavía no tiene una `Garantia` `active` (`GarantiaGate`,
-   * `TimedSalaPage`). */
+   * el comprador todavía no tiene una `Garantia` `active`. */
   hasRequiredGuarantee: boolean;
-  /** `true` si este remate exige garantía y quien mira es `comprador` -- controla si se
-   * renderiza `GarantiaGate` debajo del botón de pujar (ver `TimedSalaPage`). */
-  showGarantiaGate: boolean;
-  /** `RemateSettings.guarantee_amount` -- `null` si el remate no exige garantía. */
-  guaranteeAmount: string | null;
-  /** Sube el estado resuelto por `GarantiaGate` hasta `TimedSalaPage`, que lo usa para
-   * calcular `hasRequiredGuarantee`. */
-  onGarantiaStatusChange: (status: GarantiaStatus | null) => void;
+  /** Abre el diálogo para constituir la garantía (`GarantiaModal`, montado por
+   * `TimedSalaPage`). */
+  onBuildGuarantee?: () => void;
 }
 
-/** `PlaceBidButton`/`computeMinimumAmount` (`features/sala/`) solo leen `.amount` de
- * este objeto -- mismo criterio que tenía `TimedLoteDetailPanel` (reemplazado por este
- * panel): no hay una oferta puntual "seleccionada" fuera del monto líder por lote. */
+/** `PlaceBidButton`/`computeMinimumAmount` (`features/sala/`) solo leen `.amount` de este
+ * objeto: no hay una oferta puntual "seleccionada" fuera del monto líder por lote. */
 function toWinningOfferEntry(amount: string | null): OfertaSnapshotEntry | null {
   if (amount === null) return null;
   return { id: '', buyer_id: null, amount, status: 'winning', created_at: '' };
 }
 
+/** Cinco minutos: desde ahí el cronómetro pasa a rojo. */
+const URGENT_SECONDS = 5 * 60;
+
 /**
- * Columna angosta (340px, match del mockup de referencia) al lado de
- * `TimedLoteCenterPanel` -- cuenta regresiva y formulario de oferta del lote fijado.
- * Sin card envolvente alrededor de precio/oferta/garantía (pedido explícito, "no todo
- * englobado dentro de cards"): mismo criterio "sin card" que `SalaBidPanel.tsx` (Sala
- * LIVE), separadores finos (`border-y`) en vez de una caja blanca -- el único elemento
- * con superficie propia acá es `LoteCountdown` (`variant="boxed"`), que ya es un aviso
- * puntual con color semántico (urgencia), no una card de contenido genérico. El
- * historial ya no vive acá -- pasa a `TimedLoteHistoryCard`, debajo de este panel
- * (pedido explícito, "ponelas debajo de la card de ofertar"), renderizado por
- * `TimedSalaPage` en la misma columna angosta.
+ * La mesa de ofertas de un lote Timed: cuenta regresiva de ESE lote (cada uno cierra en su
+ * propio momento) y, debajo, el mismo panel de precio y formulario de la Sala en vivo
+ * (`SalaBidPanel`: precio, aviso de "Te superaron", sugerencias, garantía).
  *
- * Orden vertical (pedido explícito):
- * 1. Timer (si tiene) -- `LoteCountdown` boxed
- * 2. Base + Incremento -- línea compacta con separadores finos
- * 3. Precio actual -- grande, `font-mono text-2xl`
- * 4. Formulario de oferta -- `PlaceBidButton` reusado tal cual (ya incluye las
- *    "ofertas rápidas precalculadas" como chips de sugerencia)
- * 5. `GarantiaGate` -- debajo del botón de pujar, no arriba de la página (pedido
- *    explícito): indica si la garantía económica ya está activa o si todavía hace
- *    falta constituirla, justo donde el comprador está a punto de ofertar.
+ * Un lote que ya no está abierto no tiene formulario: muestra su precio final, o el aviso
+ * de que cerró sin ofertas o de que todavía no abrió.
  */
 export function TimedLoteBidRail({
   lote,
@@ -72,65 +50,52 @@ export function TimedLoteBidRail({
   viewerRole,
   isLeadingBidder,
   hasRequiredGuarantee,
-  showGarantiaGate,
-  guaranteeAmount,
-  onGarantiaStatusChange,
+  onBuildGuarantee,
 }: TimedLoteBidRailProps) {
-  const isOpen = lote.status === 'open';
-  const isClosed = lote.status === 'closed_sold' || lote.status === 'closed_unsold';
-  const currentPrice = leadingAmount ?? lote.base_price;
-  const winningOffer = toWinningOfferEntry(leadingAmount);
+  if (lote.status === 'open') {
+    const hasTimer = lote.timer_ends_at !== null || lote.timer_paused_remaining_seconds !== null;
 
-  const hasTimer =
-    isOpen && (lote.timer_ends_at !== null || lote.timer_paused_remaining_seconds !== null);
-
-  return (
-    <div className="flex flex-col gap-4">
-      {hasTimer && (
-        <LoteCountdown
-          endsAt={lote.timer_ends_at}
-          pausedRemainingSeconds={lote.timer_paused_remaining_seconds}
-          variant="boxed"
-        />
-      )}
-
-      <div className="flex items-center justify-between border-y border-line py-2 text-xs text-ink-faint">
-        <span>Base: {formatCurrency(lote.base_price, currency)}</span>
-        <span>Inc: {formatCurrency(lote.min_increment, currency)}</span>
-      </div>
-
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
-          {isClosed ? 'Precio final' : 'Precio actual'}
-        </p>
-        <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-ink">
-          {lote.status === 'closed_unsold'
-            ? 'Sin ofertas'
-            : formatCurrency(lote.final_price ?? currentPrice, currency)}
-        </p>
-      </div>
-
-      {isOpen && (
-        <PlaceBidButton
+    return (
+      <div className="flex flex-col gap-5">
+        {hasTimer && (
+          <LoteCountdown
+            endsAt={lote.timer_ends_at}
+            pausedRemainingSeconds={lote.timer_paused_remaining_seconds}
+            variant="strip"
+            urgentThresholdSeconds={URGENT_SECONDS}
+          />
+        )}
+        <SalaBidPanel
           remateId={remateId}
           lote={lote}
           currency={currency}
-          winningOffer={winningOffer}
+          winningOffer={toWinningOfferEntry(leadingAmount)}
           remateStatus={remateStatus}
           viewerRole={viewerRole}
           isLeadingBidder={isLeadingBidder}
           hasRequiredGuarantee={hasRequiredGuarantee}
+          onBuildGuarantee={onBuildGuarantee}
         />
-      )}
+      </div>
+    );
+  }
 
-      {showGarantiaGate && guaranteeAmount !== null && (
-        <GarantiaGate
-          remateId={remateId}
-          amount={guaranteeAmount}
-          currency={currency}
-          onStatusChange={onGarantiaStatusChange}
-        />
-      )}
+  const isSold = lote.status === 'closed_sold';
+  const isUnsold = lote.status === 'closed_unsold';
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm text-ink-muted">{isSold ? 'Precio final' : isUnsold ? 'Cierre' : 'Precio base'}</p>
+      <p className="font-mono text-[2.75rem] font-semibold leading-none tabular-nums tracking-tight text-ink">
+        {isUnsold ? 'Sin ofertas' : formatCurrency(lote.final_price ?? lote.base_price, currency)}
+      </p>
+      <p className="mt-2 rounded-xl bg-surface-subtle px-4 py-3 text-sm text-ink-muted">
+        {isSold
+          ? 'Este lote ya se vendió. No se aceptan más ofertas.'
+          : isUnsold
+            ? 'Este lote cerró sin ofertas.'
+            : `Este lote todavía no abrió. Cuando abra, vas a poder ofertar desde ${formatCurrency(lote.base_price, currency)}.`}
+      </p>
     </div>
   );
 }

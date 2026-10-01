@@ -45,6 +45,10 @@ export interface BidsTimelineBucket {
   count: number;
 }
 
+/** LIVE usa `'minute'` (ventana móvil de los últimos minutos); TIMED usa `'hour'` (todo
+ * el rango transcurrido del remate, puede cubrir varios días). Ver `BidsTimelineChart`. */
+export type BidsTimelineGranularity = 'minute' | 'hour';
+
 export type RecentAnalyticsEventType =
   | 'lote.opened'
   | 'lote.closed_sold'
@@ -77,6 +81,7 @@ export interface RemateAnalyticsSnapshot {
   /** Ofertas por lote (solo lotes con al menos una) -- tablero Timed de la empresa. */
   offers_by_lote: LoteOfferCount[];
   bids_timeline: BidsTimelineBucket[];
+  bids_timeline_granularity: BidsTimelineGranularity;
   recent_events: RecentAnalyticsEvent[];
   generated_at: string;
 }

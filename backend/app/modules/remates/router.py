@@ -37,6 +37,7 @@ from app.modules.remates.schemas import (
     RematePrivateAccessCodeResponse,
     RematePrivateAccessRedeemRequest,
     RemateRead,
+    RemateStreamUpdate,
     RemateUpdate,
 )
 from app.modules.remates.service import RemateService
@@ -155,6 +156,33 @@ async def update_remate(
     service: Annotated[RemateService, Depends(get_remate_service)],
 ) -> Remate:
     return await service.update(remate_id, current_user, data)
+
+
+@router.put(
+    "/{remate_id}/stream",
+    response_model=RemateRead,
+    summary="Cargar o cambiar la transmisión en vivo (YouTube), en cualquier estado no terminal",
+)
+async def set_remate_stream(
+    remate_id: uuid.UUID,
+    data: RemateStreamUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[RemateService, Depends(get_remate_service)],
+) -> Remate:
+    return await service.set_stream(remate_id, current_user, data.url)
+
+
+@router.delete(
+    "/{remate_id}/stream",
+    response_model=RemateRead,
+    summary="Quitar la transmisión en vivo",
+)
+async def clear_remate_stream(
+    remate_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    service: Annotated[RemateService, Depends(get_remate_service)],
+) -> Remate:
+    return await service.set_stream(remate_id, current_user, None)
 
 
 @router.post(

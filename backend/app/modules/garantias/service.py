@@ -27,6 +27,7 @@ from app.core.config import Settings
 from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
 from app.modules.garantias.mercadopago_client import MercadoPagoClient, MercadoPagoError
 from app.modules.garantias.models import Garantia, GarantiaEvent, GarantiaStatus
+from app.modules.garantias.notifications import GarantiaEmailNotifier
 from app.modules.garantias.repository import GarantiaRepository
 from app.modules.remates.schemas import RemateSettings
 from app.modules.remates.service import RemateService
@@ -46,11 +47,13 @@ class GarantiaService:
         remate_service: RemateService,
         mp_client: MercadoPagoClient,
         settings: Settings,
+        notifier: GarantiaEmailNotifier,
     ) -> None:
         self._repository = repository
         self._remate_service = remate_service
         self._mp_client = mp_client
         self._settings = settings
+        self._notifier = notifier
 
     # --- Constitución del hold ---------------------------------------------------------
 
@@ -143,6 +146,23 @@ class GarantiaService:
         )
         await self._repository.commit()
         await self._repository.refresh(garantia)
+
+        if garantia.status == GarantiaStatus.ACTIVE:
+            # Best-effort -- `GarantiaEmailNotifier` nunca lanza, ver su docstring. Solo
+            # cubre la autorización síncrona (la respuesta de este mismo request); una
+            # confirmación tardía por webhook (`reconcile`, PENDING_AUTHORIZATION ->
+            # ACTIVE) no dispara este email -- en la práctica un hold de tarjeta con
+            # Secure Fields resuelve síncrono, a diferencia de otros medios de pago de MP.
+            assert garantia.authorized_at is not None  # invariante: lo fija `_apply_mp_result`.
+            await self._notifier.send_garantia_autorizada(
+                to=buyer_email,
+                to_name=buyer.full_name,
+                remate_title=remate.title,
+                amount=garantia.amount,
+                currency=garantia.currency,
+                authorized_at=garantia.authorized_at,
+                expires_at=garantia.expires_at,
+            )
         return garantia
 
     def _apply_mp_result(self, garantia: Garantia, mp_payment_id: str, mp_status: str) -> None:

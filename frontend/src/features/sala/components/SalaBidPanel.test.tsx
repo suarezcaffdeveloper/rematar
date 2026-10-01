@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SalaBidPanel, type SalaBidPanelProps } from './SalaBidPanel';
 import type { Lote } from '../../remates/types';
@@ -94,5 +95,62 @@ describe('SalaBidPanel', () => {
     renderPanel({ lote: makeLote({ timer_ends_at: '2026-08-01T00:01:00Z' }) });
 
     expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+  });
+
+  describe('aviso "Te superaron"', () => {
+    const offer = (amount: string): OfertaSnapshotEntry => ({
+      id: `o-${amount}`,
+      buyer_id: null,
+      amount,
+      status: 'winning',
+      created_at: '2026-07-01T00:00:00Z',
+    });
+
+    function rerenderPanel(rerender: (ui: React.ReactElement) => void, overrides: Partial<SalaBidPanelProps>) {
+      rerender(
+        <MemoryRouter>
+          <SalaBidPanel {...makeProps(overrides)} />
+        </MemoryRouter>,
+      );
+    }
+
+    it('si ibas liderando y otra oferta te supera, avisa con el monto que lidera ahora', () => {
+      const { rerender } = renderPanel({ isLeadingBidder: true, winningOffer: offer('1500.00') });
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+      rerenderPanel(rerender, { isLeadingBidder: false, winningOffer: offer('1550.00') });
+
+      const alert = screen.getByRole('alert');
+      expect(alert).toHaveTextContent('Te superaron: ahora lidera');
+      expect(alert).toHaveTextContent(/1[.,]?550/);
+    });
+
+    it('el aviso se puede cerrar', async () => {
+      const { rerender } = renderPanel({ isLeadingBidder: true, winningOffer: offer('1500.00') });
+      rerenderPanel(rerender, { isLeadingBidder: false, winningOffer: offer('1550.00') });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Cerrar aviso' }));
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('desaparece si volvés a liderar', () => {
+      const { rerender } = renderPanel({ isLeadingBidder: true, winningOffer: offer('1500.00') });
+      rerenderPanel(rerender, { isLeadingBidder: false, winningOffer: offer('1550.00') });
+      rerenderPanel(rerender, { isLeadingBidder: true, winningOffer: offer('1600.00') });
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('no aparece si nunca lideraste (una oferta ajena más) ni al cambiar de lote', () => {
+      const { rerender } = renderPanel({ isLeadingBidder: false, winningOffer: offer('1500.00') });
+      rerenderPanel(rerender, { isLeadingBidder: false, winningOffer: offer('1550.00') });
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+      // Liderando el lote 1 y pasar al lote 2 no es "que te superen".
+      const { rerender: rerender2 } = renderPanel({ isLeadingBidder: true, winningOffer: offer('1500.00') });
+      rerenderPanel(rerender2, { lote: makeLote({ id: 'lote-2' }), isLeadingBidder: false, winningOffer: null });
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
   });
 });

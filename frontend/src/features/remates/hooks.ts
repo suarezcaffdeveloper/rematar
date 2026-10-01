@@ -8,6 +8,8 @@
 import { useEffect, useState } from 'react';
 import type { NormalizedApiError } from '../../shared/api/errors';
 import { useAsyncResource } from '../../shared/hooks/useAsyncResource';
+import { fetchRemateSnapshotRequest } from '../sala/api';
+import type { RemateStateSnapshot } from '../sala/types';
 import {
   fetchConnectedUsersCountRequest,
   fetchLoteByIdRequest,
@@ -180,6 +182,47 @@ export function useLoteCoverImages(remateId: string): string[] | null {
   }, [remateId]);
 
   return images;
+}
+
+const LIVE_PREVIEW_POLL_MS = 8000;
+
+/**
+ * Qué está pasando ahora mismo en un remate en vivo, para la galería del inicio: el lote
+ * en el martillo, la mejor oferta vigente y cuántos usuarios hay conectados. Sale de un
+ * único `GET /remates/{id}/snapshot` (el mismo que arma la Sala) repetido cada
+ * `LIVE_PREVIEW_POLL_MS` mientras la pestaña está visible -- el inicio no abre un
+ * WebSocket por cada remate. `remateId` vacío no pide nada (panel inactivo). `null`
+ * mientras carga o si el pedido falla: la galería cae a mostrar lugar y cantidad de lotes.
+ */
+export function useRemateLiveSnapshot(remateId: string): RemateStateSnapshot | null {
+  const [snapshot, setSnapshot] = useState<RemateStateSnapshot | null>(null);
+
+  useEffect(() => {
+    setSnapshot(null);
+    if (!remateId) return;
+    let cancelled = false;
+
+    function load() {
+      fetchRemateSnapshotRequest(remateId)
+        .then((result) => {
+          if (!cancelled) setSnapshot(result);
+        })
+        .catch(() => {
+          // Dato secundario: si falla, se conserva el último valor bueno (o `null`).
+        });
+    }
+
+    load();
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') load();
+    }, LIVE_PREVIEW_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [remateId]);
+
+  return snapshot;
 }
 
 export interface UseRemateDetailResult {

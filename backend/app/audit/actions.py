@@ -19,6 +19,7 @@ class AuditAction:
     REMATE_CREATED = "remate.created"
     REMATE_UPDATED = "remate.updated"
     REMATE_SETTINGS_CHANGED = "remate.settings_changed"
+    REMATE_STREAM_CHANGED = "remate.stream_changed"
     REMATE_DELETED = "remate.deleted"
     REMATE_STATUS_CHANGED = "remate.status_changed"
     REMATE_OPERATOR_CODE_GENERATED = "remate.operator_code_generated"

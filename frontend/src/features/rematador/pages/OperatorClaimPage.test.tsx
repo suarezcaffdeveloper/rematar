@@ -18,7 +18,11 @@ vi.mock('react-router-dom', async () => {
 });
 
 vi.mock('../../auth/hooks', () => ({ useAuth: useAuthMock }));
-vi.mock('../../remates/hooks', () => ({ useRemates: useRematesMock }));
+vi.mock('../../remates/hooks', () => ({
+  useRemates: useRematesMock,
+  useLoteCount: () => 5,
+  useLoteCoverImages: () => [],
+}));
 vi.mock('../../remates/api', () => apiMocks);
 
 function makeRemate(overrides: Partial<Remate> = {}): Remate {
@@ -101,6 +105,34 @@ describe('OperatorClaimPage', () => {
     renderPage();
 
     expect(screen.getByText('Unirme como operador')).toBeInTheDocument();
+  });
+
+  it('lista los remates finalizados que ya dirigió, sin repetir el que está en curso', () => {
+    useRematesMock.mockReturnValue({
+      remates: [
+        makeRemate({ id: 'remate-old', title: 'Remate viejo de maquinaria', status: 'finished', finished_at: '2026-06-01T00:00:00Z' }),
+        makeRemate({ id: 'remate-now', title: 'Remate actual de hacienda', status: 'live' }),
+        makeRemate({ id: 'remate-cancelado', title: 'Remate cancelado', status: 'cancelled' }),
+      ],
+      isLoading: false,
+      error: null,
+      reload: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(screen.getByRole('heading', { name: 'Remates que dirigiste' })).toBeInTheDocument();
+    expect(screen.getByText('Remate viejo de maquinaria')).toBeInTheDocument();
+    expect(screen.getAllByText('Remate actual de hacienda')).toHaveLength(1);
+    expect(screen.queryByText('Remate cancelado')).not.toBeInTheDocument();
+  });
+
+  it('sin remates finalizados, no muestra la sección de remates dirigidos', () => {
+    useRematesMock.mockReturnValue({ remates: [], isLoading: false, error: null, reload: vi.fn() });
+
+    renderPage();
+
+    expect(screen.queryByRole('heading', { name: 'Remates que dirigiste' })).not.toBeInTheDocument();
   });
 
   it('si falla el chequeo de asignación, degrada al formulario en vez de bloquear la pantalla', () => {

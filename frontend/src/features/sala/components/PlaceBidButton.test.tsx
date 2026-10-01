@@ -194,6 +194,42 @@ describe('PlaceBidButton', () => {
     expect(screen.getByRole('button', { name: 'Realizar oferta' })).toBeDisabled();
   });
 
+  it('sin garantía activa y sin callback -- el formulario no se muestra, solo el botón deshabilitado (comportamiento de siempre)', () => {
+    renderButton({ hasRequiredGuarantee: false });
+    expect(screen.getByRole('button', { name: 'Realizar oferta' })).toBeDisabled();
+    expect(screen.getByText(/Este remate requiere una garantía económica activa/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Tu oferta/)).not.toBeInTheDocument();
+  });
+
+  it('sin garantía activa pero con callback -- un botón amarillo "Construir garantía" reemplaza al formulario y lo abre (pedido explícito)', async () => {
+    const onBuildGuarantee = vi.fn();
+    renderButton({ hasRequiredGuarantee: false, onBuildGuarantee });
+
+    const button = screen.getByRole('button', { name: 'Construir garantía' });
+    expect(button).toBeEnabled();
+    // El formulario de oferta no está -- este botón ES la acción en su lugar.
+    expect(screen.queryByLabelText(/Tu oferta/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ofertar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Realizar oferta' })).not.toBeInTheDocument();
+
+    await userEvent.click(button);
+    expect(onBuildGuarantee).toHaveBeenCalledTimes(1);
+  });
+
+  it('con la garantía ya activa aunque haya callback -- el formulario de oferta de siempre, sin botón amarillo', () => {
+    renderButton({ hasRequiredGuarantee: true, onBuildGuarantee: vi.fn() });
+
+    expect(screen.getByRole('button', { name: 'Ofertar' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Construir garantía' })).not.toBeInTheDocument();
+  });
+
+  it('sin garantía y con callback, pero remate no live -- el botón deshabilitado con el motivo, no el amarillo (la garantía no es el único impedimento)', () => {
+    renderButton({ hasRequiredGuarantee: false, onBuildGuarantee: vi.fn(), remateStatus: 'paused' });
+
+    expect(screen.getByRole('button', { name: 'Realizar oferta' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Construir garantía' })).not.toBeInTheDocument();
+  });
+
   it('visitante anónimo (sin rol) -- muestra un llamado a iniciar sesión, no el mensaje de permisos', () => {
     renderButton({ viewerRole: undefined });
     expect(screen.getByRole('button', { name: 'Iniciá sesión para ofertar' })).toBeInTheDocument();

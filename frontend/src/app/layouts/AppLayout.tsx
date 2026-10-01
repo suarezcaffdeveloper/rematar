@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
 import { useAuth } from '../../features/auth/hooks';
+import { BuyerTopNav } from './BuyerTopNav';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { useLayoutPreferencesStore } from './layoutPreferencesStore';
@@ -41,12 +42,19 @@ import { useLayoutPreferencesStore } from './layoutPreferencesStore';
  * ya está, normalmente el `<body>`), solo en navegaciones posteriores. Se mantiene igual
  * en modo foco -- ocultar la navegación global no es motivo para bajar el estándar de
  * accesibilidad del contenido que queda.
+ *
+ * `isTopNav` (inicio del comprador, ver `useTopNavLayout`): reemplaza `Sidebar` + `Header`
+ * por la barra superior `BuyerTopNav` y deja el `<main>` sin ancho ni padding -- la página
+ * arma su propio contenedor a todo el ancho. No se monta el drawer mobile del `Sidebar`:
+ * sin su botón de apertura (vivía en `Header`) no habría forma de abrirlo.
  */
 export function AppLayout() {
   const { user } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const isWide = useLayoutPreferencesStore((state) => state.isWide);
   const isFocusMode = useLayoutPreferencesStore((state) => state.isFocusMode);
+  const isTopNav = useLayoutPreferencesStore((state) => state.isTopNav);
+  const isTopNavStatic = useLayoutPreferencesStore((state) => state.isTopNavStatic);
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   // Comparación por valor contra el pathname anterior, no un flag booleano "ya until
@@ -77,18 +85,21 @@ export function AppLayout() {
       >
         Saltar al contenido principal
       </a>
-      <Sidebar role={user?.role} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      <div className="flex min-h-screen flex-col lg:pl-16">
-        {!isFocusMode && <Header onOpenSidebar={() => setIsSidebarOpen(true)} />}
+      {!isTopNav && <Sidebar role={user?.role} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />}
+      <div className={clsx('flex min-h-screen flex-col', !isTopNav && 'lg:pl-16')}>
+        {isTopNav && <BuyerTopNav staticBar={isTopNavStatic} />}
+        {!isTopNav && !isFocusMode && <Header onOpenSidebar={() => setIsSidebarOpen(true)} />}
         <main
           id="main-content"
           ref={mainRef}
           tabIndex={-1}
           className={clsx(
             'mx-auto w-full flex-1 focus:outline-none',
-            isFocusMode
-              ? 'max-w-[110rem] px-3 py-4 sm:px-4 lg:px-6'
-              : clsx('px-4 py-8', isWide ? 'max-w-[90rem]' : 'max-w-5xl'),
+            isTopNav
+              ? 'max-w-none'
+              : isFocusMode
+                ? 'max-w-[110rem] px-3 py-4 sm:px-4 lg:px-6'
+                : clsx('px-4 py-8', isWide ? 'max-w-[90rem]' : 'max-w-5xl'),
           )}
         >
           <Outlet />

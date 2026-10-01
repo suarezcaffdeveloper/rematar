@@ -88,6 +88,38 @@ describe('applyDomainEventToSnapshot', () => {
     expect(result.remate.settings).toBe(snapshot.remate.settings);
   });
 
+  it('remate.stream_updated carga y quita la transmisión del remate', () => {
+    const snapshot = makeSnapshot({ remate: makeRemate({ status: 'live' }) });
+    const withStream = applyDomainEventToSnapshot(
+      snapshot,
+      {
+        event_type: 'remate.stream_updated',
+        event_id: 'e1',
+        remate_id: 'remate-1',
+        occurred_at: 't',
+        stream_provider: 'youtube',
+        stream_video_id: 'dQw4w9WgXcQ',
+      },
+      [],
+    );
+    expect(withStream.remate.stream_video_id).toBe('dQw4w9WgXcQ');
+    expect(withStream.remate.status).toBe('live');
+
+    const cleared = applyDomainEventToSnapshot(
+      withStream,
+      {
+        event_type: 'remate.stream_updated',
+        event_id: 'e2',
+        remate_id: 'remate-1',
+        occurred_at: 't',
+        stream_provider: null,
+        stream_video_id: null,
+      },
+      [],
+    );
+    expect(cleared.remate.stream_video_id).toBeNull();
+  });
+
   it('remate.paused / remate.resumed alternan el estado', () => {
     const snapshot = makeSnapshot({ remate: makeRemate({ status: 'live' }) });
     const paused = applyDomainEventToSnapshot(
@@ -411,7 +443,7 @@ describe('applyDomainEventToSnapshot', () => {
     });
   });
 
-  it('oferta.accepted agrega la entrada al historial (con buyer_id anonimizado) y la marca ganadora', () => {
+  it('oferta.accepted vuelca el buyer_id tal cual llega en el evento (ya enmascarado por destinatario en el backend)', () => {
     const snapshot = makeSnapshot({ winning_offer: null, recent_offers: [] });
     const result = applyDomainEventToSnapshot(
       snapshot,
@@ -430,12 +462,32 @@ describe('applyDomainEventToSnapshot', () => {
 
     expect(result.winning_offer).toEqual({
       id: 'oferta-9',
-      buyer_id: null,
+      buyer_id: 'comprador-real-123',
       amount: '1500.00',
       status: 'winning',
       created_at: '2026-07-02T10:00:00Z',
     });
-    expect(result.recent_offers[0].buyer_id).toBeNull();
+    expect(result.recent_offers[0].buyer_id).toBe('comprador-real-123');
+  });
+
+  it('oferta.accepted refleja un buyer_id null (oferta ajena, enmascarada por el backend)', () => {
+    const snapshot = makeSnapshot({ winning_offer: null, recent_offers: [] });
+    const result = applyDomainEventToSnapshot(
+      snapshot,
+      {
+        event_type: 'oferta.accepted',
+        event_id: 'e1',
+        remate_id: 'remate-1',
+        occurred_at: '2026-07-02T10:00:00Z',
+        oferta_id: 'oferta-9',
+        lote_id: 'lote-1',
+        buyer_id: null,
+        amount: '1500.00',
+      },
+      [],
+    );
+
+    expect(result.winning_offer?.buyer_id).toBeNull();
   });
 
   it('oferta.accepted acumula en recent_offers respetando el tope de 10', () => {

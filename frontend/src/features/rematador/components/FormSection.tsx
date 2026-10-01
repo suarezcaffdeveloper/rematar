@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 /** Bloque de sección compartido por los formularios de Remate y Lote (mismo lenguaje
- * visual, Épica 9) -- usado dentro de `RemateFormModal` y `LoteFormModal`.
+ * visual, Épica 9) -- usado dentro de `RemateFormModal` y `LoteDrawer`.
  *
  * Retexturizado sobre el sistema de diseño más reciente (mismo criterio "no todas cajas"
  * que ya aplica `ConsolaControlPanel`/`ControlSection`): antes cada sección era su propia

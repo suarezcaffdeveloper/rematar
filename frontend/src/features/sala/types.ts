@@ -17,12 +17,12 @@ export type OfertaStatus = 'accepted' | 'rejected' | 'outbid' | 'winning';
 /**
  * `OfertaSnapshotEntry` -- `backend/app/snapshot/schemas.py`. `buyer_id` llega `null`
  * para cualquier comprador que no sea el dueño del remate ni admin (enmascarado por
- * `SnapshotService._mask_oferta`) -- en la práctica, SIEMPRE `null` para el rol
- * `comprador`, incluso para el propio postor de esa oferta. No es un hueco a resolver:
- * es la misma política de anonimato entre postores que ya aplica `LeadingOfferRead`
- * (ver docs/26-detalle-remate.md, que documentó el mismo criterio para el rematador).
- * `amount` es `string` -- mismo motivo que `Lote.base_price` (ver
- * `features/remates/types.ts`).
+ * `SnapshotService._mask_oferta`) -- salvo que la oferta sea la del propio comprador que
+ * pide el snapshot, en cuyo caso ve su propio id real. El anonimato es entre postores
+ * (ADR-031), no de uno mismo: un comprador siempre puede saber que la oferta que va
+ * ganando es la suya (mismo criterio, ya aplicado del lado del backend, que
+ * `LeadingOfferRead` -- ver docs/26-detalle-remate.md). `amount` es `string` -- mismo
+ * motivo que `Lote.base_price` (ver `features/remates/types.ts`).
  */
 export interface OfertaSnapshotEntry {
   id: string;

@@ -147,7 +147,8 @@ describe('TimedSalaPage', () => {
     expect(screen.getByText('Todavía no hay lotes cargados')).toBeInTheDocument();
   });
 
-  it('con varios lotes, arranca mostrando el primer lote abierto y permite cambiar de lote', async () => {
+  it('con varios lotes, arranca mostrando el primer lote abierto y permite cambiar de lote desde el catálogo', async () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
     mockTimedState({
       lotes: [
         makeLote({ id: 'lote-1', lot_number: '1', title: 'Toro Angus', status: 'open' }),
@@ -159,14 +160,16 @@ describe('TimedSalaPage', () => {
     renderPage();
 
     expect(screen.getByRole('heading', { name: 'Toro Angus' })).toBeInTheDocument();
-    expect(screen.getByText('Secuencia de lotes · 2')).toBeInTheDocument();
+    expect(screen.getByText('2 lotes en este remate', { exact: false })).toBeInTheDocument();
 
-    // La fila del segundo lote en la cola es clickeable para fijarlo -- su nombre
-    // accesible incluye el número y título (contenido de la fila).
+    // El lote del catálogo es un botón: su nombre accesible incluye el número y el título.
     await userEvent.click(screen.getByRole('button', { name: /Vaquillona/ }));
 
     expect(screen.getByRole('heading', { name: 'Vaquillona' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Toro Angus' })).not.toBeInTheDocument();
+    // La vitrina queda arriba del catálogo: al elegir un lote se sube hasta ella.
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+    scrollTo.mockRestore();
   });
 
   it('ignora los lotes cancelados al elegir el lote inicial y al armar el carrusel', () => {
@@ -193,7 +196,7 @@ describe('TimedSalaPage', () => {
     expect(screen.getByRole('button', { name: 'Iniciá sesión para ofertar' })).toBeInTheDocument();
   });
 
-  it('el buscador filtra el carrusel y fija el primer lote que coincide', async () => {
+  it('el buscador filtra el catálogo pero no cambia el lote que se está viendo', async () => {
     mockTimedState({
       lotes: [
         makeLote({ id: 'lote-1', lot_number: '1', title: 'Toro Angus', status: 'open' }),
@@ -206,13 +209,12 @@ describe('TimedSalaPage', () => {
 
     await userEvent.type(screen.getByRole('searchbox', { name: 'Buscar lote por número, título o categoría' }), 'holando');
 
-    expect(screen.getByRole('heading', { name: 'Vaquillona Holando' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Vaquillona Holando/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Toro Angus/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Toro Angus' })).toBeInTheDocument();
   });
 
-  it('el buscador sin coincidencias muestra un aviso y no rompe el panel derecho', async () => {
-    // Con un solo lote no aparece el buscador (no tendría sentido) -- se cargan dos
-    // para que se muestre, y se busca algo que no matchea a ninguno de los dos.
+  it('el buscador sin coincidencias muestra un aviso y deja la vitrina como estaba', async () => {
     mockTimedState({
       lotes: [
         makeLote({ id: 'lote-1', lot_number: '1', title: 'Toro Angus', status: 'open' }),
@@ -225,6 +227,40 @@ describe('TimedSalaPage', () => {
 
     await userEvent.type(screen.getByRole('searchbox', { name: 'Buscar lote por número, título o categoría' }), 'ovejas');
 
-    expect(screen.getByText('Ningún lote coincide con tu búsqueda')).toBeInTheDocument();
+    expect(screen.getByText('Ningún lote coincide con lo que buscás.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Toro Angus' })).toBeInTheDocument();
+  });
+
+  it('la cabecera dice cuántos lotes siguen abiertos y vuelve a la ficha del remate', () => {
+    mockTimedState({
+      lotes: [
+        makeLote({ id: 'lote-1', lot_number: '1', status: 'open' }),
+        makeLote({ id: 'lote-2', lot_number: '2', title: 'Vendido', status: 'closed_sold', final_price: '1200.00' }),
+      ],
+    });
+    mockRecentOffers();
+
+    renderPage();
+
+    expect(screen.getByRole('heading', { name: 'Remate Timed de hacienda' })).toBeInTheDocument();
+    expect(screen.getByText('1 lote abierto de 2')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Volver al remate' })).toHaveAttribute('href', '/remates/remate-1');
+  });
+
+  it('si el lote elegido ya cerró, la mesa de ofertas muestra el precio final y no el formulario', async () => {
+    mockTimedState({
+      lotes: [
+        makeLote({ id: 'lote-1', lot_number: '1', title: 'Toro Angus', status: 'open' }),
+        makeLote({ id: 'lote-2', lot_number: '2', title: 'Vaquillona', status: 'closed_sold', final_price: '1200.00' }),
+      ],
+    });
+    mockRecentOffers();
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: /Vaquillona/ }));
+
+    expect(screen.getByText('Este lote ya se vendió. No se aceptan más ofertas.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Iniciá sesión para ofertar' })).not.toBeInTheDocument();
   });
 });

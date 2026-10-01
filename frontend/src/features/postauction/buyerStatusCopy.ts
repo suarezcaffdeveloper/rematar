@@ -10,7 +10,7 @@
  */
 
 import { formatDateTime } from '../../shared/lib/format';
-import type { PostAuctionCaseDetail, PostAuctionStatus } from './types';
+import type { PostAuctionCase, PostAuctionStatus } from './types';
 
 export interface StatusCopy {
   /** Frase corta debajo del estado, en el header. */
@@ -66,27 +66,36 @@ const BASE_COPY: Record<PostAuctionStatus, StatusCopy> = {
   },
 };
 
+/** `formatDateTime` termina en "p. m." / "a. m."; sin esto, la oración que lo contiene
+ * cerraba con un segundo punto ("p. m.."). */
+function dateWithoutTrailingDot(iso: string): string {
+  return formatDateTime(iso).replace(/\.$/, '');
+}
+
 /** Variante del copy base con fechas hito insertadas cuando están disponibles (ej. "fue
- * enviada el 11 ago") -- mismos campos que ya trae `PostAuctionCaseDetail`, sin pedir
- * nada nuevo al backend. */
-export function getStatusCopy(data: PostAuctionCaseDetail): StatusCopy {
+ * enviada el 11 ago") -- mismos campos que ya trae cada caso, sin pedir nada nuevo al
+ * backend. Acepta el caso de la lista (`PostAuctionCase`) o el detalle (lo extiende): solo
+ * usa el estado y las fechas de hito. */
+export function getStatusCopy(
+  data: Pick<PostAuctionCase, 'status' | 'payment_at' | 'shipped_at' | 'delivered_at'>,
+): StatusCopy {
   const base = BASE_COPY[data.status];
   if (data.status === 'pago_recibido' && data.payment_at) {
     return {
       ...base,
-      nextStepDescription: `Registramos tu pago el ${formatDateTime(data.payment_at)}. El martillero va a preparar la entrega de tu compra.`,
+      nextStepDescription: `Registramos tu pago el ${dateWithoutTrailingDot(data.payment_at)}. El martillero va a preparar la entrega de tu compra.`,
     };
   }
   if (data.status === 'enviado' && data.shipped_at) {
     return {
       ...base,
-      nextStepDescription: `Tu compra fue enviada el ${formatDateTime(data.shipped_at)}. Si necesitás más información, contactá al martillero.`,
+      nextStepDescription: `Tu compra fue enviada el ${dateWithoutTrailingDot(data.shipped_at)}. Si necesitás más información, contactá al martillero.`,
     };
   }
   if (data.status === 'entregado' && data.delivered_at) {
     return {
       ...base,
-      nextStepDescription: `La entrega fue registrada el ${formatDateTime(data.delivered_at)}.`,
+      nextStepDescription: `La entrega fue registrada el ${dateWithoutTrailingDot(data.delivered_at)}.`,
     };
   }
   return base;

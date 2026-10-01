@@ -230,6 +230,13 @@ class RematePrivateAccessRedeemRequest(BaseModel):
     code: str = Field(min_length=1, max_length=32)
 
 
+class RemateStreamUpdate(BaseModel):
+    """Body de `PUT /remates/{id}/stream`. La validación real (host, ID) vive en
+    `RemateService.set_stream`; acá solo se acota el largo antes de parsear."""
+
+    url: str = Field(min_length=1, max_length=2048)
+
+
 class RemateRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -241,6 +248,8 @@ class RemateRead(BaseModel):
     category: RemateCategory
     cover_image_url: str | None
     location: str | None
+    stream_provider: str | None
+    stream_video_id: str | None
     starts_at: datetime | None
     ends_at: datetime | None
     status: RemateStatus

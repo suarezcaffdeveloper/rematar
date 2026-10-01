@@ -28,7 +28,7 @@ function renderLayout() {
 
 afterEach(() => {
   act(() => {
-    useLayoutPreferencesStore.setState({ isWide: false, isFocusMode: false });
+    useLayoutPreferencesStore.setState({ isWide: false, isFocusMode: false, isTopNav: false, isTopNavStatic: false });
   });
 });
 
@@ -105,5 +105,53 @@ describe('AppLayout', () => {
     expect(container.querySelector('main')).toHaveClass('max-w-[110rem]');
     expect(container.querySelector('main')).not.toHaveClass('max-w-5xl');
     expect(container.querySelector('main')).not.toHaveClass('max-w-[90rem]');
+  });
+
+  it('con isTopNav en true (useTopNavLayout), reemplaza Sidebar y Header por la barra superior y suelta el ancho del <main>', () => {
+    useAuthMock.mockReturnValue({ user: { full_name: 'Ana', role: 'comprador' } });
+    act(() => {
+      useLayoutPreferencesStore.setState({ isTopNav: true });
+    });
+
+    const { container } = renderLayout();
+
+    expect(screen.getAllByRole('navigation', { name: 'Navegación principal' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Abrir menú de navegación' })).not.toBeInTheDocument();
+    expect(container.querySelector('aside')).not.toBeInTheDocument();
+    expect(container.querySelector('main')).toHaveClass('max-w-none');
+    expect(container.querySelector('main')).not.toHaveClass('px-4');
+  });
+
+  it('sin isTopNav, se mantiene el Sidebar con su Header y no se monta la barra superior', () => {
+    useAuthMock.mockReturnValue({ user: { full_name: 'Ana', role: 'comprador' } });
+
+    const { container } = renderLayout();
+
+    expect(container.querySelector('aside')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Abrir menú de navegación' })).toBeInTheDocument();
+  });
+
+  it('con isTopNav e isTopNavStatic (la Sala en vivo), la barra superior es fija al principio de la página: no sticky', () => {
+    useAuthMock.mockReturnValue({ user: { full_name: 'Ana', role: 'comprador' } });
+    act(() => {
+      useLayoutPreferencesStore.setState({ isTopNav: true, isTopNavStatic: true });
+    });
+
+    const { container } = renderLayout();
+
+    const header = container.querySelector('header');
+    expect(header).toHaveClass('relative');
+    expect(header).not.toHaveClass('sticky');
+  });
+
+  it('con isTopNav sin isTopNavStatic (inicio, Mis compras...), la barra sigue sticky', () => {
+    useAuthMock.mockReturnValue({ user: { full_name: 'Ana', role: 'comprador' } });
+    act(() => {
+      useLayoutPreferencesStore.setState({ isTopNav: true });
+    });
+
+    const { container } = renderLayout();
+
+    expect(container.querySelector('header')).toHaveClass('sticky');
   });
 });

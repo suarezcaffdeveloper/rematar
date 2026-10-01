@@ -37,6 +37,7 @@ from app.modules.remates.events import (
     RematePaused,
     RemateResumed,
     RemateStarted,
+    RemateStreamUpdated,
 )
 from app.modules.remates.lotes.events import (
     LoteCancelled,
@@ -68,6 +69,7 @@ SYNCED_EVENTS: tuple[type[RemateScopedEvent], ...] = (
     RemateResumed,
     RemateFinished,
     RemateCancelled,
+    RemateStreamUpdated,
     LoteOpened,
     LoteClosed,
     LoteCancelled,

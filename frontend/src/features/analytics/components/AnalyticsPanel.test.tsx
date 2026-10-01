@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { UseRemateAnalyticsResult } from '../hooks';
 import type { RemateAnalyticsSnapshot } from '../types';
 
 const useRemateAnalyticsMock = vi.hoisted(() => vi.fn());
 vi.mock('../hooks', () => ({ useRemateAnalytics: useRemateAnalyticsMock }));
+
+const exportRecentEventsToCsvMock = vi.hoisted(() => vi.fn());
+vi.mock('../exportEvents', () => ({ exportRecentEventsToCsv: exportRecentEventsToCsvMock }));
 
 const { AnalyticsPanel } = await import('./AnalyticsPanel');
 
@@ -47,6 +51,7 @@ function makeSnapshot(overrides: Partial<RemateAnalyticsSnapshot> = {}): RemateA
     },
     offers_by_lote: [{ lote_id: 'lote-1', offer_count: 4 }],
     bids_timeline: [{ bucket_start: '2026-07-21T10:00:00Z', count: 2 }],
+    bids_timeline_granularity: 'minute',
     recent_events: [
       {
         event_type: 'lote.opened',
@@ -120,5 +125,51 @@ describe('AnalyticsPanel', () => {
   it('sin duración promedio, muestra "--"', () => {
     renderPanel({ data: makeSnapshot({ average_lote_duration_seconds: null }) });
     expect(screen.getByText('--')).toBeInTheDocument();
+  });
+
+  it('con granularidad "minute" (remate Live), titula la sección "Evolución de ofertas"', () => {
+    renderPanel({ data: makeSnapshot({ bids_timeline_granularity: 'minute' }) });
+    expect(screen.getByText('Evolución de ofertas')).toBeInTheDocument();
+  });
+
+  it('con granularidad "hour" (remate Timed), titula la sección "Ofertas por hora, por día"', () => {
+    renderPanel({ data: makeSnapshot({ bids_timeline_granularity: 'hour' }) });
+    expect(screen.getByText('Ofertas por hora, por día')).toBeInTheDocument();
+  });
+
+  it('muestra el progreso de lotes (vendidos/total y restantes)', () => {
+    renderPanel();
+    expect(screen.getByText('6/11')).toBeInTheDocument(); // closed_sold/total
+    expect(screen.getByText(/6 vendidos · 4 restantes/)).toBeInTheDocument(); // pending+open
+  });
+
+  it('muestra hace cuánto se actualizó el snapshot', () => {
+    renderPanel();
+    expect(screen.getByText(/^Actualizado hace/)).toBeInTheDocument();
+  });
+
+  it('muestra la leyenda con los tipos de evento presentes en la línea de tiempo', () => {
+    renderPanel();
+    expect(screen.getByText('1 evento')).toBeInTheDocument(); // badge de conteo
+    expect(screen.getAllByText('Lote abierto').length).toBeGreaterThan(0);
+  });
+
+  it('sin eventos, no muestra el badge de conteo ni el botón de exportar', () => {
+    renderPanel({ data: makeSnapshot({ recent_events: [] }) });
+    // Regex ancorada -- el estado vacío de `EventsTimeline` dice "Todavía no hay
+    // eventos." y un patrón laxo como /evento/ también matchea esa frase.
+    expect(screen.queryByText(/^\d+ eventos?$/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Exportar' })).not.toBeInTheDocument();
+  });
+
+  it('al exportar, dispara la exportación a CSV con los eventos y la moneda del panel', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    await user.click(screen.getByRole('button', { name: 'Exportar' }));
+    expect(exportRecentEventsToCsvMock).toHaveBeenCalledWith(
+      makeSnapshot().recent_events,
+      'remate-1',
+      'ARS',
+    );
   });
 });

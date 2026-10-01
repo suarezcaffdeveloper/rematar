@@ -18,6 +18,7 @@ from sqlalchemy.engine import Row
 from app.analytics.repository import AnalyticsRepository
 from app.analytics.schemas import (
     BidsTimelineBucket,
+    BidsTimelineGranularity,
     HighestOferta,
     LoteOfferCount,
     LoteStatusCounts,
@@ -28,7 +29,7 @@ from app.analytics.schemas import (
 )
 from app.core.exceptions import ForbiddenError
 from app.modules.remates.lotes.models import Lote, LoteStatus
-from app.modules.remates.models import Remate
+from app.modules.remates.models import Remate, RemateAuctionType
 from app.modules.remates.service import RemateService
 from app.modules.users.models import User, UserRole
 from app.presence.schemas import ConnectedUserSummary
@@ -41,6 +42,11 @@ DEFAULT_CACHE_TTL_SECONDS = 3.0
 DEFAULT_BIDS_TIMELINE_MINUTES = 20
 DEFAULT_RECENT_EVENTS_LIMIT = 15
 DEFAULT_OFFERS_RATE_WINDOW_SECONDS = 60
+# Tope defensivo para el timeline horario de un remate TIMED: un remate mal configurado
+# (`ends_at` absurdamente lejano) no debe generar miles de buckets zero-filled. 14 días
+# cubre con margen la duración real de un remate Timed; más allá de eso se recorta al
+# tramo más reciente (ver `AnalyticsService._resolve_timeline_window`).
+MAX_TIMED_TIMELINE_HOURS = 14 * 24
 
 
 class AnalyticsService:
@@ -97,6 +103,7 @@ class AnalyticsService:
             top_lote_by_offers=raw.top_lote_by_offers,
             offers_by_lote=raw.offers_by_lote,
             bids_timeline=raw.bids_timeline,
+            bids_timeline_granularity=raw.bids_timeline_granularity,
             recent_events=raw.recent_events,
             generated_at=datetime.now(UTC),
         )
@@ -131,7 +138,7 @@ class AnalyticsService:
         una guerra de ofertas) sin repetir las ocho en cada request."""
         now = datetime.now(UTC)
         since_rate_window = now - timedelta(seconds=self._offers_rate_window_seconds)
-        since_timeline = now - timedelta(minutes=self._bids_timeline_minutes)
+        since_timeline, until_timeline, granularity = self._resolve_timeline_window(remate, now)
 
         total_ofertas = await self._repository.count_total_ofertas(remate_id)
         ofertas_last_minute = await self._repository.count_ofertas_since(
@@ -141,7 +148,9 @@ class AnalyticsService:
         highest_row = await self._repository.get_highest_oferta(remate_id)
         top_lote_row = await self._repository.get_top_lote_by_offer_count(remate_id)
         offer_count_rows = await self._repository.get_offer_counts_by_lote(remate_id)
-        timeline_rows = await self._repository.get_bids_timeline(remate_id, since_timeline)
+        timeline_rows = await self._repository.get_bids_timeline(
+            remate_id, since_timeline, until_timeline, granularity=granularity
+        )
         transition_lotes = await self._repository.list_lote_transitions(
             remate_id, limit=self._recent_events_limit
         )
@@ -158,9 +167,47 @@ class AnalyticsService:
                 LoteOfferCount(lote_id=row.lote_id, offer_count=row.offer_count)
                 for row in offer_count_rows
             ],
-            bids_timeline=self._build_bids_timeline(timeline_rows, since_timeline, now),
+            bids_timeline=self._build_bids_timeline(
+                timeline_rows, since_timeline, until_timeline, granularity
+            ),
+            bids_timeline_granularity=granularity,
             recent_events=self._build_recent_events(transition_lotes, remate),
         )
+
+    def _resolve_timeline_window(
+        self, remate: Remate, now: datetime
+    ) -> tuple[datetime, datetime, BidsTimelineGranularity]:
+        """LIVE: ventana móvil de los últimos `_bids_timeline_minutes` minutos,
+        bucketeada por minuto -- comportamiento preexistente, sin cambios. TIMED: todo el
+        rango transcurrido del remate (`starts_at` -> `min(now, ends_at)`), bucketeado por
+        hora -- un remate Timed dura días, no minutos, así que un timeline por minuto
+        quedaría casi siempre vacío. `starts_at`/`ends_at` están garantizados no-nulos
+        para cualquier remate TIMED que ya haya sido programado (`RemateService.schedule`
+        lo exige), que es el único caso donde este panel (exclusivo del dueño) importa;
+        el fallback de acá solo cubre el caso teórico de un TIMED todavía en DRAFT."""
+        if remate.auction_type != RemateAuctionType.TIMED:
+            since = now - timedelta(minutes=self._bids_timeline_minutes)
+            return since, now, "minute"
+
+        since = remate.starts_at or (now - timedelta(minutes=self._bids_timeline_minutes))
+        until = min(now, remate.ends_at) if remate.ends_at is not None else now
+        if since > until:
+            # TIMED programado pero todavía no arrancó (`now < starts_at`): sin rango
+            # transcurrido todavía, un único bucket en `until` queda en cero -- mismo
+            # resultado visual que un remate LIVE recién creado sin ofertas.
+            since = until
+        max_span = timedelta(hours=MAX_TIMED_TIMELINE_HOURS)
+        if until - since > max_span:
+            clamped_since = until - max_span
+            logger.warning(
+                "analytics_timeline_window_clamped",
+                remate_id=str(remate.id),
+                original_since=since.isoformat(),
+                clamped_since=clamped_since.isoformat(),
+                until=until.isoformat(),
+            )
+            since = clamped_since
+        return since, until, "hour"
 
     # --- Presencia (nunca cacheada) -----------------------------------------------------
 
@@ -189,19 +236,31 @@ class AnalyticsService:
         )
 
     def _build_bids_timeline(
-        self, rows: list[Row], since: datetime, now: datetime
+        self,
+        rows: list[Row],
+        since: datetime,
+        until: datetime,
+        granularity: BidsTimelineGranularity,
     ) -> list[BidsTimelineBucket]:
-        """Zero-fillea cada minuto entre `since` y `now` -- un minuto sin ofertas se ve
-        como una barra en cero, no desaparece del gráfico (evita confundir "sin datos"
-        con "sin actividad")."""
+        """Zero-fillea cada bucket entre `since` y `until` -- un bucket sin ofertas se ve
+        como una barra en cero, no desaparece del gráfico (evita confundir "sin datos" con
+        "sin actividad"). El paso es de un minuto (LIVE) o una hora (TIMED), según
+        `granularity` -- ver `_resolve_timeline_window`."""
+        step = timedelta(minutes=1) if granularity == "minute" else timedelta(hours=1)
         counts = {row.bucket_start: row.count for row in rows}
-        since_minute = since.replace(second=0, microsecond=0)
-        now_minute = now.replace(second=0, microsecond=0)
-        total_minutes = max(0, int((now_minute - since_minute).total_seconds() // 60))
+        if granularity == "minute":
+            since_bucket = since.replace(second=0, microsecond=0)
+            until_bucket = until.replace(second=0, microsecond=0)
+        else:
+            since_bucket = since.replace(minute=0, second=0, microsecond=0)
+            until_bucket = until.replace(minute=0, second=0, microsecond=0)
+        total_steps = max(0, int((until_bucket - since_bucket) / step))
         buckets: list[BidsTimelineBucket] = []
-        for offset in range(total_minutes + 1):
-            minute = since_minute + timedelta(minutes=offset)
-            buckets.append(BidsTimelineBucket(bucket_start=minute, count=counts.get(minute, 0)))
+        for offset in range(total_steps + 1):
+            bucket_start = since_bucket + step * offset
+            buckets.append(
+                BidsTimelineBucket(bucket_start=bucket_start, count=counts.get(bucket_start, 0))
+            )
         return buckets
 
     def _build_recent_events(

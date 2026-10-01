@@ -39,14 +39,17 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.audit.repository import AuditLogRepository
 from app.core.config import Settings
+from app.email.renderer import EmailTemplateRenderer
 from app.events.bus import EventBus
 from app.modules.garantias.mercadopago_client import MercadoPagoClient
 from app.modules.garantias.models import GarantiaStatus
+from app.modules.garantias.notifications import GarantiaEmailNotifier
 from app.modules.garantias.repository import GarantiaRepository
 from app.modules.garantias.service import GarantiaService
 from app.modules.remates.lotes.repository import LoteRepository
 from app.modules.remates.repository import RemateRepository
 from app.modules.remates.service import RemateService
+from app.notify.dependencies import _build_email_sender
 
 logger = structlog.get_logger(__name__)
 
@@ -149,6 +152,10 @@ class GarantiaEventDispatcher:
         remate_service = RemateService(
             RemateRepository(db), LoteRepository(db), self._event_bus, AuditLogRepository(db)
         )
+        # Este dispatcher solo llama a `capture`/`release` (nunca `create_or_retry`), así
+        # que el notifier nunca dispara un email desde acá -- se arma igual porque es un
+        # parámetro obligatorio del constructor.
+        notifier = GarantiaEmailNotifier(_build_email_sender(self._settings), EmailTemplateRenderer())
         return GarantiaService(
-            GarantiaRepository(db), remate_service, self._mp_client, self._settings
+            GarantiaRepository(db), remate_service, self._mp_client, self._settings, notifier
         )

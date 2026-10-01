@@ -1,64 +1,48 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useFocusMode } from '../../../app/layouts/useFocusMode';
+import { useTopNavLayout } from '../../../app/layouts/useTopNavLayout';
 import { useWideLayout } from '../../../app/layouts/useWideLayout';
 import { Alert } from '../../../shared/components/Alert';
 import { Button } from '../../../shared/components/Button';
-import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
 import { useToastStore } from '../../../shared/toast/toastStore';
 import { useAuth } from '../../auth/hooks';
-import { GarantiaGate } from '../../garantias/components/GarantiaGate';
-import type { GarantiaStatus } from '../../garantias/types';
-import { NotificationBell } from '../../notifications/components/NotificationBell';
-import { GavelIcon } from '../../remates/components/icons';
+import { ChatPanel } from '../../chat/components/ChatPanel';
+import { GarantiaModal } from '../../garantias/components/GarantiaModal';
+import { useGarantiaStatus } from '../../garantias/hooks';
 import { TimedSalaPage } from '../../timedSala/pages/TimedSalaPage';
-import { ActiveLotePanel } from '../components/ActiveLotePanel';
 import { LoteWonOverlay, type WonLoteInfo } from '../components/LoteWonOverlay';
 import { SalaBidPanel } from '../components/SalaBidPanel';
-import { SalaHeader } from '../components/SalaHeader';
-import { SalaSidePanel } from '../components/SalaSidePanel';
-import { UpcomingLotesStrip } from '../components/UpcomingLotesStrip';
+import { SalaLoteColumn } from '../components/SalaLoteColumn';
+import { SalaMobileBidBar } from '../components/SalaMobileBidBar';
+import { SalaRecentOffers } from '../components/SalaRecentOffers';
+import { SalaRoomHeader } from '../components/SalaRoomHeader';
+import { SalaUpcomingGrid } from '../components/SalaUpcomingGrid';
 import { useLiveRemateState } from '../hooks';
 import { isDomainEventMessage } from '../realtime/messages';
 
-/** Único resto visible del `Header` global una vez que `SalaPage` lo oculta vía
- * `useFocusMode(true)`. En la pantalla ya cargada la campana vive adentro de
- * `SalaHeader` (a la par del contador de conectados, ver el prop `notifications`) --
- * esta burbuja flotante solo cubre los estados que no llegan a renderizar `SalaHeader`
- * (esqueleto de carga, error), donde igual tiene que quedar accesible. */
-function FloatingNotificationBell() {
-  const { isAuthenticated } = useAuth();
-  // Visitante anónimo (ADR-049): sin sesión no hay notificaciones que pedir -- montar
-  // igual dispararía un 401 contra un endpoint autenticado.
-  if (!isAuthenticated) return null;
-  return (
-    <div className="flex justify-end">
-      <div className="rounded-full border border-slate-200 bg-white p-1 shadow-sm">
-        <NotificationBell />
-      </div>
-    </div>
-  );
-}
-
 function SalaSkeleton() {
   return (
-    <div className="mx-auto flex w-full max-w-[85rem] flex-col gap-4 font-display">
-      <FloatingNotificationBell />
-      <Skeleton className="h-16 w-full rounded-lg" />
-      <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1fr_380px]">
-        <div className="flex flex-col gap-4">
-          <Skeleton className="aspect-video w-full rounded-xl" />
+    <div className="font-display">
+      <div className="border-b border-line px-3 pb-4 pt-6 sm:px-6 lg:px-10">
+        <Skeleton className="h-10 w-2/3 max-w-2xl rounded-md" />
+      </div>
+      <div className="grid grid-cols-1 border-b border-line xl:grid-cols-[minmax(0,1.5fr)_minmax(23rem,1fr)_minmax(20rem,0.85fr)]">
+        <div className="flex flex-col gap-4 p-4 xl:p-5">
+          <Skeleton className="aspect-video w-full rounded-2xl" />
           <Skeleton className="h-6 w-2/3 rounded-md" />
           <Skeleton className="h-16 w-full rounded-md" />
         </div>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 p-4 xl:border-l xl:border-line xl:p-5">
           <Skeleton className="h-24 w-full rounded-md" />
           <Skeleton className="h-32 w-full rounded-md" />
-          <Skeleton className="h-64 w-full rounded-md" />
+          <Skeleton className="h-40 w-full rounded-md" />
+        </div>
+        <div className="p-4 xl:border-l xl:border-line xl:p-5">
+          <Skeleton className="h-96 w-full rounded-md" />
         </div>
       </div>
-      <Skeleton className="h-32 w-full rounded-xl" />
     </div>
   );
 }
@@ -72,34 +56,29 @@ function SalaSkeleton() {
  * pantalla que corresponde, sin recargar nada. Ver
  * docs/28-websocket-tiempo-real-sala.md para el flujo completo.
  *
- * Layout (Épica 9, Etapa 4; recompuesto en el rediseño visual -- ver prototipo
- * aprobado): `useWideLayout()` le pide a `AppLayout` un `<main>` más ancho (sin esto, el
- * sidebar de ofertar+historial+chat no entra cómodo junto al lote). Desde `xl:`
- * (1280px), grid de dos columnas -- identidad del lote a la izquierda
- * (`ActiveLotePanel`: imagen/título/descripción) y un sidebar fijo a la derecha
- * (`sticky`, alto de viewport) con precio + ofertar (`SalaBidPanel`, solo con lote
- * activo) arriba e historial/chat con pestañas (`SalaSidePanel`) ocupando el resto --
- * todo lo importante visible sin scroll de la página en desktop, pedido explícito del
- * enunciado. Por debajo de `xl:` (tablet/mobile), se apila en una sola columna como ya
- * hacía antes -- ningún componente de presentación de acá para abajo (`SalaHeader`,
- * `ActiveLotePanel`, `SalaBidPanel`, `SalaSidePanel`, `UpcomingLotesStrip`) sabe que
- * existe un WebSocket, tal como anticipaba `docs/27-sala-del-remate.md`, "Preparación
- * para WebSockets".
+ * Layout ("el chat te acompaña", rediseño de la Sala en vivo): la página scrollea. Desde
+ * `xl:` (1280px), grilla de tres columnas -- el lote en remate (`SalaLoteColumn`: video o
+ * fotos, y de qué se trata), la mesa de ofertas (`SalaBidPanel`: precio vigente + formulario
+ * de ofertar, y `SalaRecentOffers`: las ofertas recientes con la ganadora arriba) y el chat
+ * (`ChatPanel`), que queda PEGADO a la pantalla con todo su alto mientras se scrollea. Los
+ * próximos lotes (`SalaUpcomingGrid`) van debajo del lote y de las ofertas, ocupando el
+ * ancho de esas dos columnas y chocando a la derecha con el chat. Nada queda detrás de
+ * pestañas. Por debajo de `xl:` se apila y `SalaMobileBidBar` deja el precio y el atajo para
+ * ofertar fijos abajo. Ningún componente de presentación de acá para abajo sabe que existe
+ * un WebSocket, tal como anticipaba `docs/27-sala-del-remate.md`, "Preparación para
+ * WebSockets".
  *
- * Sin navbar global (rediseño -- vista del comprador): `useFocusMode(true)`, mismo
- * mecanismo que ya usaba el "Modo Remate" de la Consola del rematador
- * (`ConsolaOperativaPage`) para ocultar el `Header` global (breadcrumb + campana) por
- * completo -- acá el pedido fue sacarlo siempre, no solo mientras el remate está en
- * vivo, así que va sin condición y antes de cualquier `return` temprano (no puede
- * llamarse un Hook condicionalmente). La campana de notificaciones sigue siendo
- * necesaria: se remonta dentro de `SalaHeader` (prop `notifications`), a la par del
- * contador de conectados -- no en una franja propia arriba, que dejaba un espacio en
- * blanco entre el borde superior de la página y el título (pedido explícito de sacarlo).
+ * Barra superior fija (`useTopNavLayout({ staticBar: true })`): la Sala usa el mismo nav
+ * del resto del comprador (`BuyerTopNav`, con la campana adentro -- ya no hace falta la
+ * campana suelta que se remontaba al ocultar el `Header`), pero como barra completa al
+ * principio de la página, que no sigue el scroll ni se achica: durante el remate no se
+ * navega, y para salir se vuelve hacia arriba. Vale también para un remate Timed, que esta
+ * página monta más abajo (`TimedSalaPage`).
  */
 export function SalaPage() {
   const { remateId } = useParams<{ remateId: string }>();
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   useWideLayout();
   useFocusMode(true);
 
@@ -113,6 +92,9 @@ export function SalaPage() {
     connectionStatus,
     subscribeToRealtime,
   } = useLiveRemateState(remateId ?? '');
+
+  // Barra superior fija, para las dos modalidades -- ver el docstring.
+  useTopNavLayout({ staticBar: true });
 
   // Mensaje de adjudicación (Épica 8, "cuenta regresiva y cierre automático") -- un
   // toast, no un cambio de `active_lote` (eso ya lo resuelve `reducer.ts` en
@@ -131,68 +113,59 @@ export function SalaPage() {
     });
   }, [subscribeToRealtime]);
 
-  // Cartel "ganaste el lote" (pedido explícito, comprador): el snapshot enmascara
-  // siempre `buyer_id` a `null` (ADR-031, anonimato entre postores -- ver
-  // `realtime/reducer.ts::toOfertaSnapshotEntry`), así que no alcanza con mirar
-  // `winningOffer` para saber si el ganador es quien está mirando esta pantalla. Los
-  // eventos crudos del Event Dispatcher sí traen el `buyer_id` real (`oferta.accepted`/
-  // `oferta.winner_changed`, ver `realtime/events.ts`), así que acá se sigue "quién va
-  // liderando" fuera del reducer -- mismo patrón que el toast de `lote.closed` de más
-  // abajo -- y se compara contra `user.id` recién cuando el lote cierra vendido. Esto
-  // cubre tanto el cierre manual del rematador como el automático por timer: en los dos
-  // casos la oferta ganadora ya pasó por `oferta.accepted` antes del cierre, así que no
-  // hace falta distinguir `lote.winner_determined` (que solo se publica en el cierre
-  // automático, ver ADR-018) por separado.
+  // Cartel "ganaste el lote" (pedido explícito, comprador): desde la remediación del
+  // WebSocket Security Audit (Fase 1, `backend/app/realtime/privilege.py`) tanto el
+  // snapshot (`SnapshotService._mask_oferta`) como los eventos crudos (`oferta.accepted`/
+  // `oferta.winner_changed`, `MASKERS` en ese mismo módulo) enmascaran `buyer_id` por
+  // destinatario dejando visible el propio id real -- así que `winningOffer.buyer_id`
+  // (más abajo) ya alcanza para saber si el líder actual es quien mira esta pantalla,
+  // tanto al cargar/recargar la Sala como en vivo. Antes de esa remediación no era así
+  // (ver historial de este archivo) y esta pantalla llevaba su propio seguimiento
+  // "reconstruible solo desde eventos en vivo" -- eso es justo lo que producía el bug
+  // reportado: recargar la Sala mientras se lideraba un lote perdía el cartel de
+  // "liderando" hasta la próxima oferta.
   //
-  // `activeLoteRef`/`currencyRef`: `lote.closed` ya limpia `active_lote` a `null` en el
-  // mismo tick (`reducer.ts`), así que para el título/N° de lote/moneda del cartel hace
-  // falta guardarlos aparte -- no se puede leer del `snapshot` en el momento del cierre.
+  // Lo único que sigue necesitando seguimiento aparte es el cartel de "ganaste el lote":
+  // `lote.closed` limpia `active_lote` (y por lo tanto oculta `winningOffer`) en el mismo
+  // tick del reducer, así que hace falta capturar el líder/título/N° de lote/moneda un
+  // instante antes de que eso pase -- se guarda en refs, sincronizados en cada cambio de
+  // `snapshot`, y se lee en el listener de `lote.closed` de más abajo (que corre con el
+  // evento crudo, antes de que el reducer aplique el cierre). Cubre tanto el cierre
+  // manual del rematador como el automático por timer: en los dos casos la oferta
+  // ganadora ya pasó por `oferta.accepted` antes del cierre, así que no hace falta
+  // distinguir `lote.winner_determined` (que solo se publica en el cierre automático, ver
+  // ADR-018) por separado.
   const activeLoteRef = useRef<NonNullable<typeof snapshot>['active_lote']>(null);
   const currencyRef = useRef('');
+  const winningBuyerIdRef = useRef<string | null>(null);
   useEffect(() => {
     activeLoteRef.current = snapshot?.active_lote ?? null;
     currencyRef.current = snapshot?.remate.settings.currency ?? '';
+    winningBuyerIdRef.current = snapshot?.winning_offer?.buyer_id ?? null;
   }, [snapshot]);
 
-  const leadingBuyerRef = useRef<{ loteId: string; buyerId: string } | null>(null);
   const [wonLote, setWonLote] = useState<WonLoteInfo | null>(null);
-  // "Vas liderando" (pedido explícito, comprador): mismo `buyer_id` real de los eventos
-  // crudos que ya se sigue para el cartel de "ganaste el lote" de más abajo -- acá en vez
-  // de un ref es estado, porque esto sí se pinta en cada render (`PlaceBidButton`, para
-  // no dejar que el comprador se sobreoferte a sí mismo). Igual que `leadingBuyerRef`,
-  // arranca en `false` sin forma de reconstruirlo desde el snapshot (`buyer_id` llega
-  // enmascarado, ver `types.ts`) -- consistente con la misma limitación que ya tenía el
-  // cartel de "ganaste el lote".
-  const [isLeadingBidder, setIsLeadingBidder] = useState(false);
-  // Garantía económica (bloqueo de tarjeta vía Mercado Pago) -- `null` mientras
-  // `GarantiaGate` todavía no resolvió el estado inicial, tratado igual que "sin
+  // Garantía económica (bloqueo de tarjeta vía Mercado Pago): el estado lo resuelve
+  // `useGarantiaStatus` (el `GET /garantia/me` que antes hacía el `GarantiaGate`) y el
+  // diálogo para constituirla lo abre el botón "Construir garantía" del propio
+  // `PlaceBidButton` (pedido explícito -- ya no hay una card amarilla arriba de la
+  // sala). `null` mientras el fetch inicial no resolvió, tratado igual que "sin
   // garantía activa" (`hasRequiredGuarantee` de más abajo) hasta que sí lo haga.
-  const [garantiaStatus, setGarantiaStatus] = useState<GarantiaStatus | null>(null);
+  const [isGarantiaModalOpen, setIsGarantiaModalOpen] = useState(false);
+  const { status: garantiaStatus, reportGarantia } = useGarantiaStatus(remateId ?? '');
   useEffect(() => {
     return subscribeToRealtime((message) => {
       if (!isDomainEventMessage(message)) return;
       const { payload } = message;
-
-      if (payload.event_type === 'oferta.accepted') {
-        leadingBuyerRef.current = { loteId: payload.lote_id, buyerId: payload.buyer_id };
-        setIsLeadingBidder(payload.buyer_id === user?.id);
-        return;
-      }
-      if (payload.event_type === 'oferta.winner_changed') {
-        leadingBuyerRef.current = { loteId: payload.lote_id, buyerId: payload.new_buyer_id };
-        setIsLeadingBidder(payload.new_buyer_id === user?.id);
-        return;
-      }
-      if (payload.event_type === 'lote.opened') {
-        leadingBuyerRef.current = null;
-        setIsLeadingBidder(false);
-        return;
-      }
-      if (payload.event_type === 'lote.closed') setIsLeadingBidder(false);
       if (payload.event_type !== 'lote.closed' || payload.outcome !== 'sold') return;
 
-      const leading = leadingBuyerRef.current;
-      if (!leading || leading.loteId !== payload.lote_id || !user?.id || leading.buyerId !== user.id) return;
+      if (
+        activeLoteRef.current?.id !== payload.lote_id ||
+        !user?.id ||
+        winningBuyerIdRef.current !== user.id
+      ) {
+        return;
+      }
 
       const closingLote = activeLoteRef.current;
       setWonLote({
@@ -207,7 +180,7 @@ export function SalaPage() {
   // Fin del remate (Módulo de lotes desiertos): el comprador no debe quedar
   // indefinidamente en una sala que ya terminó -- toast informativo y, tras una
   // pequeña transición, redirección suave al listado de remates. `remate.finished` ya
-  // actualiza el badge de estado en `SalaHeader` vía `reducer.ts`; acá solo se agrega
+  // actualiza el badge de estado en `SalaRoomHeader` vía `reducer.ts`; acá solo se agrega
   // el aviso + la salida de la sala.
   const finishRedirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -230,8 +203,7 @@ export function SalaPage() {
 
   if (snapshotError || !snapshot) {
     return (
-      <div className="mx-auto flex w-full max-w-[85rem] flex-col gap-6 font-display">
-        <FloatingNotificationBell />
+      <div className="mx-auto flex w-full max-w-[110rem] flex-col gap-6 px-3 py-8 font-display sm:px-6 lg:px-10">
         <Alert variant="error">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{snapshotError?.message ?? 'No se pudo cargar la sala de este remate.'}</span>
@@ -266,65 +238,54 @@ export function SalaPage() {
   const guaranteeRequired = Boolean(remate.settings.guarantee_required);
   const guaranteeAmount = remate.settings.guarantee_amount;
   // El gate solo aplica a un comprador autenticado -- un visitante anónimo/rematador/
-  // admin ya ve el botón de ofertar deshabilitado por otro motivo (rol), y `GarantiaGate`
-  // dispararía un 401 si se montara sin sesión.
-  const showGarantiaGate = guaranteeRequired && user?.role === 'comprador';
+  // admin ya ve el botón de ofertar deshabilitado por otro motivo (rol), y el fetch de
+  // la garantía daría 401 si se disparara sin sesión.
+  const isGarantiaGateRelevant = guaranteeRequired && user?.role === 'comprador';
   const hasRequiredGuarantee = !guaranteeRequired || garantiaStatus === 'active';
+  // Derivado directo de `winningOffer.buyer_id` (ver comentario más arriba, junto a
+  // `winningBuyerIdRef`) -- se recalcula solo en cada render, así que sobrevive tanto a
+  // una recarga de página como a una reconexión del WebSocket sin depender de haber
+  // recibido un evento en vivo mientras la pestaña estuvo abierta.
+  const isLeadingBidder = Boolean(winningOffer && user && winningOffer.buyer_id === user.id);
 
   return (
-    <div className="mx-auto flex w-full max-w-[85rem] flex-col gap-4 font-display">
+    <div className="min-h-screen bg-white font-display text-ink">
       <LoteWonOverlay wonLote={wonLote} onContinue={() => setWonLote(null)} />
 
-      <SalaHeader
+      <SalaRoomHeader
         remate={remate}
         connectedUsers={snapshot.connected_users}
         connectionStatus={connectionStatus}
-        notifications={isAuthenticated ? <NotificationBell /> : null}
+        backTo={`/remates/${remate.id}`}
       />
 
-      {showGarantiaGate && guaranteeAmount && (
-        <GarantiaGate
+      {/* Diálogo de la garantía, montado una sola vez por la página y abierto desde el
+       * botón "Construir garantía" del `PlaceBidButton` (ya no hay card arriba de la
+       * sala que lo anuncie y lo dispare -- pedido explícito). */}
+      {isGarantiaGateRelevant && guaranteeAmount && (
+        <GarantiaModal
+          isOpen={isGarantiaModalOpen}
+          onClose={() => setIsGarantiaModalOpen(false)}
           remateId={remate.id}
           amount={guaranteeAmount}
           currency={currency}
-          onStatusChange={setGarantiaStatus}
+          onResolved={reportGarantia}
         />
       )}
 
-      {/* Rediseño visual (ver prototipo aprobado): columna izquierda -- solo identidad
-       * del lote (imagen/título/descripción, `ActiveLotePanel`); precio + formulario de
-       * ofertar (`SalaBidPanel`) e historial/chat (`SalaSidePanel`, con pestañas) ahora
-       * viven juntos en el sidebar derecho, ya no repartidos entre `ActiveLotePanel` y
-       * un stack separado. `gap-14` (56px, igual que el prototipo aprobado): sin la
-       * "card" de `ActiveLotePanel` que antes delimitaba visualmente la columna, hace
-       * falta más aire entre columnas para que sigan leyéndose como dos bloques
-       * distintos -- y de paso dejar más espacio para precio/historial/chat, en vez de
-       * que la imagen ocupe todo el ancho disponible. */}
-      <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1fr_380px] xl:gap-14">
-        <div className="flex min-w-0 flex-col">
-          {activeLote ? (
-            <ActiveLotePanel lote={activeLote} />
-          ) : (
-            <EmptyState
-              icon={<GavelIcon className="h-10 w-10" />}
-              title="No hay ningún lote abierto en este momento"
-              description="El martillero todavía no abrió un lote para ofertar. Volvé a intentar en unos minutos."
-              action={
-                <Button variant="secondary" onClick={reloadSnapshot}>
-                  Actualizar
-                </Button>
-              }
-            />
-          )}
-        </div>
+      {/* Tres columnas desde `xl:`: el lote, la mesa de ofertas y el chat. El chat ocupa
+       * las dos filas de la grilla y su contenido queda pegado (`sticky`) al borde de la
+       * pantalla mientras el resto de la página scrollea por al lado; los próximos lotes
+       * ocupan la segunda fila de las dos primeras columnas. */}
+      <div className="grid grid-cols-1 border-b border-line xl:grid-cols-[minmax(0,1.5fr)_minmax(23rem,1fr)_minmax(20rem,0.85fr)]">
+        <SalaLoteColumn remate={remate} lote={activeLote} onReload={reloadSnapshot} />
 
-        {/* Precio/ofertar solo con lote activo (igual que antes: `PlaceBidButton` nunca
-         * se mostraba sin un lote abierto) + historial/chat, siempre visibles. Mismo
-         * `top-4`/`calc(100vh-2rem)` de siempre -- tunado para el `Header` global oculto
-         * acá (`useFocusMode(true)`). */}
-        <div className="flex flex-col gap-6 xl:sticky xl:top-4 xl:h-[calc(100vh-2rem)]">
-          {activeLote && (
-            <>
+        <section
+          aria-label="Mesa de ofertas"
+          className="flex flex-col bg-brand-50/40 xl:border-l xl:border-line"
+        >
+          {activeLote ? (
+            <div className="p-4 xl:p-5">
               <SalaBidPanel
                 remateId={remate.id}
                 lote={activeLote}
@@ -334,38 +295,57 @@ export function SalaPage() {
                 viewerRole={user?.role}
                 isLeadingBidder={isLeadingBidder}
                 hasRequiredGuarantee={hasRequiredGuarantee}
+                onBuildGuarantee={
+                  isGarantiaGateRelevant && guaranteeAmount ? () => setIsGarantiaModalOpen(true) : undefined
+                }
               />
-              <hr className="border-t border-line" />
-            </>
+            </div>
+          ) : (
+            <p className="p-4 text-ink-muted xl:p-5">
+              Cuando el martillero abra un lote, el precio y el formulario para ofertar aparecen acá.
+            </p>
           )}
-          {/* Por debajo de `xl:` la columna no tiene alto fijo (`xl:h-[calc(100vh-2rem)]`
-           * recién aplica desde ahí), así que sin un alto propio acá el panel crecía con
-           * la cantidad de mensajes/ofertas que tuviera -- nada de scroll interno, y para
-           * llegar a "Próximos lotes" había que scrollear todo ese alto. `h-[28rem]` fija
-           * el tamaño (~6/7 mensajes de chat visibles) y deja que el scroll interno de
-           * `SalaSidePanel` (`OfferHistoryList`/`ChatPanel`) haga el resto. Desde `xl:` se
-           * vuelve a `h-auto` + `flex-1` para repartirse el alto fijo de la columna, tal
-           * como antes. */}
-          <SalaSidePanel
-            recentOffers={recentOffers}
-            currency={currency}
-            remateId={remate.id}
-            subscribeToRealtime={subscribeToRealtime}
-            currentUserId={user?.id}
-            connectedUsers={snapshot.connected_users}
-            className="h-[28rem] min-h-0 xl:h-auto xl:flex-1"
-          />
+          {activeLote && (
+            <SalaRecentOffers
+              recentOffers={recentOffers}
+              winningOffer={winningOffer}
+              currency={currency}
+              currentUserId={user?.id}
+            />
+          )}
+        </section>
+
+        <div className="xl:col-start-3 xl:row-span-2 xl:row-start-1 xl:border-l xl:border-line">
+          <section
+            aria-label="Chat del remate"
+            className="flex h-[32rem] min-h-0 flex-col p-4 xl:sticky xl:top-0 xl:h-screen xl:p-5 xl:pt-4"
+          >
+            <h2 className="mb-3 text-sm font-semibold text-ink">Chat</h2>
+            <ChatPanel
+              remateId={remate.id}
+              subscribeToRealtime={subscribeToRealtime}
+              currentUserId={user?.id}
+              connectedUsers={snapshot.connected_users}
+              canModerate={false}
+              chrome="flat"
+              className="min-h-0 flex-1"
+            />
+          </section>
+        </div>
+
+        <div className="border-t border-line px-4 pb-28 pt-10 xl:col-span-2 xl:col-start-1 xl:row-start-2 xl:px-5 xl:pb-16">
+          <SalaUpcomingGrid lotes={upcomingLotes} isLoading={isUpcomingLotesLoading} currency={currency} />
         </div>
       </div>
 
-      <div className="flex flex-col gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Próximos lotes</h2>
-        {isUpcomingLotesLoading ? (
-          <Skeleton className="h-32 w-full rounded-xl" />
-        ) : (
-          <UpcomingLotesStrip lotes={upcomingLotes} />
-        )}
-      </div>
+      {activeLote && (
+        <SalaMobileBidBar
+          lote={activeLote}
+          winningOffer={winningOffer}
+          currency={currency}
+          isLeadingBidder={isLeadingBidder}
+        />
+      )}
     </div>
   );
 }

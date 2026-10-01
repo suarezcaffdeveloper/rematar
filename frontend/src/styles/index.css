@@ -146,6 +146,55 @@ body {
 }
 
 /*
+ * Inicio del comprador (vistas previas `/preview-inicio-a` y `/preview-inicio-b`):
+ * cinta de ofertas que corre sin fin (el contenido se renderiza dos veces, por eso el
+ * recorrido es -50%) y barra de progreso del escenario que rota los remates en vivo.
+ */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 48s linear infinite;
+}
+
+/* Lote recién creado en la galería de preparación: entra con una escala corta para que se
+ * note dónde quedó (ver `LoteCatalogCard`, prop `isNew`). */
+@keyframes lote-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-lote-pop {
+  animation: lote-pop 800ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes stage-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.animate-stage-progress {
+  animation: stage-progress var(--stage-duration, 8s) linear forwards;
+  transform-origin: left;
+}
+
+/*
  * Accesibilidad (Épica 9, Etapa 7 -- rediseño, accesibilidad final): respeta
  * `prefers-reduced-motion`, el ajuste de sistema operativo para usuarios sensibles al
  * movimiento (mareo, migrañas, trastornos vestibulares). Recorta virtualmente a cero la

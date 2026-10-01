@@ -106,7 +106,7 @@ function buildPayload(values: FormValues): BotProfileFormPayload {
 
 /**
  * Formulario de bot simulador, crear y editar -- mismo lenguaje visual que
- * `LoteFormModal`/`RemateFormModal` (Input/Select/Switch/Modal ya compartidos), pero sin
+ * `LoteDrawer`/`RemateFormModal` (Input/Select/Switch/Modal ya compartidos), pero sin
  * ningún manejo de imágenes: un bot no tiene galería.
  */
 export function BotProfileFormModal({ isOpen, onClose, bot, onSaved }: BotProfileFormModalProps) {

@@ -87,6 +87,11 @@ export interface Remate {
   category: RemateCategory;
   cover_image_url: string | null;
   location: string | null;
+  // Transmisión en vivo embebida (solo YouTube por ahora): el backend guarda únicamente el
+  // ID del video, nunca la URL cruda -- ver `features/sala/components/StreamEmbed.tsx`.
+  // Opcionales a nivel de tipo por el mismo motivo que `rematador_id` (fixtures existentes).
+  stream_provider?: string | null;
+  stream_video_id?: string | null;
   starts_at: string | null;
   ends_at: string | null;
   status: RemateStatus;

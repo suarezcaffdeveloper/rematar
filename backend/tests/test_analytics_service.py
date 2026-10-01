@@ -5,7 +5,7 @@ por HTTP) contra Postgres y Redis reales -- mismo criterio y mismos helpers que
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -15,13 +15,15 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.analytics.repository import AnalyticsRepository
-from app.analytics.service import AnalyticsService
+from app.analytics.service import MAX_TIMED_TIMELINE_HOURS, AnalyticsService
 from app.audit.repository import AuditLogRepository
 from app.core.config import get_settings
 from app.core.exceptions import ForbiddenError, NotFoundError
 from app.core.security import hash_password
 from app.events.base import DomainEvent
+from app.modules.ofertas.models import Oferta
 from app.modules.remates.lotes.repository import LoteRepository
+from app.modules.remates.models import Remate, RemateAuctionType
 from app.modules.remates.repository import RemateRepository
 from app.modules.remates.service import RemateService
 from app.modules.users.models import User, UserRole
@@ -355,3 +357,85 @@ async def test_build_serves_cached_aggregates_within_ttl(
 
     second = await service.build(uuid.UUID(remate["id"]), owner)
     assert second.total_ofertas == 1, "se esperaba servir los agregados cacheados"
+
+
+# --- Timeline de ofertas: granularidad según `auction_type` ------------------------------
+
+
+async def _mark_timed(
+    db_session: AsyncSession, remate_id: str, *, starts_at: datetime, ends_at: datetime
+) -> None:
+    """Convierte un remate (creado/armado como LIVE, más simple de llevar a través del
+    flujo de apertura/oferta vía HTTP) en TIMED directamente en la base, con un rango de
+    fechas arbitrario -- `AnalyticsService._resolve_timeline_window` solo lee
+    `auction_type`/`starts_at`/`ends_at` del `Remate`, no depende de cómo se llegó a ese
+    estado ni de `remate.status`, así que este atajo alcanza para probarlo sin tener que
+    reproducir todo el ciclo de vida automático de un TIMED real
+    (`TimedAuctionLifecycleScheduler`)."""
+    remate = await db_session.get(Remate, remate_id)
+    assert remate is not None
+    remate.auction_type = RemateAuctionType.TIMED
+    remate.starts_at = starts_at
+    remate.ends_at = ends_at
+    await db_session.commit()
+
+
+async def test_build_for_timed_remate_uses_hourly_granularity_across_the_full_window(
+    client: AsyncClient, db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    owner_id, owner_token = await _owner(client, "an-svc7@example.com")
+    _, buyer_token = await _buyer(client, "an-svc7-buyer@example.com")
+    remate = await _create_remate(client, owner_token)
+    lote = await _create_lote(client, owner_token, remate["id"])
+    await _start_remate(client, owner_token, remate["id"])
+    await _open_lote(client, owner_token, remate["id"], lote["id"])
+
+    # Una oferta de hace 2 días, una de ayer, una de ahora -- el timeline por minuto
+    # (ventana de 20 min) las perdería a todas menos la última.
+    old_bid = await _bid(client, buyer_token, remate["id"], lote["id"], "1000.00")
+    old_row = await db_session.get(Oferta, old_bid["id"])
+    old_row.created_at = datetime.now(UTC) - timedelta(days=2, hours=1)
+    yesterday_bid = await _bid(client, buyer_token, remate["id"], lote["id"], "1500.00")
+    yesterday_row = await db_session.get(Oferta, yesterday_bid["id"])
+    yesterday_row.created_at = datetime.now(UTC) - timedelta(days=1)
+    await db_session.commit()
+    await _bid(client, buyer_token, remate["id"], lote["id"], "2000.00")
+
+    await _mark_timed(
+        db_session,
+        remate["id"],
+        starts_at=datetime.now(UTC) - timedelta(days=3),
+        ends_at=datetime.now(UTC) + timedelta(days=2),
+    )
+    owner = await _fetch_user(db_engine, owner_id)
+
+    service = _make_service(db_session)
+    snapshot = await service.build(uuid.UUID(remate["id"]), owner)
+
+    assert snapshot.bids_timeline_granularity == "hour"
+    # El rango transcurrido son ~3 días (72h) desde `starts_at` hasta ahora -- muy por
+    # encima de lo que cabría en una ventana de 20 minutos, y cubre las 3 ofertas.
+    assert len(snapshot.bids_timeline) > 48
+    assert sum(bucket.count for bucket in snapshot.bids_timeline) == 3
+
+
+async def test_build_clamps_the_timeline_window_for_an_excessively_long_timed_remate(
+    client: AsyncClient, db_session: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    owner_id, owner_token = await _owner(client, "an-svc8@example.com")
+    remate = await _create_remate(client, owner_token)
+    await _mark_timed(
+        db_session,
+        remate["id"],
+        starts_at=datetime.now(UTC) - timedelta(days=60),
+        ends_at=datetime.now(UTC) + timedelta(days=1),
+    )
+    owner = await _fetch_user(db_engine, owner_id)
+
+    service = _make_service(db_session)
+    snapshot = await service.build(uuid.UUID(remate["id"]), owner)
+
+    assert snapshot.bids_timeline_granularity == "hour"
+    # El rango real pedido (60 días) supera el tope defensivo -- se recorta a
+    # `MAX_TIMED_TIMELINE_HOURS`, no a los 60 días completos.
+    assert len(snapshot.bids_timeline) <= MAX_TIMED_TIMELINE_HOURS + 1

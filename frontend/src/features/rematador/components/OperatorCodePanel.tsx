@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Check, Copy, KeyRound, RefreshCcw } from 'lucide-react';
+import clsx from 'clsx';
+import { Check, Copy, Gavel, KeyRound, RefreshCcw, X } from 'lucide-react';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
@@ -10,18 +11,30 @@ import type { Remate } from '../../remates/types';
 
 export interface OperatorCodePanelProps {
   remate: Remate;
+  /** 'card' (default): franja horizontal de siempre, con su propio fondo/borde de marca
+   * -- la usan los estados no operativos (`ConsolaOperativaPage`, remate todavía en
+   * borrador/programado). 'popover': layout vertical angosto, sin fondo/borde propio --
+   * pensado para vivir DENTRO del globito naranja que abre `ConsolaQuickPanels`
+   * (Consola en vivo/pausada), que ya pone el marco, la sombra y la puntita. */
+  variant?: 'card' | 'popover';
+  /** Solo con `variant="popover"`: cierra el globito (la X del encabezado). */
+  onClose?: () => void;
 }
 
 interface InlineCopyFieldProps {
   label: string;
   value: string;
   successMessage: string;
+  /** Borde del campo -- `border-brand-200` en la franja de siempre, neutro en el
+   * globito naranja (el color del globito ya lo lleva el encabezado, no hace falta
+   * repetirlo en cada campo). */
+  toneClassName: string;
 }
 
 /** Un dato copiable inline -- ID de remate y código de acceso comparten la misma
  * interacción (copiar al portapapeles, ícono que confirma un instante), así que se
  * resuelve una sola vez acá en vez de duplicar el manejo de estado. */
-function InlineCopyField({ label, value, successMessage }: InlineCopyFieldProps) {
+function InlineCopyField({ label, value, successMessage, toneClassName }: InlineCopyFieldProps) {
   const [justCopied, setJustCopied] = useState(false);
 
   async function handleCopy() {
@@ -37,14 +50,14 @@ function InlineCopyField({ label, value, successMessage }: InlineCopyFieldProps)
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-brand-200 bg-white px-2.5 py-1.5">
-      <span className="text-[11px] font-semibold text-ink-faint">{label}</span>
-      <code className="text-[13px] font-semibold text-ink">{value}</code>
+    <div className={clsx('flex items-center gap-2 rounded-lg border bg-white px-2.5 py-1.5', toneClassName)}>
+      <span className="shrink-0 text-[11px] font-semibold text-ink-faint">{label}</span>
+      <code className="truncate text-[13px] font-semibold text-ink">{value}</code>
       <button
         type="button"
         onClick={() => void handleCopy()}
         aria-label={`Copiar ${label.toLowerCase()}`}
-        className="rounded p-0.5 text-ink-faint transition-colors hover:bg-slate-100 hover:text-ink-muted"
+        className="ml-auto shrink-0 rounded p-0.5 text-ink-faint transition-colors hover:bg-slate-100 hover:text-ink-muted"
       >
         {justCopied ? (
           <Check aria-hidden="true" className="h-3.5 w-3.5 text-success-600" />
@@ -94,8 +107,13 @@ function EmptyCodeField() {
  * que además revoca al operador ya asignado (confirmación explícita antes de hacerlo si
  * ya había uno, para no cortarle el acceso a alguien en medio de un remate en vivo por
  * accidente).
+ *
+ * `variant="popover"` (diseño aprobado, Consola en vivo/pausada): mismo componente,
+ * mismos handlers/estado -- solo cambia el marco visual, de la franja horizontal de
+ * siempre a un layout vertical angosto (badge/label/campos apilados) sin fondo/borde
+ * propio, para vivir dentro del globito naranja de `ConsolaQuickPanels`.
  */
-export function OperatorCodePanel({ remate }: OperatorCodePanelProps) {
+export function OperatorCodePanel({ remate, variant = 'card', onClose }: OperatorCodePanelProps) {
   const [rematadorId, setRematadorId] = useState(remate.rematador_id ?? null);
   const [lastCode, setLastCode] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -140,6 +158,125 @@ export function OperatorCodePanel({ remate }: OperatorCodePanelProps) {
     }
   }
 
+  const isPopover = variant === 'popover';
+  const fieldTone = isPopover ? 'border-line' : 'border-brand-200';
+
+  const statusBadge =
+    rematadorId ? (
+      <Badge variant="success">Operador asignado</Badge>
+    ) : lastCode ? (
+      <Badge variant="brand">Código listo</Badge>
+    ) : (
+      <Badge variant="warning">Falta generar</Badge>
+    );
+
+  const generateButton = (
+    <Button
+      variant={isPopover ? 'warning-outline' : 'ink-outline'}
+      className={isPopover ? 'flex-1 !gap-1.5 !px-2.5 !py-1.5 text-xs' : '!gap-1.5 !px-2.5 !py-1.5 text-xs'}
+      onClick={handleGenerateClick}
+      isLoading={isGenerating}
+    >
+      <RefreshCcw aria-hidden="true" className="h-3.5 w-3.5" />
+      {rematadorId || lastCode ? 'Regenerar código' : 'Generar código'}
+    </Button>
+  );
+
+  const copyBothButton = (
+    <Button
+      variant={isPopover ? 'warning' : 'primary'}
+      className={isPopover ? 'flex-1 !gap-1.5 !px-2.5 !py-1.5 text-xs' : '!gap-1.5 !px-2.5 !py-1.5 text-xs'}
+      onClick={() => void handleCopyBoth()}
+      disabled={!lastCode}
+    >
+      {justCopiedBoth ? (
+        <>
+          <Check aria-hidden="true" className="h-3.5 w-3.5" />
+          ¡Copiado!
+        </>
+      ) : (
+        <>
+          <Copy aria-hidden="true" className="h-3.5 w-3.5" />
+          Copiar datos
+        </>
+      )}
+    </Button>
+  );
+
+  const confirmModal = (
+    <ConfirmModal
+      isOpen={confirmRegenerate}
+      onClose={() => setConfirmRegenerate(false)}
+      onConfirm={() => {
+        setConfirmRegenerate(false);
+        void generate();
+      }}
+      variant="danger"
+      title="Regenerar código de operador"
+      message="Ya hay un martillero asignado. Regenerar el código lo desvincula de este remate de inmediato -- vas a tener que darle el código nuevo para que vuelva a entrar."
+      confirmLabel="Regenerar de todos modos"
+    />
+  );
+
+  if (isPopover) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] bg-warning-100">
+              <Gavel aria-hidden="true" className="h-3.5 w-3.5 text-warning-800" strokeWidth={2.2} />
+            </span>
+            <span className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">Datos para el martillero</span>
+          </div>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar datos para el martillero"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-warning-50 hover:text-warning-700"
+            >
+              <X aria-hidden="true" className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {statusBadge}
+
+        <div className="flex flex-col gap-2">
+          <InlineCopyField
+            label="ID del remate"
+            value={remate.id}
+            successMessage="ID del remate copiado."
+            toneClassName={fieldTone}
+          />
+          {lastCode ? (
+            <InlineCopyField
+              label="Código de acceso"
+              value={lastCode}
+              successMessage="Código copiado."
+              toneClassName={fieldTone}
+            />
+          ) : (
+            <EmptyCodeField />
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          {generateButton}
+          {copyBothButton}
+        </div>
+
+        {lastCode && (
+          <p className="text-xs text-ink-faint">
+            El código no se va a volver a mostrar una vez que salgas de esta pantalla -- copialo ahora.
+          </p>
+        )}
+
+        {confirmModal}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5">
       <div className="flex items-center gap-2.5">
@@ -149,53 +286,21 @@ export function OperatorCodePanel({ remate }: OperatorCodePanelProps) {
         <span className="text-[11px] font-bold uppercase tracking-wide text-ink-muted">Datos para el martillero</span>
       </div>
 
-      {rematadorId ? (
-        <Badge variant="success">Operador asignado</Badge>
-      ) : lastCode ? (
-        <Badge variant="brand">Código listo</Badge>
-      ) : (
-        <Badge variant="warning">Falta generar</Badge>
-      )}
+      {statusBadge}
 
       <span aria-hidden="true" className="h-7 w-px shrink-0 bg-brand-200" />
 
-      <InlineCopyField label="ID del remate" value={remate.id} successMessage="ID del remate copiado." />
+      <InlineCopyField label="ID del remate" value={remate.id} successMessage="ID del remate copiado." toneClassName={fieldTone} />
 
       {lastCode ? (
-        <InlineCopyField label="Código de acceso" value={lastCode} successMessage="Código copiado." />
+        <InlineCopyField label="Código de acceso" value={lastCode} successMessage="Código copiado." toneClassName={fieldTone} />
       ) : (
         <EmptyCodeField />
       )}
 
       <div className="ml-auto flex items-center gap-2">
-        <Button
-          variant="ink-outline"
-          className="!gap-1.5 !px-2.5 !py-1.5 text-xs"
-          onClick={handleGenerateClick}
-          isLoading={isGenerating}
-        >
-          <RefreshCcw aria-hidden="true" className="h-3.5 w-3.5" />
-          {rematadorId || lastCode ? 'Regenerar código' : 'Generar código'}
-        </Button>
-
-        <Button
-          variant="primary"
-          className="!gap-1.5 !px-2.5 !py-1.5 text-xs"
-          onClick={() => void handleCopyBoth()}
-          disabled={!lastCode}
-        >
-          {justCopiedBoth ? (
-            <>
-              <Check aria-hidden="true" className="h-3.5 w-3.5" />
-              ¡Copiado!
-            </>
-          ) : (
-            <>
-              <Copy aria-hidden="true" className="h-3.5 w-3.5" />
-              Copiar datos
-            </>
-          )}
-        </Button>
+        {generateButton}
+        {copyBothButton}
       </div>
 
       {lastCode && (
@@ -205,18 +310,7 @@ export function OperatorCodePanel({ remate }: OperatorCodePanelProps) {
         </p>
       )}
 
-      <ConfirmModal
-        isOpen={confirmRegenerate}
-        onClose={() => setConfirmRegenerate(false)}
-        onConfirm={() => {
-          setConfirmRegenerate(false);
-          void generate();
-        }}
-        variant="danger"
-        title="Regenerar código de operador"
-        message="Ya hay un martillero asignado. Regenerar el código lo desvincula de este remate de inmediato -- vas a tener que darle el código nuevo para que vuelva a entrar."
-        confirmLabel="Regenerar de todos modos"
-      />
+      {confirmModal}
     </div>
   );
 }

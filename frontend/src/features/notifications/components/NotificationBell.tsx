@@ -13,6 +13,15 @@ const RECENT_COUNT = 8;
 
 const ARROW_KEYS = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
 
+export interface NotificationBellProps {
+  /** `'pill'`: disparador redondo de 40px y panel más redondeado, para la barra flotante
+   * `BuyerTopNav`. `'default'` (sin cambios): el que usa `Header`. */
+  variant?: 'default' | 'pill';
+  /** Avisa cuando el panel se abre o se cierra -- `BuyerTopNav` lo usa para mantener
+   * abierta la barra mientras el panel está desplegado. */
+  onOpenChange?: (open: boolean) => void;
+}
+
 /**
  * Campana de notificaciones (Épica 9, Etapa 3 -- rediseño), montada una única vez en
  * `Header`. Primer consumo real del Notification Service (Épica 7.5) desde el
@@ -25,7 +34,7 @@ const ARROW_KEYS = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
  * tratamiento que `DropdownMenu` -- ↑/↓/Home/End recorren las filas, Escape cierra y
  * devuelve el foco a la campana.
  */
-export function NotificationBell() {
+export function NotificationBell({ variant = 'default', onOpenChange }: NotificationBellProps = {}) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -33,6 +42,17 @@ export function NotificationBell() {
   const { unreadCount, reload: reloadUnreadCount } = useUnreadNotificationCount();
   const { data, isLoading, markAsRead, markAllAsRead } = useNotifications(RECENT_COUNT);
   const { user } = useAuth();
+  const isPill = variant === 'pill';
+
+  // Ref en vez de dependencia: solo importa el cambio de `isOpen`, no que el padre pase un
+  // callback nuevo en cada render.
+  const onOpenChangeRef = useRef(onOpenChange);
+  useEffect(() => {
+    onOpenChangeRef.current = onOpenChange;
+  });
+  useEffect(() => {
+    onOpenChangeRef.current?.(isOpen);
+  }, [isOpen]);
 
   function close(restoreFocus: boolean) {
     setIsOpen(false);
@@ -101,11 +121,19 @@ export function NotificationBell() {
         aria-label="Notificaciones"
         aria-haspopup="true"
         aria-expanded={isOpen}
-        className="relative rounded-md p-2 text-ink-muted transition-colors hover:bg-surface-subtle hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        className={clsx(
+          'relative text-ink-muted transition-colors hover:bg-surface-subtle hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
+          isPill ? 'flex h-10 w-10 items-center justify-center rounded-full' : 'rounded-md p-2',
+        )}
       >
-        <Bell aria-hidden="true" className="h-5 w-5" />
+        <Bell aria-hidden="true" className={isPill ? 'h-[18px] w-[18px]' : 'h-5 w-5'} />
         {unreadCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-500 px-1 text-[10px] font-semibold text-white">
+          <span
+            className={clsx(
+              'absolute flex h-4 min-w-4 items-center justify-center rounded-full bg-danger-500 px-1 text-[10px] font-semibold text-white',
+              isPill ? 'right-1.5 top-1.5 ring-2 ring-white' : '-right-0.5 -top-0.5',
+            )}
+          >
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -116,7 +144,12 @@ export function NotificationBell() {
           ref={panelRef}
           role="region"
           aria-label="Notificaciones"
-          className="absolute right-0 z-20 mt-2 w-80 rounded-lg border border-line bg-white shadow-lg"
+          className={clsx(
+            'absolute right-0 border border-line bg-white',
+            isPill
+              ? 'z-50 mt-3 w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl shadow-xl'
+              : 'z-20 mt-2 w-80 rounded-lg shadow-lg',
+          )}
         >
           <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
             <span className="text-sm font-semibold text-ink">Notificaciones</span>

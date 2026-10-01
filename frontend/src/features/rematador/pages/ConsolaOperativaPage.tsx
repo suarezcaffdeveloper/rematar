@@ -25,6 +25,7 @@ import { ConsolaSidebar } from '../components/ConsolaSidebar';
 import { ConsolaUpcomingLotesPanel } from '../components/ConsolaUpcomingLotesPanel';
 import { OperatorCodePanel } from '../components/OperatorCodePanel';
 import { PrivateAccessPanel } from '../components/PrivateAccessPanel';
+import { StreamPanel } from '../components/StreamPanel';
 
 const NOT_OPERATIONAL_MESSAGES: Partial<Record<RemateStatus, string>> = {
   draft: 'El remate todavía está en borrador. Programalo desde el dashboard antes de operarlo acá.',
@@ -82,21 +83,27 @@ function ConsolaSkeleton() {
  * el ancho, arriba del `EmptyState`, como cualquier encabezado de página normal. "Próximos
  * lotes" sigue pegado contra el borde derecho del chat en vez de estirarse a todo el ancho
  * de la pantalla (pedido explícito: aprovechar el espacio en blanco que deja el chat, más
- * alto, en vez de repetir una franja a ancho completo). Solo la columna de
- * `ConsolaSidebar` queda `sticky` (ver ese componente) -- se mantiene fija en pantalla
- * mientras se hace scroll hacia "Próximos lotes"/analítica más abajo; el grupo izquierdo
- * se va con el scroll normalmente, ya que su contenido ya entra completo arriba. Ese
- * wrapper también lleva `xl:self-stretch` (el grid usa `items-start` por default, así
- * que sin esto el wrapper del sidebar solo mide lo que pide su propio contenido) --
- * pedido explícito: oferta+chat tienen que ocupar todo el alto de la celda del grid
- * (que normalmente es la del grupo izquierdo, más alto), no quedar más bajos y dejar un
- * hueco en blanco antes de la analítica; el reparto de ese alto entre la oferta (fija) y
- * el chat (lo que sobra) se resuelve dentro de `ConsolaSidebar`. Por
- * debajo de `xl:` las clases `col-start`/`row-start`/`row-span` no aplican, así que todo
- * cae de vuelta al orden natural del DOM en una sola columna (`grid-cols-1`): header,
- * lote + control, próximos lotes, sidebar. "Analítica en tiempo real" sigue debajo del
- * grid principal, a todo el ancho -- información secundaria, no necesita competir por el
- * mismo alto de pantalla.
+ * alto, en vez de repetir una franja a ancho completo). De la columna de `ConsolaSidebar`,
+ * el bloque de ofertas recientes + pestañas (chat/conectados/moderación) queda `sticky`
+ * con su alto natural (ver `ConsolaSidebar` -- el `xl:h-[calc(100vh-2rem)]` de la Sala del
+ * comprador NO aplica acá: este bloque arranca debajo de la botonera, no en el tope de la
+ * página, y con alto fijo de pantalla no tenía espacio para bajar): baja junto con el
+ * scroll hasta que su borde superior toca el tope de la pantalla (donde estaban los
+ * botones, que ya se fueron), y frena solo al llegar al final de su propia celda del grid
+ * -- justo donde empieza la sección de "Analítica en tiempo real", que vive debajo del
+ * grid (pedido explícito de la vista de la empresa: "la empresa debería ver eso
+ * siempre... hasta que choquen con la parte de análisis"). El header y la botonera
+ * "Transmisión"/"Martillero" (`ConsolaQuickPanels`, primer elemento de esa columna), en
+ * cambio, ya NO son `sticky`: quedan arriba y se van con el scroll. La celda del sidebar
+ * ya NO lleva `xl:self-stretch` (antes lo necesitaba la botonera sticky para tener caja de
+ * sobra donde "viajar" hasta el final de la columna izquierda): ahora la caja contenida es
+ * justamente lo que acota el recorrido del bloque sticky de ofertas+chat -- sin
+ * `self-stretch` deja de bajar donde termina su propio contenido, no más allá. Por debajo
+ * de `xl:` las clases `col-start`/`row-start`/`row-span` no aplican, así que todo cae de
+ * vuelta al orden natural del DOM en una sola columna (`grid-cols-1`): header, lote +
+ * control, próximos lotes, sidebar (nada sticky ahí: todas las clases nuevas también son
+ * `xl:`-only). "Analítica en tiempo real" sigue debajo del grid principal, a todo el
+ * ancho -- información secundaria, no necesita competir por el mismo alto de pantalla.
  *
  * Reemplaza la ruta `/remates/:remateId/gestionar` que hasta ahora mostraba
  * `GestionRematePlaceholderPage` (Épica 5.1) -- mismo patrón que la Sala reemplazó su
@@ -130,13 +137,14 @@ function ConsolaSkeleton() {
  * para que el rematador operador asignado pueda de verdad seleccionar/iniciar bots, no
  * solo la empresa dueña.
  *
- * `OperatorCodePanel` ("Datos para el rematador") se renderiza antes que cualquier otra
- * cosa en la página -- fuera de los dos branches de `isOperational`, no dentro de
- * ninguno -- para que sea lo primero que ve la empresa dueña al entrar (`showOperatorCodePanel`),
- * incluso mientras el remate todavía está en borrador/programado, cuando el resto de la
- * página solo muestra el `EmptyState` de "esta consola es para remates en vivo": la idea
- * es que pueda dejar el operador asignado con anticipación, no recién una vez que ya
- * arrancó el remate en vivo.
+ * `OperatorCodePanel` ("Datos para el rematador") y `StreamPanel` ("Transmisión en
+ * vivo") solo se renderizan acá arriba, a todo lo ancho, mientras el remate NO está
+ * operativo (`!isOperational` -- borrador/programado, sin sidebar de chat/ofertas al
+ * que anclar un botón): la idea sigue siendo que la empresa pueda dejar el operador
+ * asignado con anticipación, antes de que arranque el remate en vivo. Una vez operativo
+ * (`live`/`paused`), estas dos cards a todo lo ancho desaparecen -- pasan a ser los dos
+ * botones plegables de `ConsolaQuickPanels` (diseño aprobado, "Transmisión"/
+ * "Martillero"), dentro de `ConsolaSidebar`, a la misma altura que `ConsolaHeader`.
  */
 export function ConsolaOperativaPage() {
   const { remateId } = useParams<{ remateId: string }>();
@@ -247,10 +255,15 @@ function LiveConsolaOperativaPage() {
     remate.status !== 'finished' &&
     remate.status !== 'cancelled';
 
+  // La transmisión la cargan tanto la empresa dueña como el rematador asignado (el backend
+  // permite ambos: `set_stream` usa `get_operator_or_raise`) -- el que esté frente al vivo.
+  const showStreamPanel = remate.status !== 'finished' && remate.status !== 'cancelled';
+
   return (
     <div className="flex flex-col gap-4 font-display">
-      {showOperatorCodePanel && <OperatorCodePanel remate={remate} />}
+      {!isOperational && showOperatorCodePanel && <OperatorCodePanel remate={remate} />}
       {showPrivateAccessPanel && <PrivateAccessPanel remate={remate} />}
+      {!isOperational && showStreamPanel && <StreamPanel remate={remate} onChange={reload} />}
 
       {!isOperational ? (
         <>
@@ -319,7 +332,11 @@ function LiveConsolaOperativaPage() {
               />
             </div>
 
-            <div className="xl:col-start-2 xl:row-start-1 xl:row-span-2 xl:self-stretch">
+            {/* Sin `xl:self-stretch` a propósito (ver el comentario del layout arriba):
+             * la caja contenida de esta celda es lo que acota el recorrido del bloque
+             * sticky de ofertas+chat de `ConsolaSidebar` -- deja de bajar al chocar con
+             * la sección de analítica, que vive debajo del grid. */}
+            <div className="xl:col-start-2 xl:row-start-1 xl:row-span-2">
               <ConsolaSidebar
                 remateId={remate.id}
                 subscribeToRealtime={subscribeToRealtime}
@@ -328,6 +345,9 @@ function LiveConsolaOperativaPage() {
                 winningOffer={winningOffer}
                 recentOffers={recentOffers}
                 currency={currency}
+                remate={remate}
+                isOwner={isOwner}
+                onRemateChange={reload}
               />
             </div>
           </div>

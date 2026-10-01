@@ -230,6 +230,11 @@ class Remate(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     cover_image_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # Transmisión en vivo embebida (ver `stream.py`): solo el ID del video del proveedor,
+    # nunca la URL cruda. Editable en cualquier estado no terminal vía endpoints propios.
+    stream_provider: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    stream_video_id: Mapped[str | None] = mapped_column(String(11), nullable=True)
+
     # Opcionales en DRAFT; `starts_at` pasa a ser obligatorio recién para programar (ver
     # RemateService.schedule). `ends_at` es siempre opcional (pedido explícito).
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
