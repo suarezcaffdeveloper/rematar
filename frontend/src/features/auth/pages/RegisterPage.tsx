@@ -1,21 +1,54 @@
 import { type FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Building2, CheckCircle2, Eye, EyeOff, Gavel, Lock, Mail, Phone, User } from 'lucide-react';
-import logoRematar from '../../../assets/brand/logo-rematar.png';
+import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
+import { CheckCircle2, Eye, EyeOff, Lock, Mail, Phone, ShieldCheck, User } from 'lucide-react';
 import { useAuthActions } from '../hooks';
 import { normalizeApiError } from '../../../shared/api/errors';
-import { Button } from '../../../shared/components/Button';
-import { Input } from '../../../shared/components/Input';
-import { Alert } from '../../../shared/components/Alert';
+import { STOCK_PHOTOS, type StockPhoto } from '../../../shared/media/stockPhotos';
 import { ROLES_PENDING_APPROVAL, type RegisterableRole } from '../types';
-import { PasswordStrengthMeter } from '../components/PasswordStrengthMeter';
-import { RegisterShowcase } from '../components/RegisterShowcase';
+import { CinematicShell } from '../components/cinematic/CinematicShell';
+import { GlassAlert, GlassField, GlassSubmitButton } from '../components/cinematic/GlassField';
+import { PasswordRules } from '../components/cinematic/PasswordRules';
 
-const ROLE_OPTIONS: { value: RegisterableRole; label: string; description: string; icon: typeof User }[] = [
-  { value: 'comprador', label: 'Comprador', description: 'Quiero ofertar en remates', icon: User },
-  { value: 'empresa', label: 'Empresa', description: 'Quiero organizar remates', icon: Building2 },
-  { value: 'rematador', label: 'Martillero', description: 'Quiero dirigir remates en vivo', icon: Gavel },
+interface RoleOption {
+  value: RegisterableRole;
+  label: string;
+  photo: StockPhoto;
+  /** Titular y ventajas de la columna izquierda: cambian con el rol elegido. */
+  title: string;
+  points: string[];
+}
+
+const ROLE_OPTIONS: RoleOption[] = [
+  {
+    value: 'comprador',
+    label: 'Comprador',
+    photo: STOCK_PHOTOS.vehiculos,
+    title: 'Ofertá en vivo, desde donde estés.',
+    points: [
+      'Seguí los remates en tiempo real',
+      'Ofertá con garantía económica verificada',
+      'Tené todas tus compras en un solo lugar',
+    ],
+  },
+  {
+    value: 'empresa',
+    label: 'Empresa',
+    photo: STOCK_PHOTOS.maquinariaPesada,
+    title: 'Armá tus remates y vendé a todo el país.',
+    points: ['Remates en vivo y por tiempo', 'Lotes con fotos y video', 'Seguimiento de cada venta adjudicada'],
+  },
+  {
+    value: 'rematador',
+    label: 'Martillero',
+    photo: STOCK_PHOTOS.ganado,
+    title: 'Dirigí la sala con el control en tus manos.',
+    points: [
+      'Consola con ofertas y chat en tiempo real',
+      'Control del ritmo lote por lote',
+      'Registro de auditoría de cada acción',
+    ],
+  },
 ];
 
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
@@ -25,19 +58,18 @@ const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
 const PHONE_PATTERN = /^\+?\d{8,15}$/;
 
 /**
- * Pantalla de registro (mismo estilo minimalista sin card que `LoginPage.tsx`): dos
- * columnas a pantalla completa, sin tarjeta ni superposición sobre la imagen -- el
- * formulario vive directo sobre el fondo blanco de su columna, igual que el login.
+ * Pantalla de registro (rediseño "cinematográfico", mismo marco que `LoginPage.tsx` -- ver
+ * `components/cinematic/CinematicShell`): foto a pantalla completa y formulario en un panel
+ * de vidrio. La foto, el titular y las ventajas de la izquierda cambian según el rol elegido.
  * Campos: nombre completo, email, teléfono, contraseña y confirmar contraseña --
  * éste último es puramente de validación (compara contra `password` acá y de nuevo
  * en el backend como defensa en profundidad, ver `UserCreate` en
  * `backend/app/modules/users/schemas.py`) y nunca se persiste en ningún lado, aunque
  * sí viaja en el POST de registro para que el backend pueda revalidarlo.
  *
- * Teléfono/email y contraseña/confirmar contraseña van de a pares en la misma fila
- * (`grid sm:grid-cols-2`) para mantener el formulario compacto en altura pese a tener
- * más campos que el login -- apilados en una sola columna por debajo de `sm` (640px),
- * donde dos columnas dejan muy poco ancho por campo y truncan los placeholders.
+ * Email/teléfono y contraseña/confirmar van de a pares en la misma fila
+ * (`grid sm:grid-cols-2`) para mantener el formulario compacto en altura -- apilados en
+ * una sola columna por debajo de `sm` (640px), donde dos columnas dejan muy poco ancho.
  */
 export function RegisterPage() {
   const { register } = useAuthActions();
@@ -54,10 +86,12 @@ export function RegisterPage() {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isPendingApproval, setIsPendingApproval] = useState(false);
 
+  const currentRole = ROLE_OPTIONS.find((option) => option.value === role) ?? ROLE_OPTIONS[0];
   const isFullNameValid = fullName.trim().length > 1;
   const isEmailValid = EMAIL_PATTERN.test(email);
   const isPhoneValid = PHONE_PATTERN.test(phone.replace(/[\s\-()]/g, ''));
   const passwordsMismatch = confirmPassword.length > 0 && password !== confirmPassword;
+  const validMark = <CheckCircle2 className="h-4 w-4 text-success-400" />;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -91,193 +125,184 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <div className="relative flex w-full flex-col justify-center overflow-hidden bg-white px-6 py-12 sm:px-12 md:w-2/3 lg:w-1/2 lg:px-16 xl:px-20">
-        <div className="pointer-events-none absolute -left-24 -top-24 -z-10 h-72 w-72 rounded-full bg-brand-100/60 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 -right-24 -z-10 h-72 w-72 rounded-full bg-brand-50 blur-3xl" />
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="mx-auto w-full max-w-md"
-        >
-          <Link to="/" className="inline-flex items-center">
-            <img src={logoRematar} alt="RematAR" className="h-9 w-auto" />
+    <CinematicShell
+      size="register"
+      photo={currentRole.photo}
+      photoKey={currentRole.value}
+      headerAction={
+        <p className="text-sm text-white/70">
+          ¿Ya tenés una cuenta?{' '}
+          <Link to="/login" className="font-semibold text-white underline-offset-4 hover:underline">
+            Iniciar sesión
           </Link>
+        </p>
+      }
+      aside={
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentRole.value}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <h2 className="max-w-2xl text-6xl font-semibold leading-[1.02] tracking-[-0.035em] xl:text-7xl">
+              {currentRole.title}
+            </h2>
+            <ul className="mt-10 flex max-w-md flex-col gap-3.5">
+              {currentRole.points.map((point) => (
+                <li key={point} className="flex items-center gap-4 text-[17px] text-white/80">
+                  <span className="h-px w-8 shrink-0 bg-white/50" />
+                  {point}
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+        </AnimatePresence>
+      }
+    >
+      {isPendingApproval ? (
+        <>
+          <h1 className="text-[1.75rem] font-semibold tracking-tight">Cuenta creada</h1>
+          <div className="mt-5">
+            <GlassAlert variant="success">
+              Tu cuenta como {role === 'empresa' ? 'empresa' : 'martillero'} quedó pendiente de
+              aprobación. Un administrador de RematAR la va a revisar y activar antes de que
+              puedas iniciar sesión -- te vamos a avisar por email apenas esté lista.
+            </GlassAlert>
+          </div>
+        </>
+      ) : (
+        <>
+          <h1 className="text-[1.75rem] font-semibold tracking-tight">Crear una cuenta</h1>
+          <p className="mt-2 text-[15px] text-white/65">Menos de un minuto. Elegí cómo vas a usar RematAR.</p>
 
-          {isPendingApproval ? (
-            <>
-              <h1 className="mt-6 text-3xl font-bold tracking-tight text-ink">Cuenta creada</h1>
-              <Alert variant="success" className="mt-4">
-                Tu cuenta como {role === 'empresa' ? 'empresa' : 'martillero'} quedó pendiente de
-                aprobación. Un administrador de RematAR la va a revisar y activar antes de que
-                puedas iniciar sesión -- te vamos a avisar por email apenas esté lista.
-              </Alert>
-            </>
-          ) : (
-            <>
-              <h1 className="mt-6 text-3xl font-bold tracking-tight text-ink">Crear una cuenta</h1>
-              <p className="mt-3 text-base leading-relaxed text-ink-muted">
-                Unite a la plataforma de remates en tiempo real y comenzá a participar de
-                subastas de forma simple y segura.
-              </p>
+          <form onSubmit={handleSubmit} className="mt-7 flex flex-col gap-4" noValidate>
+            {error && <GlassAlert variant="error">{error}</GlassAlert>}
 
-              <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4" noValidate>
-                {error && <Alert variant="error">{error}</Alert>}
-
-                <Input
-                  label="Nombre completo"
-                  autoComplete="name"
-                  required
-                  icon={User}
-                  className="py-2.5"
-                  placeholder="Juan Pérez"
-                  value={fullName}
-                  onChange={(event) => setFullName(event.target.value)}
-                  rightElement={
-                    isFullNameValid ? <CheckCircle2 className="h-4 w-4 text-success-500" /> : undefined
-                  }
-                />
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <Input
-                    label="Teléfono"
-                    type="tel"
-                    autoComplete="tel"
-                    required
-                    icon={Phone}
-                    className="py-2.5"
-                    placeholder="+54 9 11 2345-6789"
-                    value={phone}
-                    onChange={(event) => setPhone(event.target.value)}
-                    rightElement={isPhoneValid ? <CheckCircle2 className="h-4 w-4 text-success-500" /> : undefined}
-                  />
-
-                  <Input
-                    label="Email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    icon={Mail}
-                    className="py-2.5"
-                    placeholder="juan.perez@email.com"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    rightElement={isEmailValid ? <CheckCircle2 className="h-4 w-4 text-success-500" /> : undefined}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <Input
-                      label="Contraseña"
-                      type={isPasswordVisible ? 'text' : 'password'}
-                      autoComplete="new-password"
-                      minLength={8}
-                      required
-                      icon={Lock}
-                      className="py-2.5"
-                      placeholder="Mínimo 8 caracteres"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      rightElement={
-                        <button
-                          type="button"
-                          onClick={() => setIsPasswordVisible((visible) => !visible)}
-                          className="text-ink-faint transition-colors hover:text-ink-muted"
-                          aria-label={isPasswordVisible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                        >
-                          {isPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      }
-                    />
-                    <PasswordStrengthMeter password={password} />
-                  </div>
-
-                  <Input
-                    label="Confirmar contraseña"
-                    type={isPasswordVisible ? 'text' : 'password'}
-                    autoComplete="new-password"
-                    minLength={8}
-                    required
-                    icon={Lock}
-                    className="py-2.5"
-                    placeholder="Repetí tu contraseña"
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                    error={passwordsMismatch ? 'Las contraseñas no coinciden.' : undefined}
-                    rightElement={
-                      !passwordsMismatch && confirmPassword.length > 0 ? (
-                        <CheckCircle2 className="h-4 w-4 text-success-500" />
-                      ) : undefined
-                    }
-                  />
-                </div>
-
-                <fieldset className="flex flex-col gap-1.5">
-                  <legend className="mb-2 text-sm font-medium text-ink">Quiero registrarme como</legend>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    {ROLE_OPTIONS.map((option) => {
-                      const isSelected = role === option.value;
-                      return (
-                        <label
-                          key={option.value}
-                          className={`flex cursor-pointer flex-col gap-0.5 rounded-lg border p-2 transition-all duration-200 ${
-                            isSelected
-                              ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-200'
-                              : 'border-line bg-white hover:border-brand-300 hover:bg-surface-subtle'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="role"
-                            value={option.value}
-                            checked={isSelected}
-                            onChange={() => setRole(option.value)}
-                            className="sr-only"
+            <fieldset>
+              <legend className="sr-only">Quiero registrarme como</legend>
+              <LayoutGroup id="register-role">
+                <div className="grid grid-cols-3 gap-1 rounded-xl bg-black/25 p-1 ring-1 ring-white/15">
+                  {ROLE_OPTIONS.map((option) => {
+                    const isSelected = role === option.value;
+                    return (
+                      <label
+                        key={option.value}
+                        className="relative flex h-10 cursor-pointer items-center justify-center rounded-lg text-sm font-medium has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-white/30"
+                      >
+                        <input
+                          type="radio"
+                          name="role"
+                          value={option.value}
+                          checked={isSelected}
+                          onChange={() => setRole(option.value)}
+                          className="sr-only"
+                        />
+                        {isSelected && (
+                          <motion.span
+                            layoutId="register-role-pill"
+                            className="absolute inset-0 rounded-lg bg-white"
+                            transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                           />
-                          <span className="flex items-center gap-1.5">
-                            <option.icon
-                              aria-hidden="true"
-                              className={`h-3.5 w-3.5 shrink-0 ${isSelected ? 'text-brand-600' : 'text-ink-faint'}`}
-                            />
-                            <span className={`text-sm font-semibold ${isSelected ? 'text-brand-700' : 'text-ink'}`}>
-                              {option.label}
-                            </span>
-                          </span>
-                          <span className="text-xs text-ink-muted">{option.description}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                  {ROLES_PENDING_APPROVAL.has(role) && (
-                    <p className="text-xs text-ink-muted">
-                      Esta cuenta queda pendiente de aprobación de un administrador antes de
-                      poder iniciar sesión.
-                    </p>
-                  )}
-                </fieldset>
+                        )}
+                        <span className={`relative transition-colors ${isSelected ? 'text-ink' : 'text-white/70'}`}>
+                          {option.label}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </LayoutGroup>
+              {ROLES_PENDING_APPROVAL.has(role) && (
+                <p className="mt-2.5 flex items-start gap-2 text-xs leading-relaxed text-white/65">
+                  <ShieldCheck aria-hidden="true" className="mt-px h-3.5 w-3.5 shrink-0" />
+                  Esta cuenta queda pendiente de aprobación de un administrador antes de poder iniciar sesión.
+                </p>
+              )}
+            </fieldset>
 
-                <Button type="submit" isLoading={isSubmitting} className="mt-2 w-full py-2.5 text-base">
-                  Crear cuenta
-                </Button>
-              </form>
-            </>
-          )}
+            <GlassField
+              label="Nombre completo"
+              autoComplete="name"
+              required
+              icon={User}
+              placeholder="Juan Pérez"
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+              rightElement={isFullNameValid ? validMark : undefined}
+            />
 
-          <p className="mt-8 text-center text-sm text-ink-muted">
-            ¿Ya tenés una cuenta?{' '}
-            <Link to="/login" className="font-semibold text-brand-600 hover:underline">
-              Iniciar sesión
-            </Link>
-          </p>
-        </motion.div>
-      </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <GlassField
+                label="Email"
+                type="email"
+                autoComplete="email"
+                required
+                icon={Mail}
+                placeholder="juan@email.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                rightElement={isEmailValid ? validMark : undefined}
+              />
+              <GlassField
+                label="Teléfono"
+                type="tel"
+                autoComplete="tel"
+                required
+                icon={Phone}
+                placeholder="+54 9 11 2345-6789"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                rightElement={isPhoneValid ? validMark : undefined}
+              />
+            </div>
 
-      <div className="hidden md:block md:w-1/3 lg:w-1/2">
-        <RegisterShowcase />
-      </div>
-    </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <GlassField
+                label="Contraseña"
+                type={isPasswordVisible ? 'text' : 'password'}
+                autoComplete="new-password"
+                minLength={8}
+                required
+                icon={Lock}
+                placeholder="Mínimo 8 caracteres"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={() => setIsPasswordVisible((visible) => !visible)}
+                    className="rounded p-0.5 text-white/50 transition-colors hover:text-white"
+                    aria-label={isPasswordVisible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  >
+                    {isPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                }
+              />
+              <GlassField
+                label="Confirmar contraseña"
+                type={isPasswordVisible ? 'text' : 'password'}
+                autoComplete="new-password"
+                minLength={8}
+                required
+                icon={Lock}
+                placeholder="Repetí tu contraseña"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                error={passwordsMismatch ? 'Las contraseñas no coinciden.' : undefined}
+                rightElement={!passwordsMismatch && confirmPassword.length > 0 ? validMark : undefined}
+              />
+            </div>
+
+            <PasswordRules password={password} />
+
+            <div className="mt-1">
+              <GlassSubmitButton isLoading={isSubmitting}>Crear cuenta</GlassSubmitButton>
+            </div>
+          </form>
+        </>
+      )}
+    </CinematicShell>
   );
 }

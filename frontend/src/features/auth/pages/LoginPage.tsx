@@ -1,20 +1,23 @@
 import { type FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import logoRematar from '../../../assets/brand/logo-rematar.png';
+import { ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { useAuthActions } from '../hooks';
 import { normalizeApiError } from '../../../shared/api/errors';
-import { Button } from '../../../shared/components/Button';
-import { Input } from '../../../shared/components/Input';
-import { Alert } from '../../../shared/components/Alert';
-import { LoginShowcase } from '../components/LoginShowcase';
+import { AUTH_RUBROS } from '../components/cinematic/authRubros';
+import { CategoryCarousel } from '../components/cinematic/CategoryCarousel';
+import { CinematicShell } from '../components/cinematic/CinematicShell';
+import { GlassAlert, GlassField, GlassSubmitButton } from '../components/cinematic/GlassField';
+import { useAutoRotate } from '../components/cinematic/useAutoRotate';
+
+/** Cuánto está cada rubro en pantalla antes de pasar al siguiente. */
+const ROTATE_MS = 8000;
 
 /**
- * Pantalla de login (rediseño visual -- ver conversación de diseño): dos columnas a
- * pantalla completa en vez de la tarjeta centrada genérica que comparten el resto de
- * las pantallas de auth (`/register` la sigue usando, ver `AuthLayout`). La lógica de
- * autenticación es exactamente la misma que antes (`useAuthActions().login`,
- * `normalizeApiError`) -- sólo cambió el marcado alrededor.
+ * Pantalla de login (rediseño "cinematográfico", mismo marco que `RegisterPage` -- ver
+ * `components/cinematic/CinematicShell`): fotografía a pantalla completa con el carrusel de
+ * rubros a la izquierda y el formulario en un panel de vidrio. La lógica de autenticación es
+ * exactamente la de antes (`useAuthActions().login`, `normalizeApiError`) -- sólo cambió el
+ * marcado alrededor.
  *
  * Redirect fijo a `/` (nunca `location.state.from`): `/` es la ruta `index` de
  * `AppLayout` (`HomePage`) y ya reparte por rol (comprador/empresa/rematador/admin,
@@ -36,8 +39,13 @@ export function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [isCarouselPaused, setIsCarouselPaused] = useState(false);
+  const [rubroIndex, setRubroIndex] = useAutoRotate(AUTH_RUBROS.length, ROTATE_MS, isCarouselPaused);
+  const rubro = AUTH_RUBROS[rubroIndex];
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -54,85 +62,99 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <div className="relative flex w-full flex-col justify-center overflow-hidden bg-white px-6 py-12 sm:px-12 md:w-2/3 lg:w-2/5 lg:px-16 xl:px-20">
-        <div className="pointer-events-none absolute -left-24 -top-24 -z-10 h-72 w-72 rounded-full bg-brand-100/60 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 -right-24 -z-10 h-72 w-72 rounded-full bg-brand-50 blur-3xl" />
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="mx-auto w-full max-w-sm"
+    <CinematicShell
+      size="login"
+      photo={rubro.photo}
+      photoKey={rubro.category}
+      zoomSeconds={ROTATE_MS / 1000 + 2}
+      headerAction={
+        // Visitante anónimo (ADR-049): el listado, el detalle de un remate y su sala
+        // en vivo ya aceptan un viewer sin sesión -- este link es el único punto de
+        // entrada explícito a esa vista (ofertar y chatear siguen exigiendo login,
+        // ver `PlaceBidButton`/`ChatPanel`).
+        <Link
+          to="/remates"
+          className="rounded-full px-4 py-2 text-sm font-medium text-white/80 ring-1 ring-white/25 backdrop-blur transition hover:bg-white/10 hover:text-white"
         >
-          <Link to="/" className="inline-flex items-center">
-            <img src={logoRematar} alt="RematAR" className="h-9 w-auto" />
-          </Link>
-
-          <h1 className="mt-10 text-3xl font-bold tracking-tight text-ink">
-            Bienvenido a RematAR
-          </h1>
-          <p className="mt-3 text-base leading-relaxed text-ink-muted">
-            Plataforma profesional para la gestión y participación en remates en tiempo
-            real.
+          Ver remates sin iniciar sesión
+        </Link>
+      }
+      aside={
+        <>
+          <h2 className="max-w-2xl text-6xl font-semibold leading-[1.02] tracking-[-0.035em] xl:text-7xl">
+            Cada lote tiene su momento.
+          </h2>
+          <p className="mt-6 max-w-md text-lg leading-relaxed text-white/70">
+            Remates en vivo y por tiempo, con ofertas que se actualizan al instante para todos los
+            participantes.
           </p>
-
-          <form onSubmit={handleSubmit} className="mt-10 flex flex-col gap-5" noValidate>
-            {error && <Alert variant="error">{error}</Alert>}
-            <Input
-              label="Email"
-              type="email"
-              autoComplete="email"
-              required
-              className="py-2.5"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+          <div className="mt-10">
+            <CategoryCarousel
+              items={AUTH_RUBROS}
+              index={rubroIndex}
+              onSelect={setRubroIndex}
+              durationMs={ROTATE_MS}
+              paused={isCarouselPaused}
+              onPausedChange={setIsCarouselPaused}
             />
-            <div>
-              <Input
-                label="Contraseña"
-                type="password"
-                autoComplete="current-password"
-                required
-                className="py-2.5"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-              <Link
-                to="/forgot-password"
-                className="mt-2 inline-block text-sm font-medium text-brand-600 transition-colors hover:text-brand-700 hover:underline"
+          </div>
+        </>
+      }
+    >
+      <h1 className="text-[1.75rem] font-semibold tracking-tight">Bienvenido a RematAR</h1>
+      <p className="mt-2 text-[15px] text-white/65">Entrá con tu cuenta para seguir tus ofertas.</p>
+
+      <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5" noValidate>
+        {error && <GlassAlert variant="error">{error}</GlassAlert>}
+        <GlassField
+          label="Email"
+          type="email"
+          autoComplete="email"
+          required
+          icon={Mail}
+          placeholder="nombre@empresa.com"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+        />
+        <div>
+          <GlassField
+            label="Contraseña"
+            type={isPasswordVisible ? 'text' : 'password'}
+            autoComplete="current-password"
+            required
+            icon={Lock}
+            placeholder="Tu contraseña"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            rightElement={
+              <button
+                type="button"
+                onClick={() => setIsPasswordVisible((visible) => !visible)}
+                className="rounded p-0.5 text-white/50 transition-colors hover:text-white"
+                aria-label={isPasswordVisible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
               >
-                ¿Olvidaste tu contraseña?
-              </Link>
-            </div>
-            <Button type="submit" isLoading={isSubmitting} className="mt-2 w-full py-2.5 text-base">
-              Entrar
-            </Button>
-          </form>
-
-          <p className="mt-8 text-center text-sm text-ink-muted">
-            ¿No tenés cuenta?{' '}
-            <Link to="/register" className="font-semibold text-brand-600 hover:underline">
-              Registrate
+                {isPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            }
+          />
+          <div className="mt-2.5 text-right">
+            <Link to="/forgot-password" className="text-[13px] font-medium text-brand-300 hover:text-white">
+              ¿Olvidaste tu contraseña?
             </Link>
-          </p>
+          </div>
+        </div>
+        <GlassSubmitButton isLoading={isSubmitting}>
+          Entrar
+          <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+        </GlassSubmitButton>
+      </form>
 
-          {/* Visitante anónimo (ADR-049): el listado, el detalle de un remate y su sala
-              en vivo ya aceptan un viewer sin sesión -- este link es el único punto de
-              entrada explícito a esa vista (ofertar y chatear siguen exigiendo login,
-              ver `PlaceBidButton`/`ChatPanel`). */}
-          <p className="mt-2 text-center text-sm text-ink-muted">
-            ¿Solo querés mirar?{' '}
-            <Link to="/remates" className="font-semibold text-brand-600 hover:underline">
-              Ver remates sin iniciar sesión
-            </Link>
-          </p>
-        </motion.div>
-      </div>
-
-      <div className="hidden md:block md:w-1/3 lg:w-3/5">
-        <LoginShowcase />
-      </div>
-    </div>
+      <p className="mt-7 text-center text-sm text-white/65">
+        ¿No tenés cuenta?{' '}
+        <Link to="/register" className="font-semibold text-white underline-offset-4 hover:underline">
+          Registrate
+        </Link>
+      </p>
+    </CinematicShell>
   );
 }

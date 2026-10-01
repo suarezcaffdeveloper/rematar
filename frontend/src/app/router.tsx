@@ -65,8 +65,6 @@ export const router = createBrowserRouter([
         children: [
           { path: '/login', element: <LoginPage /> },
           { path: '/register', element: <RegisterPage /> },
-          // Sin `AuthLayout` de dos columnas (no están en `FULL_BLEED_PATHS`): usan el
-          // fallback centrado que `AuthLayout` ya tenía previsto para esto.
           { path: '/forgot-password', element: <ForgotPasswordPage /> },
           { path: '/reset-password', element: <ResetPasswordPage /> },
         ],
