@@ -22,6 +22,23 @@ services:
         value: production
       - key: LOG_JSON
         value: "true"
+      # Plan free de Render = 512 MB de RAM. El default del entrypoint (4 workers) lo
+      # excede y el proceso muere por OOM; con 1 worker entra holgado. Con 1 worker el
+      # pool de Postgres puede ser chico (Neon free tiene pocas conexiones).
+      - key: UVICORN_WORKERS
+        value: "1"
+      - key: DB_POOL_SIZE
+        value: "5"
+      - key: DB_MAX_OVERFLOW
+        value: "5"
+      # Sin SMTP/WhatsApp/Mercado Pago configurados, que usen el sender que solo loguea.
+      # Cambiar a "true" y completar credenciales cuando se necesiten de verdad.
+      - key: EMAIL_ENABLED
+        value: "false"
+      - key: WHATSAPP_ENABLED
+        value: "false"
+      - key: MERCADOPAGO_ENABLED
+        value: "false"
       # Pegar la connection string de Neon tal cual la da su dashboard
       # (postgresql://usuario:password@host/db?sslmode=require) -- el backend la
       # convierte solo al driver async y descarta el query param, ver
