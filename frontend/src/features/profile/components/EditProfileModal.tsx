@@ -2,7 +2,6 @@ import { type ChangeEvent, useEffect, useRef, useState } from 'react';
 import { Camera } from 'lucide-react';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Button } from '../../../shared/components/Button';
-import { Input } from '../../../shared/components/Input';
 import { Modal } from '../../../shared/components/Modal';
 import { Spinner } from '../../../shared/components/Spinner';
 import { UserAvatar } from '../../../shared/components/UserAvatar';
@@ -12,6 +11,7 @@ import { useAuthActions } from '../../auth/hooks';
 import type { User } from '../../auth/types';
 import { updateUserAvatarRequest, uploadUserAvatarRequest } from '../api';
 import { AvatarPresetPicker } from './AvatarPresetPicker';
+import { ProfileField } from './ProfileField';
 
 export interface EditProfileModalProps {
   isOpen: boolean;
@@ -20,10 +20,11 @@ export interface EditProfileModalProps {
 }
 
 /**
- * Formulario de "Editar perfil". La foto de perfil (subida propia o avatar
+ * Formulario de "Editar perfil" (rediseño editorial: encabezado propio con `hideHeader`,
+ * campos con línea inferior, botones en píldora). La foto de perfil (subida propia o avatar
  * predeterminado) se guarda al toque -- `POST /users/me/avatar` + `PATCH /users/me`
  * (ver `features/profile/api.ts`) -- y actualiza el store de sesión (`updateUser`) para
- * que se vea reflejada en el acto en toda la app (sidebar incluido), sin depender del
+ * que se vea reflejada en el acto en toda la app (barra superior incluida), sin depender del
  * botón "Guardar cambios" del pie.
  *
  * Nombre/email/teléfono siguen sin backend (`GET /users/me` es de solo lectura para
@@ -117,44 +118,53 @@ export function EditProfileModal({ isOpen, onClose, user }: EditProfileModalProp
       onClose={onClose}
       title="Editar perfil"
       size="md"
+      hideHeader
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose} className="h-11 rounded-full px-5 text-[15px] font-semibold">
             Cancelar
           </Button>
-          <Button variant="primary" onClick={handleSubmit}>
+          <Button variant="primary" onClick={handleSubmit} className="h-11 rounded-full px-5 text-[15px] font-semibold">
             Guardar cambios
           </Button>
         </>
       }
     >
-      <div className="flex flex-col gap-6">
-        <div>
-          <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-7 pt-4 font-display text-ink">
+        <div className="pr-10">
+          <h2 className="text-3xl font-semibold leading-[1.1] tracking-tight">Editar perfil</h2>
+          <p className="mt-2.5 max-w-[46ch] text-[15px] text-ink-muted">Cambiá tu foto y tus datos de contacto.</p>
+        </div>
+
+        <section aria-labelledby="edit-photo-title">
+          <h3 id="edit-photo-title" className="mb-3 font-semibold">
+            Foto de perfil
+          </h3>
+          <div className="flex flex-wrap items-center gap-4">
             <div className="relative">
               <UserAvatar avatarUrl={avatarUrl} fullName={fullName} size="md" />
               {isSavingAvatar && (
-                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-900/40">
+                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-ink/40">
                   <Spinner size="sm" className="text-white" />
                 </div>
               )}
             </div>
-            <div className="flex flex-col gap-1">
-              <button
-                type="button"
+            <div className="grid justify-items-start gap-2">
+              <Button
+                variant="ink-outline"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isSavingAvatar}
-                className="flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:text-brand-800 disabled:opacity-60"
+                className="h-[38px] rounded-full px-4 font-semibold"
               >
                 <Camera aria-hidden="true" className="h-4 w-4" />
                 Subir una foto
-              </button>
+              </Button>
               {avatarUrl && (
                 <button
                   type="button"
                   onClick={() => void handlePresetOrRemove(null)}
                   disabled={isSavingAvatar}
-                  className="text-left text-xs text-slate-400 hover:text-slate-600 disabled:opacity-60"
+                  className="rounded text-sm font-semibold text-brand-700 hover:text-brand-800 hover:underline hover:underline-offset-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-60"
                 >
                   Quitar foto
                 </button>
@@ -169,26 +179,39 @@ export function EditProfileModal({ isOpen, onClose, user }: EditProfileModalProp
             </div>
           </div>
 
-          <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-400">
-            O elegí un avatar predeterminado
-          </p>
-          <div className="mt-2">
-            <AvatarPresetPicker selectedAvatarUrl={avatarUrl} onSelect={(url) => void handlePresetOrRemove(url)} />
-          </div>
+          <p className="mb-2.5 mt-5 text-sm text-ink-muted">O elegí un avatar predeterminado</p>
+          <AvatarPresetPicker selectedAvatarUrl={avatarUrl} onSelect={(url) => void handlePresetOrRemove(url)} />
 
-          {avatarError && <p className="mt-2 text-sm text-danger-600">{avatarError}</p>}
-        </div>
+          {avatarError && <p className="mt-2 text-[13px] text-danger-600">{avatarError}</p>}
+        </section>
 
-        <div className="flex flex-col gap-5 border-t border-slate-100 pt-6">
-          <Input label="Nombre y apellido" value={fullName} onChange={(event) => setFullName(event.target.value)} required />
-          <Input
+        <hr className="border-line" />
+
+        <div className="flex flex-col gap-5">
+          <ProfileField
+            label="Nombre y apellido"
+            value={fullName}
+            onChange={(event) => setFullName(event.target.value)}
+            autoComplete="name"
+            required
+          />
+          <ProfileField
             label="Email"
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
+            autoComplete="email"
             required
           />
-          <Input label="Teléfono" type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} />
+          <ProfileField
+            label="Teléfono"
+            type="tel"
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            autoComplete="tel"
+            placeholder="+54 9 11 1234-5678"
+            help="Opcional. Lo usamos solo para coordinar entregas y pagos."
+          />
         </div>
       </div>
     </Modal>

@@ -23,6 +23,7 @@ import { ConsolaHeader } from '../components/ConsolaHeader';
 import { ConsolaLotePanel } from '../components/ConsolaLotePanel';
 import { ConsolaSidebar } from '../components/ConsolaSidebar';
 import { ConsolaUpcomingLotesPanel } from '../components/ConsolaUpcomingLotesPanel';
+import { EmpresaConsolaView } from '../components/empresa/EmpresaConsolaView';
 import { OperatorCodePanel } from '../components/OperatorCodePanel';
 import { PrivateAccessPanel } from '../components/PrivateAccessPanel';
 import { StreamPanel } from '../components/StreamPanel';
@@ -258,6 +259,27 @@ function LiveConsolaOperativaPage() {
   // La transmisión la cargan tanto la empresa dueña como el rematador asignado (el backend
   // permite ambos: `set_stream` usa `get_operator_or_raise`) -- el que esté frente al vivo.
   const showStreamPanel = remate.status !== 'finished' && remate.status !== 'cancelled';
+
+  // La empresa dueña no opera el remate: con el remate en vivo/pausado ve la "Cabina"
+  // (ver `EmpresaConsolaView`), no la consola del martillero de más abajo.
+  if (isOwner && isOperational) {
+    return (
+      <EmpresaConsolaView
+        remate={remate}
+        activeLote={activeLote}
+        winningOffer={winningOffer}
+        recentOffers={recentOffers}
+        connectedUsers={connectedUsers}
+        connectionStatus={connectionStatus}
+        upcomingLotes={upcomingLotes}
+        desiertoLotes={desiertoLotes}
+        currency={currency}
+        currentUserId={user?.id}
+        subscribeToRealtime={subscribeToRealtime}
+        onRemateChange={reload}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4 font-display">

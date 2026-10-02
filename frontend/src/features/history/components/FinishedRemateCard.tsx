@@ -1,97 +1,112 @@
-import { ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Badge } from '../../../shared/components/Badge';
-import { formatCurrency, formatDateTimeCompact, formatDuration } from '../../../shared/lib/format';
-import { CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_LABELS } from '../../remates/labels';
+import { Clock, CheckCircle2 } from 'lucide-react';
+import { formatCurrency, formatDateShort } from '../../../shared/lib/format';
+import { CoverPlaceholder } from '../../remates/components/CoverPlaceholder';
+import { GavelIcon } from '../../remates/components/icons';
+import { CATEGORY_LABELS } from '../../remates/labels';
+import { HISTORY_CURRENCY, isCancelled } from '../summary';
 import type { FinishedRemateSummary } from '../types';
 
 export interface FinishedRemateCardProps {
   remate: FinishedRemateSummary;
-  /** `true` en el panel global del admin -- muestra a quién pertenece el remate. En el
-   * listado del rematador (siempre remates propios) sería ruido. */
+  /** `true` en el panel global del admin: muestra de quién es el remate. */
   showOwner?: boolean;
-  /** Moneda para formatear `total_awarded_value` -- `FinishedRemateSummary` no la trae
-   * (no es un campo de `Remate.settings` que este listado agregado exponga), así que se
-   * recibe un valor razonable por defecto desde quien arma la lista. */
+  /** Portada del remate si tiene (el resumen del backend no la trae). */
+  coverImageUrl?: string | null;
+  /** Ventas de este remate que todavía no llegaron a "Pago recibido"; `null` si no se
+   * sabe (admin, o las ventas todavía cargan). */
+  unpaidCount?: number | null;
   currency?: string;
 }
 
 /**
- * Tarjeta de un remate finalizado/cancelado (Épica 7, Módulo 7.3) -- KPIs resumidos,
- * pedidos explícitamente por el enunciado: nombre, fecha, estado, cantidad de lotes,
- * lotes vendidos, monto adjudicado, compradores participantes, duración total. Mismo
- * lenguaje visual que `CaseCard` (post-remate) y `RematadorRemateCard` (rediseño Épica 9):
- * monto destacado en su propio bloque, un único `<dl>` de estadísticas sin líneas que se
- * pisen, y el CTA como única pieza interactiva al pie -- antes el valor adjudicado y las
- * demás métricas competían por el mismo tamaño de fuente y se apretaban en una grilla de
- * 4 columnas donde el texto largo (montos, "vendidos") se solapaba en pantallas chicas.
+ * Un remate terminado en la lista del Historial: portada con su estado y fecha, nombre, lo
+ * vendido en grande, cuántos lotes se vendieron (con una barra), y si quedaron ventas sin
+ * cobrar. Un remate cancelado dice cuándo y no muestra montos (no vendió nada). Mismo
+ * patrón que `RematadorRemateCard` del panel principal; toda la tarjeta lleva al resumen.
  */
-export function FinishedRemateCard({ remate, showOwner = false, currency = 'ARS' }: FinishedRemateCardProps) {
+export function FinishedRemateCard({ remate, showOwner = false, coverImageUrl, unpaidCount = null, currency = HISTORY_CURRENCY }: FinishedRemateCardProps) {
+  const cancelled = isCancelled(remate);
+  const to = `/remates/${remate.id}/historial`;
   const soldPercent = remate.lote_count > 0 ? Math.round((remate.lotes_sold_count / remate.lote_count) * 100) : 0;
+  const resolved = remate.resolved_at ? formatDateShort(remate.resolved_at) : null;
 
   return (
-    <Link
-      to={`/remates/${remate.id}/historial`}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-line-strong hover:shadow-xl"
-    >
-      <div className="flex flex-1 flex-col gap-4 p-5">
-        <div>
-          <h3 className="break-words text-base font-semibold leading-snug text-ink">{remate.title}</h3>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
-            <span>{CATEGORY_LABELS[remate.category]}</span>
-            {showOwner && remate.owner_name && <span>· {remate.owner_name}</span>}
-            {remate.resolved_at && (
-              <>
-                <span className="text-ink-faint">·</span>
-                <span>{formatDateTimeCompact(remate.resolved_at)}</span>
-              </>
-            )}
-            {/* "Finalizado" no se muestra -- todas las tarjetas de este listado ya son
-                remates terminados, así que sería redundante; "Cancelado" sí se muestra,
-                es la única distinción de estado que aporta algo acá. */}
-            {remate.status !== 'finished' && (
-              <Badge variant={STATUS_BADGE_VARIANTS[remate.status]} className="ml-auto">
-                {STATUS_LABELS[remate.status]}
-              </Badge>
-            )}
-          </div>
-        </div>
+    <article className="flex min-w-0 flex-col">
+      <Link
+        to={to}
+        aria-label={`Ver resumen de ${remate.title}`}
+        className="group relative block aspect-[16/10] overflow-hidden rounded-2xl bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+      >
+        {coverImageUrl ? (
+          <img src={coverImageUrl} alt="" className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105" />
+        ) : (
+          <CoverPlaceholder className="h-full w-full" icon={<GavelIcon className="h-10 w-10 text-brand-300" />} />
+        )}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/55 via-transparent to-transparent" />
+        <span
+          className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-xs font-semibold shadow-sm ${
+            cancelled ? 'bg-white text-danger-600' : 'bg-white text-slate-700'
+          }`}
+        >
+          {cancelled ? 'Cancelado' : 'Finalizado'}
+        </span>
+        {resolved && <span className="absolute bottom-3 left-3.5 text-sm font-semibold text-white">{resolved}</span>}
+      </Link>
 
-        <div className="flex flex-col items-center border-t border-line pt-4 text-center">
-          <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Valor adjudicado</span>
-          <span className="text-2xl font-bold text-brand-600">
+      <h3 className="mt-3.5 line-clamp-2 text-xl font-semibold leading-snug tracking-tight">{remate.title}</h3>
+      <p className="mt-1 text-sm text-ink-muted">
+        {CATEGORY_LABELS[remate.category]}
+        {showOwner && remate.owner_name ? ` · ${remate.owner_name}` : ''}
+      </p>
+
+      {cancelled ? (
+        <p className="mt-3 flex-1 text-sm text-ink-muted">Se canceló antes de terminar. Mirá el motivo en el resumen.</p>
+      ) : (
+        <>
+          <p className="mt-2.5 text-3xl font-semibold leading-none tracking-tight tabular-nums">
             {formatCurrency(remate.total_awarded_value, currency)}
-          </span>
-        </div>
-
-        <dl className="border-t border-line pt-4 text-sm">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <dt className="text-xs font-medium uppercase tracking-wide text-ink-faint">Lotes</dt>
-            <dd className="font-semibold text-ink">
-              {remate.lotes_sold_count}/{remate.lote_count}
-            </dd>
-            <span className="text-xs text-ink-faint">{soldPercent}% vendidos</span>
+            <span className="mt-1 block text-sm font-medium tracking-normal text-ink-muted">vendidos</span>
+          </p>
+          <div
+            className="mt-3 h-1.5 overflow-hidden rounded-full bg-line"
+            role="img"
+            aria-label={`${remate.lotes_sold_count} de ${remate.lote_count} lotes vendidos`}
+          >
+            <div className="h-full rounded-full bg-brand-600" style={{ width: `${soldPercent}%` }} />
           </div>
+          <p className="mt-1.5 flex-1 text-sm tabular-nums">
+            <b className="font-semibold">
+              {remate.lotes_sold_count} de {remate.lote_count}
+            </b>{' '}
+            lotes vendidos
+            {remate.buyer_count > 0 && ` · ${remate.buyer_count} ${remate.buyer_count === 1 ? 'comprador' : 'compradores'}`}
+          </p>
+          {remate.lotes_sold_count === 0 && <p className="mt-1.5 text-sm text-ink-muted">Ningún lote se vendió en este remate.</p>}
+          {unpaidCount !== null && remate.lotes_sold_count > 0 && (
+            <p className="mt-2.5">
+              {unpaidCount > 0 ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-50 px-2.5 py-1 text-xs font-semibold text-warning-700">
+                  <Clock aria-hidden="true" className="h-3 w-3" />
+                  {unpaidCount} {unpaidCount === 1 ? 'venta sin cobrar' : 'ventas sin cobrar'}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-success-50 px-2.5 py-1 text-xs font-semibold text-success-700">
+                  <CheckCircle2 aria-hidden="true" className="h-3 w-3" />
+                  Todo cobrado
+                </span>
+              )}
+            </p>
+          )}
+        </>
+      )}
 
-          <div className="mt-3 grid grid-cols-2 gap-3 border-t border-line pt-3">
-            <div className="flex min-w-0 flex-col gap-1">
-              <dt className="text-xs font-medium uppercase tracking-wide text-ink-faint">Compradores</dt>
-              <dd className="font-semibold text-ink">{remate.buyer_count}</dd>
-            </div>
-            <div className="flex min-w-0 flex-col gap-1">
-              <dt className="text-xs font-medium uppercase tracking-wide text-ink-faint">Duración</dt>
-              <dd className="font-semibold text-ink">
-                {remate.duration_seconds != null ? formatDuration(remate.duration_seconds * 1000) : '—'}
-              </dd>
-            </div>
-          </div>
-        </dl>
-
-        <div className="mt-auto flex items-center justify-end gap-1 border-t border-line pt-3 text-sm font-medium text-brand-600 transition-colors group-hover:text-brand-700">
-          Ver resumen
-          <ArrowRight aria-hidden="true" className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-        </div>
-      </div>
-    </Link>
+      <Link
+        to={to}
+        className="mt-4 inline-flex h-10 items-center justify-center rounded-full bg-ink px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+      >
+        Ver resumen
+      </Link>
+    </article>
   );
 }

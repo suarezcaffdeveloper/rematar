@@ -44,6 +44,33 @@ describe('validateLoteForm', () => {
     expect(validateLoteForm(makeValues({ min_increment: '0' }))).toHaveProperty('min_increment');
   });
 
+  it('el incremento mínimo no puede ser mayor al precio inicial', () => {
+    expect(validateLoteForm(makeValues({ base_price: '100', min_increment: '500' }))).toHaveProperty('min_increment');
+    expect(validateLoteForm(makeValues({ base_price: '100', min_increment: '100.01' }))).toHaveProperty('min_increment');
+    expect(validateLoteForm(makeValues({ base_price: '100', min_increment: '100' })).min_increment).toBeUndefined();
+    expect(validateLoteForm(makeValues({ base_price: '100', min_increment: '5' })).min_increment).toBeUndefined();
+  });
+
+  it('el incremento no suma un error extra si el precio inicial todavía es inválido', () => {
+    const result = validateLoteForm(makeValues({ base_price: '', min_increment: '50' }));
+    expect(result).toHaveProperty('base_price');
+    expect(result.min_increment).toBeUndefined();
+  });
+
+  it('el reencolado exige el mismo vínculo incremento <= precio inicial', () => {
+    const result = validateLoteForm(
+      makeValues({ requeue_preset_enabled: true, requeue_preset_base_price: '100', requeue_preset_min_increment: '300' }),
+    );
+    expect(result).toHaveProperty('requeue_preset_min_increment');
+  });
+
+  it('rechaza más de 2 decimales, montos enormes y formatos raros', () => {
+    expect(validateLoteForm(makeValues({ base_price: '10.123' }))).toHaveProperty('base_price');
+    expect(validateLoteForm(makeValues({ base_price: '1e5' }))).toHaveProperty('base_price');
+    expect(validateLoteForm(makeValues({ base_price: '-5' }))).toHaveProperty('base_price');
+    expect(validateLoteForm(makeValues({ base_price: '9999999999999', min_increment: '1' }))).toHaveProperty('base_price');
+  });
+
   it('precio de reserva menor al precio inicial', () => {
     const result = validateLoteForm(makeValues({ base_price: '1000.00', reserve_price: '500.00' }));
     expect(result).toHaveProperty('reserve_price');

@@ -48,6 +48,9 @@ export interface UseRematesParams {
    * (`Remate.rematador_id`), en cualquier estado no borrador (mismo criterio que
    * `ownerId`: el propio operador asignado siempre lo ve, `RemateService._is_visible`). */
   rematadorId?: string;
+  /** `false` evita el pedido (por ejemplo, el Historial del admin no necesita las portadas
+   * de los remates propios). Default `true`. */
+  enabled?: boolean;
 }
 
 /** Trae TODAS las páginas de `GET /remates` visibles para el usuario actual (hasta el
@@ -75,7 +78,7 @@ async function fetchAllRemates(
 }
 
 export function useRemates(params: UseRematesParams = {}): UseRematesResult {
-  const { ownerId, rematadorId } = params;
+  const { ownerId, rematadorId, enabled = true } = params;
   const {
     data: remates,
     isLoading,
@@ -85,6 +88,7 @@ export function useRemates(params: UseRematesParams = {}): UseRematesResult {
     () => fetchAllRemates(ownerId, rematadorId),
     [ownerId, rematadorId],
     [],
+    { enabled },
   );
 
   return { remates, isLoading, error, reload };

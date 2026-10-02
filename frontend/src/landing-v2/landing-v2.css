@@ -1,0 +1,86 @@
+/*
+ * Estilos propios del ejemplo de landing (v2). Los tokens de color (ink, brand, line,
+ * surface-subtle...) y las utilidades de Tailwind salen de `styles/index.css`; acá solo van
+ * las cosas que Tailwind no resuelve: la tipografía display, el fondo "noche" del
+ * cinematográfico, el grano de película y las animaciones propias.
+ */
+
+:root {
+  --lv2-night: #07080b;
+  --lv2-paper: #f7f6f3;
+}
+
+html {
+  background: var(--lv2-night);
+}
+
+.lv2-root {
+  background: var(--lv2-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.lv2-night {
+  background: var(--lv2-night);
+}
+
+.lv2-paper {
+  background: var(--lv2-paper);
+}
+
+.lv2-serif {
+  font-family: 'Newsreader', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  font-optical-sizing: auto;
+  font-feature-settings: 'lnum' 1, 'kern' 1;
+}
+
+/* Grano de película sobre las secciones oscuras: SVG inline de ruido fractal, sin imagen
+ * externa. Muy sutil -- da textura sin ensuciar el texto. */
+.lv2-grain::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Ondas del golpe de martillo en el cierre (`Closing.tsx`): nacen chicas, crecen y se desvanecen. */
+@keyframes lv2-ring {
+  0% {
+    transform: translate(-50%, -50%) scale(0.12);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.25);
+    opacity: 0;
+  }
+}
+
+/* Progreso de cada pantalla en el visor de capturas (`Showcase.tsx`). */
+@keyframes lv2-progress {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+/* Pistas horizontales sin barra de scroll visible (galería de rubros en mobile). */
+.lv2-noscrollbar {
+  scrollbar-width: none;
+}
+.lv2-noscrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Foco visible coherente en toda la landing. */
+.lv2-root :focus-visible {
+  outline: 2px solid var(--color-brand-400);
+  outline-offset: 3px;
+}

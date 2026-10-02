@@ -1,138 +1,206 @@
-import { useEffect, useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { useMemo, useState } from 'react';
+import { Package, Search } from 'lucide-react';
 import { useBreadcrumb } from '../../../app/layouts/useBreadcrumb';
-import { useWideLayout } from '../../../app/layouts/useWideLayout';
+import { useTopNavLayout } from '../../../app/layouts/useTopNavLayout';
 import { Alert } from '../../../shared/components/Alert';
 import { Button } from '../../../shared/components/Button';
-import { EmptyState } from '../../../shared/components/EmptyState';
 import { Skeleton } from '../../../shared/components/Skeleton';
-import { GavelIcon } from '../../remates/components/icons';
-import { CaseCard } from '../components/CaseCard';
-import { SearchFilterBar } from '../components/SearchFilterBar';
-import { useVentasAdjudicadas } from '../hooks';
-import type { PostAuctionCase, PostAuctionListFilters } from '../types';
+import { SaleCard } from '../components/sales/SaleCard';
+import { SalesNumbers } from '../components/sales/SalesNumbers';
+import { SalesTodo } from '../components/sales/SalesTodo';
+import { StatusChangeDialog } from '../components/sales/StatusChangeDialog';
+import { useAllVentasAdjudicadas } from '../hooks';
+import {
+  SALES_FILTERS,
+  buildSalesHeadline,
+  buildSalesTasks,
+  computeTotals,
+  filterSales,
+  matchesFilter,
+  nextStatus,
+  sortSales,
+  type SalesFilter,
+} from '../sales';
+import type { PostAuctionCase } from '../types';
 
-const PAGE_SIZE = 4;
+const GRID_CLASSES = 'grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4';
 
-interface DisplayedPage {
-  page: number;
-  items: PostAuctionCase[];
+function SectionHeading({ id, title, description }: { id: string; title: string; description?: string }) {
+  return (
+    <div className="mb-6">
+      <h2 id={id} className="text-2xl font-semibold tracking-tight sm:text-3xl">
+        {title}
+      </h2>
+      {description && <p className="mt-1.5 max-w-[60ch] text-ink-muted">{description}</p>}
+    </div>
+  );
 }
 
 /**
- * "Ventas adjudicadas" del rematador (Épica 7, Módulo 7.5), en `/ventas-adjudicadas`.
- * Buscar y filtrar por estado son requisitos explícitos del enunciado -- ver
- * `SearchFilterBar`. El backend (`PostAuctionService.list_for_rematador`) ya restringe a
- * las ventas propias; un `comprador` que llegue por URL directa recibe 403.
+ * "Ventas adjudicadas" de la empresa (Épica 7, Módulo 7.5), en `/ventas-adjudicadas`;
+ * rediseño editorial sobre el mismo sistema visual del panel principal (`BuyerTopNav`,
+ * `font-display`, líneas `ink`/`line`). Trae todas las ventas de una vez (`useAllVentasAdjudicadas`)
+ * y arma, de arriba a abajo:
  *
- * Retexturizada al mismo sistema visual (`ink`/`line`, `font-display`) que ya usan la
- * Consola Operativa y el Dashboard del Rematador, sin tocar la lógica de filtros/
- * paginación.
+ * 1. Un titular con lo que hay por cobrar y cuántas cosas esperan.
+ * 2. "Qué hacer ahora" -- las ventas que frenan un cobro o una entrega, con el botón del
+ *    próximo paso en cada fila.
+ * 3. "Cómo van tus ventas" -- cifras y el monto por etapa.
+ * 4. "Todas tus ventas" -- galería con filtro por grupo de etapas y búsqueda; las atrasadas
+ *    primero.
  *
- * Transición "carrusel" entre páginas de 4 (mejora estética, sin cambios de datos):
- * `useAsyncResource` deja `data.items` "stale" (la página anterior) mientras `isLoading`
- * está en `true`, así que animar directo sobre `data.items` mostraría un slide con el
- * contenido viejo que después "salta" al contenido real recién llegado. `displayed`
- * captura una foto de `data.items` solo una vez que la carga terminó, y es esa foto (no
- * `data` directo) la que dispara el slide -- el resultado es una pausa breve (lo que
- * tarda el fetch) y después un movimiento fluido con el contenido ya correcto, en vez de
- * un corte seco. `direction` (1 = siguiente, -1 = anterior, 0 = cambio de filtros)
- * decide hacia qué lado entra/sale cada tarjeta.
+ * El próximo paso se confirma en `StatusChangeDialog` (con observación y fecha del hecho).
+ * "Atrasada" y "tiempo en este estado" son derivados en el cliente (ver `sales.ts`): el
+ * backend no los calcula.
  */
 export function VentasAdjudicadasPage() {
-  useWideLayout();
-  const [filters, setFilters] = useState<PostAuctionListFilters>({});
-  const [page, setPage] = useState(1);
-  const [direction, setDirection] = useState<-1 | 0 | 1>(0);
-  const prefersReducedMotion = useReducedMotion();
-
-  const { data, isLoading, error } = useVentasAdjudicadas(filters, page, PAGE_SIZE);
-
-  const [displayed, setDisplayed] = useState<DisplayedPage | null>(null);
-  useEffect(() => {
-    if (isLoading || !data) return;
-    setDisplayed((prev) => (prev?.page === page && prev.items === data.items ? prev : { page, items: data.items }));
-  }, [isLoading, data, page]);
-
-  function handleFiltersChange(next: PostAuctionListFilters) {
-    setFilters(next);
-    setDirection(0);
-    setPage(1);
-  }
-
-  function goToPage(next: number, dir: -1 | 1) {
-    setDirection(dir);
-    setPage(next);
-  }
-
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
-
+  useTopNavLayout();
   useBreadcrumb([{ label: 'Mis remates', to: '/' }, { label: 'Ventas adjudicadas' }]);
+  const { data: items, isLoading, error, reload } = useAllVentasAdjudicadas();
+  const [filter, setFilter] = useState<SalesFilter>('all');
+  const [query, setQuery] = useState('');
+  const [advancing, setAdvancing] = useState<PostAuctionCase | null>(null);
+  const [now] = useState(() => Date.now());
+
+  const hasSales = items.length > 0;
+  const showContent = !isLoading && !error;
+  const totals = useMemo(() => computeTotals(items, now), [items, now]);
+  const tasks = useMemo(() => buildSalesTasks(items, now), [items, now]);
+  const visible = useMemo(() => sortSales(filterSales(items, filter, query, now), now), [items, filter, query, now]);
+
+  const target = advancing ? nextStatus(advancing.status) : null;
 
   return (
-    <div className="flex flex-col gap-6 font-display">
-      <div className="border-b border-line pb-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Ventas adjudicadas</h1>
-        <p className="mt-1 max-w-xl text-sm text-ink-muted">
-          Seguimiento del proceso post-remate: contacto, pago y entrega de cada lote vendido.
-        </p>
-      </div>
+    <div className="min-h-screen bg-white font-display text-ink">
+      <div className="mx-auto w-full max-w-[110rem] px-3 py-8 sm:px-6 lg:px-10">
+        <header className="flex flex-col gap-5">
+          <h1 className="max-w-[22ch] text-balance text-4xl font-semibold leading-[1.02] tracking-tight sm:text-6xl">
+            {isLoading ? 'Ventas adjudicadas' : error ? 'Ventas adjudicadas' : hasSales ? buildSalesHeadline(totals, tasks.length) : 'Todavía no tenés ventas adjudicadas.'}
+          </h1>
+          <p className="max-w-[56ch] text-lg text-ink-muted">
+            {hasSales || isLoading || error
+              ? 'Cada lote vendido, desde el contacto con el comprador hasta la entrega.'
+              : 'Cuando se adjudique un lote de uno de tus remates, la venta aparece acá automáticamente y le avisamos al comprador.'}
+          </p>
+        </header>
 
-      <SearchFilterBar value={filters} onChange={handleFiltersChange} />
-
-      {error ? (
-        <Alert variant="error">No se pudieron cargar las ventas adjudicadas.</Alert>
-      ) : isLoading && !data ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }, (_, index) => (
-            <Skeleton key={index} className="h-40 rounded-xl" />
-          ))}
-        </div>
-      ) : data && data.items.length === 0 ? (
-        <EmptyState
-          icon={<GavelIcon className="h-10 w-10" />}
-          title="Sin ventas adjudicadas"
-          description="Cuando se adjudique un lote de uno de tus remates, el caso aparece acá automáticamente."
-        />
-      ) : (
-        <>
-          <div className="relative overflow-hidden">
-            <AnimatePresence mode="popLayout" initial={false}>
-              <motion.div
-                key={displayed?.page ?? page}
-                initial={prefersReducedMotion ? undefined : { x: direction === 0 ? 0 : direction * 56, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={prefersReducedMotion ? undefined : { x: direction === 0 ? 0 : direction * -56, opacity: 0 }}
-                transition={{ duration: 0.35, ease: [0.21, 0.47, 0.32, 0.98] }}
-                className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-              >
-                {(displayed?.items ?? data?.items ?? []).map((item) => (
-                  <CaseCard key={item.id} item={item} to={`/ventas-adjudicadas/${item.id}`} perspective="rematador" />
-                ))}
-              </motion.div>
-            </AnimatePresence>
-          </div>
-
-          {data && data.total > PAGE_SIZE && (
-            <div className="flex items-center justify-between border-t border-line pt-3">
-              <span className="text-xs text-ink-faint">
-                {data.total} {data.total === 1 ? 'venta' : 'ventas'} · página {page} de {totalPages}
-              </span>
-              <div className="flex gap-2">
-                <Button variant="secondary" disabled={page <= 1} onClick={() => goToPage(Math.max(1, page - 1), -1)}>
-                  Anterior
-                </Button>
-                <Button
-                  variant="secondary"
-                  disabled={page >= totalPages}
-                  onClick={() => goToPage(Math.min(totalPages, page + 1), 1)}
-                >
-                  Siguiente
+        {error && (
+          <div className="mt-10">
+            <Alert variant="error">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span>No se pudieron cargar las ventas adjudicadas.</span>
+                <Button variant="secondary" onClick={reload}>
+                  Reintentar
                 </Button>
               </div>
+            </Alert>
+          </div>
+        )}
+
+        {isLoading && !error && (
+          <div className="mt-12 flex flex-col gap-10">
+            <Skeleton className="h-64 w-full rounded-2xl" />
+            <div className={GRID_CLASSES}>
+              {Array.from({ length: 3 }, (_, index) => (
+                <Skeleton key={index} className="aspect-[4/5] w-full rounded-2xl" />
+              ))}
             </div>
-          )}
-        </>
+          </div>
+        )}
+
+        {showContent && hasSales && (
+          <>
+            <section aria-labelledby="todo-title" className="mt-12">
+              <SectionHeading id="todo-title" title="Qué hacer ahora" description="Lo que está frenando un cobro o una entrega, ordenado por urgencia." />
+              <SalesTodo tasks={tasks} onAdvance={setAdvancing} />
+            </section>
+
+            <section aria-labelledby="numbers-title" className="mt-20">
+              <SectionHeading id="numbers-title" title="Cómo van tus ventas" description="Lo cobrado, lo pendiente y lo que está en camino." />
+              <SalesNumbers totals={totals} />
+            </section>
+
+            <section aria-labelledby="sales-title" className="mt-20">
+              <SectionHeading id="sales-title" title="Todas tus ventas" description="Cada tarjeta dice en qué etapa está y qué sigue. Las atrasadas van primero." />
+              <div className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-3">
+                <div role="group" aria-label="Filtrar ventas" className="flex flex-wrap gap-1.5">
+                  {SALES_FILTERS.map((option) => {
+                    const count = items.filter((item) => matchesFilter(item, option.value, now)).length;
+                    const isActive = filter === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={isActive}
+                        onClick={() => setFilter(option.value)}
+                        className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                          isActive ? 'border-ink bg-ink text-white' : 'border-line bg-white text-ink-muted hover:border-ink hover:text-ink'
+                        }`}
+                      >
+                        {option.label}
+                        <span className="ml-1.5 font-medium tabular-nums opacity-65">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <label className="relative ml-auto w-full sm:w-64">
+                  <span className="sr-only">Buscar venta</span>
+                  <Search aria-hidden="true" className="pointer-events-none absolute left-0 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Buscar lote o comprador"
+                    className="w-full border-0 border-b border-line-strong bg-transparent py-2 pl-6 pr-1 text-sm text-ink placeholder:text-ink-faint focus:border-ink focus:outline-none"
+                  />
+                </label>
+              </div>
+
+              {visible.length > 0 ? (
+                <div className={GRID_CLASSES}>
+                  {visible.map((item) => (
+                    <SaleCard key={item.id} item={item} now={now} onAdvance={setAdvancing} />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid justify-items-start gap-3">
+                  <p className="text-lg font-semibold">No hay ventas con ese filtro</p>
+                  <p className="text-ink-muted">Probá con otra etapa o borrá la búsqueda.</p>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setFilter('all');
+                      setQuery('');
+                    }}
+                  >
+                    Limpiar filtros
+                  </Button>
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        {showContent && !hasSales && (
+          <div className="mt-12 grid justify-items-center gap-3 rounded-3xl border border-dashed border-line-strong px-6 py-16 text-center">
+            <Package aria-hidden="true" className="h-8 w-8 text-ink-faint" />
+            <h2 className="text-2xl font-semibold tracking-tight">Sin ventas adjudicadas</h2>
+            <p className="max-w-[46ch] text-ink-muted">Cuando se adjudique un lote de uno de tus remates, el caso aparece acá automáticamente.</p>
+          </div>
+        )}
+      </div>
+
+      {advancing && target && (
+        <StatusChangeDialog
+          isOpen
+          onClose={() => setAdvancing(null)}
+          caseId={advancing.id}
+          loteTitle={advancing.lote_title}
+          buyerName={advancing.buyer_name}
+          from={advancing.status}
+          to={target}
+          onChanged={reload}
+        />
       )}
     </div>
   );

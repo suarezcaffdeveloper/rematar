@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { ArrowRight, Check, CheckCircle2, Lock, TriangleAlert, X } from 'lucide-react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { ArrowRight, Check, Lock, TriangleAlert, X } from 'lucide-react';
 import { normalizeApiError } from '../../../shared/api/errors';
 import { Alert } from '../../../shared/components/Alert';
 import { Button } from '../../../shared/components/Button';
@@ -68,11 +68,6 @@ const STEPS: Array<{ id: StepId; label: string; description: string; fields: Arr
 
 const INCREMENT_PERCENTS = [0.5, 1, 2];
 
-interface CreatedBanner {
-  lotNumber: string;
-  title: string;
-}
-
 /**
  * Panel lateral para crear o editar un lote, en tres pasos cortos -- Fotos, Datos y Precios
  * -- con la vista previa de cómo lo ve el comprador al costado, que se actualiza mientras se
@@ -84,10 +79,9 @@ interface CreatedBanner {
  * DESPUÉS de crear el lote, en el mismo click de guardar (`submitLote`), tolerando fallos
  * individuales sin deshacer la creación.
  *
- * Confirmación de creación: al crear un lote se muestra un cartel fijo dentro del propio
- * panel ("Lote N creado correctamente") -- con "Guardar y cargar otro" es lo que le dice a
- * la empresa que el lote anterior quedó guardado mientras el formulario vuelve a quedar en
- * blanco. Además se avisa por toast (el viewport de toasts queda por encima del panel).
+ * Confirmación de creación: solo por toast ("Lote N creado correctamente"; el viewport de
+ * toasts queda por encima del panel) -- con "Guardar y cargar otro" es lo que le dice a la
+ * empresa que el lote anterior quedó guardado mientras el formulario vuelve a quedar en blanco.
  */
 export function LoteDrawer({ isOpen, onClose, remateId, currency, lote, readOnly = false, existingLotNumbers, onSaved }: LoteDrawerProps) {
   const isEditMode = Boolean(lote);
@@ -105,7 +99,6 @@ export function LoteDrawer({ isOpen, onClose, remateId, currency, lote, readOnly
   const [currentLote, setCurrentLote] = useState<Lote | undefined>(lote);
   const [stagedImages, setStagedImages] = useState<StagedImage[]>([]);
   const [savedNumbers, setSavedNumbers] = useState<string[]>([]);
-  const [createdBanner, setCreatedBanner] = useState<CreatedBanner | null>(null);
   const [isConfirmingClose, setIsConfirmingClose] = useState(false);
 
   // Se reinicia solo al abrir (o al cambiar de lote): `existingLotNumbers` cambia cada vez
@@ -125,7 +118,6 @@ export function LoteDrawer({ isOpen, onClose, remateId, currency, lote, readOnly
     setCurrentLote(lote);
     setStagedImages([]);
     setSavedNumbers([]);
-    setCreatedBanner(null);
     setIsConfirmingClose(false);
   }, [isOpen, lote]);
 
@@ -266,7 +258,7 @@ export function LoteDrawer({ isOpen, onClose, remateId, currency, lote, readOnly
   }
 
   /** "Guardar y cargar otro" (solo en creación): deja el panel abierto con el formulario
-   * limpio y un cartel que confirma el lote recién guardado. */
+   * limpio; el toast confirma el lote recién guardado. */
   async function handleSaveAndNew() {
     setActiveAction('save-and-new');
     const saved = await submitLote();
@@ -276,7 +268,6 @@ export function LoteDrawer({ isOpen, onClose, remateId, currency, lote, readOnly
     useToastStore.getState().push('success', `Lote ${saved.lot_number} creado correctamente.`);
     onSaved(saved, true);
     setSavedNumbers(nextNumbers);
-    setCreatedBanner({ lotNumber: saved.lot_number, title: saved.title });
     const next = { ...DEFAULT_LOTE_FORM_VALUES, lot_number: suggestNextLotNumber([...existingLotNumbers, ...nextNumbers]) };
     setValues(next);
     setInitialValues(next);
@@ -362,32 +353,6 @@ export function LoteDrawer({ isOpen, onClose, remateId, currency, lote, readOnly
 
         <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
           <div data-drawer-body className="flex min-h-0 flex-col gap-5 overflow-y-auto px-4 py-5 sm:px-7">
-            <AnimatePresence initial={false}>
-              {createdBanner && (
-                <motion.div
-                  key="created"
-                  role="status"
-                  initial={prefersReducedMotion ? false : { opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="flex items-start gap-3 rounded-2xl bg-success-50 px-4 py-3 text-success-700"
-                >
-                  <CheckCircle2 aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0" />
-                  <p className="flex-1 text-sm">
-                    <b>Lote {createdBanner.lotNumber} creado correctamente.</b> “{createdBanner.title}” ya está en tu catálogo. Podés cargar el siguiente.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setCreatedBanner(null)}
-                    aria-label="Cerrar aviso"
-                    className="rounded-full p-1 text-success-700/70 hover:bg-success-100 hover:text-success-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-success-600"
-                  >
-                    <X aria-hidden="true" className="h-4 w-4" />
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
             {submitError && <Alert variant="error">{submitError}</Alert>}
 
             {readOnly ? (

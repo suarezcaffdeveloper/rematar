@@ -22,6 +22,8 @@ export interface MockChatMessage {
   text: string;
   at: number;
   fromOperator?: boolean;
+  /** Id del mensaje (pregunta) al que responde. */
+  replyTo?: number;
 }
 
 export interface AdjudicatedInfo {
@@ -66,9 +68,11 @@ function seedChat(now: number): MockChatMessage[] {
   return [
     { id: 1, author: 'Comprador 31', text: 'Buenas tardes a todos', at: now - 540_000 },
     { id: 2, author: 'Comprador 14', text: '¿Los equipos tienen garantía?', at: now - 420_000 },
-    { id: 3, author: 'Martillero', text: 'Tienen 30 días de garantía de funcionamiento', at: now - 400_000, fromOperator: true },
+    { id: 3, author: 'Empresa', text: 'Tienen 30 días de garantía de funcionamiento', at: now - 400_000, fromOperator: true, replyTo: 2 },
     { id: 4, author: 'Comprador 27', text: 'Gracias', at: now - 360_000 },
     { id: 5, author: 'Comprador 52', text: 'Estoy atento al lote 6', at: now - 160_000 },
+    { id: 6, author: 'Comprador 08', text: '¿Se puede retirar con flete propio o hay que coordinar?', at: now - 95_000 },
+    { id: 7, author: 'Comprador 19', text: '¿Las laptops tienen Windows instalado?', at: now - 41_000 },
   ];
 }
 
@@ -230,10 +234,13 @@ export function useConsolaSim() {
     toast('success', 'El remate se reanudó.');
   }, [isPaused, toast]);
 
-  const sendChat = useCallback((text: string) => {
+  const sendChat = useCallback((text: string, options: { author?: string; replyTo?: number } = {}) => {
     const clean = text.trim();
     if (!clean) return;
-    setChat((list) => [...list, { id: ++idRef.current, author: 'Martillero', text: clean, at: Date.now(), fromOperator: true }]);
+    setChat((list) => [
+      ...list,
+      { id: ++idRef.current, author: options.author ?? 'Martillero', text: clean, at: Date.now(), fromOperator: true, replyTo: options.replyTo },
+    ]);
   }, []);
 
   const reset = useCallback(() => {

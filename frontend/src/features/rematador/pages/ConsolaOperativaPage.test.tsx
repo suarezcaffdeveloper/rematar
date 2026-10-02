@@ -234,16 +234,31 @@ describe('ConsolaOperativaPage', () => {
     expect(screen.getByText('Simuladores (mock)')).toBeInTheDocument(); // ConsolaBotsPanel
   });
 
-  it('remate "live", viewer dueño del remate (empresa): oculta la botonera y los simuladores, muestra la analítica en su lugar', () => {
+  it('remate "live", viewer dueño del remate (empresa): ve la Cabina, sin botonera ni simuladores, con la analítica en su pestaña', async () => {
     useAuthMock.mockReturnValue({ user: { id: 'owner-1', role: 'empresa' } });
     mockLiveState({ snapshot: makeSnapshot() });
 
     renderPage();
 
-    expect(screen.getByText('Toro Angus')).toBeInTheDocument(); // ConsolaLotePanel sigue visible
+    expect(screen.getByText('Toro Angus')).toBeInTheDocument(); // lote en remate
     expect(screen.queryByText('Panel de control operativo')).not.toBeInTheDocument(); // ConsolaControlPanel
-    expect(screen.getByText('Analítica en tiempo real (mock)')).toBeInTheDocument(); // AnalyticsPanel
     expect(screen.queryByText('Simuladores (mock)')).not.toBeInTheDocument(); // ConsolaBotsPanel
+    expect(screen.queryByText('Analítica en tiempo real (mock)')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Análisis' }));
+    expect(screen.getByText('Analítica en tiempo real (mock)')).toBeInTheDocument(); // AnalyticsPanel
+  });
+
+  it('remate "live", viewer dueño: "Ver como comprador" abre la sala del mismo remate en otra pestaña', () => {
+    useAuthMock.mockReturnValue({ user: { id: 'owner-1', role: 'empresa' } });
+    mockLiveState({ snapshot: makeSnapshot() });
+
+    renderPage();
+
+    const link = screen.getByRole('link', { name: /Ver como comprador/ });
+    expect(link).toHaveAttribute('href', '/remates/remate-1/sala');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
   });
 
   it('el historial de ofertas del sidebar queda siempre visible, sin pestaña', () => {

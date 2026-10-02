@@ -1,0 +1,119 @@
+/*
+ * Estilos de la landing v3 (rediseño editorial/cinematográfico). Los tokens de color
+ * (ink, brand, line, surface...) y las utilidades de Tailwind salen de `styles/index.css`;
+ * acá solo van las cosas que Tailwind no resuelve: la tipografía display, el fondo "noche",
+ * el grano de película, las curvas propias y las animaciones de la página.
+ */
+
+:root {
+  --lv3-night: #07080b;
+  --lv3-paper: #f7f6f3;
+  /* Expo out: la curva de los paneles. */
+  --lv3-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Salida fuerte para interacciones de UI (press, hover, dropdowns). */
+  --lv3-ease-ui: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+html {
+  background: var(--lv3-night);
+}
+
+.lv3-root {
+  background: var(--lv3-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  /* `clip` (no `hidden`): los estados de entrada con translateX de la línea de tiempo
+     empujan ~24px a la derecha y generarían un scroll horizontal de 4px en mobile.
+     A diferencia de `hidden`, `clip` no crea contexto de scroll, así que no rompe
+     los `position: sticky` de las secciones. */
+  overflow-x: clip;
+}
+
+.lv3-night {
+  background: var(--lv3-night);
+}
+
+.lv3-paper {
+  background: var(--lv3-paper);
+}
+
+.lv3-serif {
+  font-family: 'Newsreader', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  font-optical-sizing: auto;
+  font-feature-settings: 'lnum' 1, 'kern' 1;
+}
+
+/*
+ * Grano de película: una única capa fija sobre toda la página (SVG inline de ruido fractal,
+ * sin imagen externa). `pointer-events: none` y capa fija para que no pague repaints al
+ * scrollear. Muy sutil -- da textura física sin ensuciar el texto.
+ */
+.lv3-grain-fixed {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Feedback de press: todo lo presionable responde al instante (160 ms, sin ease-in). */
+.v3-press {
+  transition: transform 160ms var(--lv3-ease-ui);
+}
+.v3-press:active {
+  transform: scale(0.97);
+}
+
+/* Ondas del golpe de martillo en el cierre: nacen chicas, crecen y se desvanecen. */
+@keyframes lv3-ring {
+  0% {
+    transform: translate(-50%, -50%) scale(0.12);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.25);
+    opacity: 0;
+  }
+}
+
+/* Progreso de cada pantalla en el visor de capturas (`Showcase.tsx`). */
+@keyframes lv3-progress {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+/* Punto "en vivo" del hero: doble latido (ping + núcleo). */
+@keyframes lv3-live {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.82);
+  }
+}
+
+/* Pistas horizontales sin barra de scroll visible (carriles mobile). */
+.lv3-noscrollbar {
+  scrollbar-width: none;
+}
+.lv3-noscrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Foco visible coherente en toda la landing. */
+.lv3-root :focus-visible {
+  outline: 2px solid var(--color-brand-400);
+  outline-offset: 3px;
+}

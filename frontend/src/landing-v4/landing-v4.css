@@ -1,0 +1,216 @@
+/*
+ * Estilos de la landing v4 (opción B: "La sala" — cinematográfica con lectura editorial).
+ * Los tokens de marca y las utilidades de Tailwind salen de `styles/index.css`; acá van solo
+ * las cosas que Tailwind no resuelve: tipografía, grano, viñeta, curvas propias, resplandores
+ * y keyframes.
+ */
+
+:root {
+  --lv4-ink: #06080f;
+  --lv4-night: #0a0f1e;
+  --lv4-paper: #eef0f3;
+  --lv4-paper-2: #e3e6ec;
+  --lv4-cobalt: #2451f2;
+  --lv4-cobalt-soft: #9db3fa;
+  --lv4-brass: #c8a45d;
+  --lv4-line-dark: rgba(255, 255, 255, 0.14);
+  --lv4-line-light: rgba(6, 8, 15, 0.14);
+  --lv4-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --lv4-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --lv4-ease-cine: cubic-bezier(0.76, 0, 0.18, 1);
+}
+
+html {
+  background: var(--lv4-ink);
+}
+
+.lv4-root {
+  background: var(--lv4-paper);
+  color: var(--lv4-ink);
+  font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* `clip` y no `hidden`: no crea contexto de scroll, así no rompe los `position: sticky`. */
+  overflow-x: clip;
+}
+
+/* Display editorial: serif de alto contraste, tracking cerrado, sin negritas falsas. */
+.lv4-serif {
+  font-family: 'Instrument Serif', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.022em;
+  font-feature-settings: 'kern' 1, 'liga' 1;
+}
+
+.lv4-num {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.lv4-dark {
+  background: var(--lv4-ink);
+  color: #fff;
+}
+.lv4-night {
+  background: var(--lv4-night);
+  color: #fff;
+}
+.lv4-paper {
+  background: var(--lv4-paper);
+  color: var(--lv4-ink);
+}
+
+.lv4-press {
+  transition: transform 160ms var(--lv4-ease-out);
+}
+.lv4-press:active {
+  transform: scale(0.98);
+}
+
+/* Foco visible en toda la página. */
+.lv4-root :focus-visible {
+  outline: 2px solid var(--lv4-cobalt-soft);
+  outline-offset: 3px;
+}
+
+/*
+ * Grano de película: una única capa fija sobre toda la página (SVG de ruido fractal inline).
+ * Fija y sin eventos de puntero para no pagar repaints al scrollear.
+ */
+.lv4-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  pointer-events: none;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Viñeta: oscurece los bordes de la imagen, como una lente. */
+.lv4-vignette {
+  background: radial-gradient(120% 90% at 50% 45%, transparent 45%, rgba(6, 8, 15, 0.75) 100%);
+}
+
+/* Botón: relleno que sube desde abajo al apoyar el cursor. */
+.lv4-btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition: color 450ms var(--lv4-ease), border-color 450ms var(--lv4-ease), transform 160ms var(--lv4-ease-out);
+}
+.lv4-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--lv4-fill, var(--lv4-cobalt));
+  transform: translateY(101%);
+  transition: transform 550ms var(--lv4-ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .lv4-btn:hover::before {
+    transform: translateY(0);
+  }
+}
+.lv4-btn:active {
+  transform: scale(0.98);
+}
+
+/* Spotlight: resplandor que sigue al cursor (--mx/--my se setean por JS). */
+.lv4-spot {
+  position: relative;
+  isolation: isolate;
+}
+.lv4-spot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 500ms var(--lv4-ease-out);
+  background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 50%), rgba(36, 81, 242, 0.2), transparent 65%);
+}
+@media (hover: hover) and (pointer: fine) {
+  .lv4-spot:hover::before {
+    opacity: 1;
+  }
+}
+
+/* Luz de galería: la foto queda en penumbra salvo donde apunta el cursor. */
+.lv4-gallery-light {
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), transparent 0%, rgba(6, 8, 15, 0.62) 100%);
+  opacity: 0;
+  transition: opacity 500ms var(--lv4-ease-out);
+}
+.lv4-gallery-card:hover .lv4-gallery-light {
+  opacity: 1;
+}
+@media (hover: none) {
+  .lv4-gallery-light {
+    display: none;
+  }
+}
+
+@keyframes lv4-pulse-ring {
+  0% { transform: scale(0.8); opacity: 0.7; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+.lv4-live-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: lv4-pulse-ring 2s var(--lv4-ease-out) infinite;
+}
+
+/* Golpe del martillo: un temblor corto del panel y un destello que se apaga. */
+@keyframes lv4-strike {
+  0% { transform: translate3d(0, 0, 0); }
+  15% { transform: translate3d(0, 5px, 0); }
+  30% { transform: translate3d(0, -3px, 0); }
+  50% { transform: translate3d(0, 2px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+.lv4-strike { animation: lv4-strike 520ms var(--lv4-ease-out); }
+
+@keyframes lv4-flash {
+  0% { opacity: 0.55; }
+  100% { opacity: 0; }
+}
+.lv4-flash { animation: lv4-flash 900ms var(--lv4-ease-out) forwards; }
+
+@keyframes lv4-shockwave {
+  0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+}
+.lv4-shockwave { animation: lv4-shockwave 1100ms var(--lv4-ease-out) forwards; }
+
+/* Haz de luz del cierre: respira despacio. */
+@keyframes lv4-beam {
+  0%, 100% { opacity: 0.55; transform: translateX(-50%) scaleX(1); }
+  50% { opacity: 0.9; transform: translateX(-50%) scaleX(1.08); }
+}
+.lv4-beam { animation: lv4-beam 7s var(--lv4-ease) infinite; }
+
+@keyframes lv4-cue {
+  0% { transform: scaleY(0); transform-origin: top; }
+  50% { transform: scaleY(1); transform-origin: top; }
+  51% { transform: scaleY(1); transform-origin: bottom; }
+  100% { transform: scaleY(0); transform-origin: bottom; }
+}
+.lv4-cue { animation: lv4-cue 2.4s var(--lv4-ease-cine) infinite; }
+
+@keyframes lv4-typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+.lv4-typing-dot { animation: lv4-typing 1.2s var(--lv4-ease) infinite; }
+
+.lv4-hide-scrollbar { scrollbar-width: none; }
+.lv4-hide-scrollbar::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lv4-live-dot::after, .lv4-beam, .lv4-cue, .lv4-typing-dot, .lv4-strike, .lv4-flash, .lv4-shockwave {
+    animation: none;
+  }
+}

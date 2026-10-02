@@ -92,6 +92,27 @@ export function suggestNextLotNumber(existing: string[]): string {
   return String((numbers.length > 0 ? Math.max(...numbers) : 0) + 1);
 }
 
+/** Máximo que admite el backend: `max_digits=14`, `decimal_places=2`. */
+const MAX_PRICE = 999_999_999_999.99;
+
+/** Error de un campo de precio (monto > 0, hasta 2 decimales, tope del backend) o `undefined` si es válido. */
+function priceFieldError(raw: string, label: string): string | undefined {
+  const value = raw.trim();
+  if (!value) return `Ingresá ${label}.`;
+  if (/^\d+\.\d{3,}$/.test(value)) return 'Usá como máximo 2 decimales.';
+  if (!isPositiveDecimal(value)) return `Ingresá ${label} válido, mayor a 0.`;
+  if (Number(value) > MAX_PRICE) return 'El monto es demasiado grande.';
+  return undefined;
+}
+
+/** El incremento es una parte del precio inicial: nunca puede ser mayor a él. Se ignora si alguno
+ * de los dos todavía no es un número válido (ese error ya se muestra en su propio campo). */
+function incrementVsBaseError(base: string, increment: string): string | undefined {
+  if (!isPositiveDecimal(base) || !isPositiveDecimal(increment)) return undefined;
+  if (Number(increment) > Number(base)) return 'El incremento no puede ser mayor al precio inicial.';
+  return undefined;
+}
+
 /**
  * Mismas reglas que el backend (`LoteCreate`/`LoteUpdate`, ver docstring del archivo).
  * `takenLotNumbers` (opcional): números de lote que otro lote del remate ya usa -- el backend
@@ -116,27 +137,27 @@ export function validateLoteForm(values: LoteFormValues, takenLotNumbers: string
   if (values.description.length > 5000) {
     errors.description = 'La descripción no puede superar los 5000 caracteres.';
   }
-  if (!isPositiveDecimal(values.base_price)) {
-    errors.base_price = 'Ingresá un precio inicial válido, mayor a 0.';
-  }
-  if (!isPositiveDecimal(values.min_increment)) {
-    errors.min_increment = 'Ingresá un incremento mínimo válido, mayor a 0.';
-  }
+  const priceError = priceFieldError(values.base_price, 'un precio inicial');
+  if (priceError) errors.base_price = priceError;
+  const incrementError =
+    priceFieldError(values.min_increment, 'un incremento mínimo') ?? incrementVsBaseError(values.base_price, values.min_increment);
+  if (incrementError) errors.min_increment = incrementError;
   if (values.reserve_price.trim()) {
-    if (!isPositiveDecimal(values.reserve_price)) {
-      errors.reserve_price = 'Ingresá un precio de reserva válido, mayor a 0.';
+    const reserveError = priceFieldError(values.reserve_price, 'un precio de reserva');
+    if (reserveError) {
+      errors.reserve_price = reserveError;
     } else if (isPositiveDecimal(values.base_price) && Number(values.reserve_price) < Number(values.base_price)) {
       errors.reserve_price = 'El precio de reserva no puede ser menor al precio inicial.';
     }
   }
 
   if (values.requeue_preset_enabled) {
-    if (!isPositiveDecimal(values.requeue_preset_base_price)) {
-      errors.requeue_preset_base_price = 'Ingresá un precio inicial válido, mayor a 0.';
-    }
-    if (!isPositiveDecimal(values.requeue_preset_min_increment)) {
-      errors.requeue_preset_min_increment = 'Ingresá un incremento mínimo válido, mayor a 0.';
-    }
+    const presetBaseError = priceFieldError(values.requeue_preset_base_price, 'un precio inicial');
+    if (presetBaseError) errors.requeue_preset_base_price = presetBaseError;
+    const presetIncrementError =
+      priceFieldError(values.requeue_preset_min_increment, 'un incremento mínimo') ??
+      incrementVsBaseError(values.requeue_preset_base_price, values.requeue_preset_min_increment);
+    if (presetIncrementError) errors.requeue_preset_min_increment = presetIncrementError;
   }
 
   return errors;

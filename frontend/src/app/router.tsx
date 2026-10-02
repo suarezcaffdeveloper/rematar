@@ -24,7 +24,6 @@ import { BotProfilesPage } from '../features/bots/pages/BotProfilesPage';
 import { ConsolaOperativaPage } from '../features/rematador/pages/ConsolaOperativaPage';
 import { LotesManagementPage } from '../features/rematador/pages/LotesManagementPage';
 import { RemateAuditLogPage } from '../features/rematador/pages/RemateAuditLogPage';
-import { LoteHistoryDetailPage } from '../features/history/pages/LoteHistoryDetailPage';
 import { RemateHistoryDetailPage } from '../features/history/pages/RemateHistoryDetailPage';
 import { RemateHistoryListPage } from '../features/history/pages/RemateHistoryListPage';
 import { MiCompraDetailPage } from '../features/postauction/pages/MiCompraDetailPage';
@@ -54,6 +53,8 @@ import { PreviewRemateAPage } from './pages/PreviewRemateAPage';
 import { PreviewRemateBPage } from './pages/PreviewRemateBPage';
 import { PreviewTimedAPage } from './pages/PreviewTimedAPage';
 import { PreviewTimedBPage } from './pages/PreviewTimedBPage';
+import { PreviewEmpresaAPage } from './pages/PreviewEmpresaAPage';
+import { PreviewEmpresaBPage } from './pages/PreviewEmpresaBPage';
 
 export const router = createBrowserRouter([
   {
@@ -91,6 +92,9 @@ export const router = createBrowserRouter([
       // Propuestas de la Sala de un remate Timed (simulación sin backend; `?modo=`, `?largo=1`, `?lotes=N`, `?vivo=0`).
       { path: '/preview-timed-a', element: <PreviewTimedAPage /> },
       { path: '/preview-timed-b', element: <PreviewTimedBPage /> },
+      // Propuestas del panel de la empresa en un remate en vivo (simulación sin backend; `?tab=`, `?martillero=0`, `?estado=pausado`, `?stream=0`).
+      { path: '/preview-empresa-a', element: <PreviewEmpresaAPage /> },
+      { path: '/preview-empresa-b', element: <PreviewEmpresaBPage /> },
       // Protegidas: todo lo que cuelga de acá exige sesión iniciada.
       {
         element: <RequireAuth />,
@@ -138,10 +142,6 @@ export const router = createBrowserRouter([
               // esté finalizado/cancelado, ver HistoryService).
               { path: '/historial', element: <RemateHistoryListPage /> },
               { path: '/remates/:remateId/historial', element: <RemateHistoryDetailPage /> },
-              {
-                path: '/remates/:remateId/historial/lotes/:loteId',
-                element: <LoteHistoryDetailPage />,
-              },
               // Gestión Post-Remate (Épica 7, Módulo 7.5) -- mismo criterio sin
               // RequireRole que /historial: el backend decide (empresa dueña del
               // caso o admin para "ventas adjudicadas", ADR-047; comprador dueño para

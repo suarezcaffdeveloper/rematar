@@ -55,6 +55,31 @@ async function fetchAllVentasAdjudicadasForRemate(remateId: string): Promise<Pos
   return collected;
 }
 
+const MAX_VENTAS = 300;
+
+async function fetchAllVentasAdjudicadas(): Promise<PostAuctionCase[]> {
+  const collected: PostAuctionCase[] = [];
+  let page = 1;
+  while (collected.length < MAX_VENTAS) {
+    const result = await fetchVentasAdjudicadasRequest({}, page, VENTAS_PAGE_SIZE);
+    collected.push(...result.items);
+    const gotFullPage = result.items.length === VENTAS_PAGE_SIZE;
+    const moreRemain = collected.length < result.total;
+    if (!gotFullPage || !moreRemain) break;
+    page += 1;
+  }
+  return collected;
+}
+
+export type UseAllVentasAdjudicadasResult = UseAsyncResourceResult<PostAuctionCase[]>;
+
+/** Todas las ventas de la empresa, sin paginar en la UI: el tablero de "Ventas adjudicadas"
+ * arma el resumen de cobros, "qué hacer ahora" y los filtros sobre la lista completa (misma
+ * idea que `useAllMisCompras` del lado comprador). Tope defensivo, no un límite de negocio. */
+export function useAllVentasAdjudicadas(options: { enabled?: boolean } = {}): UseAllVentasAdjudicadasResult {
+  return useAsyncResource(() => fetchAllVentasAdjudicadas(), [], [], { enabled: options.enabled ?? true });
+}
+
 export type UseVentasAdjudicadasForRemateResult = UseAsyncResourceResult<PostAuctionCase[]>;
 
 /** Todos los casos post-remate de un remate puntual, sin paginar en la UI -- usado por

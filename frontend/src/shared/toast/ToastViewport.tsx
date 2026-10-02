@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, Info, TriangleAlert, X, XCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { useToastStore, type ToastVariant } from './toastStore';
-import { Alert } from '../components/Alert';
 
 const AUTO_DISMISS_MS = 5000;
 const EXIT_DURATION_MS = 150;
@@ -12,6 +11,13 @@ const VARIANT_ICONS: Record<ToastVariant, typeof Info> = {
   success: CheckCircle2,
   info: Info,
   warning: TriangleAlert,
+};
+
+const TONES: Record<ToastVariant, { chip: string; bar: string; border: string }> = {
+  success: { chip: 'bg-success-100 text-success-700', bar: 'bg-success-500', border: 'border-success-200' },
+  error: { chip: 'bg-danger-100 text-danger-700', bar: 'bg-danger-500', border: 'border-danger-200' },
+  warning: { chip: 'bg-amber-100 text-amber-700', bar: 'bg-amber-500', border: 'border-amber-200' },
+  info: { chip: 'bg-brand-100 text-brand-700', bar: 'bg-brand-500', border: 'border-brand-200' },
 };
 
 function ToastItem({ id, variant, message }: { id: string; variant: ToastVariant; message: string }) {
@@ -43,20 +49,32 @@ function ToastItem({ id, variant, message }: { id: string; variant: ToastVariant
         isVisible && !isLeaving ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0',
       )}
     >
-      <Alert variant={variant} className="shadow-lg">
-        <div className="flex items-start gap-3">
-          <Icon aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0" />
-          <p className="flex-1">{message}</p>
+      <div
+        className={clsx(
+          'relative overflow-hidden rounded-2xl border bg-white shadow-[0_18px_40px_-12px_rgba(16,17,20,0.28)]',
+          TONES[variant].border,
+        )}
+      >
+        <div className="flex items-center gap-3 py-3 pl-3.5 pr-2.5">
+          <span className={clsx('flex h-9 w-9 shrink-0 items-center justify-center rounded-full', TONES[variant].chip)}>
+            <Icon aria-hidden="true" className="h-[18px] w-[18px]" />
+          </span>
+          <p className="flex-1 text-sm font-semibold leading-snug text-ink">{message}</p>
           <button
             type="button"
             onClick={handleDismiss}
             aria-label="Cerrar aviso"
-            className="rounded p-0.5 text-current opacity-60 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="rounded-full p-1.5 text-ink-muted transition-colors hover:bg-surface-subtle hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <X aria-hidden="true" className="h-4 w-4" />
           </button>
         </div>
-      </Alert>
+        <span
+          aria-hidden="true"
+          className={clsx('toast-progress absolute inset-x-0 bottom-0 h-[3px] origin-left', TONES[variant].bar)}
+          style={{ animationDuration: `${AUTO_DISMISS_MS}ms` }}
+        />
+      </div>
     </div>
   );
 }

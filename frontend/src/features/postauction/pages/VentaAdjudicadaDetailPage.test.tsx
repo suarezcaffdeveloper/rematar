@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { VentaAdjudicadaDetailPage } from './VentaAdjudicadaDetailPage';
 import type { PostAuctionCaseDetail } from '../types';
@@ -107,8 +108,48 @@ describe('VentaAdjudicadaDetailPage', () => {
     renderPage();
 
     expect((await screen.findAllByText('Ford Ranger XLT 3.2 4x2')).length).toBeGreaterThan(0);
-    expect(screen.queryByText('Última observación')).not.toBeInTheDocument();
+    expect(screen.getByText('Todavía no hay observaciones.')).toBeInTheDocument();
     expect(screen.getByText('Sin actividad registrada')).toBeInTheDocument();
+  });
+
+  it('muestra el recorrido de los 8 estados con el próximo paso en el estado actual', async () => {
+    apiMocks.fetchVentaDetailRequest.mockResolvedValue(makeDetail());
+    renderPage();
+
+    const journey = (await screen.findByRole('heading', { name: 'El recorrido de la venta' })).closest('section') as HTMLElement;
+    expect(within(journey).getAllByRole('listitem')).toHaveLength(8);
+    expect(within(journey).getByRole('listitem', { current: 'step' })).toHaveTextContent('Pago pendiente');
+    expect(within(journey).getByRole('button', { name: /Registrar pago recibido/ })).toBeInTheDocument();
+    // Los estados que faltan permiten saltar directo; los anteriores no.
+    expect(within(journey).getAllByRole('button', { name: 'Pasar directo a este estado' })).toHaveLength(5);
+  });
+
+  it('pasar directo a un estado avisa qué pasos se saltean antes de confirmar', async () => {
+    apiMocks.fetchVentaDetailRequest.mockResolvedValue(makeDetail());
+    renderPage();
+
+    const journey = (await screen.findByRole('heading', { name: 'El recorrido de la venta' })).closest('section') as HTMLElement;
+    await userEvent.click(within(journey).getAllByRole('button', { name: 'Pasar directo a este estado' })[2]);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Vas a saltear 2 pasos/)).toBeInTheDocument();
+  });
+
+  it('marca como salteado el paso que no tiene fecha y muestra la actividad con lo más reciente primero', async () => {
+    apiMocks.fetchVentaDetailRequest.mockResolvedValue(makeDetail({ status: 'enviado' }));
+    renderPage();
+
+    expect((await screen.findAllByText('Salteado: este paso quedó sin fecha.')).length).toBeGreaterThan(0);
+    const activity = screen.getByRole('heading', { name: 'Actividad' }).closest('section') as HTMLElement;
+    const badges = within(activity).getAllByText(/Observación agregada|Caso creado/);
+    expect(badges[0]).toHaveTextContent('Observación agregada');
+  });
+
+  it('avisa que el comprador ve las observaciones', async () => {
+    apiMocks.fetchVentaDetailRequest.mockResolvedValue(makeDetail());
+    renderPage();
+
+    expect(await screen.findByText(/El comprador ve las observaciones/)).toBeInTheDocument();
   });
 
   it('muestra un error con opción de reintentar si falla la carga', async () => {

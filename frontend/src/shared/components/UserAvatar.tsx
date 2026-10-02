@@ -5,7 +5,7 @@ export interface UserAvatarProps {
   /** `User.avatar_url` -- `null`/`undefined` cae al avatar por defecto (iniciales). */
   avatarUrl: string | null | undefined;
   fullName: string;
-  size?: 'xs' | 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
 }
 
@@ -16,6 +16,8 @@ const SIZE_CLASSES: Record<NonNullable<UserAvatarProps['size']>, string> = {
   sm: 'h-9 w-9 text-sm',
   md: 'h-14 w-14 text-base',
   lg: 'h-20 w-20 text-xl sm:h-24 sm:w-24 sm:text-2xl',
+  // Cabecera editorial de "Mi perfil": acompaña al nombre como titular.
+  xl: 'h-28 w-28 text-4xl md:h-[8.5rem] md:w-[8.5rem] md:text-[44px]',
 };
 
 /** `"Ana Rematadora"` -> `"AR"`. */

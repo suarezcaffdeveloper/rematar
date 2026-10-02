@@ -146,17 +146,15 @@ describe('LoteDrawer', () => {
     expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ id: 'nuevo' }), true);
   });
 
-  it('"Guardar y cargar otro" deja el panel abierto, en blanco, con un cartel que confirma el lote creado', async () => {
+  it('"Guardar y cargar otro" deja el panel abierto y en blanco, y confirma el lote creado por toast', async () => {
     apiMocks.createLoteRequest.mockResolvedValue(makeLote({ id: 'nuevo', lot_number: '15', title: 'Toro Hereford' }));
     const { onClose, onSaved } = renderDrawer();
 
     await fillAndReachPrices();
     await userEvent.click(screen.getByRole('button', { name: 'Guardar y cargar otro' }));
 
-    const banner = await screen.findByRole('status');
-    expect(banner).toHaveTextContent('Lote 15 creado correctamente.');
-    expect(banner).toHaveTextContent('Toro Hereford');
-    expect(toastPushMock).toHaveBeenCalledWith('success', 'Lote 15 creado correctamente.');
+    await waitFor(() => expect(toastPushMock).toHaveBeenCalledWith('success', 'Lote 15 creado correctamente.'));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ id: 'nuevo' }), true);
     expect(onClose).not.toHaveBeenCalled();
 
@@ -167,19 +165,7 @@ describe('LoteDrawer', () => {
     expect(screen.getByLabelText(/Número de lote/)).toHaveValue('16');
   });
 
-  it('el cartel de lote creado se puede cerrar', async () => {
-    apiMocks.createLoteRequest.mockResolvedValue(makeLote({ lot_number: '15' }));
-    renderDrawer();
-
-    await fillAndReachPrices();
-    await userEvent.click(screen.getByRole('button', { name: 'Guardar y cargar otro' }));
-    await screen.findByRole('status');
-    await userEvent.click(screen.getByRole('button', { name: 'Cerrar aviso' }));
-
-    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
-  });
-
-  it('un error del backend se muestra dentro del panel y no hay cartel de creado', async () => {
+  it('un error del backend se muestra dentro del panel y no hay aviso de creado', async () => {
     apiMocks.createLoteRequest.mockRejectedValue({
       isAxiosError: true,
       response: { status: 422, data: { error: { code: 'business_rule', message: 'No se pudo crear el lote.' } } },

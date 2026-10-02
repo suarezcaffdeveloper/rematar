@@ -37,6 +37,34 @@ export function useFinishedRemates(
   );
 }
 
+// Mismo tope de página que `GET /history/remates` (`page_size` máx. 100 en el backend).
+const FINISHED_PAGE_SIZE = 100;
+const MAX_FINISHED = 300;
+
+async function fetchAllFinishedRemates(): Promise<FinishedRemateSummary[]> {
+  const collected: FinishedRemateSummary[] = [];
+  let page = 1;
+  while (collected.length < MAX_FINISHED) {
+    const result = await fetchFinishedRemateHistoryRequest({ sort: 'date_desc' }, page, FINISHED_PAGE_SIZE);
+    collected.push(...result.items);
+    const gotFullPage = result.items.length === FINISHED_PAGE_SIZE;
+    const moreRemain = collected.length < result.total;
+    if (!gotFullPage || !moreRemain) break;
+    page += 1;
+  }
+  return collected;
+}
+
+export type UseAllFinishedRematesResult = UseAsyncResourceResult<FinishedRemateSummary[]>;
+
+/** Todos los remates finalizados/cancelados, sin paginar en la UI: el Historial arma su
+ * titular, sus cifras y los filtros (período, estado, búsqueda, orden) sobre la lista
+ * completa -- mismo criterio que `useAllVentasAdjudicadas`. Tope defensivo, no un límite de
+ * negocio. */
+export function useAllFinishedRemates(): UseAllFinishedRematesResult {
+  return useAsyncResource(() => fetchAllFinishedRemates(), [], []);
+}
+
 export type UseRemateHistoryDetailResult = UseAsyncResourceResult<RemateHistoryDetail | null>;
 
 export function useRemateHistoryDetail(remateId: string): UseRemateHistoryDetailResult {
