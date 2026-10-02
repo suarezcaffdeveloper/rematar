@@ -56,6 +56,11 @@ class _LotePriceValidationMixin:
         if base_price is not None and reserve_price is not None and reserve_price < base_price:
             raise ValueError("El precio de reserva no puede ser menor al precio base.")
 
+    @staticmethod
+    def _check_min_increment(base_price: Decimal | None, min_increment: Decimal | None) -> None:
+        if base_price is not None and min_increment is not None and min_increment > base_price:
+            raise ValueError("El incremento mínimo no puede ser mayor al precio base.")
+
 
 class LoteCreate(BaseModel, _LotePriceValidationMixin):
     lot_number: str = Field(min_length=1, max_length=20)
@@ -91,6 +96,8 @@ class LoteCreate(BaseModel, _LotePriceValidationMixin):
     @model_validator(mode="after")
     def _validate_prices(self) -> "LoteCreate":
         self._check_reserve_price(self.base_price, self.reserve_price)
+        self._check_min_increment(self.base_price, self.min_increment)
+        self._check_min_increment(self.requeue_preset_base_price, self.requeue_preset_min_increment)
         if self.requeue_preset_enabled and (
             self.requeue_preset_base_price is None or self.requeue_preset_min_increment is None
         ):
@@ -141,6 +148,8 @@ class LoteUpdate(BaseModel, _LotePriceValidationMixin):
         fields_set = self.model_fields_set
         if "base_price" in fields_set or "reserve_price" in fields_set:
             self._check_reserve_price(self.base_price, self.reserve_price)
+        if "base_price" in fields_set and "min_increment" in fields_set:
+            self._check_min_increment(self.base_price, self.min_increment)
         # La validación de "si requeue_preset_enabled, hacen falta ambos precios" se hace
         # en LoteService.update contra el valor ya persistido (mismo criterio que
         # reserve_price/base_price arriba): acá, a nivel de transporte, no se puede saber

@@ -279,6 +279,12 @@ class LoteService:
         reserve_price: Decimal | None = changes.get("reserve_price", lote.reserve_price)
         if base_price is not None and reserve_price is not None and reserve_price < base_price:
             raise BusinessRuleError("El precio de reserva no puede ser menor al precio base.")
+        # Solo si el PATCH toca alguno de los dos: un lote viejo con datos previos a esta
+        # regla no tiene que quedar bloqueado para editar, p. ej., su descripción.
+        if "base_price" in changes or "min_increment" in changes:
+            min_increment: Decimal | None = changes.get("min_increment", lote.min_increment)
+            if base_price is not None and min_increment is not None and min_increment > base_price:
+                raise BusinessRuleError("El incremento mínimo no puede ser mayor al precio base.")
 
         requeue_preset_enabled = changes.get(
             "requeue_preset_enabled", lote.requeue_preset_enabled

@@ -11,12 +11,12 @@ existían sin usar antes de este módulo).
 """
 
 import uuid
-from pathlib import Path
 
 from fastapi import UploadFile
 
 from app.core.config import Settings
 from app.core.exceptions import BusinessRuleError
+from app.core.object_storage import delete_stored_file, store_file
 
 _EXTENSION_BY_CONTENT_TYPE = {
     "application/pdf": ".pdf",
@@ -58,23 +58,21 @@ async def save_postauction_document(
             size=len(contents),
         )
 
-    extension = _EXTENSION_BY_CONTENT_TYPE[upload.content_type]
-    directory = Path(settings.MEDIA_ROOT) / "postauction" / str(case_id)
-    directory.mkdir(parents=True, exist_ok=True)
-
-    filename = f"{uuid.uuid4()}{extension}"
-    (directory / filename).write_bytes(contents)
-
-    prefix = settings.MEDIA_URL_PREFIX.strip("/")
-    url = f"{request_base_url.rstrip('/')}/{prefix}/postauction/{case_id}/{filename}"
+    filename, url = await store_file(
+        folder=f"postauction/{case_id}",
+        extension=_EXTENSION_BY_CONTENT_TYPE[upload.content_type],
+        contents=contents,
+        content_type=upload.content_type,
+        settings=settings,
+        request_base_url=request_base_url,
+    )
     return SavedDocument(filename=filename, url=url, file_size=len(contents))
 
 
-def delete_postauction_document_file(
+async def delete_postauction_document_file(
     case_id: uuid.UUID, filename: str, settings: Settings
 ) -> None:
-    """Borra el archivo en disco de un documento ya eliminado de la base -- best-effort,
-    nunca lanza si el archivo ya no está (mismo criterio defensivo que el resto de este
+    """Borra el archivo de un documento ya eliminado de la base -- best-effort, nunca
+    lanza si el archivo ya no está (mismo criterio defensivo que el resto de este
     módulo con referencias que podrían no resolver)."""
-    path = Path(settings.MEDIA_ROOT) / "postauction" / str(case_id) / filename
-    path.unlink(missing_ok=True)
+    await delete_stored_file(folder=f"postauction/{case_id}", filename=filename, settings=settings)

@@ -25,6 +25,7 @@ from fastapi import UploadFile
 
 from app.core.config import Settings
 from app.core.exceptions import BusinessRuleError
+from app.core.object_storage import store_file
 
 _EXTENSION_BY_CONTENT_TYPE = {
     "image/jpeg": ".jpg",
@@ -41,8 +42,9 @@ async def save_image(
     request_base_url: str,
 ) -> str:
     """Valida `upload` (Content-Type y tamaño) y lo persiste en
-    `directory/{uuid}.ext`. Devuelve la URL pública absoluta bajo
-    `request_base_url/MEDIA_URL_PREFIX/public_path/{uuid}.ext`."""
+    `public_path/{uuid}.ext` del storage activo (Cloudinary si está configurado, si no
+    `MEDIA_ROOT`, ver `app/core/object_storage.py`). Devuelve la URL pública absoluta.
+    `directory` se conserva por compatibilidad con los wrappers y ya no se usa."""
     if upload.content_type not in settings.ALLOWED_IMAGE_CONTENT_TYPES:
         raise BusinessRuleError(
             "Formato de imagen no admitido. Usá JPG, PNG o WEBP.",
@@ -57,14 +59,15 @@ async def save_image(
             size=len(contents),
         )
 
-    extension = _EXTENSION_BY_CONTENT_TYPE[upload.content_type]
-    directory.mkdir(parents=True, exist_ok=True)
-
-    filename = f"{uuid.uuid4()}{extension}"
-    (directory / filename).write_bytes(contents)
-
-    prefix = settings.MEDIA_URL_PREFIX.strip("/")
-    return f"{request_base_url.rstrip('/')}/{prefix}/{public_path}/{filename}"
+    _, url = await store_file(
+        folder=public_path,
+        extension=_EXTENSION_BY_CONTENT_TYPE[upload.content_type],
+        contents=contents,
+        content_type=upload.content_type,
+        settings=settings,
+        request_base_url=request_base_url,
+    )
+    return url
 
 
 async def save_remate_cover_image(

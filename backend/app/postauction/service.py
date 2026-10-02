@@ -431,7 +431,7 @@ class PostAuctionService:
         )
         await self._repository.commit()
         await self._repository.refresh(case)
-        media_storage.delete_postauction_document_file(case.id, filename, self._settings)
+        await media_storage.delete_postauction_document_file(case.id, filename, self._settings)
         return case
 
     # --- Lectura -------------------------------------------------------------------------

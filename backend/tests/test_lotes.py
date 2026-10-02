@@ -207,6 +207,37 @@ async def test_reserve_price_below_base_price_is_rejected(client: AsyncClient) -
     assert response.status_code == 422
 
 
+async def test_min_increment_above_base_price_is_rejected_on_create_and_update(
+    client: AsyncClient,
+) -> None:
+    token = await _register_and_login(client, email="rematador-inc@example.com", role="empresa")
+    remate = await _create_remate(client, token)
+
+    response = await client.post(
+        _lotes_url(remate["id"]),
+        json={
+            "lot_number": "1",
+            "title": "Lote inválido",
+            "category": "hacienda",
+            "base_price": "100.00",
+            "min_increment": "500.00",
+        },
+        headers=_auth(token),
+    )
+    assert response.status_code == 422
+
+    lote = await _create_lote(client, token, remate["id"], base_price="1000.00")
+    url = f"{_lotes_url(remate['id'])}/{lote['id']}"
+    # Solo el incremento: se compara contra el precio base ya guardado.
+    response = await client.patch(url, json={"min_increment": "5000.00"}, headers=_auth(token))
+    assert response.status_code == 422
+    # Solo el precio base: bajarlo por debajo del incremento ya guardado también se rechaza.
+    response = await client.patch(url, json={"base_price": "10.00"}, headers=_auth(token))
+    assert response.status_code == 422
+    response = await client.patch(url, json={"min_increment": "1000.00"}, headers=_auth(token))
+    assert response.status_code == 200
+
+
 async def test_base_price_must_be_positive(client: AsyncClient) -> None:
     token = await _register_and_login(client, email="rematador7@example.com", role="empresa")
     remate = await _create_remate(client, token)

@@ -176,6 +176,12 @@ class Settings(BaseSettings):
     # esta fase, ver docs/32-gestion-multimedia-lotes.md y ADR-035.
     MEDIA_ROOT: str = "media"
     MEDIA_URL_PREFIX: str = "/static"
+    # Storage externo (app/core/object_storage.py): con las tres definidas, los archivos
+    # se suben a Cloudinary y sobreviven a redeploys (Render free tiene disco efímero);
+    # sin ellas, se usa el disco local de arriba.
+    CLOUDINARY_CLOUD_NAME: str | None = None
+    CLOUDINARY_API_KEY: str | None = None
+    CLOUDINARY_API_SECRET: str | None = None
     MAX_IMAGE_UPLOAD_BYTES: int = 5 * 1024 * 1024
     ALLOWED_IMAGE_CONTENT_TYPES: list[str] = ["image/jpeg", "image/png", "image/webp"]
     MAX_DOCUMENT_UPLOAD_BYTES: int = 10 * 1024 * 1024
