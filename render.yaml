@@ -66,3 +66,12 @@ services:
         sync: false
       - key: FIRST_ADMIN_PASSWORD
         sync: false
+      # Storage de imagenes/documentos subidos. Render free tiene disco efimero: sin estas
+      # tres, el backend cae a disco local y los archivos se pierden en cada redeploy o
+      # reinicio (ver app/core/object_storage.py). Se cargan a mano en el dashboard.
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
