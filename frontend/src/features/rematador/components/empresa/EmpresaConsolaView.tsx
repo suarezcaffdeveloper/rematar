@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 import clsx from 'clsx';
-import { AlertTriangle, ArrowLeft, ExternalLink, Info, MessageCircleQuestion } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Info, MessageCircleQuestion } from 'lucide-react';
 import { formatCurrency } from '../../../../shared/lib/format';
 import type { ConnectionStatus } from '../../../../shared/websocket/client';
 import { AnalyticsPanel } from '../../../analytics/components/AnalyticsPanel';
@@ -145,23 +144,16 @@ export function EmpresaConsolaView({
 
   return (
     <div className="-mx-3 -my-4 min-h-screen bg-white font-display text-ink sm:-mx-4 lg:-mx-6">
-      <header className="sticky top-0 z-40 bg-ink text-white shadow-[0_1px_0_rgba(255,255,255,0.08)]">
+      <header className="sticky top-0 z-40 border-b border-line bg-white">
         <div className="flex w-full items-center gap-x-6 px-3 py-3 sm:px-6 lg:px-10">
-          <Link
-            to="/"
-            aria-label="Volver a Mis remates"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/20 text-white/75 transition-colors hover:border-white hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          </Link>
           <div className="flex min-w-0 flex-1 items-center gap-x-6 overflow-hidden">
             <div className="min-w-0 shrink basis-56">
               <h1 className="truncate text-sm font-semibold tracking-tight">{remate.title}</h1>
-              <p className="mt-0.5 flex items-center gap-3 text-xs text-white/60">
+              <p className="mt-0.5 flex items-center gap-3 text-xs text-ink-muted">
                 <span className="inline-flex items-center gap-1.5">
                   <span
                     aria-hidden="true"
-                    className={clsx('h-2 w-2 rounded-full', isPaused ? 'bg-white/50' : 'animate-pulse bg-warning-400')}
+                    className={clsx('h-2 w-2 rounded-full', isPaused ? 'bg-ink-faint' : 'animate-pulse bg-danger-500')}
                   />
                   <span className="font-semibold uppercase tracking-wide">{STATUS_LABELS[remate.status]}</span>
                 </span>
@@ -169,21 +161,21 @@ export function EmpresaConsolaView({
                 {connectionStatus !== 'open' && <ConnectionStatusBadge status={connectionStatus} />}
               </p>
             </div>
-            <span aria-hidden="true" className="hidden h-8 w-px shrink-0 bg-white/15 md:block" />
+            <span aria-hidden="true" className="hidden h-8 w-px shrink-0 bg-line md:block" />
             <div className="hidden min-w-0 flex-col md:flex">
-              <span className="text-[11px] leading-none text-white/50">
+              <span className="text-[11px] leading-none text-ink-muted">
                 {activeLote ? `Lote ${activeLote.lot_number} · líder` : 'Lote en remate'}
               </span>
               <span className="mt-1 truncate text-sm font-semibold leading-none tabular-nums">{leadAmount ?? '—'}</span>
             </div>
             <div className="hidden min-w-0 flex-col lg:flex">
-              <span className="text-[11px] leading-none text-white/50">Recaudado</span>
+              <span className="text-[11px] leading-none text-ink-muted">Recaudado</span>
               <span className="mt-1 truncate text-sm font-semibold leading-none tabular-nums">
                 {analytics ? formatCurrency(analytics.total_awarded_value, currency) : '—'}
               </span>
             </div>
             <div className="hidden min-w-0 flex-col sm:flex">
-              <span className="text-[11px] leading-none text-white/50">Conectados</span>
+              <span className="text-[11px] leading-none text-ink-muted">Conectados</span>
               <span className="mt-1 truncate text-sm font-semibold leading-none tabular-nums">{connectedUsers}</span>
             </div>
           </div>
@@ -191,7 +183,7 @@ export function EmpresaConsolaView({
             {pendingQuestions > 0 && (
               <a
                 href="#empresa-rail"
-                className="inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                className="inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               >
                 <MessageCircleQuestion className="h-3.5 w-3.5" aria-hidden="true" />
                 {pendingQuestions} {pendingQuestions === 1 ? 'pregunta' : 'preguntas'}
@@ -206,7 +198,7 @@ export function EmpresaConsolaView({
               href={`/remates/${remate.id}/sala`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-white/25 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:border-white hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              className="inline-flex items-center gap-2 rounded-full border border-line px-3.5 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-ink hover:bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Ver como comprador</span>

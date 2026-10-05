@@ -10,11 +10,11 @@ import { useLayoutPreferencesStore } from './layoutPreferencesStore';
  * página -- la Consola sigue montada aunque el remate pase de `live` a `finished`, y ahí
  * el modo remate se tiene que desactivar solo, no hace falta navegar a otra pantalla.
  */
-export function useFocusMode(enabled: boolean): void {
+export function useFocusMode(enabled: boolean, hideSidebar = false): void {
   const setFocusMode = useLayoutPreferencesStore((state) => state.setFocusMode);
 
   useEffect(() => {
-    setFocusMode(enabled);
+    setFocusMode(enabled, hideSidebar);
     return () => setFocusMode(false);
-  }, [enabled, setFocusMode]);
+  }, [enabled, hideSidebar, setFocusMode]);
 }

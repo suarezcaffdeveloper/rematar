@@ -24,7 +24,9 @@ interface LayoutPreferencesState {
   isWide: boolean;
   setWide: (wide: boolean) => void;
   isFocusMode: boolean;
-  setFocusMode: (focus: boolean) => void;
+  /** Con `isFocusMode`: oculta también el riel lateral (la empresa en su propio remate no navega). */
+  hideSidebar: boolean;
+  setFocusMode: (focus: boolean, hideSidebar?: boolean) => void;
   isTopNav: boolean;
   isTopNavStatic: boolean;
   setTopNav: (topNav: boolean, isStatic?: boolean) => void;
@@ -34,7 +36,8 @@ export const useLayoutPreferencesStore = create<LayoutPreferencesState>((set) =>
   isWide: false,
   setWide: (wide) => set({ isWide: wide }),
   isFocusMode: false,
-  setFocusMode: (focus) => set({ isFocusMode: focus }),
+  hideSidebar: false,
+  setFocusMode: (focus, hideSidebar = false) => set({ isFocusMode: focus, hideSidebar: focus && hideSidebar }),
   isTopNav: false,
   isTopNavStatic: false,
   setTopNav: (topNav, isStatic = false) => set({ isTopNav: topNav, isTopNavStatic: topNav && isStatic }),

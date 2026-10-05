@@ -54,6 +54,7 @@ export function AppLayout() {
   const isWide = useLayoutPreferencesStore((state) => state.isWide);
   const isFocusMode = useLayoutPreferencesStore((state) => state.isFocusMode);
   const isTopNav = useLayoutPreferencesStore((state) => state.isTopNav);
+  const hideSidebar = useLayoutPreferencesStore((state) => state.isFocusMode && state.hideSidebar);
   const isTopNavStatic = useLayoutPreferencesStore((state) => state.isTopNavStatic);
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
@@ -85,8 +86,10 @@ export function AppLayout() {
       >
         Saltar al contenido principal
       </a>
-      {!isTopNav && <Sidebar role={user?.role} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />}
-      <div className={clsx('flex min-h-screen flex-col', !isTopNav && 'lg:pl-16')}>
+      {!isTopNav && !hideSidebar && (
+        <Sidebar role={user?.role} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      )}
+      <div className={clsx('flex min-h-screen flex-col', !isTopNav && !hideSidebar && 'lg:pl-16')}>
         {isTopNav && <BuyerTopNav staticBar={isTopNavStatic} />}
         {!isTopNav && !isFocusMode && <Header onOpenSidebar={() => setIsSidebarOpen(true)} />}
         <main

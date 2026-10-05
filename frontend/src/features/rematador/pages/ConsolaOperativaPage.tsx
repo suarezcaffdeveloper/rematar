@@ -181,7 +181,9 @@ function LiveConsolaOperativaPage() {
   // importar si todavía está cargando o si hubo un error -- se calcula acá, antes de
   // los `return` tempranos de abajo, porque un Hook no puede llamarse condicionalmente.
   const isOperational = snapshot?.remate.status === 'live' || snapshot?.remate.status === 'paused';
-  useFocusMode(isOperational);
+  // La empresa dueña, en su propio remate en vivo, no navega: sin riel lateral.
+  const isOwnerLive = isOperational && Boolean(user) && user?.id === snapshot?.remate.owner_id;
+  useFocusMode(isOperational, isOwnerLive);
 
   const [selectedLoteId, setSelectedLoteId] = useState<string | null>(null);
 
