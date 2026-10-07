@@ -34,7 +34,12 @@ export function CompradorDashboardPage() {
   useTopNavLayout();
   useBreadcrumb([{ label: 'Inicio', to: '/' }, { label: 'Remates disponibles' }]);
   const reduceMotion = useReducedMotion();
-  const { remates, isLoading, error, reload } = useRemates();
+  const { remates: allRemates, isLoading, error, reload } = useRemates();
+  // El catálogo del comprador solo muestra remates vigentes: nada de finalizados ni cancelados.
+  const remates = useMemo(
+    () => allRemates.filter((remate) => remate.status !== 'finished' && remate.status !== 'cancelled'),
+    [allRemates],
+  );
   const [filters, setFilters] = useState<RemateFilters>(DEFAULT_FILTERS);
   const indexRef = useRef<HTMLElement>(null);
 
