@@ -10,6 +10,11 @@ const GRID_COLUMNS = {
   register: 'lg:grid-cols-[1fr_34rem] xl:grid-cols-[1fr_36rem]',
 } as const;
 
+/** El fondo ocupa toda la pantalla (y se agranda con el zoom): las fotos de Unsplash se piden a más resolución que en las tarjetas. */
+function backgroundSrc(url: string): string {
+  return url.includes('images.unsplash.com') ? url.replace('w=1600', 'w=2800').replace('q=80', 'q=85') : url;
+}
+
 export interface CinematicShellProps {
   /** Foto de fondo; al cambiar `photoKey` hace crossfade a la nueva. */
   photo: StockPhoto;
@@ -54,7 +59,7 @@ export function CinematicShell({
           transition={{ duration: 1.3, ease: 'easeInOut' }}
         >
           <motion.img
-            src={photo.url}
+            src={backgroundSrc(photo.url)}
             alt=""
             className="h-full w-full object-cover"
             onError={(event) => {

@@ -51,6 +51,8 @@ export interface ChatPanelProps {
    * "Historial de ofertas"). Solo cambia el contenedor externo -- header/lista/input
    * quedan idénticos en ambos casos. */
   chrome?: 'boxed' | 'flat';
+  /** Sin margen inferior bajo el input: el contador de caracteres queda casi en el borde. */
+  flushBottom?: boolean;
 }
 
 /**
@@ -69,6 +71,7 @@ export function ChatPanel({
   canModerate,
   className,
   chrome = 'boxed',
+  flushBottom = false,
 }: ChatPanelProps) {
   const {
     messages,
@@ -260,7 +263,7 @@ export function ChatPanel({
       {currentUserId && (
         <>
           <TypingIndicator typingUsers={typingUsers} />
-          <ChatInput onSend={sendMessage} onTyping={notifyTyping} isSending={isSending} sendError={sendError} />
+          <ChatInput onSend={sendMessage} onTyping={notifyTyping} isSending={isSending} sendError={sendError} flushBottom={flushBottom} />
         </>
       )}
 

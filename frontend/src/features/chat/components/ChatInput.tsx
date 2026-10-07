@@ -10,13 +10,15 @@ export interface ChatInputProps {
   onTyping: () => void;
   isSending: boolean;
   sendError: NormalizedApiError | null;
+  /** Casi sin margen inferior: el contador queda pegado al borde de abajo del contenedor. */
+  flushBottom?: boolean;
 }
 
 /** Caja de envío: contador de caracteres, Enter para enviar (Shift+Enter para salto de
  * línea), deshabilitada mientras envía o si el contenido está vacío/excede el máximo.
  * `onTyping` se llama en cada tecla -- el throttle real (cliente + rate limit del
  * backend) vive en `useChatMessages`, acá no hace falta duplicar esa lógica. */
-export function ChatInput({ onSend, onTyping, isSending, sendError }: ChatInputProps) {
+export function ChatInput({ onSend, onTyping, isSending, sendError, flushBottom = false }: ChatInputProps) {
   const [value, setValue] = useState('');
 
   const trimmed = value.trim();
@@ -42,7 +44,7 @@ export function ChatInput({ onSend, onTyping, isSending, sendError }: ChatInputP
   }
 
   return (
-    <div className="flex flex-col gap-1.5 border-t border-slate-200 p-3">
+    <div className={clsx('flex flex-col gap-1.5 border-t border-slate-200 p-3', flushBottom && '!pb-1')}>
       {sendError && <p className="text-xs text-danger-600">{sendError.message}</p>}
       <div className="flex items-end gap-2">
         <textarea

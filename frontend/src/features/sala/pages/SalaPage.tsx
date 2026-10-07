@@ -19,8 +19,10 @@ import { SalaMobileBidBar } from '../components/SalaMobileBidBar';
 import { SalaRecentOffers } from '../components/SalaRecentOffers';
 import { SalaRoomHeader } from '../components/SalaRoomHeader';
 import { SalaUpcomingGrid } from '../components/SalaUpcomingGrid';
+import { RemateFinishedNotice } from '../../rematador/components/RemateFinishedNotice';
 import { useLiveRemateState } from '../hooks';
 import { isDomainEventMessage } from '../realtime/messages';
+import { useRemateFinishedSignal } from '../useRemateFinishedSignal';
 
 function SalaSkeleton() {
   return (
@@ -177,25 +179,13 @@ export function SalaPage() {
     });
   }, [subscribeToRealtime, user?.id]);
 
-  // Fin del remate (Módulo de lotes desiertos): el comprador no debe quedar
-  // indefinidamente en una sala que ya terminó -- toast informativo y, tras una
-  // pequeña transición, redirección suave al listado de remates. `remate.finished` ya
-  // actualiza el badge de estado en `SalaRoomHeader` vía `reducer.ts`; acá solo se agrega
-  // el aviso + la salida de la sala.
-  const finishRedirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    const unsubscribe = subscribeToRealtime((message) => {
-      if (!isDomainEventMessage(message) || message.payload.event_type !== 'remate.finished') return;
-      useToastStore
-        .getState()
-        .push('info', 'El remate finalizó. Te llevamos de vuelta al inicio en unos segundos.');
-      finishRedirectTimeoutRef.current = setTimeout(() => navigate('/'), 4000);
-    });
-    return () => {
-      unsubscribe();
-      if (finishRedirectTimeoutRef.current) clearTimeout(finishRedirectTimeoutRef.current);
-    };
-  }, [subscribeToRealtime, navigate]);
+  // Fin del remate: nadie debe quedar en una sala que ya terminó (y quedó vacía, sin lote
+  // ni imágenes). `RemateFinishedNotice` tapa la sala con un cartel sobre fondo borroso y
+  // redirige a los pocos segundos según quién mira: el comprador al listado de remates, la
+  // empresa dueña (pestaña "Ver como comprador") al resumen del remate y el rematador a su
+  // panel. `remate.finished` ya actualiza el badge de estado en `SalaRoomHeader` vía
+  // `reducer.ts`; acá solo se agrega el aviso + la salida de la sala.
+  const hasRemateFinished = useRemateFinishedSignal(subscribeToRealtime);
 
   if (isSnapshotLoading) {
     return <SalaSkeleton />;
@@ -251,6 +241,15 @@ export function SalaPage() {
   return (
     <div className="min-h-screen bg-white font-display text-ink">
       <LoteWonOverlay wonLote={wonLote} onContinue={() => setWonLote(null)} />
+      {hasRemateFinished && (
+        <RemateFinishedNotice
+          remateId={remate.id}
+          currency={currency}
+          audience={
+            user?.id === remate.owner_id ? 'empresa' : user?.role === 'rematador' ? 'martillero' : 'comprador'
+          }
+        />
+      )}
 
       <SalaRoomHeader
         remate={remate}

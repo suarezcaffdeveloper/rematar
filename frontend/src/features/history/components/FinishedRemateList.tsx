@@ -238,7 +238,7 @@ export function FinishedRemateList({ showOwner = false }: FinishedRemateListProp
                     key={item.id}
                     remate={item}
                     showOwner={showOwner}
-                    coverImageUrl={coverById.get(item.id) ?? null}
+                    coverImageUrl={item.cover_image_url ?? coverById.get(item.id) ?? null}
                     unpaidCount={showUnpaid ? (unpaidByRemate.get(item.id) ?? 0) : null}
                   />
                 ))}

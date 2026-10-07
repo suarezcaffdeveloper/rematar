@@ -7,10 +7,7 @@ import { AUTH_RUBROS } from '../components/cinematic/authRubros';
 import { CategoryCarousel } from '../components/cinematic/CategoryCarousel';
 import { CinematicShell } from '../components/cinematic/CinematicShell';
 import { GlassAlert, GlassField, GlassSubmitButton } from '../components/cinematic/GlassField';
-import { useAutoRotate } from '../components/cinematic/useAutoRotate';
-
-/** Cuánto está cada rubro en pantalla antes de pasar al siguiente. */
-const ROTATE_MS = 8000;
+import { AUTH_ROTATE_MS, useAuthRubros } from '../components/cinematic/useAuthRubros';
 
 /**
  * Pantalla de login (rediseño "cinematográfico", mismo marco que `RegisterPage` -- ver
@@ -43,9 +40,13 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [isCarouselPaused, setIsCarouselPaused] = useState(false);
-  const [rubroIndex, setRubroIndex] = useAutoRotate(AUTH_RUBROS.length, ROTATE_MS, isCarouselPaused);
-  const rubro = AUTH_RUBROS[rubroIndex];
+  const {
+    rubro,
+    index: rubroIndex,
+    setIndex: setRubroIndex,
+    isPaused: isCarouselPaused,
+    setIsPaused: setIsCarouselPaused,
+  } = useAuthRubros();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -66,7 +67,7 @@ export function LoginPage() {
       size="login"
       photo={rubro.photo}
       photoKey={rubro.category}
-      zoomSeconds={ROTATE_MS / 1000 + 2}
+      zoomSeconds={AUTH_ROTATE_MS / 1000 + 1}
       headerAction={
         // Visitante anónimo (ADR-049): el listado, el detalle de un remate y su sala
         // en vivo ya aceptan un viewer sin sesión -- este link es el único punto de
@@ -93,7 +94,7 @@ export function LoginPage() {
               items={AUTH_RUBROS}
               index={rubroIndex}
               onSelect={setRubroIndex}
-              durationMs={ROTATE_MS}
+              durationMs={AUTH_ROTATE_MS}
               paused={isCarouselPaused}
               onPausedChange={setIsCarouselPaused}
             />

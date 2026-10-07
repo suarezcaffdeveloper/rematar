@@ -1,6 +1,6 @@
 import { CATEGORY_LABELS, CATEGORY_OPTIONS, CATEGORY_SHORT_LABELS } from '../../../remates/labels';
 import type { RemateCategory } from '../../../remates/types';
-import { STOCK_PHOTOS, type StockPhoto } from '../../../../shared/media/stockPhotos';
+import { AUTH_BACKGROUNDS, STOCK_PHOTOS, type StockPhoto } from '../../../../shared/media/stockPhotos';
 
 export interface AuthRubro {
   category: RemateCategory;
@@ -13,13 +13,13 @@ export interface AuthRubro {
 
 const CATEGORY_PHOTOS: Record<RemateCategory, StockPhoto> = {
   inmuebles: STOCK_PHOTOS.inmuebles,
-  vehiculos: STOCK_PHOTOS.vehiculos,
-  maquinaria_pesada_y_agricola: STOCK_PHOTOS.maquinariaPesada,
-  hacienda: STOCK_PHOTOS.ganado,
-  arte_antiguedades_y_coleccionables: STOCK_PHOTOS.antiguedades,
-  joyas_relojeria_y_numismatica: STOCK_PHOTOS.joyas,
+  vehiculos: AUTH_BACKGROUNDS.vehiculos,
+  maquinaria_pesada_y_agricola: AUTH_BACKGROUNDS.maquinariaPesada,
+  hacienda: AUTH_BACKGROUNDS.ganado,
+  arte_antiguedades_y_coleccionables: AUTH_BACKGROUNDS.antiguedades,
+  joyas_relojeria_y_numismatica: AUTH_BACKGROUNDS.joyas,
   tecnologia_electrodomesticos_y_hogar: STOCK_PHOTOS.tecnologia,
-  nautica_y_aviacion: STOCK_PHOTOS.nautica,
+  nautica_y_aviacion: AUTH_BACKGROUNDS.nautica,
   mercaderia_e_indumentaria: STOCK_PHOTOS.indumentaria,
 };
 
@@ -31,7 +31,12 @@ const ROTATION_ORDER: RemateCategory[] = [
   'arte_antiguedades_y_coleccionables',
   ...CATEGORY_OPTIONS.filter(
     (category) =>
-      !['hacienda', 'vehiculos', 'maquinaria_pesada_y_agricola', 'arte_antiguedades_y_coleccionables'].includes(category),
+      ![
+        'hacienda',
+        'vehiculos',
+        'maquinaria_pesada_y_agricola',
+        'arte_antiguedades_y_coleccionables',
+      ].includes(category),
   ),
 ];
 

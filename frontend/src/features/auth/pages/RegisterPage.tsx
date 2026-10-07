@@ -4,7 +4,8 @@ import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { CheckCircle2, Eye, EyeOff, Lock, Mail, Phone, ShieldCheck, User } from 'lucide-react';
 import { useAuthActions } from '../hooks';
 import { normalizeApiError } from '../../../shared/api/errors';
-import { STOCK_PHOTOS, type StockPhoto } from '../../../shared/media/stockPhotos';
+import { CategoryTicker } from '../components/cinematic/CategoryTicker';
+import { AUTH_ROTATE_MS, useAuthRubros } from '../components/cinematic/useAuthRubros';
 import { ROLES_PENDING_APPROVAL, type RegisterableRole } from '../types';
 import { CinematicShell } from '../components/cinematic/CinematicShell';
 import { GlassAlert, GlassField, GlassSubmitButton } from '../components/cinematic/GlassField';
@@ -13,7 +14,6 @@ import { PasswordRules } from '../components/cinematic/PasswordRules';
 interface RoleOption {
   value: RegisterableRole;
   label: string;
-  photo: StockPhoto;
   /** Titular y ventajas de la columna izquierda: cambian con el rol elegido. */
   title: string;
   points: string[];
@@ -23,7 +23,6 @@ const ROLE_OPTIONS: RoleOption[] = [
   {
     value: 'comprador',
     label: 'Comprador',
-    photo: STOCK_PHOTOS.vehiculos,
     title: 'Ofertá en vivo, desde donde estés.',
     points: [
       'Seguí los remates en tiempo real',
@@ -34,14 +33,16 @@ const ROLE_OPTIONS: RoleOption[] = [
   {
     value: 'empresa',
     label: 'Empresa',
-    photo: STOCK_PHOTOS.maquinariaPesada,
     title: 'Armá tus remates y vendé a todo el país.',
-    points: ['Remates en vivo y por tiempo', 'Lotes con fotos y video', 'Seguimiento de cada venta adjudicada'],
+    points: [
+      'Remates en vivo y por tiempo',
+      'Lotes con fotos y video',
+      'Seguimiento de cada venta adjudicada',
+    ],
   },
   {
     value: 'rematador',
     label: 'Martillero',
-    photo: STOCK_PHOTOS.ganado,
     title: 'Dirigí la sala con el control en tus manos.',
     points: [
       'Consola con ofertas y chat en tiempo real',
@@ -86,6 +87,13 @@ export function RegisterPage() {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isPendingApproval, setIsPendingApproval] = useState(false);
 
+  const {
+    rubro,
+    index: rubroIndex,
+    setIndex: setRubroIndex,
+    isPaused: isTickerPaused,
+    setIsPaused: setIsTickerPaused,
+  } = useAuthRubros();
   const currentRole = ROLE_OPTIONS.find((option) => option.value === role) ?? ROLE_OPTIONS[0];
   const isFullNameValid = fullName.trim().length > 1;
   const isEmailValid = EMAIL_PATTERN.test(email);
@@ -127,8 +135,9 @@ export function RegisterPage() {
   return (
     <CinematicShell
       size="register"
-      photo={currentRole.photo}
-      photoKey={currentRole.value}
+      photo={rubro.photo}
+      photoKey={rubro.category}
+      zoomSeconds={AUTH_ROTATE_MS / 1000 + 1}
       headerAction={
         <p className="text-sm text-white/70">
           ¿Ya tenés una cuenta?{' '}
@@ -138,27 +147,36 @@ export function RegisterPage() {
         </p>
       }
       aside={
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentRole.value}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <h2 className="max-w-2xl text-6xl font-semibold leading-[1.02] tracking-[-0.035em] xl:text-7xl">
-              {currentRole.title}
-            </h2>
-            <ul className="mt-10 flex max-w-md flex-col gap-3.5">
-              {currentRole.points.map((point) => (
-                <li key={point} className="flex items-center gap-4 text-[17px] text-white/80">
-                  <span className="h-px w-8 shrink-0 bg-white/50" />
-                  {point}
-                </li>
-              ))}
-            </ul>
-          </motion.div>
-        </AnimatePresence>
+        <>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentRole.value}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <h2 className="max-w-2xl text-6xl font-semibold leading-[1.02] tracking-[-0.035em] xl:text-7xl">
+                {currentRole.title}
+              </h2>
+              <ul className="mt-10 flex max-w-md flex-col gap-3.5">
+                {currentRole.points.map((point) => (
+                  <li key={point} className="flex items-center gap-4 text-[17px] text-white/80">
+                    <span className="h-px w-8 shrink-0 bg-white/50" />
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
+          </AnimatePresence>
+          <CategoryTicker
+            index={rubroIndex}
+            onSelect={setRubroIndex}
+            durationMs={AUTH_ROTATE_MS}
+            paused={isTickerPaused}
+            onPausedChange={setIsTickerPaused}
+          />
+        </>
       }
     >
       {isPendingApproval ? (
@@ -166,9 +184,9 @@ export function RegisterPage() {
           <h1 className="text-[1.75rem] font-semibold tracking-tight">Cuenta creada</h1>
           <div className="mt-5">
             <GlassAlert variant="success">
-              Tu cuenta como {role === 'empresa' ? 'empresa' : 'martillero'} quedó pendiente de
-              aprobación. Un administrador de RematAR la va a revisar y activar antes de que
-              puedas iniciar sesión -- te vamos a avisar por email apenas esté lista.
+              Tu cuenta como {role === 'empresa' ? 'empresa' : 'martillero'} quedó pendiente de aprobación. Un
+              administrador de RematAR la va a revisar y activar antes de que puedas iniciar sesión -- te
+              vamos a avisar por email apenas esté lista.
             </GlassAlert>
           </div>
         </>
@@ -203,10 +221,16 @@ export function RegisterPage() {
                           <motion.span
                             layoutId="register-role-pill"
                             className="absolute inset-0 rounded-lg bg-white"
-                            transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                            transition={{
+                              type: 'spring',
+                              stiffness: 420,
+                              damping: 34,
+                            }}
                           />
                         )}
-                        <span className={`relative transition-colors ${isSelected ? 'text-ink' : 'text-white/70'}`}>
+                        <span
+                          className={`relative transition-colors ${isSelected ? 'text-ink' : 'text-white/70'}`}
+                        >
                           {option.label}
                         </span>
                       </label>

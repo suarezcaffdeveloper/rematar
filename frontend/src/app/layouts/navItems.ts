@@ -32,7 +32,6 @@ export const NAV_ITEMS_BY_ROLE: Record<UserRole, NavItem[]> = {
     { label: 'Mis remates', to: '/', icon: Gavel },
     { label: 'Ventas adjudicadas', to: '/ventas-adjudicadas', icon: Package },
     { label: 'Historial', to: '/historial', icon: History },
-    { label: 'Simuladores', to: '/simuladores', icon: Bot },
   ],
   rematador: [
     { label: 'Unirme a un remate', to: '/', icon: Gavel },

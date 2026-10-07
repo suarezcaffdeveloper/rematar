@@ -116,13 +116,14 @@ const TICK_INTERVAL_MS = 1000;
  * no un cronómetro exacto desde el `start` real, documentada como tal (ver
  * docs/30-consola-operativa-rematador.md, "Limitaciones conocidas").
  *
- * - `live`/`paused`: cuenta en vivo desde `starts_at` hasta ahora (tick cada segundo).
+ * - `live`/`paused`: cuenta en vivo desde `starts_at` hasta ahora (tick cada segundo); si
+ *   `starts_at` todavía no llegó (se inició antes de hora), usa `fallbackStartIso`, o `null`.
  * - `finished`: fijo, `finished_at - starts_at` (el remate ya no corre, no hace falta
  *   ningún intervalo).
  * - cualquier otro estado (`draft`/`scheduled`/`cancelled`): `null` -- no hay "tiempo
  *   transcurrido" de una operación que no llegó a correr.
  */
-export function useElapsedTime(remate: Remate | null): string | null {
+export function useElapsedTime(remate: Remate | null, fallbackStartIso?: string | null): string | null {
   const [now, setNow] = useState(() => Date.now());
   const isTicking = remate?.status === 'live' || remate?.status === 'paused';
 
@@ -136,7 +137,12 @@ export function useElapsedTime(remate: Remate | null): string | null {
   if (!remate?.starts_at) return null;
 
   if (isTicking) {
-    return formatDuration(now - new Date(remate.starts_at).getTime());
+    // Si el remate se puso en vivo antes de su fecha programada, `starts_at` está en el futuro y
+    // el cronómetro quedaría clavado en 0: se usa `fallbackStartIso` (ej. cuándo se abrió el
+    // primer lote) como el mejor inicio real conocido.
+    const scheduled = new Date(remate.starts_at).getTime();
+    if (scheduled <= now) return formatDuration(now - scheduled);
+    return fallbackStartIso ? formatDuration(now - new Date(fallbackStartIso).getTime()) : null;
   }
 
   if (remate.status === 'finished' && remate.finished_at) {

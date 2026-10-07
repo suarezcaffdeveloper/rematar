@@ -14,7 +14,7 @@ function CollageCover({ remateId, className }: { remateId: string; className?: s
  * el degradé genérico de `CoverPlaceholder`. Separado en dos componentes para que el
  * pedido de lotes (`useLoteCoverImages`) solo ocurra cuando de verdad hace falta.
  */
-export function RemateCover({ remate, className }: { remate: Remate; className?: string }) {
+export function RemateCover({ remate, className }: { remate: Pick<Remate, 'id' | 'cover_image_url'>; className?: string }) {
   if (remate.cover_image_url) {
     return <img src={remate.cover_image_url} alt="" className={clsx('object-cover', className)} />;
   }

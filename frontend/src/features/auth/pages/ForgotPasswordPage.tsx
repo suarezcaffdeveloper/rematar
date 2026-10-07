@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, MailCheck, Mail } from 'lucide-react';
 import { forgotPasswordRequest } from '../api';
 import { normalizeApiError } from '../../../shared/api/errors';
-import { STOCK_PHOTOS } from '../../../shared/media/stockPhotos';
+import { CategoryTicker } from '../components/cinematic/CategoryTicker';
+import { AUTH_ROTATE_MS, useAuthRubros } from '../components/cinematic/useAuthRubros';
 import { CinematicShell } from '../components/cinematic/CinematicShell';
 import { GlassAlert, GlassField, GlassSubmitButton } from '../components/cinematic/GlassField';
 import { RecoverySteps } from '../components/cinematic/RecoverySteps';
@@ -41,12 +42,20 @@ export function ForgotPasswordPage() {
     }
   }
 
+  const {
+    rubro,
+    index: rubroIndex,
+    setIndex: setRubroIndex,
+    isPaused: isTickerPaused,
+    setIsPaused: setIsTickerPaused,
+  } = useAuthRubros();
+
   return (
     <CinematicShell
       size="login"
-      photo={STOCK_PHOTOS.ganado}
-      photoKey="forgot-password"
-      zoomSeconds={30}
+      photo={rubro.photo}
+      photoKey={rubro.category}
+      zoomSeconds={AUTH_ROTATE_MS / 1000 + 1}
       headerAction={
         <p className="text-sm text-white/70">
           ¿No tenés cuenta?{' '}
@@ -61,6 +70,13 @@ export function ForgotPasswordPage() {
             Recuperá el acceso a tu cuenta.
           </h2>
           <RecoverySteps current={currentStep} />
+          <CategoryTicker
+            index={rubroIndex}
+            onSelect={setRubroIndex}
+            durationMs={AUTH_ROTATE_MS}
+            paused={isTickerPaused}
+            onPausedChange={setIsTickerPaused}
+          />
         </>
       }
     >
@@ -72,8 +88,8 @@ export function ForgotPasswordPage() {
           <h1 className="mt-5 text-[1.75rem] font-semibold tracking-tight">Revisá tu email</h1>
           <div className="mt-4">
             <GlassAlert variant="success">
-              Si existe una cuenta con ese email, te enviamos un link para restablecer tu
-              contraseña. Revisá tu bandeja de entrada (y la carpeta de spam).
+              Si existe una cuenta con ese email, te enviamos un link para restablecer tu contraseña. Revisá
+              tu bandeja de entrada (y la carpeta de spam).
             </GlassAlert>
           </div>
         </>
@@ -81,8 +97,7 @@ export function ForgotPasswordPage() {
         <>
           <h1 className="text-[1.75rem] font-semibold tracking-tight">Recuperar contraseña</h1>
           <p className="mt-2 text-[15px] leading-relaxed text-white/65">
-            Ingresá el email de tu cuenta y te vamos a enviar un link para elegir una
-            contraseña nueva.
+            Ingresá el email de tu cuenta y te vamos a enviar un link para elegir una contraseña nueva.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5" noValidate>

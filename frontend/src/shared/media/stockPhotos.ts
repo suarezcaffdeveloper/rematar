@@ -33,3 +33,16 @@ export const STOCK_PHOTOS = {
   paisaje: unsplash('1441974231531-c6227db76b6e', 'Paisaje natural abierto'),
   atardecer: unsplash('1493932484895-752d1471eab5', 'Atardecer sobre el campo'),
 } as const;
+
+/**
+ * Fondos de pantalla completa (login, registro, recuperar contraseña): versiones horizontales
+ * de `public/rubros/*v2`. Las demás fotos son verticales y se veían estiradas con `object-cover`.
+ */
+export const AUTH_BACKGROUNDS = {
+  ganado: { url: '/rubros/ganaderiav2.jpg', alt: STOCK_PHOTOS.ganado.alt },
+  vehiculos: { url: '/rubros/vehiculosv2.jpg', alt: STOCK_PHOTOS.vehiculos.alt },
+  maquinariaPesada: { url: '/rubros/maquinariapesadav2.jpg', alt: STOCK_PHOTOS.maquinariaPesada.alt },
+  antiguedades: { url: '/rubros/antiguedadesv2.jpg', alt: STOCK_PHOTOS.antiguedades.alt },
+  joyas: { url: '/rubros/joyasyrelojeriav2.jpg', alt: STOCK_PHOTOS.joyas.alt },
+  nautica: { url: '/rubros/nauticav2.jpg', alt: STOCK_PHOTOS.nautica.alt },
+} as const;

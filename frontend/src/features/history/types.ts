@@ -41,6 +41,7 @@ export interface FinishedRemateSummary {
   duration_seconds: number | null;
   owner_id: string;
   owner_name: string | null;
+  cover_image_url?: string | null;
 }
 
 export interface ChatActivitySummary {

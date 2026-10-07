@@ -8,7 +8,7 @@ import type { FinishedRemateSummary } from '../types';
 const { historyApi, ventasApi, rematesApi } = vi.hoisted(() => ({
   historyApi: { fetchFinishedRemateHistoryRequest: vi.fn(), fetchRemateHistoryDetailRequest: vi.fn(), fetchLoteHistoryDetailRequest: vi.fn() },
   ventasApi: { fetchVentasAdjudicadasRequest: vi.fn() },
-  rematesApi: { fetchRematesRequest: vi.fn() },
+  rematesApi: { fetchRematesRequest: vi.fn(), fetchLotesRequest: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, page_size: 50 }) },
 }));
 
 vi.mock('../api', () => historyApi);

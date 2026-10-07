@@ -7,7 +7,8 @@ import { ConnectedBuyersList } from '../../../moderation/components/ConnectedBuy
 import { LockChatButton } from '../../../moderation/components/LockChatButton';
 import { RecentModerationActions } from '../../../moderation/components/RecentModerationActions';
 import { isModerationDomainEventMessage } from '../../../moderation/realtime/events';
-import { OfferHistoryPanel } from '../../../sala/components/OfferHistoryPanel';
+import { OFERTA_STATUS_LABELS } from '../../../sala/labels';
+import { formatCurrency, formatTime } from '../../../../shared/lib/format';
 import type { OfertaSnapshotEntry } from '../../../sala/types';
 import type { BuyerQuestion, BuyerQuestions } from './useBuyerQuestions';
 
@@ -145,7 +146,49 @@ function QuestionsInbox({ buyerQuestions }: { buyerQuestions: BuyerQuestions }) 
   );
 }
 
-type RailTab = 'preguntas' | 'chat' | 'conectados' | 'moderacion';
+const OFFER_STATUS_DOT: Record<OfertaSnapshotEntry['status'], string> = {
+  winning: 'bg-success-500',
+  accepted: 'bg-success-500',
+  outbid: 'bg-ink-faint',
+  rejected: 'bg-danger-500',
+};
+
+/** Ofertas en vivo, compacta y de alto fijo (no crece con cada oferta nueva): la oferta líder
+ * destacada y 3 ofertas visibles debajo, la más reciente primero; el resto se ve con el scroll
+ * interno de la lista, para dejarle el alto al chat y a las preguntas. */
+function LiveOffers({ winningOffer, recentOffers, currency }: { winningOffer: OfertaSnapshotEntry | null; recentOffers: OfertaSnapshotEntry[]; currency: string }) {
+  const latest = recentOffers;
+  return (
+    <section aria-label="Ofertas en vivo" className="shrink-0 border-b border-line px-5 pb-3 pt-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-base font-semibold tracking-tight">Ofertas en vivo</h2>
+        <span className="text-xs text-ink-muted">{latest.length > 3 ? `${latest.length} recientes · scroll para ver más` : `${latest.length} ${latest.length === 1 ? 'reciente' : 'recientes'}`}</span>
+      </div>
+      <div className="mt-2">
+        <p className="text-xs text-ink-muted">Va ganando</p>
+        {winningOffer ? (
+          <p className="mt-0.5 text-3xl font-semibold tracking-tight tabular-nums text-success-700">{formatCurrency(winningOffer.amount, currency)}</p>
+        ) : (
+          <p className="mt-1 text-sm text-ink-muted">Todavía no hay ofertas en este lote.</p>
+        )}
+      </div>
+      {latest.length > 0 && (
+        <ul tabIndex={0} aria-label="Ofertas recientes" className="mt-3 max-h-[6.75rem] divide-y divide-line overflow-y-auto border-t border-line focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+          {latest.map((offer) => (
+            <li key={offer.id} className="flex items-center gap-2.5 py-1.5 text-sm">
+              <span aria-hidden="true" className={clsx('h-1.5 w-1.5 shrink-0 rounded-full', OFFER_STATUS_DOT[offer.status])} />
+              <span className="flex-1 font-semibold tabular-nums">{formatCurrency(offer.amount, currency)}</span>
+              <span className="text-xs text-ink-muted">{OFERTA_STATUS_LABELS[offer.status]}</span>
+              <span className="w-12 text-right text-xs tabular-nums text-ink-faint">{formatTime(offer.created_at)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+export type RailTab = 'preguntas' | 'chat' | 'conectados' | 'moderacion';
 
 export interface EmpresaRailProps {
   remateId: string;
@@ -156,6 +199,8 @@ export interface EmpresaRailProps {
   recentOffers: OfertaSnapshotEntry[];
   currency: string;
   buyerQuestions: BuyerQuestions;
+  /** Pedido desde afuera (la barra superior) de abrir una pestaña; `nonce` cambia en cada pedido. */
+  request?: { tab: RailTab; nonce: number };
 }
 
 /**
@@ -173,8 +218,12 @@ export function EmpresaRail({
   recentOffers,
   currency,
   buyerQuestions,
+  request,
 }: EmpresaRailProps) {
   const [tab, setTab] = useState<RailTab>('preguntas');
+  useEffect(() => {
+    if (request && request.nonce > 0) setTab(request.tab);
+  }, [request]);
   const [reloadToken, setReloadToken] = useState(0);
   const pendingCount = buyerQuestions.pending.length;
 
@@ -194,11 +243,11 @@ export function EmpresaRail({
   ];
 
   return (
-    <div id="empresa-rail" className="flex min-h-0 flex-col gap-6">
-      <OfferHistoryPanel winningOffer={winningOffer} recentOffers={recentOffers} currency={currency} />
+    <div id="empresa-rail" className="flex h-full min-h-0 flex-col">
+      <LiveOffers winningOffer={winningOffer} recentOffers={recentOffers} currency={currency} />
 
-      <div className="flex min-h-[28rem] flex-1 flex-col xl:min-h-0">
-        <div role="tablist" aria-label="Preguntas, chat y moderación" className="flex shrink-0 gap-4 overflow-x-auto border-b border-line">
+      <div className="flex min-h-[28rem] flex-1 flex-col px-5 pt-4 xl:min-h-0">
+        <div role="tablist" aria-label="Preguntas, chat y moderación" className="flex shrink-0 gap-1 overflow-x-auto rounded-xl bg-surface-subtle p-1 ring-1 ring-line">
           {tabs.map(([id, label]) => (
             <button
               key={id}
@@ -207,19 +256,19 @@ export function EmpresaRail({
               aria-selected={tab === id}
               onClick={() => setTab(id)}
               className={clsx(
-                '-mb-px flex shrink-0 items-center gap-2 border-b-2 pb-2.5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
-                tab === id ? 'border-ink text-ink' : 'border-transparent text-ink-muted hover:text-ink',
+                'flex h-8 shrink-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
+                tab === id ? 'bg-white text-ink shadow-sm ring-1 ring-line' : 'text-ink-muted hover:text-ink',
               )}
             >
               {label}
               {id === 'preguntas' && pendingCount > 0 && (
-                <span className="rounded-full bg-brand-600 px-1.5 text-xs font-semibold tabular-nums text-white">{pendingCount}</span>
+                <span className="rounded-full bg-brand-600 px-1.5 text-[11px] font-semibold tabular-nums text-white">{pendingCount}</span>
               )}
             </button>
           ))}
         </div>
 
-        <div className="mt-4 flex min-h-0 flex-1 flex-col">
+        <div className={clsx('mt-4 flex min-h-0 flex-1 flex-col', tab !== 'chat' && 'pb-4')}>
           {tab === 'preguntas' && <QuestionsInbox buyerQuestions={buyerQuestions} />}
           {tab === 'chat' && (
             <ChatPanel
@@ -229,6 +278,7 @@ export function EmpresaRail({
               connectedUsers={connectedUsers}
               canModerate
               chrome="flat"
+              flushBottom
               className="min-h-0 flex-1"
             />
           )}
@@ -239,10 +289,10 @@ export function EmpresaRail({
           )}
           {tab === 'moderacion' && (
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-              <div className="flex items-center justify-between rounded-xl border border-line bg-white p-3 shadow-sm">
+              <div className="flex items-center justify-between border-b border-line pb-3">
                 <span className="flex items-center gap-2 text-sm font-semibold text-ink">
                   <ShieldAlert aria-hidden="true" className="h-4 w-4 text-ink-faint" />
-                  Moderación
+                  Chat de la sala
                 </span>
                 <LockChatButton remateId={remateId} onLocked={() => setReloadToken((token) => token + 1)} />
               </div>

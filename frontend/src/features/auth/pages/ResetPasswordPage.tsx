@@ -3,7 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Eye, EyeOff, Link2Off, Loader2, Lock } from 'lucide-react';
 import { resetPasswordRequest, validateResetPasswordTokenRequest } from '../api';
 import { normalizeApiError } from '../../../shared/api/errors';
-import { STOCK_PHOTOS } from '../../../shared/media/stockPhotos';
+import { CategoryTicker } from '../components/cinematic/CategoryTicker';
+import { AUTH_ROTATE_MS, useAuthRubros } from '../components/cinematic/useAuthRubros';
 import { useToastStore } from '../../../shared/toast/toastStore';
 import { CinematicShell } from '../components/cinematic/CinematicShell';
 import { GlassAlert, GlassField, GlassSubmitButton } from '../components/cinematic/GlassField';
@@ -83,12 +84,20 @@ export function ResetPasswordPage() {
     }
   }
 
+  const {
+    rubro,
+    index: rubroIndex,
+    setIndex: setRubroIndex,
+    isPaused: isTickerPaused,
+    setIsPaused: setIsTickerPaused,
+  } = useAuthRubros();
+
   return (
     <CinematicShell
       size="login"
-      photo={STOCK_PHOTOS.maquinariaAgricola}
-      photoKey="reset-password"
-      zoomSeconds={30}
+      photo={rubro.photo}
+      photoKey={rubro.category}
+      zoomSeconds={AUTH_ROTATE_MS / 1000 + 1}
       headerAction={
         <p className="text-sm text-white/70">
           ¿Ya la recordaste?{' '}
@@ -104,6 +113,13 @@ export function ResetPasswordPage() {
           </h2>
           {/* Con el link vencido el recorrido se corta en el paso 2: hay que pedir otro. */}
           <RecoverySteps current={tokenStatus === 'invalid' ? 1 : 2} />
+          <CategoryTicker
+            index={rubroIndex}
+            onSelect={setRubroIndex}
+            durationMs={AUTH_ROTATE_MS}
+            paused={isTickerPaused}
+            onPausedChange={setIsTickerPaused}
+          />
         </>
       }
     >
@@ -122,8 +138,8 @@ export function ResetPasswordPage() {
           <h1 className="mt-5 text-[1.75rem] font-semibold tracking-tight">Este link ya no sirve</h1>
           <div className="mt-4">
             <GlassAlert variant="error">
-              Este link de recuperación ya no es válido: puede haber expirado, haberse usado,
-              o haberse pedido uno más nuevo.
+              Este link de recuperación ya no es válido: puede haber expirado, haberse usado, o haberse pedido
+              uno más nuevo.
             </GlassAlert>
           </div>
           <Link

@@ -15,6 +15,7 @@ import { TimedConsolaPage } from '../../timedConsola/pages/TimedConsolaPage';
 import { ConsolaBotsPanel } from '../../bots/components/ConsolaBotsPanel';
 import { useRemateDetail } from '../../remates/hooks';
 import { useLiveRemateState } from '../../sala/hooks';
+import { useRemateFinishedSignal } from '../../sala/useRemateFinishedSignal';
 import { GavelIcon } from '../../remates/components/icons';
 import type { RemateStatus } from '../../remates/types';
 import { ConsolaControlPanel } from '../components/ConsolaControlPanel';
@@ -25,6 +26,7 @@ import { ConsolaSidebar } from '../components/ConsolaSidebar';
 import { ConsolaUpcomingLotesPanel } from '../components/ConsolaUpcomingLotesPanel';
 import { EmpresaConsolaView } from '../components/empresa/EmpresaConsolaView';
 import { OperatorCodePanel } from '../components/OperatorCodePanel';
+import { RemateFinishedNotice } from '../components/RemateFinishedNotice';
 import { PrivateAccessPanel } from '../components/PrivateAccessPanel';
 import { StreamPanel } from '../components/StreamPanel';
 
@@ -185,6 +187,10 @@ function LiveConsolaOperativaPage() {
   const isOwnerLive = isOperational && Boolean(user) && user?.id === snapshot?.remate.owner_id;
   useFocusMode(isOperational, isOwnerLive);
 
+  // Cartel de "remate finalizado" (empresa y rematador): aparece apenas llega
+  // `remate.finished` y los redirige, en vez de dejarlos frente al `EmptyState` de abajo.
+  const hasRemateFinished = useRemateFinishedSignal(subscribeToRealtime);
+
   const [selectedLoteId, setSelectedLoteId] = useState<string | null>(null);
 
   // Si el lote seleccionado deja de estar "pending" (se abrió, se canceló, o
@@ -285,6 +291,9 @@ function LiveConsolaOperativaPage() {
 
   return (
     <div className="flex flex-col gap-4 font-display">
+      {hasRemateFinished && (
+        <RemateFinishedNotice remateId={remate.id} currency={currency} audience={isOwner ? 'empresa' : 'martillero'} />
+      )}
       {!isOperational && showOperatorCodePanel && <OperatorCodePanel remate={remate} />}
       {showPrivateAccessPanel && <PrivateAccessPanel remate={remate} />}
       {!isOperational && showStreamPanel && <StreamPanel remate={remate} onChange={reload} />}

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import clsx from 'clsx';
 import { PackageX, RotateCcw } from 'lucide-react';
 import { Badge } from '../../../shared/components/Badge';
 import { Button } from '../../../shared/components/Button';
@@ -87,23 +88,28 @@ function PresetRequeueButton({
   );
 }
 
-function DesiertoLoteCard({
+/** `variant="row"`: fila abierta sin caja propia, para listas editoriales (pestaña "Lotes"
+ * de la Cabina de la empresa); `"card"` (default) es la tarjeta de siempre. */
+export function DesiertoLoteCard({
   remateId,
   lote,
   currency,
   canUseCustomPrice,
+  variant = 'card',
 }: {
   remateId: string;
   lote: Lote;
   currency: string;
   canUseCustomPrice: boolean;
+  variant?: 'card' | 'row';
 }) {
+  const boxed = variant === 'card';
   const [isRequeuing, setIsRequeuing] = useState(false);
   const mainImage = [...lote.images].sort((a, b) => a.order - b.order)[0];
 
   if (!lote.requeue_preset_enabled && isRequeuing) {
     return (
-      <div className="rounded-lg border border-line bg-white p-3">
+      <div className={boxed ? 'rounded-lg border border-line bg-white p-3' : 'py-4'}>
         <p className="mb-2 text-sm font-medium text-ink">
           Lote {lote.lot_number} · {lote.title}
         </p>
@@ -118,7 +124,7 @@ function DesiertoLoteCard({
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-white p-3">
+    <div className={clsx('flex items-center justify-between gap-3', boxed ? 'rounded-lg border border-line bg-white p-3' : 'py-4')}>
       <div className="flex min-w-0 items-center gap-3">
         <div className="h-12 w-16 shrink-0 overflow-hidden rounded-md">
           {mainImage ? (

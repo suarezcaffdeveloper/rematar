@@ -45,9 +45,16 @@ export interface CategoryCarouselProps {
  * posición (destacado, con su nombre completo y una barra de progreso) y los demás giran
  * alrededor -- así el nombre nunca queda fuera de vista, sin importar cuántas categorías haya.
  * Muestra una fila anterior y tres siguientes; el resto espera fuera de cuadro. Al pasar el
- * mouse o enfocar una fila, la rotación automática se frena; un clic elige ese rubro.
+ * mouse, la rotación automática se frena; un clic elige ese rubro.
  */
-export function CategoryCarousel({ items, index, onSelect, durationMs, paused, onPausedChange }: CategoryCarouselProps) {
+export function CategoryCarousel({
+  items,
+  index,
+  onSelect,
+  durationMs,
+  paused,
+  onPausedChange,
+}: CategoryCarouselProps) {
   const total = items.length;
 
   return (
@@ -58,8 +65,6 @@ export function CategoryCarousel({ items, index, onSelect, durationMs, paused, o
       style={{ height: HEIGHT }}
       onMouseEnter={() => onPausedChange(true)}
       onMouseLeave={() => onPausedChange(false)}
-      onFocus={() => onPausedChange(true)}
-      onBlur={() => onPausedChange(false)}
     >
       <ul className="relative h-full">
         {items.map((item, i) => (
@@ -111,7 +116,10 @@ function CarouselRow({ item, slot, index, durationMs, paused, onSelect }: Carous
       animate={{ y: yOf(slot), opacity: opacityOf(slot) }}
       transition={transition}
       className="absolute inset-x-0 top-0"
-      style={{ height: isActive ? ACTIVE_H : ROW_H, pointerEvents: isVisible ? 'auto' : 'none' }}
+      style={{
+        height: isActive ? ACTIVE_H : ROW_H,
+        pointerEvents: isVisible ? 'auto' : 'none',
+      }}
       aria-hidden={!isVisible}
     >
       <button

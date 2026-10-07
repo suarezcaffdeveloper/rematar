@@ -1,8 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Clock, CheckCircle2 } from 'lucide-react';
 import { formatCurrency, formatDateShort } from '../../../shared/lib/format';
-import { CoverPlaceholder } from '../../remates/components/CoverPlaceholder';
-import { GavelIcon } from '../../remates/components/icons';
+import { RemateCover } from '../../remates/components/home/RemateCover';
 import { CATEGORY_LABELS } from '../../remates/labels';
 import { HISTORY_CURRENCY, isCancelled } from '../summary';
 import type { FinishedRemateSummary } from '../types';
@@ -38,11 +37,10 @@ export function FinishedRemateCard({ remate, showOwner = false, coverImageUrl, u
         aria-label={`Ver resumen de ${remate.title}`}
         className="group relative block aspect-[16/10] overflow-hidden rounded-2xl bg-surface-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
       >
-        {coverImageUrl ? (
-          <img src={coverImageUrl} alt="" className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105" />
-        ) : (
-          <CoverPlaceholder className="h-full w-full" icon={<GavelIcon className="h-10 w-10 text-brand-300" />} />
-        )}
+        <RemateCover
+          remate={{ id: remate.id, cover_image_url: coverImageUrl ?? null }}
+          className="h-full w-full transition-transform duration-700 ease-out group-hover:scale-105"
+        />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink/55 via-transparent to-transparent" />
         <span
           className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-xs font-semibold shadow-sm ${
