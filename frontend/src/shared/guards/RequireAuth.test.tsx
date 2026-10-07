@@ -50,16 +50,18 @@ describe('RequireAuth', () => {
     expect(screen.getByText('Contenido protegido')).toBeInTheDocument();
   });
 
-  it('muestra la landing pública en "/" si no hay sesión, en vez de redirigir', () => {
+  it('manda a la landing estática desde "/" si no hay sesión, en vez de redirigir a /login', () => {
     useAuthMock.mockReturnValue({ isAuthenticated: false, isHydrated: true });
+    const replace = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...original, replace } });
 
     renderAt('/');
 
-    expect(
-      screen.getByRole('heading', { name: /la nueva generación de remates en tiempo real/i }),
-    ).toBeInTheDocument();
+    expect(replace).toHaveBeenCalledWith('/landing/');
     expect(screen.queryByText('Listado público de remates')).not.toBeInTheDocument();
     expect(screen.queryByText('Pantalla de login')).not.toBeInTheDocument();
+    Object.defineProperty(window, 'location', { configurable: true, value: original });
   });
 
   it('sigue mostrando el dashboard autenticado en "/" si hay sesión (no la landing)', () => {

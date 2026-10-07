@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RematAR — Remates en vivo</title>
+  <meta name="description" content="Un solo sistema para que la empresa arme el catálogo, el martillero conduzca la sala y el comprador ofrezca desde donde esté." />
+  <meta name="theme-color" content="#0b1411" />
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..800;1,6..96,400..800&family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="hero-variants.css" />
+  <link rel="stylesheet" href="strips-color.css" />
+</head>
+<body>
+  <a class="skip" href="#contenido">Saltar al contenido</a>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="progress" aria-hidden="true"><span></span></div>
+
+  <!-- Navegación -->
+  <header class="nav" id="nav">
+    <div class="nav__pill">
+      <a class="nav__logo" href="#inicio" aria-label="RematAR, ir al inicio">
+        <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 27h14"/><path d="M13 5l7 7-6 6-7-7z"/><path d="M16.5 15.5L24 23"/></svg>
+        <span>RematAR</span>
+      </a>
+      <nav class="nav__links" aria-label="Principal">
+        <a href="#sistema">Sistema</a>
+        <a href="#rubros">Rubros</a>
+        <a href="#proceso">Proceso</a>
+        <a href="#pantallas">Pantallas</a>
+        <a href="#preguntas">Preguntas</a>
+      </nav>
+      <a class="btn btn--sm btn--light" href="/login"><span>Ingresar</span><i class="btn__dot" data-icon="arrow"></i></a>
+      <button class="burger" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="menu"><span></span><span></span></button>
+    </div>
+  </header>
+  <div class="menu" id="menu" aria-hidden="true">
+    <nav aria-label="Menú móvil">
+      <a href="#sistema"><span>Sistema</span></a>
+      <a href="#rubros"><span>Rubros</span></a>
+      <a href="#proceso"><span>Proceso</span></a>
+      <a href="#pantallas"><span>Pantallas</span></a>
+      <a href="#preguntas"><span>Preguntas</span></a>
+      <a href="/login" class="menu__cta"><span>Entrar al sistema</span></a>
+    </nav>
+  </div>
+
+  <main id="contenido">
+    <!-- HERO -->
+    <section class="hero" id="inicio" data-parallax="1">
+      <div class="hero__slides" id="heroSlides" aria-hidden="true"></div>
+      <div class="hero__shade" aria-hidden="true"></div>
+
+      <div class="shell hero__inner">
+        <div class="hero__copy">
+          <h1 class="hero__title" data-lines>Cada puja,<br>en vivo.<br><em>A la vista de todos.</em></h1>
+          <p class="hero__sub">RematAR reúne en un solo sistema a la empresa, al martillero y al comprador. Catálogo, sala en vivo y adjudicación, todo desde el navegador.</p>
+          <div class="hero__cta">
+            <a class="btn btn--brass" href="/login"><span>Entrar al sistema</span><i class="btn__dot" data-icon="arrow"></i></a>
+            <a class="btn btn--ghost" href="#sistema"><span>Ver cómo funciona</span><i class="btn__dot" data-icon="down"></i></a>
+          </div>
+        </div>
+
+        <aside class="vcard" data-variant="pulse" data-hero-aside aria-label="Simulación de la actividad de una sala">
+          <div class="vcard__top"><span class="live"><i></i>En vivo</span><span class="mono vcard__tag"><b id="pcRoom">42</b> en sala</span></div>
+          <div class="vcard__body">
+            <p class="vcard__rubro" id="pcRubro"></p>
+            <h2 class="pulse__name" id="pcName"></h2>
+          </div>
+          <svg class="pulse__chart" viewBox="0 0 320 96" preserveAspectRatio="none" aria-hidden="true">
+            <defs><linearGradient id="pcGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c4a26b" stop-opacity="0.35"/><stop offset="1" stop-color="#c4a26b" stop-opacity="0"/></linearGradient></defs>
+            <line class="grid" x1="0" y1="24" x2="320" y2="24"/><line class="grid" x1="0" y1="56" x2="320" y2="56"/>
+            <path class="area" id="pcArea"/><path class="line" id="pcLine"/><circle class="dot" id="pcDot" r="4"/>
+          </svg>
+          <div class="vcard__price mono"><span>Oferta actual</span><b><small>USD</small><i id="pcPrice">0</i></b></div>
+          <div class="pulse__stats mono">
+            <div><b id="pcBids">0</b><span>pujas</span></div>
+            <div><b id="pcBidders">0</b><span>postores activos</span></div>
+            <div><b id="pcStep">+0</b><span>último salto</span></div>
+          </div>
+          <p class="vcard__note">Simulación ilustrativa</p>
+        </aside>
+      </div>
+
+      <div class="shell hero__bar">
+        <ol class="hero__index" id="heroIndex"></ol>
+        <div class="hero__arrows">
+          <button class="round" type="button" id="heroPrev" aria-label="Lote anterior"><i data-icon="left"></i></button>
+          <button class="round" type="button" id="heroNext" aria-label="Lote siguiente"><i data-icon="right"></i></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- CINTA -->
+    <section class="tape" aria-label="Ejemplos de lotes adjudicados">
+      <div class="tape__track" id="tapeTrack"></div>
+    </section>
+
+    <!-- MANIFIESTO -->
+    <section class="manifesto paper" id="nosotros">
+      <div class="shell">
+        <p class="manifesto__text" id="manifesto">Un solo sistema para que la empresa arme el catálogo, el martillero conduzca la sala y el comprador ofrezca desde donde esté. Cada puja llega a todos en el mismo instante y cada adjudicación queda registrada.</p>
+      </div>
+      <div class="strips" aria-hidden="true"><div class="strip" id="stripA"></div><div class="strip strip--b" id="stripB"></div></div>
+    </section>
+
+    <!-- SISTEMA / ROLES -->
+    <section class="roles ink" id="sistema">
+      <div class="roles__sticky">
+        <div class="shell roles__grid">
+          <div class="roles__left">
+            <h2 class="h2" data-lines>Un sistema,<br><em>tres puestos.</em></h2>
+            <div class="roles__tabs" id="rolesTabs" role="tablist" aria-label="Puestos del remate"></div>
+            <div class="roles__chapters" id="rolesChapters"></div>
+          </div>
+          <div class="roles__stage" id="rolesStage" aria-hidden="true">
+            <div class="stage__glow"></div>
+            <div class="stage__frame bezel bezel--dark">
+              <div class="bezel__core">
+                <div class="chrome"><i></i><i></i><i></i><span id="stageUrl">app.rematar.com/remates</span></div>
+                <div class="stage__layers" id="stageLayers"></div>
+              </div>
+            </div>
+            <div class="stage__chips" id="stageChips"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RUBROS -->
+    <section class="rubros paper" id="rubros">
+      <div class="shell rubros__head">
+        <h2 class="h2" data-lines>Se remata<br><em>de todo.</em></h2>
+        <p class="lead">Inmuebles, hacienda, maquinaria, arte, joyas, náutica. Un mismo sistema para cualquier categoría, con el catálogo y la sala adaptados a cada lote.</p>
+      </div>
+      <div class="shell"><div class="acc" id="acc" role="list"></div></div>
+    </section>
+
+    <!-- PROCESO -->
+    <section class="process ink2" id="proceso">
+      <div class="shell process__grid">
+        <div class="process__left">
+          <div class="process__sticky">
+            <h2 class="h2" data-lines>Del catálogo<br><em>a la adjudicación.</em></h2>
+            <div class="counter" aria-hidden="true">
+              <div class="counter__win"><div class="counter__col" id="counterCol"></div></div>
+              <span class="counter__of mono">/ 07</span>
+            </div>
+            <p class="process__owner mono" id="processOwner">Empresa</p>
+            <div class="process__bar" aria-hidden="true"><span id="processBar"></span></div>
+          </div>
+        </div>
+        <ol class="process__list" id="processList"></ol>
+      </div>
+    </section>
+
+    <!-- PANTALLAS -->
+    <section class="screens paper" id="pantallas">
+      <div class="shell screens__head">
+        <h2 class="h2" data-lines>La plataforma,<br><em>por dentro.</em></h2>
+        <div class="screens__side">
+          <p class="lead">Capturas reales de la app, no maquetas. Así se ve cada pantalla con el remate en marcha.</p>
+          <div class="screens__ctrl">
+            <button class="round round--ink" type="button" id="scrPrev" aria-label="Pantalla anterior"><i data-icon="left"></i></button>
+            <button class="round round--ink" type="button" id="scrNext" aria-label="Pantalla siguiente"><i data-icon="right"></i></button>
+            <span class="mono screens__count"><b id="scrNow">01</b> / 07</span>
+          </div>
+        </div>
+      </div>
+      <div class="screens__rail" id="rail" tabindex="0" aria-label="Pantallas de la plataforma, usá las flechas o deslizá para ver más" aria-roledescription="carrusel"></div>
+      <div class="shell"><div class="screens__prog" aria-hidden="true"><span id="scrProg"></span></div></div>
+      <div class="dragcursor" id="dragCursor" aria-hidden="true"><span>Arrastrar</span></div>
+    </section>
+
+    <!-- FUNCIONES -->
+    <section class="features ink" id="funciones">
+      <div class="shell">
+        <div class="features__head">
+          <h2 class="h2" data-lines>Todo lo que<br><em>el remate necesita.</em></h2>
+        </div>
+        <div class="bento" id="bento"></div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="faq paper" id="preguntas">
+      <div class="shell faq__grid">
+        <div class="faq__left">
+          <h2 class="h2" data-lines>Lo que suelen<br><em>preguntar.</em></h2>
+          <div class="faq__tabs" id="faqTabs" role="tablist" aria-label="Preguntas por perfil"></div>
+        </div>
+        <div class="faq__list" id="faqList"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- CIERRE -->
+  <footer class="closing ink" id="ingresar">
+    <div class="closing__bg" aria-hidden="true"><img src="assets/rubros/atardecer.png" alt="" loading="lazy" /></div>
+    <div class="closing__shade" aria-hidden="true"></div>
+    <div class="shell closing__inner">
+      <h2 class="closing__title" data-lines>El próximo remate<br><em>puede ser el tuyo.</em></h2>
+      <p class="closing__sub">Entrá con tu cuenta o creá una nueva. Si sos una empresa y querés ver una demo guiada, escribinos.</p>
+      <div class="closing__cta">
+        <a class="btn btn--brass btn--lg magnetic" href="/login"><span>Entrar al sistema</span><i class="btn__dot" data-icon="arrow"></i></a>
+        <a class="btn btn--ghost btn--lg magnetic" href="/register"><span>Crear cuenta</span><i class="btn__dot" data-icon="arrow"></i></a>
+      </div>
+    </div>
+    <div class="shell closing__foot">
+      <span class="closing__word" aria-hidden="true">RematAR</span>
+      <div class="closing__meta">
+        <span>© 2026 RematAR</span>
+        <nav aria-label="Pie"><a href="#sistema">Sistema</a><a href="#rubros">Rubros</a><a href="#proceso">Proceso</a><a href="#preguntas">Preguntas</a></nav>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.18/dist/lenis.min.js"></script>
+  <script src="app.js"></script>
+  <script src="hero-variants.js"></script>
+  <script src="strips-color.js"></script>
+</body>
+</html>

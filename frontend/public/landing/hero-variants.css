@@ -1,0 +1,31 @@
+/* Hero: intensidad del parallax y card «Pulso de la sala». Se apoya en styles.css. */
+.hero[data-parallax] .hero__slides { inset: -6%; }
+
+.vcard { width: 360px; margin-bottom: 6px; padding: 22px 22px 18px; border-radius: 22px; color: var(--white);
+  background: rgba(11, 20, 17, 0.62); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  box-shadow: 0 0 0 1px rgba(246, 247, 243, 0.16), 0 40px 80px -40px rgba(0, 0, 0, 0.7); }
+.vcard__top { display: flex; justify-content: space-between; align-items: center; }
+.vcard__tag { font-size: 12px; color: rgba(246, 247, 243, 0.6); }
+.vcard__tag b { color: var(--white); font-weight: 500; }
+.vcard__rubro { margin-top: 20px; font-size: 13px; color: var(--brass); }
+.vcard__body { transition: opacity 0.35s var(--ease), filter 0.35s var(--ease), transform 0.35s var(--ease); }
+.vcard.is-swap .vcard__body { opacity: 0; filter: blur(6px); transform: translateY(6px); }
+.vcard__price { display: flex; align-items: baseline; justify-content: space-between; margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(246, 247, 243, 0.14); font-size: 2.1rem; letter-spacing: -0.03em; font-weight: 500; }
+.vcard__price span { font-family: var(--sans); font-size: 13px; letter-spacing: 0; font-weight: 400; color: rgba(246, 247, 243, 0.62); }
+.vcard__price small { font-size: 0.85rem; margin-right: 6px; color: var(--brass); font-weight: 400; letter-spacing: 0; }
+.vcard__price i { font-style: normal; }
+.vcard__note { margin-top: 10px; font-size: 11px; color: rgba(246, 247, 243, 0.38); }
+
+/* C · Pulso de la sala */
+.pulse__name { margin-top: 4px; font-family: var(--serif); font-weight: 500; font-size: 1.7rem; line-height: 1.05; letter-spacing: -0.02em; }
+.pulse__chart { display: block; width: 100%; height: 96px; margin-top: 16px; overflow: visible; }
+.pulse__chart .area { fill: url(#pcGrad); }
+.pulse__chart .line { fill: none; stroke: var(--brass); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.pulse__chart .dot { fill: var(--white); stroke: var(--brass); stroke-width: 2; }
+.pulse__chart .grid { stroke: rgba(246, 247, 243, 0.08); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.pulse__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+.pulse__stats div { display: grid; gap: 2px; }
+.pulse__stats b { font-weight: 500; font-size: 1.05rem; }
+.pulse__stats span { font-size: 11px; color: rgba(246, 247, 243, 0.5); }
+
+@media (max-width: 1100px) { .vcard { width: min(100%, 420px); } }

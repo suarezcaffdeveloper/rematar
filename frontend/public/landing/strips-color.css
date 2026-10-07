@@ -1,0 +1,57 @@
+/* Tiras del manifiesto — versión a color (experimento, pisa las reglas de styles.css)
+   Fotos con su color natural; el acento es solo el latón de la marca. */
+
+.strips { perspective: 1400px; }
+.strip { transform-origin: 50% 50%; }
+
+.tile {
+  --rx: 0deg; --ry: 0deg; --px: 0; --py: 0; --gx: 50%; --gy: 50%;
+  transform: perspective(900px) rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform 0.5s var(--ease), box-shadow 0.6s var(--ease), filter 0.5s var(--ease);
+  box-shadow: 0 30px 50px -34px rgba(11, 20, 17, 0.55);
+  will-change: transform;
+}
+.tile img {
+  filter: saturate(1.05) contrast(1.03);
+  transform: scale(1.08) translate(calc(var(--px) * -10px), calc(var(--py) * -10px));
+  transition: transform 0.6s var(--ease);
+}
+/* Velo oscuro suave abajo (para leer el nombre) + brillo que sigue al cursor */
+.tile::after {
+  background:
+    radial-gradient(circle at var(--gx) var(--gy), rgba(255, 255, 255, 0.22), transparent 40%),
+    linear-gradient(0deg, rgba(11, 20, 17, 0.72) 0%, rgba(11, 20, 17, 0) 55%);
+  opacity: 0;
+  transition: opacity 0.5s var(--ease);
+  pointer-events: none;
+}
+/* Nombre del rubro: oculto, aparece desde abajo al pasar el mouse */
+.tile span {
+  z-index: 2; left: 18px; right: 18px; bottom: 16px;
+  font-family: var(--serif); font-weight: 500; font-size: clamp(1.05rem, 1.5vw, 1.5rem); letter-spacing: -0.02em; line-height: 1.1;
+  text-shadow: none;
+  opacity: 0; transform: translateY(14px);
+  transition: opacity 0.4s var(--ease), transform 0.55s var(--ease);
+}
+.tile span::before {
+  content: ''; display: block; width: 28px; height: 2px; margin-bottom: 10px; background: var(--brass);
+  transform: scaleX(0); transform-origin: left; transition: transform 0.6s var(--ease) 0.08s;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tile:hover { z-index: 3; box-shadow: 0 44px 60px -30px rgba(11, 20, 17, 0.7); transition-duration: 0.18s, 0.6s, 0.5s; }
+  .tile:hover img { filter: saturate(1.12) contrast(1.05); transform: scale(1.18) translate(calc(var(--px) * -16px), calc(var(--py) * -16px)); }
+  .tile:hover::after { opacity: 1; }
+  .tile:hover span { opacity: 1; transform: none; }
+  .tile:hover span::before { transform: scaleX(1); }
+}
+/* Sin hover (táctil): el nombre queda siempre visible, discreto */
+@media (hover: none), (pointer: coarse) {
+  .tile::after { opacity: 1; }
+  .tile span { opacity: 1; transform: none; font-size: 1rem; }
+  .tile span::before { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile, .tile img { transform: none !important; }
+}

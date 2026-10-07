@@ -1,6 +1,6 @@
+import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../features/auth/hooks';
-import { LandingPage } from '../../features/landing/pages/LandingPage';
 import { Spinner } from '../components/Spinner';
 
 // Visitante anónimo (ADR-049): el listado público de remates (`/remates`, punto de
@@ -10,6 +10,23 @@ import { Spinner } from '../components/Spinner';
 // `backend/app/websocket/auth.py`). El resto de sub-rutas (`/gestionar`, `/lotes`,
 // `/auditoria`, etc.) siguen exigiendo sesión.
 const ANONYMOUS_VIEWABLE_PATTERNS = [/^\/remates$/, /^\/remates\/[^/]+$/, /^\/remates\/[^/]+\/sala$/];
+
+/**
+ * La landing pública es una página estática aparte (`public/landing/`, HTML/CSS/JS con GSAP, no
+ * parte del bundle de React): "/" sin sesión navega ahí con `replace`, así "atrás" no vuelve a "/".
+ */
+export const LANDING_PATH = '/landing/';
+
+function LandingRedirect() {
+  useEffect(() => {
+    window.location.replace(LANDING_PATH);
+  }, []);
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <Spinner size="lg" />
+    </div>
+  );
+}
 
 function isPubliclyViewablePath(pathname: string): boolean {
   return ANONYMOUS_VIEWABLE_PATTERNS.some((pattern) => pattern.test(pathname));
@@ -32,8 +49,8 @@ function isPubliclyViewablePath(pathname: string): boolean {
  * fracción de segundo aunque la sesión siga siendo válida.
  *
  * Dos casos especiales para un visitante sin sesión (ADR-049): "/" muestra la landing
- * pública (`LandingPage`, mismo componente que reusa el deploy standalone de solo-landing
- * en `src/landing-main.tsx`) -- mismo patrón que cualquier SaaS con dominio único
+ * pública (la landing estática de `public/landing/`, ver `LandingRedirect`; el deploy standalone de
+ * solo-landing en `src/landing-main.tsx` sigue usando el `LandingPage` de React) -- mismo patrón que cualquier SaaS con dominio único
  * (github.com, notion.so, vercel.com: "/" es marketing sin sesión, dashboard con sesión).
  * El listado público de remates, el detalle de un remate real y su sala en vivo
  * (`/remates`, `/remates/:id`, `/remates/:id/sala`, ver `isPubliclyViewablePath`) dejan
@@ -50,8 +67,8 @@ function isPubliclyViewablePath(pathname: string): boolean {
  * afectados.
  *
  * Importante para un cierre de sesión explícito (`Sidebar`, botón "Cerrar sesión"): acá
- * "/" nunca dispara un `<Navigate>` para un visitante sin sesión, solo renderiza
- * `LandingPage` en el lugar -- a diferencia de una versión anterior que redirigía a
+ * "/" nunca dispara un `<Navigate>` para un visitante sin sesión, solo muestra
+ * `LandingRedirect` en el lugar -- a diferencia de una versión anterior que redirigía a
  * `/remates` (ver historial de este archivo), eso significa que el `navigate('/login')`
  * imperativo que dispara `Sidebar` al confirmar no compite con ninguna navegación propia
  * de este componente y siempre gana limpio, sin necesidad de ningún flag ni truco de
@@ -71,7 +88,7 @@ export function RequireAuth() {
 
   if (!isAuthenticated) {
     if (location.pathname === '/') {
-      return <LandingPage />;
+      return <LandingRedirect />;
     }
     if (isPubliclyViewablePath(location.pathname)) {
       return <Outlet />;
