@@ -54,6 +54,7 @@ class FinishedRemateSummary(BaseModel):
     duration_seconds: float | None
     owner_id: uuid.UUID
     owner_name: str | None
+    cover_image_url: str | None = None
 
 
 class ChatActivitySummary(BaseModel):

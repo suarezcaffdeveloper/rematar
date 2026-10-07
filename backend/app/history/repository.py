@@ -89,6 +89,7 @@ class HistoryRepository:
                 Remate.status,
                 Remate.starts_at,
                 Remate.owner_id,
+                Remate.cover_image_url,
                 resolved_at.label("resolved_at"),
                 func.coalesce(lote_agg.c.lote_count, 0).label("lote_count"),
                 func.coalesce(lote_agg.c.lotes_sold_count, 0).label("lotes_sold_count"),

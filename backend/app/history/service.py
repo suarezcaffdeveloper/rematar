@@ -100,6 +100,7 @@ class HistoryService:
             duration_seconds=duration,
             owner_id=row.owner_id,
             owner_name=owner.full_name if owner else None,
+            cover_image_url=row.cover_image_url,
         )
 
     # --- Detalle de remate -----------------------------------------------------------------
