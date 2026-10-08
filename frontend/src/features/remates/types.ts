@@ -82,6 +82,11 @@ export interface Remate {
   // fixtures de prueba ya existentes que arman un `Remate` a mano sin este campo --
   // mismo criterio pragmático que el resto de este archivo ("mantenido a mano").
   rematador_id?: string | null;
+  // Solo vienen en `GET /remates` (listado): evitan pedir los lotes de cada remate aparte
+  // para el contador y el collage de portada. Opcionales porque el resto de los endpoints
+  // de remate no los incluye.
+  lote_count?: number;
+  cover_images?: string[];
   title: string;
   description: string | null;
   category: RemateCategory;

@@ -100,10 +100,12 @@ export function useRemates(params: UseRematesParams = {}): UseRematesResult {
  * carga o si falló -- la tarjeta lo trata igual en ambos casos (ver `RemateCard.tsx`):
  * no vale la pena bloquear ni romper el resto de la tarjeta por este dato secundario.
  */
-export function useLoteCount(remateId: string): number | null {
+export function useLoteCount(remateId: string, known?: number): number | null {
   const [count, setCount] = useState<number | null>(null);
 
   useEffect(() => {
+    // `known` viene en el listado (`Remate.lote_count`): ya no hace falta pedirlo.
+    if (known !== undefined) return;
     let cancelled = false;
     setCount(null);
     fetchLoteCountRequest(remateId)
@@ -116,9 +118,9 @@ export function useLoteCount(remateId: string): number | null {
     return () => {
       cancelled = true;
     };
-  }, [remateId]);
+  }, [remateId, known]);
 
-  return count;
+  return known ?? count;
 }
 
 /**
@@ -167,10 +169,12 @@ const COVER_IMAGES_SAMPLE_SIZE = 12;
  * secundario. Pensado para tarjetas que, a diferencia de `RemateDetailOverview`, no
  * tienen ya los lotes cargados en memoria.
  */
-export function useLoteCoverImages(remateId: string): string[] | null {
+export function useLoteCoverImages(remateId: string, known?: string[]): string[] | null {
   const [images, setImages] = useState<string[] | null>(null);
 
   useEffect(() => {
+    // `known` viene en el listado (`Remate.cover_images`): ya no hace falta pedir los lotes.
+    if (known !== undefined) return;
     let cancelled = false;
     setImages(null);
     fetchLotesRequest(remateId, { page: 1, page_size: COVER_IMAGES_SAMPLE_SIZE })
@@ -183,9 +187,9 @@ export function useLoteCoverImages(remateId: string): string[] | null {
     return () => {
       cancelled = true;
     };
-  }, [remateId]);
+  }, [remateId, known]);
 
-  return images;
+  return known ?? images;
 }
 
 const LIVE_PREVIEW_POLL_MS = 8000;

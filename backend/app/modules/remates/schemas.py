@@ -265,6 +265,16 @@ class RemateRead(BaseModel):
     updated_at: datetime
 
 
+class RemateListItem(RemateRead):
+    """Un elemento de `GET /remates`: `RemateRead` más lo que la grilla del inicio
+    necesitaba pedir aparte por cada fila (cantidad de lotes y fotos del collage de
+    portada), resuelto en el backend para todos los remates de la página a la vez."""
+
+    lote_count: int = 0
+    # Fotos de lotes para el collage; solo se completa en remates sin `cover_image_url`.
+    cover_images: list[str] = []
+
+
 class RemateCreateResponse(RemateRead):
     """Extiende `RemateRead` únicamente para `POST /remates`: cuando `access_type` es
     `private`, agrega el código en texto plano, visible una única vez (mismo criterio

@@ -195,7 +195,7 @@ function LivePrice({ amount, currency, isOffer }: { amount: string; currency: st
 
 /** Sin lote en el martillo todavía (o sin snapshot): lugar y cantidad de lotes. */
 function LotesFallback({ remate }: { remate: Remate }) {
-  const loteCount = useLoteCount(remate.id);
+  const loteCount = useLoteCount(remate.id, remate.lote_count);
   return (
     <p className="text-sm text-white/80">
       {[

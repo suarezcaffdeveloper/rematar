@@ -713,3 +713,41 @@ async def test_upload_lote_image_for_nonexistent_lote_returns_404(client: AsyncC
         headers=_auth(token),
     )
     assert response.status_code == 404
+
+
+async def test_remate_listing_includes_lote_count_and_cover_images(client: AsyncClient) -> None:
+    token = await _register_and_login(client, email="rematador-resumen@example.com", role="empresa")
+    con_lotes = await _create_remate(client, token, title="Con lotes")
+    await _create_remate(client, token, title="Sin lotes")
+
+    await _create_lote(
+        client,
+        token,
+        con_lotes["id"],
+        images=[
+            {"url": "https://example.com/segunda.jpg", "order": 1, "caption": None},
+            {"url": "https://example.com/primera.jpg", "order": 0, "caption": None},
+        ],
+    )
+    await _create_lote(client, token, con_lotes["id"], lot_number="2", images=[])
+    await _create_lote(
+        client,
+        token,
+        con_lotes["id"],
+        lot_number="3",
+        images=[{"url": "https://example.com/otra.jpg", "order": 0, "caption": None}],
+    )
+
+    response = await client.get(REMATES_URL, headers=_auth(token))
+    assert response.status_code == 200
+    by_title = {item["title"]: item for item in response.json()["items"]}
+
+    assert by_title["Con lotes"]["lote_count"] == 3
+    # Primera imagen (por `order`) de cada lote con fotos, en `display_order`; el lote sin
+    # imágenes se saltea.
+    assert by_title["Con lotes"]["cover_images"] == [
+        "https://example.com/primera.jpg",
+        "https://example.com/otra.jpg",
+    ]
+    assert by_title["Sin lotes"]["lote_count"] == 0
+    assert by_title["Sin lotes"]["cover_images"] == []

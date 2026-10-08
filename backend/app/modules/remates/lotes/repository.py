@@ -79,6 +79,56 @@ class LoteRepository:
         )
         return (await self._db.execute(stmt)).scalar_one()
 
+    async def summaries_by_remates(
+        self,
+        remate_ids: list[uuid.UUID],
+        *,
+        cover_remate_ids: list[uuid.UUID],
+        cover_limit: int,
+    ) -> tuple[dict[uuid.UUID, int], dict[uuid.UUID, list[str]]]:
+        """Cantidad de lotes vivos de cada remate y, para `cover_remate_ids`, las primeras
+        `cover_limit` fotos de lote (la primera imagen de cada uno, en `display_order`),
+        en dos consultas para todos a la vez -- el listado de remates las usa en lugar de
+        que el cliente pida los lotes de cada fila por separado."""
+        if not remate_ids:
+            return {}, {}
+
+        count_stmt = (
+            select(Lote.remate_id, func.count())
+            .where(Lote.remate_id.in_(remate_ids), Lote.deleted_at.is_(None))
+            .group_by(Lote.remate_id)
+        )
+        counts = {rid: total for rid, total in (await self._db.execute(count_stmt)).all()}
+
+        covers: dict[uuid.UUID, list[str]] = {}
+        if cover_remate_ids:
+            ranked = (
+                select(
+                    Lote.remate_id.label("remate_id"),
+                    Lote.images.label("images"),
+                    Lote.display_order.label("display_order"),
+                    func.row_number()
+                    .over(partition_by=Lote.remate_id, order_by=Lote.display_order.asc())
+                    .label("rn"),
+                )
+                .where(
+                    Lote.remate_id.in_(cover_remate_ids),
+                    Lote.deleted_at.is_(None),
+                    func.jsonb_array_length(Lote.images) > 0,
+                )
+                .subquery()
+            )
+            cover_stmt = (
+                select(ranked.c.remate_id, ranked.c.images)
+                .where(ranked.c.rn <= cover_limit)
+                .order_by(ranked.c.remate_id, ranked.c.display_order.asc())
+            )
+            for rid, images in (await self._db.execute(cover_stmt)).all():
+                first = min(images, key=lambda image: image.get("order", 0), default=None)
+                if first and first.get("url"):
+                    covers.setdefault(rid, []).append(first["url"])
+        return counts, covers
+
     async def has_open_lote(self, remate_id: uuid.UUID) -> bool:
         """RF-12: usado antes de abrir un lote (no puede haber otro ya OPEN) y antes de
         finalizar el remate (no puede haber ninguno OPEN)."""

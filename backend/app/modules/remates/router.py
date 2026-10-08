@@ -32,6 +32,7 @@ from app.modules.remates.schemas import (
     RemateCoverImageUploadResponse,
     RemateCreate,
     RemateCreateResponse,
+    RemateListItem,
     RemateOperatorClaimRequest,
     RemateOperatorCodeResponse,
     RematePrivateAccessCodeResponse,
@@ -91,7 +92,7 @@ async def upload_remate_cover_image(
 
 @router.get(
     "",
-    response_model=Page[RemateRead],
+    response_model=Page[RemateListItem],
     summary="Listar remates visibles para el usuario actual (o para un visitante anónimo, ADR-049)",
 )
 async def list_remates(
@@ -103,7 +104,7 @@ async def list_remates(
     status_: RemateStatus | None = Query(default=None, alias="status"),  # noqa: B008
     owner_id: uuid.UUID | None = None,
     rematador_id: uuid.UUID | None = None,
-) -> Page[RemateRead]:
+) -> Page[RemateListItem]:
     items, total = await service.list_for_viewer(
         viewer=current_user,
         page=page,
@@ -113,7 +114,16 @@ async def list_remates(
         owner_id=owner_id,
         rematador_id=rematador_id,
     )
-    return Page[RemateRead](items=list(items), total=total, page=page, page_size=page_size)
+    summaries = await service.summarize_lotes(list(items))
+    list_items = []
+    for remate in items:
+        lote_count, cover_images = summaries[remate.id]
+        list_items.append(
+            RemateListItem.model_validate(remate).model_copy(
+                update={"lote_count": lote_count, "cover_images": cover_images}
+            )
+        )
+    return Page[RemateListItem](items=list_items, total=total, page=page, page_size=page_size)
 
 
 @router.get(

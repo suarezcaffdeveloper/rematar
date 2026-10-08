@@ -5,8 +5,8 @@ import type { Remate } from '../../types';
 import { LotesCollagePlaceholder } from '../LotesCollagePlaceholder';
 import { optimizedImage } from '../../../../shared/lib/image';
 
-function CollageCover({ remateId, className }: { remateId: string; className?: string }) {
-  const images = useLoteCoverImages(remateId);
+function CollageCover({ remateId, known, className }: { remateId: string; known?: string[]; className?: string }) {
+  const images = useLoteCoverImages(remateId, known);
   return <LotesCollagePlaceholder images={(images ?? []).map((url) => optimizedImage(url, COLLAGE_WIDTH))} className={className} />;
 }
 
@@ -27,8 +27,8 @@ function preload(urls: string[]) {
   }
 }
 
-function CollagePreload({ remateId }: { remateId: string }) {
-  const images = useLoteCoverImages(remateId);
+function CollagePreload({ remateId, known }: { remateId: string; known?: string[] }) {
+  const images = useLoteCoverImages(remateId, known);
   useEffect(() => {
     if (images) preload(images.map((url) => optimizedImage(url, COLLAGE_WIDTH)));
   }, [images]);
@@ -41,12 +41,12 @@ function CollagePreload({ remateId }: { remateId: string }) {
  * esté en la caché del navegador. Usa los mismos anchos que `RemateCover`: si no, la URL
  * cambia y la precarga no sirve.
  */
-export function RemateCoverPreload({ remate }: { remate: Pick<Remate, 'id' | 'cover_image_url'> }) {
+export function RemateCoverPreload({ remate }: { remate: Pick<Remate, 'id' | 'cover_image_url' | 'cover_images'> }) {
   const cover = remate.cover_image_url;
   useEffect(() => {
     if (cover) preload([optimizedImage(cover, COVER_WIDTH)]);
   }, [cover]);
-  return cover ? null : <CollagePreload remateId={remate.id} />;
+  return cover ? null : <CollagePreload remateId={remate.id} known={remate.cover_images} />;
 }
 
 export function RemateCover({
@@ -55,7 +55,7 @@ export function RemateCover({
   eager = false,
   width = COVER_WIDTH,
 }: {
-  remate: Pick<Remate, 'id' | 'cover_image_url'>;
+  remate: Pick<Remate, 'id' | 'cover_image_url' | 'cover_images'>;
   className?: string;
   /** Imagen de la primera pantalla: se pide ya, sin `loading="lazy"`. */
   eager?: boolean;
@@ -74,5 +74,5 @@ export function RemateCover({
       />
     );
   }
-  return <CollageCover remateId={remate.id} className={className} />;
+  return <CollageCover remateId={remate.id} known={remate.cover_images} className={className} />;
 }

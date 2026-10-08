@@ -107,7 +107,7 @@ export function LiveRemateCarousel({ remates }: LiveRemateCarouselProps) {
 
   const activeRealIndex = count > 1 ? ((pos - 1 + count) % count) : 0;
   const activeRemateId = remates[activeRealIndex]?.id ?? '';
-  const loteCount = useLoteCount(activeRemateId);
+  const loteCount = useLoteCount(activeRemateId, remates[activeRealIndex]?.lote_count);
   const connectedUsers = useConnectedUsersCount(activeRemateId);
 
   if (count === 0) return null;
@@ -230,7 +230,7 @@ function LiveSlide({
   // primera imagen de hasta 4 lotes en vez del degradé genérico -- antes esta pieza
   // caía directo a `CoverPlaceholder` sin intentarlo, por eso remates sin portada
   // propia parecían "sin imagen" acá aunque sí se veían con foto en la grilla de abajo.
-  const loteCoverImages = useLoteCoverImages(remate.id);
+  const loteCoverImages = useLoteCoverImages(remate.id, remate.cover_images);
 
   const badge = (
     <div className="absolute left-3 top-3">

@@ -307,7 +307,7 @@ function IndexRow({
   onBlurRow: () => void;
 }) {
   const Icon = CATEGORY_ICONS[remate.category];
-  const loteCount = useLoteCount(remate.id);
+  const loteCount = useLoteCount(remate.id, remate.lote_count);
 
   return (
     <motion.li

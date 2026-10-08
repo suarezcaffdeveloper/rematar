@@ -516,6 +516,18 @@ class RemateService:
             rematador_id=rematador_id,
         )
 
+    async def summarize_lotes(
+        self, remates: list[Remate], *, cover_limit: int = 4
+    ) -> dict[uuid.UUID, tuple[int, list[str]]]:
+        """`{remate_id: (cantidad de lotes, fotos para el collage)}` de varios remates en
+        pocas consultas -- las fotos solo para los que no tienen `cover_image_url`."""
+        counts, covers = await self._lote_repository.summaries_by_remates(
+            [r.id for r in remates],
+            cover_remate_ids=[r.id for r in remates if not r.cover_image_url],
+            cover_limit=cover_limit,
+        )
+        return {r.id: (counts.get(r.id, 0), covers.get(r.id, [])) for r in remates}
+
     async def update(self, remate_id: uuid.UUID, owner: User, data: RemateUpdate) -> Remate:
         remate = await self.get_owned_or_raise(remate_id, owner)
         if remate.status not in (RemateStatus.DRAFT, RemateStatus.SCHEDULED):

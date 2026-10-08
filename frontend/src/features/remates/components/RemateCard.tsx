@@ -22,8 +22,8 @@ export interface RemateCardProps {
  */
 export function RemateCard({ remate }: RemateCardProps) {
   const navigate = useNavigate();
-  const loteCount = useLoteCount(remate.id);
-  const loteCoverImages = useLoteCoverImages(remate.id);
+  const loteCount = useLoteCount(remate.id, remate.lote_count);
+  const loteCoverImages = useLoteCoverImages(remate.id, remate.cover_images);
 
   return (
     <article
