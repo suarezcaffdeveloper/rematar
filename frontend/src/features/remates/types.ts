@@ -110,6 +110,9 @@ export interface Remate {
   // private_access_code`/`PrivateAccessCodeResponse.code` (`POST` o `GET
   // /remates/{id}/private-access-code`, ver `getPrivateAccessCodeRequest` en `api.ts`).
   private_access_code_generated_at?: string | null;
+  // Cuándo se generó por última vez el código de operador (`null` si nunca). El código en
+  // sí no se persiste en texto plano: solo se ve al generarlo.
+  operator_code_generated_at?: string | null;
   settings: RemateSettings;
   cancellation_reason: string | null;
   cancelled_at: string | null;

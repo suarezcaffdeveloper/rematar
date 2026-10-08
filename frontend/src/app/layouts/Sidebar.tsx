@@ -180,8 +180,8 @@ function SidebarContent({
           // navegan por su cuenta, así que este `navigate` es la única navegación en
           // juego (ver el docstring de `RequireAuth` para el detalle de por qué esto
           // antes competía y ya no).
-          logout();
           navigate('/login');
+          logout();
         }}
       />
     </div>

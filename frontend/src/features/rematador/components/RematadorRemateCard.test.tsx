@@ -173,6 +173,26 @@ describe('RematadorRemateCard', () => {
       expect(navigateMock).toHaveBeenCalledWith('/remates/remate-9/gestionar');
     });
 
+    it('"scheduled" en vivo con código generado: espera al martillero y abre el panel del código', async () => {
+      useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
+      const onOpenOperatorCode = vi.fn();
+      const remate = makeRemate({
+        id: 'remate-9',
+        status: 'scheduled',
+        rematador_id: null,
+        operator_code_generated_at: new Date().toISOString(),
+      });
+      render(
+        <MemoryRouter>
+          <RematadorRemateCard remate={remate} onChanged={vi.fn()} onStarted={vi.fn()} onOpenOperatorCode={onOpenOperatorCode} />
+        </MemoryRouter>,
+      );
+
+      expect(screen.getByText(/Esperando que el martillero/)).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Ver código' }));
+      expect(onOpenOperatorCode).toHaveBeenCalledWith(remate);
+    });
+
     it('"live"/"paused": "Administrar" / "Ver consola" llevan a /gestionar, sin botón de ciclo de vida', async () => {
       useRemateOperationalInfoMock.mockReturnValue(defaultOperationalInfo());
       for (const [status, label] of [

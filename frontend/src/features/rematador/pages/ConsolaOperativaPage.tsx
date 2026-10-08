@@ -25,7 +25,7 @@ import { ConsolaLotePanel } from '../components/ConsolaLotePanel';
 import { ConsolaSidebar } from '../components/ConsolaSidebar';
 import { ConsolaUpcomingLotesPanel } from '../components/ConsolaUpcomingLotesPanel';
 import { EmpresaConsolaView } from '../components/empresa/EmpresaConsolaView';
-import { OperatorCodePanel } from '../components/OperatorCodePanel';
+import { OperatorCodeLauncher } from '../components/OperatorCodeLauncher';
 import { RemateFinishedNotice } from '../components/RemateFinishedNotice';
 import { PrivateAccessPanel } from '../components/PrivateAccessPanel';
 import { StreamPanel } from '../components/StreamPanel';
@@ -294,7 +294,7 @@ function LiveConsolaOperativaPage() {
       {hasRemateFinished && (
         <RemateFinishedNotice remateId={remate.id} currency={currency} audience={isOwner ? 'empresa' : 'martillero'} />
       )}
-      {!isOperational && showOperatorCodePanel && <OperatorCodePanel remate={remate} />}
+      {!isOperational && showOperatorCodePanel && <OperatorCodeLauncher remate={remate} onChanged={reload} />}
       {showPrivateAccessPanel && <PrivateAccessPanel remate={remate} />}
       {!isOperational && showStreamPanel && <StreamPanel remate={remate} onChange={reload} />}
 

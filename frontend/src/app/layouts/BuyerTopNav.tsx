@@ -209,8 +209,9 @@ export function BuyerTopNav({ staticBar = false }: { staticBar?: boolean }) {
         onConfirm={() => {
           setIsLogoutConfirmOpen(false);
           // Mismo cierre de sesión explícito que en `Sidebar`: siempre termina en /login.
-          logout();
+          // Primero se navega: `logout()` deja sin sesión a quien está en "/" y `RequireAuth` lo mandaría a la landing.
           navigate('/login');
+          logout();
         }}
       />
     </header>

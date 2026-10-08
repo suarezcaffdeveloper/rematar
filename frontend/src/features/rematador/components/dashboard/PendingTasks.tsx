@@ -18,7 +18,14 @@ const SEVERITY: Record<TaskSeverity, { label: string; icon: LucideIcon; tone: st
  * comprador: línea superior `ink`, filas separadas por `line`, y al pasar el mouse sobre
  * una fila las demás se atenúan. La severidad va siempre con ícono y texto, no solo color.
  */
-export function PendingTasks({ tasks }: { tasks: DashboardTask[] }) {
+export function PendingTasks({
+  tasks,
+  onOpenOperatorCode,
+}: {
+  tasks: DashboardTask[];
+  /** Abre el panel del código de operador de ese remate; sin esto la acción navega a `task.to`. */
+  onOpenOperatorCode?: (remateId: string) => void;
+}) {
   const [showAll, setShowAll] = useState(false);
 
   if (tasks.length === 0) {
@@ -54,12 +61,22 @@ export function PendingTasks({ tasks }: { tasks: DashboardTask[] }) {
                 <h3 className="text-lg font-semibold leading-snug tracking-tight sm:text-xl">{task.title}</h3>
                 <p className="mt-1 max-w-[70ch] text-ink-muted">{task.description}</p>
               </div>
-              <Link
-                to={task.to}
-                className={`inline-flex w-fit items-center justify-center whitespace-nowrap rounded-full px-5 py-2.5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${button}`}
-              >
-                {task.actionLabel}
-              </Link>
+              {task.operatorCodeRemateId && onOpenOperatorCode ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenOperatorCode(task.operatorCodeRemateId as string)}
+                  className={`inline-flex w-fit items-center justify-center whitespace-nowrap rounded-full px-5 py-2.5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${button}`}
+                >
+                  {task.actionLabel}
+                </button>
+              ) : (
+                <Link
+                  to={task.to}
+                  className={`inline-flex w-fit items-center justify-center whitespace-nowrap rounded-full px-5 py-2.5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${button}`}
+                >
+                  {task.actionLabel}
+                </Link>
+              )}
             </li>
           );
         })}

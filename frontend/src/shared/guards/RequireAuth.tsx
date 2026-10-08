@@ -19,6 +19,8 @@ export const LANDING_PATH = '/landing/';
 
 function LandingRedirect() {
   useEffect(() => {
+    // Si en el medio se navegó a otra ruta (p.ej. /login al cerrar sesión), no se pisa esa navegación.
+    if (window.location.pathname !== '/') return;
     window.location.replace(LANDING_PATH);
   }, []);
   return (

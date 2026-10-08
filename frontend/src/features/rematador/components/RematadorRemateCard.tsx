@@ -34,6 +34,9 @@ export interface RematadorRemateCardProps {
    * recarga desmonta brevemente esta tarjeta (pasa a mostrar esqueletos) y con ella se
    * perdía el timer del cartel -- nunca llegaba a redirigir. */
   onStarted: (remate: Remate) => void;
+  /** Abre el panel lateral del código de operador. Sin esto, "Generar código" lleva a la
+   * pantalla de gestión del remate. */
+  onOpenOperatorCode?: (remate: Remate) => void;
   /** Breve resalte (2s) sobre la tarjeta del remate recién publicado, al volver del
    * flujo de "Publicar remate" en Gestión de Lotes -- lo decide el dashboard, que sabe
    * qué remate viene resaltado (ver `RematadorDashboardPage`). */
@@ -60,7 +63,7 @@ const NEXT_STEP_TONE: Record<'urgent' | 'warn' | 'default', string> = {
  *
  * Los datos operativos (lotes, conectados, lote activo) vienen de `useRemateOperationalInfo`.
  */
-export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighted }: RematadorRemateCardProps) {
+export function RematadorRemateCard({ remate, onChanged, onStarted, onOpenOperatorCode, isHighlighted }: RematadorRemateCardProps) {
   const navigate = useNavigate();
   const { loteCount, activeLote, connectedUsers, coverImages, isLoadingLotes } = useRemateOperationalInfo(
     remate.id,
@@ -164,6 +167,7 @@ export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighte
   function handlePrimaryAction() {
     if (next.action === 'start') void handleStart();
     else if (next.action === 'publish') void handlePublish();
+    else if (next.action === 'operator-code' && onOpenOperatorCode) onOpenOperatorCode(remate);
     else navigate(next.to);
   }
 

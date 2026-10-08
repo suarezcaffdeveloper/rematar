@@ -56,6 +56,17 @@ describe('buildPendingTasks', () => {
     expect(tasks[0]).toMatchObject({ severity: 'urgent', actionLabel: 'Generar código', to: '/remates/r1/gestionar' });
   });
 
+  it('con el código ya generado y sin operador, baja de urgente: pendiente, y atención a 1 h del inicio', () => {
+    const generated = new Date(NOW - 5 * 60_000).toISOString();
+    const far = buildPendingTasks([makeRemate({ status: 'scheduled', starts_at: at(18), operator_code_generated_at: generated })], NOW, null);
+    expect(far[0]).toMatchObject({ severity: 'todo', actionLabel: 'Ver código', operatorCodeRemateId: 'r1' });
+    expect(far[0].title).toContain('Esperando al martillero');
+
+    const soon = buildPendingTasks([makeRemate({ status: 'scheduled', starts_at: at(0.5), operator_code_generated_at: generated })], NOW, null);
+    expect(soon[0]).toMatchObject({ severity: 'warn', actionLabel: 'Ver código' });
+    expect(soon[0].title).toContain('todavía no entró');
+  });
+
   it('no avisa del operador si el remate es Timed, ya tiene operador o falta mucho', () => {
     const timed = makeRemate({ id: 't', status: 'scheduled', auction_type: 'timed', starts_at: at(10) });
     const withOperator = makeRemate({ id: 'o', status: 'scheduled', starts_at: at(10), rematador_id: 'op' });
@@ -131,6 +142,15 @@ describe('describeNextStep', () => {
     expect(describeNextStep(withOperator, { ...ctx, loteCount: 0 }).blockedReason).toBe(
       'Cargá al menos un lote antes de iniciar el remate.',
     );
+  });
+
+  it('scheduled en vivo con código generado y sin operador: espera al martillero y abre el panel del código', () => {
+    const generated = new Date(NOW - 60_000).toISOString();
+    const step = describeNextStep(makeRemate({ status: 'scheduled', starts_at: at(18), operator_code_generated_at: generated }), ctx);
+    expect(step).toMatchObject({ tone: 'default', actionLabel: 'Ver código', action: 'operator-code' });
+    expect(step.text).toContain('Esperando que el martillero');
+    const soon = describeNextStep(makeRemate({ status: 'scheduled', starts_at: at(0.5), operator_code_generated_at: generated }), ctx);
+    expect(soon.tone).toBe('warn');
   });
 
   it('paused, finished y cancelled', () => {

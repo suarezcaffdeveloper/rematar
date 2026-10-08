@@ -18,6 +18,9 @@ const DAY_MS = 24 * HOUR_MS;
 
 /** Un remate en vivo sin operador es urgente si arranca dentro de esta ventana. */
 export const OPERATOR_URGENCY_WINDOW_MS = 48 * HOUR_MS;
+/** Con el código ya generado y sin operador, desde esta cercanía al inicio el aviso pasa de
+ * "pendiente" a "atención": el martillero todavía no entró. */
+export const OPERATOR_ENTRY_WARNING_WINDOW_MS = HOUR_MS;
 /** Un Timed que cierra dentro de esta ventana merece un aviso. */
 export const TIMED_CLOSING_WINDOW_MS = 3 * DAY_MS;
 
@@ -30,6 +33,8 @@ export interface DashboardTask {
   description: string;
   actionLabel: string;
   to: string;
+  /** Si está, la acción abre el panel del código de operador del remate en vez de navegar a `to`. */
+  operatorCodeRemateId?: string;
 }
 
 export interface PendingSales {
@@ -77,15 +82,35 @@ export function buildPendingTasks(remates: Remate[], now: number, pendingSales: 
       startsAt !== null &&
       startsAt - now <= OPERATOR_URGENCY_WINDOW_MS
     ) {
-      tasks.push({
-        id: `operator-${remate.id}`,
-        severity: 'urgent',
-        title: `Asigná un rematador operador a “${remate.title}”`,
-        description: `Empieza ${describeTimeUntil(remate.starts_at as string, now)} y todavía no tiene quién lo opere. Generá el código para que el rematador pueda entrar.`,
-        actionLabel: 'Generar código',
-        to: `/remates/${remate.id}/gestionar`,
-        when: startsAt,
-      });
+      const startsIn = describeTimeUntil(remate.starts_at as string, now);
+      if (remate.operator_code_generated_at) {
+        // El código ya existe pero nadie lo canjeó: sigue faltando el operador, pero lo que le
+        // toca a la empresa ya está hecho, así que deja de ser urgente.
+        const soon = startsAt - now <= OPERATOR_ENTRY_WARNING_WINDOW_MS;
+        tasks.push({
+          id: `operator-${remate.id}`,
+          severity: soon ? 'warn' : 'todo',
+          title: soon
+            ? `El martillero todavía no entró a “${remate.title}”`
+            : `Esperando al martillero de “${remate.title}”`,
+          description: `Generaste el código ${describeTimeUntil(remate.operator_code_generated_at, now)}. El remate empieza ${startsIn}; el martillero tiene que canjearlo desde su cuenta para poder operar.`,
+          actionLabel: 'Ver código',
+          to: `/remates/${remate.id}/gestionar`,
+          operatorCodeRemateId: remate.id,
+          when: startsAt,
+        });
+      } else {
+        tasks.push({
+          id: `operator-${remate.id}`,
+          severity: 'urgent',
+          title: `Asigná un rematador operador a “${remate.title}”`,
+          description: `Empieza ${startsIn} y todavía no tiene quién lo opere. Generá el código para que el rematador pueda entrar.`,
+          actionLabel: 'Generar código',
+          to: `/remates/${remate.id}/gestionar`,
+          operatorCodeRemateId: remate.id,
+          when: startsAt,
+        });
+      }
     }
 
     if (remate.status === 'paused') {
@@ -191,7 +216,7 @@ export function statusLabel(remate: Remate): string {
   return labels[remate.status];
 }
 
-export type NextStepAction = 'navigate' | 'start' | 'publish';
+export type NextStepAction = 'navigate' | 'start' | 'publish' | 'operator-code';
 export type NextStepTone = 'urgent' | 'warn' | 'default';
 
 export interface NextStep {
@@ -252,17 +277,30 @@ export function describeNextStep(remate: Remate, { loteCount, activeLoteTitle, n
           to: lotesPath,
         };
       }
+      if (!remate.rematador_id && remate.operator_code_generated_at) {
+        const generated = describeTimeUntil(remate.operator_code_generated_at, now);
+        const soon = remate.starts_at !== null && new Date(remate.starts_at).getTime() - now <= OPERATOR_ENTRY_WARNING_WINDOW_MS;
+        return {
+          text: `Código generado ${generated}. Esperando que el martillero lo use para poder operar.`,
+          tone: soon ? 'warn' : 'default',
+          actionLabel: 'Ver código',
+          action: 'operator-code',
+          to: consolePath,
+        };
+      }
       if (!remate.rematador_id) {
         return {
           text: `${when ? `Empieza ${when} y t` : 'T'}odavía no tiene rematador operador. Generá el código para que pueda entrar.`,
           tone: 'urgent',
           actionLabel: 'Generar código',
-          action: 'navigate',
+          action: 'operator-code',
           to: consolePath,
         };
       }
       return {
-        text: when ? `El rematador inicia la sala ${when}.` : 'El rematador inicia la sala cuando sea la hora.',
+        text: when
+          ? `Ya tiene operador. Iniciá el remate ${when}; el rematador toma la sala desde ahí.`
+          : 'Ya tiene operador. Iniciá el remate cuando sea la hora; el rematador toma la sala desde ahí.',
         tone: 'default',
         actionLabel: 'Iniciar remate',
         action: 'start',

@@ -46,8 +46,8 @@ vi.mock('../../analytics/components/AnalyticsPanel', () => ({
 vi.mock('../../bots/components/ConsolaBotsPanel', () => ({
   ConsolaBotsPanel: () => <div>Simuladores (mock)</div>,
 }));
-vi.mock('../components/OperatorCodePanel', () => ({
-  OperatorCodePanel: () => <div>Código de operador (mock)</div>,
+vi.mock('../components/OperatorCodeLauncher', () => ({
+  OperatorCodeLauncher: () => <div>Código de operador (mock)</div>,
 }));
 
 function makeRemate(overrides: Partial<Remate> = {}): Remate {
@@ -205,7 +205,7 @@ describe('ConsolaOperativaPage', () => {
 
     renderPage();
 
-    expect(screen.getByText('Código de operador (mock)')).toBeInTheDocument(); // OperatorCodePanel
+    expect(screen.getByText('Código de operador (mock)')).toBeInTheDocument(); // OperatorCodeLauncher
     expect(screen.getByText('Esta consola es para remates en vivo')).toBeInTheDocument();
   });
 

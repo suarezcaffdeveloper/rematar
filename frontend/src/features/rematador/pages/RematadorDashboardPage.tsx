@@ -21,6 +21,7 @@ import { RematadorRemateCardSkeleton } from '../components/RematadorRemateCardSk
 import { EmpresaLiveGallery, MAX_EMPRESA_GALLERY_PANELS } from '../components/dashboard/EmpresaLiveGallery';
 import { MonthlyNumbers } from '../components/dashboard/MonthlyNumbers';
 import { PendingTasks } from '../components/dashboard/PendingTasks';
+import { OperatorCodeDrawer } from '../components/OperatorCodeDrawer';
 import {
   DASHBOARD_STATUS_FILTERS,
   buildHeadline,
@@ -91,6 +92,7 @@ export function RematadorDashboardPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createdRemate, setCreatedRemate] = useState<Remate | null>(null);
   const [startedRemate, setStartedRemate] = useState<Remate | null>(null);
+  const [operatorCodeRemateId, setOperatorCodeRemateId] = useState<string | null>(null);
   const [highlightedRemateId, setHighlightedRemateId] = useState<string | null>(null);
   const [now] = useState(() => Date.now());
 
@@ -118,6 +120,7 @@ export function RematadorDashboardPage() {
     return { count: pendingSalesPage?.total ?? items.length, amountLabel: formatCompactMoney(amount, currency) };
   }, [pendingSalesPage, remates]);
 
+  const operatorCodeRemate = remates.find((remate) => remate.id === operatorCodeRemateId) ?? null;
   const tasks = useMemo(() => buildPendingTasks(remates, now, pendingSales), [remates, now, pendingSales]);
   const runningRemates = useMemo(
     () => remates.filter((remate) => remate.status === 'live' || remate.status === 'paused'),
@@ -188,7 +191,7 @@ export function RematadorDashboardPage() {
         {showContent && hasAnyRemates && (
           <section aria-labelledby="todo-title" className="mt-12">
             <SectionHeading id="todo-title" title="Qué hacer ahora" description="Lo que necesita tu atención, ordenado por urgencia." />
-            <PendingTasks tasks={tasks} />
+            <PendingTasks tasks={tasks} onOpenOperatorCode={setOperatorCodeRemateId} />
           </section>
         )}
 
@@ -307,6 +310,7 @@ export function RematadorDashboardPage() {
                     remate={remate}
                     onChanged={reload}
                     onStarted={setStartedRemate}
+                    onOpenOperatorCode={(target) => setOperatorCodeRemateId(target.id)}
                     isHighlighted={remate.id === highlightedRemateId}
                   />
                 ))}
@@ -334,6 +338,15 @@ export function RematadorDashboardPage() {
           )}
         </section>
       </div>
+
+      {operatorCodeRemate && (
+        <OperatorCodeDrawer
+          remate={operatorCodeRemate}
+          isOpen
+          onClose={() => setOperatorCodeRemateId(null)}
+          onGenerated={reload}
+        />
+      )}
 
       <RemateWizard
         isOpen={isCreateOpen}
