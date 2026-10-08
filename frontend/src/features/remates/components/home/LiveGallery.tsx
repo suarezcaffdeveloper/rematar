@@ -89,7 +89,7 @@ function GalleryPanel({
           isActive ? 'scale-100' : 'scale-110'
         }`}
       >
-        <RemateCover remate={remate} className="h-full w-full" />
+        <RemateCover remate={remate} className="h-full w-full" eager width={900} />
       </div>
       <div
         className={`absolute inset-0 transition-opacity duration-700 ${

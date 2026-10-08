@@ -24,7 +24,7 @@ import { GavelIcon } from '../icons';
 import { CATEGORY_ICONS } from './categoryVisuals';
 import { formatSchedule, formatWeekdayShort, remateDay, sameDay, upcomingDays } from './homeDates';
 import { LiveDot } from './LiveDot';
-import { RemateCover } from './RemateCover';
+import { RemateCover, RemateCoverPreload } from './RemateCover';
 
 const PAGE_SIZE = 12;
 const SKELETON_ROWS = 6;
@@ -261,6 +261,10 @@ export const RemateIndex = forwardRef<HTMLElement, RemateIndexProps>(function Re
               ))}
             </AnimatePresence>
           </ul>
+          {/* Precarga las portadas de la página para que la flotante aparezca al instante. */}
+          {pageItems.map((remate) => (
+            <RemateCoverPreload key={remate.id} remate={remate} />
+          ))}
 
           <div className="mt-8">
             <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
