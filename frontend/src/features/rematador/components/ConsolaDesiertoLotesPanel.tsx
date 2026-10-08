@@ -11,6 +11,7 @@ import { BoxIcon } from '../../remates/components/icons';
 import { requeueLotePresetRequest } from '../../remates/api';
 import type { Lote } from '../../remates/types';
 import { RequeueLoteForm } from './RequeueLoteForm';
+import { optimizedImage } from '../../../shared/lib/image';
 
 /**
  * Reencolado preautorizado (ADR-048): cuando la empresa dejó cargado un precio/
@@ -128,7 +129,7 @@ export function DesiertoLoteCard({
       <div className="flex min-w-0 items-center gap-3">
         <div className="h-12 w-16 shrink-0 overflow-hidden rounded-md">
           {mainImage ? (
-            <img src={mainImage.url} alt="" className="h-full w-full object-cover" />
+            <img src={optimizedImage(mainImage.url, 480)} loading="lazy" decoding="async" alt="" className="h-full w-full object-cover" />
           ) : (
             <CoverPlaceholder className="h-full w-full" icon={<BoxIcon className="h-4 w-4 text-brand-300" />} />
           )}

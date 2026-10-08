@@ -10,6 +10,7 @@ import { CATEGORY_LABELS } from '../labels';
 import type { Remate } from '../types';
 import { LotesCollagePlaceholder } from './LotesCollagePlaceholder';
 import { BoxIcon, CalendarIcon, PinIcon, UsersIcon } from './icons';
+import { optimizedImage } from '../../../shared/lib/image';
 
 const GAP_PX = 16;
 
@@ -248,7 +249,7 @@ function LiveSlide({
         <div className="flex h-64 w-full overflow-hidden rounded-xl border border-line bg-white shadow-lg sm:h-72">
           <div className="relative h-full w-3/5 shrink-0 overflow-hidden">
             {remate.cover_image_url ? (
-              <img src={remate.cover_image_url} alt="" className="h-full w-full object-cover" />
+              <img src={optimizedImage(remate.cover_image_url, 1200)} decoding="async" alt="" className="h-full w-full object-cover" />
             ) : (
               <LotesCollagePlaceholder images={loteCoverImages ?? []} className="h-full w-full" />
             )}
@@ -313,7 +314,7 @@ function LiveSlide({
           className="relative block h-64 w-full overflow-hidden rounded-xl border border-line transition-shadow hover:shadow-md sm:h-72"
         >
           {remate.cover_image_url ? (
-            <img src={remate.cover_image_url} alt="" className="h-full w-full object-cover" />
+            <img src={optimizedImage(remate.cover_image_url, 1200)} decoding="async" alt="" className="h-full w-full object-cover" />
           ) : (
             <LotesCollagePlaceholder images={loteCoverImages ?? []} className="h-full w-full" />
           )}

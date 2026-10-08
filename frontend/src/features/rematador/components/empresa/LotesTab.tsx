@@ -10,6 +10,7 @@ import type { Lote } from '../../../remates/types';
 import { DesiertoLoteCard } from '../ConsolaDesiertoLotesPanel';
 import { CollapsibleSection } from './CollapsibleSection';
 import { useRemateLotes } from './useRemateLotes';
+import { optimizedImage } from '../../../../shared/lib/image';
 
 export interface LotesTabProps {
   remateId: string;
@@ -31,7 +32,7 @@ function UpcomingRow({ lote, position, currency }: { lote: Lote; position: numbe
       <span className="text-sm font-semibold tabular-nums text-ink-faint">{position}</span>
       <span className="block h-[42px] w-[54px] overflow-hidden rounded-[10px]">
         {image ? (
-          <img src={image.url} alt="" className="h-full w-full object-cover" />
+          <img src={optimizedImage(image.url, 480)} loading="lazy" decoding="async" alt="" className="h-full w-full object-cover" />
         ) : (
           <CoverPlaceholder className="h-full w-full" icon={<BoxIcon className="h-5 w-5 text-brand-300" />} />
         )}

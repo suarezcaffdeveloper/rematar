@@ -7,6 +7,7 @@ import { CoverPlaceholder } from '../../../remates/components/CoverPlaceholder';
 import { BoxIcon } from '../../../remates/components/icons';
 import { CATEGORY_LABELS } from '../../../remates/labels';
 import type { Lote } from '../../../remates/types';
+import { optimizedImage } from '../../../../shared/lib/image';
 
 export interface LoteCatalogCardProps {
   lote: Lote;
@@ -88,7 +89,8 @@ export function LoteCatalogCard({
       >
         {mainImage ? (
           <img
-            src={mainImage.url}
+            src={optimizedImage(mainImage.url, 480)}
+            loading="lazy" decoding="async"
             alt=""
             className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
           />

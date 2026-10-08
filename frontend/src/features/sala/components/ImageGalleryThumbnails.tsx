@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import type { LoteImage } from '../../remates/types';
+import { optimizedImage } from '../../../shared/lib/image';
 
 export interface ImageGalleryThumbnailsProps {
   sorted: LoteImage[];
@@ -32,7 +33,7 @@ export function ImageGalleryThumbnails({ sorted, selectedIndex, hasMultiple, goT
             index === selectedIndex ? 'border-brand-600' : 'border-transparent hover:border-slate-300',
           )}
         >
-          <img src={image.url} alt="" className="h-full w-full object-cover" />
+          <img src={optimizedImage(image.url, 480)} loading="lazy" decoding="async" alt="" className="h-full w-full object-cover" />
         </button>
       ))}
     </div>

@@ -12,6 +12,7 @@ import type { Lote, RemateAuctionType } from '../types';
 import { CoverPlaceholder } from './CoverPlaceholder';
 import { BoxIcon } from './icons';
 import { LoteCardCarousel } from './LoteCardCarousel';
+import { optimizedImage } from '../../../shared/lib/image';
 
 export interface LoteCardProps {
   lote: Lote;
@@ -186,7 +187,8 @@ export function LoteCard({ lote, currency, auctionType = 'live', leadingAmount }
               // foto completa tal como se cargó, con el `bg-slate-100` de afuera como
               // relleno neutro (letterbox) en vez de robar imagen.
               <img
-                src={mainImage.url}
+                src={optimizedImage(mainImage.url, 480)}
+                loading="lazy" decoding="async"
                 alt={mainImage.caption ?? ''}
                 className="h-full w-full object-contain transition-transform duration-500 ease-out group-hover:scale-105"
               />

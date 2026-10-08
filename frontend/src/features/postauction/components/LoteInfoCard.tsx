@@ -13,6 +13,7 @@ import { LoteCardCarousel } from '../../remates/components/LoteCardCarousel';
 import { BoxIcon } from '../../remates/components/icons';
 import { CATEGORY_LABELS } from '../../remates/labels';
 import type { PostAuctionCaseDetail } from '../types';
+import { optimizedImage } from '../../../shared/lib/image';
 
 export interface LoteInfoCardProps {
   data: PostAuctionCaseDetail;
@@ -117,7 +118,7 @@ export function LoteInfoCard({ data }: LoteInfoCardProps) {
       <div className="flex gap-4">
         <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg">
           {data.lote_cover_image_url ? (
-            <img src={data.lote_cover_image_url} alt="" className="h-full w-full object-cover" />
+            <img src={optimizedImage(data.lote_cover_image_url, 480)} loading="lazy" decoding="async" alt="" className="h-full w-full object-cover" />
           ) : (
             <CoverPlaceholder
               className="h-full w-full"

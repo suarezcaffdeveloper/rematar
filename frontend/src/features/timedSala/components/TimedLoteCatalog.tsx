@@ -6,6 +6,7 @@ import { CoverPlaceholder } from '../../remates/components/CoverPlaceholder';
 import { BoxIcon } from '../../remates/components/icons';
 import { CATEGORY_LABELS } from '../../remates/labels';
 import type { Lote } from '../../remates/types';
+import { optimizedImage } from '../../../shared/lib/image';
 
 export interface TimedLoteCatalogProps {
   /** Todos los lotes del remate que se pueden ver (sin los cancelados). */
@@ -263,7 +264,8 @@ function CatalogTile({
         >
           {cover ? (
             <img
-              src={cover.url}
+              src={optimizedImage(cover.url, 480)}
+              loading="lazy" decoding="async"
               alt=""
               className={clsx(
                 'h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]',

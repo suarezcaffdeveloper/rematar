@@ -16,6 +16,7 @@ import { uploadVentaDocumentoRequest, deleteVentaDocumentoRequest } from '../api
 import { DOCUMENT_TYPE_LABELS } from '../labels';
 import { validateDocumentFile } from '../media';
 import type { PostAuctionDocument, PostAuctionDocumentType } from '../types';
+import { optimizedImage } from '../../../shared/lib/image';
 
 export interface DocumentationCardProps {
   caseId: string;
@@ -129,7 +130,7 @@ export function DocumentationCard({ caseId, documents, onChanged }: Documentatio
             >
               <div className="flex h-16 w-full items-center justify-center overflow-hidden rounded bg-slate-100">
                 {isImage(document.content_type) ? (
-                  <img src={document.url} alt="" className="h-full w-full object-cover" />
+                  <img src={optimizedImage(document.url, 480)} loading="lazy" decoding="async" alt="" className="h-full w-full object-cover" />
                 ) : (
                   <FileTextIcon className="h-6 w-6 text-slate-400" />
                 )}
@@ -219,7 +220,8 @@ export function DocumentationCard({ caseId, documents, onChanged }: Documentatio
             </div>
             {isImage(previewDocument.content_type) ? (
               <img
-                src={previewDocument.url}
+                src={optimizedImage(previewDocument.url, 480)}
+                loading="lazy" decoding="async"
                 alt={previewDocument.original_filename}
                 className="max-h-[65vh] w-full rounded-lg object-contain"
               />

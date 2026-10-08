@@ -3,6 +3,7 @@ import { CoverPlaceholder } from '../../remates/components/CoverPlaceholder';
 import { BoxIcon } from '../../remates/components/icons';
 import type { Lote } from '../../remates/types';
 import { useImageGallery } from './useImageGallery';
+import { optimizedImage } from '../../../shared/lib/image';
 
 /**
  * Galería de fotos de un lote: foto completa sobre un fondo desenfocado (las fotos que
@@ -22,7 +23,8 @@ export function LotePhotoGallery({ lote }: { lote: Lote }) {
             {/* Fondo desenfocado + foto completa: las fotos que suben las empresas no
              * vienen todas en la misma proporción, y así ninguna se recorta. */}
             <img
-              src={selected.url}
+              src={optimizedImage(selected.url, 1200)}
+              decoding="async"
               alt=""
               aria-hidden="true"
               className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl"
@@ -79,7 +81,7 @@ export function LotePhotoGallery({ lote }: { lote: Lote }) {
                 selectedIndex === i ? 'ring-2 ring-ink' : 'opacity-60 hover:opacity-100'
               }`}
             >
-              <img src={image.url} alt="" className="h-full w-full object-cover" />
+              <img src={optimizedImage(image.url, 1200)} decoding="async" alt="" className="h-full w-full object-cover" />
             </button>
           ))}
         </div>

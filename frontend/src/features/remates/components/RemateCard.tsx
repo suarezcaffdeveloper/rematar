@@ -7,6 +7,7 @@ import { CATEGORY_LABELS, STATUS_BADGE_VARIANTS, STATUS_CARD_ACCENT, STATUS_LABE
 import type { Remate } from '../types';
 import { LotesCollagePlaceholder } from './LotesCollagePlaceholder';
 import { BoxIcon, CalendarIcon, PinIcon } from './icons';
+import { optimizedImage } from '../../../shared/lib/image';
 
 export interface RemateCardProps {
   remate: Remate;
@@ -31,7 +32,8 @@ export function RemateCard({ remate }: RemateCardProps) {
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-surface-subtle">
         {remate.cover_image_url ? (
           <img
-            src={remate.cover_image_url}
+            src={optimizedImage(remate.cover_image_url, 480)}
+            loading="lazy" decoding="async"
             alt=""
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />

@@ -8,6 +8,7 @@ import type { Lote, LoteStatus, RemateAuctionType } from '../../types';
 import { CoverPlaceholder } from '../CoverPlaceholder';
 import { BoxIcon } from '../icons';
 import { LoteViewer } from './LoteViewer';
+import { optimizedImage } from '../../../../shared/lib/image';
 
 export interface LoteGalleryProps {
   lotes: Lote[];
@@ -128,7 +129,8 @@ function LoteTile({
       >
         {cover ? (
           <img
-            src={cover.url}
+            src={optimizedImage(cover.url, 1200)}
+            loading="lazy" decoding="async"
             alt=""
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
           />

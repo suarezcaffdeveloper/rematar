@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { useLoteCoverImages } from '../../hooks';
 import type { Remate } from '../../types';
 import { LotesCollagePlaceholder } from '../LotesCollagePlaceholder';
+import { optimizedImage } from '../../../../shared/lib/image';
 
 function CollageCover({ remateId, className }: { remateId: string; className?: string }) {
   const images = useLoteCoverImages(remateId);
@@ -16,7 +17,7 @@ function CollageCover({ remateId, className }: { remateId: string; className?: s
  */
 export function RemateCover({ remate, className }: { remate: Pick<Remate, 'id' | 'cover_image_url'>; className?: string }) {
   if (remate.cover_image_url) {
-    return <img src={remate.cover_image_url} alt="" className={clsx('object-cover', className)} />;
+    return <img src={optimizedImage(remate.cover_image_url, 480)} loading="lazy" decoding="async" alt="" className={clsx('object-cover', className)} />;
   }
   return <CollageCover remateId={remate.id} className={className} />;
 }

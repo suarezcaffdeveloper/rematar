@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { CoverPlaceholder } from '../../remates/components/CoverPlaceholder';
 import { BoxIcon } from '../../remates/components/icons';
 import type { Lote } from '../../remates/types';
+import { optimizedImage } from '../../../shared/lib/image';
 
 interface UpcomingLoteCardProps {
   lote: Lote;
@@ -28,7 +29,7 @@ const UpcomingLoteCard = memo(function UpcomingLoteCard({
     <>
       <div className="aspect-video w-full overflow-hidden">
         {mainImage ? (
-          <img src={mainImage.url} alt="" className="h-full w-full object-cover" />
+          <img src={optimizedImage(mainImage.url, 480)} loading="lazy" decoding="async" alt="" className="h-full w-full object-cover" />
         ) : (
           <CoverPlaceholder className="h-full w-full" icon={<BoxIcon className="h-6 w-6 text-brand-300" />} />
         )}

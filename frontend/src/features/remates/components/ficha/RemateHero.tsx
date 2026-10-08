@@ -5,6 +5,7 @@ import { heroPhotos } from '../../ficha';
 import type { Lote, Remate } from '../../types';
 import { CoverPlaceholder } from '../CoverPlaceholder';
 import { LiveDot } from '../home/LiveDot';
+import { optimizedImage } from '../../../../shared/lib/image';
 
 export interface RemateHeroProps {
   remate: Remate;
@@ -75,7 +76,7 @@ export function RemateHero({ remate, lotes, onEnter }: RemateHeroProps) {
               transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 0.1 * i }}
               className={`overflow-hidden rounded-2xl bg-surface-subtle ${TILE_LAYOUTS[photos.length][i]}`}
             >
-              <img src={url} alt="" className="h-full w-full object-cover" />
+              <img src={optimizedImage(url, 1200)} decoding="async" alt="" className="h-full w-full object-cover" />
             </motion.div>
           ))
         )}

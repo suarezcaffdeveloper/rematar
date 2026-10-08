@@ -8,6 +8,7 @@ import type { PostAuctionCase } from '../../postauction/types';
 import type { Lote } from '../../remates/types';
 import { risePercent } from '../summary';
 import type { LoteHistoryDetail } from '../types';
+import { optimizedImage } from '../../../shared/lib/image';
 
 export interface LoteHistoryRowProps {
   lote: Lote;
@@ -57,7 +58,7 @@ export function LoteHistoryRow({ lote, currency, offerDetail, postAuctionCase, m
       >
         <span className="block h-[42px] w-[54px] overflow-hidden rounded-[10px]">
           {mainImage ? (
-            <img src={mainImage.url} alt="" className="h-full w-full object-cover" />
+            <img src={optimizedImage(mainImage.url, 480)} loading="lazy" decoding="async" alt="" className="h-full w-full object-cover" />
           ) : (
             <CoverPlaceholder className="h-full w-full" icon={<BoxIcon className="h-5 w-5 text-brand-300" />} />
           )}

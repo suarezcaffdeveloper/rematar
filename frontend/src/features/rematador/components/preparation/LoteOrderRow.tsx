@@ -6,6 +6,7 @@ import { CoverPlaceholder } from '../../../remates/components/CoverPlaceholder';
 import { BoxIcon } from '../../../remates/components/icons';
 import { CATEGORY_LABELS } from '../../../remates/labels';
 import type { Lote } from '../../../remates/types';
+import { optimizedImage } from '../../../../shared/lib/image';
 
 export interface LoteOrderRowProps {
   lote: Lote;
@@ -74,7 +75,7 @@ export function LoteOrderRow({
         className="h-11 w-[3.75rem] overflow-hidden rounded-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
       >
         {mainImage ? (
-          <img src={mainImage.url} alt="" className="h-full w-full object-cover" />
+          <img src={optimizedImage(mainImage.url, 480)} loading="lazy" decoding="async" alt="" className="h-full w-full object-cover" />
         ) : (
           <CoverPlaceholder className="h-full w-full" icon={<BoxIcon className="h-5 w-5 text-brand-300" />} />
         )}

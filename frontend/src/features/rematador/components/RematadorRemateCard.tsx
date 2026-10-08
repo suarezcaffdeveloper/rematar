@@ -19,6 +19,7 @@ import { CancelRemateModal } from './CancelRemateModal';
 import { RemateStatusPill } from './dashboard/RemateStatusPill';
 import { PrivateAccessCredentialsPopover } from './PrivateAccessCredentialsPopover';
 import { RemateFormModal } from './RemateFormModal';
+import { optimizedImage } from '../../../shared/lib/image';
 
 export interface RematadorRemateCardProps {
   remate: Remate;
@@ -176,7 +177,8 @@ export function RematadorRemateCard({ remate, onChanged, onStarted, isHighlighte
       <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden rounded-2xl bg-surface-subtle">
         {remate.cover_image_url ? (
           <img
-            src={remate.cover_image_url}
+            src={optimizedImage(remate.cover_image_url, 480)}
+            loading="lazy" decoding="async"
             alt=""
             className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
           />

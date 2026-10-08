@@ -7,6 +7,7 @@ import { CATEGORY_LABELS } from '../../../remates/labels';
 import { formatShortDate } from '../../comprasUtils';
 import { getResponsables } from '../../detalleUtils';
 import type { PostAuctionCaseDetail } from '../../types';
+import { optimizedImage } from '../../../../shared/lib/image';
 
 const CURRENCY = 'ARS';
 const LONG_DESCRIPTION = 220;
@@ -64,7 +65,7 @@ export function DetalleAside({ detail }: { detail: PostAuctionCaseDetail }) {
                 current === i ? 'ring-2 ring-ink' : 'opacity-60 hover:opacity-100'
               }`}
             >
-              <img src={url} alt="" className="h-full w-full object-cover" />
+              <img src={optimizedImage(url, 1200)} loading="lazy" decoding="async" alt="" className="h-full w-full object-cover" />
             </button>
           ))}
         </div>

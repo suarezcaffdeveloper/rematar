@@ -10,6 +10,7 @@ import type { Lote, Remate } from '../types';
 import { CalendarIcon, PinIcon } from './icons';
 import { LotesCollagePlaceholder } from './LotesCollagePlaceholder';
 import { RemateNotLiveDialog } from './RemateNotLiveDialog';
+import { optimizedImage } from '../../../shared/lib/image';
 
 export interface RemateDetailOverviewProps {
   remate: Remate;
@@ -66,7 +67,7 @@ export function RemateDetailOverview({ remate, lotes = [], onEnterRoom }: Remate
       <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
         <div className="relative aspect-[4/3] w-full sm:aspect-[21/9]">
           {remate.cover_image_url ? (
-            <img src={remate.cover_image_url} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <img src={optimizedImage(remate.cover_image_url, 1200)} decoding="async" alt="" className="absolute inset-0 h-full w-full object-cover" />
           ) : (
             <LotesCollagePlaceholder
               images={pickLoteCoverImages(lotes)}

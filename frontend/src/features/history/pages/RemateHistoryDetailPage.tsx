@@ -24,6 +24,7 @@ import { LoteHistoryRow } from '../components/LoteHistoryRow';
 import { exportRemateHistoryToExcel, exportRemateHistoryToPdf } from '../export';
 import { useLoteResultsForRemate, useRemateHistoryDetail } from '../hooks';
 import { buildRemateSentence, describeUnsold, describeUnsoldText, formatDurationLong, risePercent } from '../summary';
+import { optimizedImage } from '../../../shared/lib/image';
 
 type LoteFilter = 'all' | 'sold' | 'unsold';
 
@@ -201,7 +202,7 @@ export function RemateHistoryDetailPage() {
         <header className="grid items-end gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-10">
           <div className="relative aspect-[16/10] overflow-hidden rounded-3xl bg-surface-subtle">
             {cover ? (
-              <img src={cover} alt="" className="h-full w-full object-cover" />
+              <img src={optimizedImage(cover, 480)} loading="lazy" decoding="async" alt="" className="h-full w-full object-cover" />
             ) : coverImages.length > 0 ? (
               <LotesCollagePlaceholder images={coverImages} className="h-full w-full" />
             ) : (

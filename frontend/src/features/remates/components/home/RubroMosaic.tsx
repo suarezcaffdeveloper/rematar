@@ -2,6 +2,7 @@ import { ArrowUpRight, Gem, Laptop, Ship } from 'lucide-react';
 import { CATEGORY_SHORT_LABELS } from '../../labels';
 import type { Remate, RemateCategory } from '../../types';
 import { CATEGORY_ICONS, RUBRO_PHOTOS } from './categoryVisuals';
+import { optimizedImage } from '../../../../shared/lib/image';
 
 export interface RubroMosaicProps {
   remates: Remate[];
@@ -117,7 +118,8 @@ function PhotoTile({
       className={`group relative overflow-hidden rounded-2xl bg-ink text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${className}`}
     >
       <img
-        src={image}
+        src={optimizedImage(image, 1200)}
+        loading="lazy" decoding="async"
         alt=""
         className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
       />

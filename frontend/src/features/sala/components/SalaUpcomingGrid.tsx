@@ -3,6 +3,7 @@ import { formatCurrency } from '../../../shared/lib/format';
 import { CoverPlaceholder } from '../../remates/components/CoverPlaceholder';
 import { BoxIcon } from '../../remates/components/icons';
 import type { Lote } from '../../remates/types';
+import { optimizedImage } from '../../../shared/lib/image';
 
 const SKELETON_COUNT = 4;
 
@@ -48,7 +49,7 @@ export function SalaUpcomingGrid({ lotes, isLoading, currency }: SalaUpcomingGri
               <li key={lote.id} className="min-w-0">
                 <div className="aspect-video overflow-hidden rounded-xl bg-surface-subtle">
                   {cover ? (
-                    <img src={cover.url} alt="" draggable={false} className="h-full w-full object-cover" />
+                    <img src={optimizedImage(cover.url, 480)} loading="lazy" decoding="async" alt="" draggable={false} className="h-full w-full object-cover" />
                   ) : (
                     <CoverPlaceholder
                       className="h-full w-full"

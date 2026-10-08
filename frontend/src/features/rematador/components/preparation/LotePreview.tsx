@@ -6,6 +6,7 @@ import { BoxIcon } from '../../../remates/components/icons';
 import { CATEGORY_LABELS } from '../../../remates/labels';
 import type { RemateCategory } from '../../../remates/types';
 import { LiveDot } from '../../../remates/components/home/LiveDot';
+import { optimizedImage } from '../../../../shared/lib/image';
 
 export interface LotePreviewProps {
   lotNumber: string;
@@ -64,7 +65,7 @@ export function LotePreview({
         <div className="relative aspect-video overflow-hidden rounded-xl bg-ink">
           {count > 0 ? (
             <>
-              <img src={images[safeIndex]} alt={`Foto ${safeIndex + 1} de ${count}`} className="h-full w-full object-cover" />
+              <img src={optimizedImage(images[safeIndex], 1200)} loading="lazy" decoding="async" alt={`Foto ${safeIndex + 1} de ${count}`} className="h-full w-full object-cover" />
               <span className="absolute bottom-2.5 right-2.5 rounded-full bg-ink/60 px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-white backdrop-blur-md">
                 {safeIndex + 1} de {count}
               </span>
@@ -106,7 +107,7 @@ export function LotePreview({
                   i === safeIndex ? 'border-brand-600 opacity-100' : 'border-transparent opacity-60'
                 }`}
               >
-                <img src={url} alt="" className="h-full w-full object-cover" />
+                <img src={optimizedImage(url, 1200)} loading="lazy" decoding="async" alt="" className="h-full w-full object-cover" />
               </button>
             ))}
           </div>

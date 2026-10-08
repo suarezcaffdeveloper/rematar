@@ -4,6 +4,7 @@ import { BoxIcon } from '../../remates/components/icons';
 import { getStatusCopy } from '../buyerStatusCopy';
 import { STATUS_BADGE_VARIANTS, STATUS_LABELS, type BadgeVariant } from '../labels';
 import type { PostAuctionCaseDetail } from '../types';
+import { optimizedImage } from '../../../shared/lib/image';
 
 export interface PurchaseHeaderProps {
   data: PostAuctionCaseDetail;
@@ -41,7 +42,7 @@ export function PurchaseHeader({ data }: PurchaseHeaderProps) {
       <div className="flex min-w-0 items-center gap-4">
         <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl sm:h-20 sm:w-20">
           {data.lote_cover_image_url ? (
-            <img src={data.lote_cover_image_url} alt="" className="h-full w-full object-cover" />
+            <img src={optimizedImage(data.lote_cover_image_url, 480)} loading="lazy" decoding="async" alt="" className="h-full w-full object-cover" />
           ) : (
             <CoverPlaceholder className="h-full w-full" icon={<BoxIcon className="h-7 w-7 text-brand-300" />} />
           )}

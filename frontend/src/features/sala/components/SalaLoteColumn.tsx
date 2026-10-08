@@ -7,6 +7,7 @@ import { LoteIdentity } from './LoteIdentity';
 import { LotePhotoGallery } from './LotePhotoGallery';
 import { StreamEmbed, buildYouTubeEmbedUrl } from './StreamEmbed';
 import { useImageGallery } from './useImageGallery';
+import { optimizedImage } from '../../../shared/lib/image';
 
 export interface SalaLoteColumnProps {
   remate: Remate;
@@ -56,7 +57,7 @@ function WithStream({ lote }: { lote: Lote }) {
   return (
     <div className="flex items-start gap-4 rounded-2xl border border-line p-3">
       {gallery.selected ? (
-        <img src={gallery.selected.url} alt="" className="aspect-[4/3] w-36 shrink-0 rounded-xl object-cover" />
+        <img src={optimizedImage(gallery.selected.url, 480)} loading="lazy" decoding="async" alt="" className="aspect-[4/3] w-36 shrink-0 rounded-xl object-cover" />
       ) : (
         <CoverPlaceholder
           className="aspect-[4/3] w-36 shrink-0 rounded-xl"

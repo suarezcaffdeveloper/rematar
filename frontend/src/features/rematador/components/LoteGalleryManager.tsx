@@ -11,6 +11,7 @@ import { updateLoteImagesRequest, uploadLoteImageRequest } from '../../remates/a
 import type { Lote, LoteImage } from '../../remates/types';
 import { validateImageFile } from '../media';
 import { ChevronLeftIcon, ChevronRightIcon, TrashIcon } from './icons';
+import { optimizedImage } from '../../../shared/lib/image';
 
 export interface LoteGalleryManagerProps {
   remateId: string;
@@ -182,7 +183,7 @@ export function LoteGalleryManager({ remateId, lote, onChanged }: LoteGalleryMan
     <div className="flex flex-col gap-3">
       {mainImage ? (
         <div className="aspect-video w-full overflow-hidden rounded-xl bg-surface-subtle">
-          <img src={mainImage.url} alt="Imagen principal del lote" className="h-full w-full object-cover" />
+          <img src={optimizedImage(mainImage.url, 480)} loading="lazy" decoding="async" alt="Imagen principal del lote" className="h-full w-full object-cover" />
         </div>
       ) : (
         <CoverPlaceholder
@@ -219,7 +220,7 @@ export function LoteGalleryManager({ remateId, lote, onChanged }: LoteGalleryMan
                   aria-pressed={index === 0}
                   className="block h-full w-full cursor-grab active:cursor-grabbing"
                 >
-                  <img src={image.url} alt="" className="h-full w-full object-cover" />
+                  <img src={optimizedImage(image.url, 480)} loading="lazy" decoding="async" alt="" className="h-full w-full object-cover" />
                 </button>
                 {index === 0 && (
                   <span className="absolute left-1 top-1 rounded bg-brand-600 px-1 text-[10px] font-semibold text-white">

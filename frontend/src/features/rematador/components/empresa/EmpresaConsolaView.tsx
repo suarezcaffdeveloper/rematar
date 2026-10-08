@@ -14,6 +14,7 @@ import { EquipoTab } from './EquipoTab';
 import { LotesTab } from './LotesTab';
 import { ResumenTab, type ResumenAlert } from './ResumenTab';
 import { useBuyerQuestions } from './useBuyerQuestions';
+import { optimizedImage } from '../../../../shared/lib/image';
 
 type TabId = 'resumen' | 'lotes' | 'equipo' | 'analisis';
 
@@ -285,7 +286,7 @@ function Hero({
     <section aria-label="Lote en remate" className="overflow-hidden rounded-3xl bg-ink text-white">
       <div className="grid lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
         <div className="relative min-h-[14rem] bg-white/5 lg:min-h-full">
-          {image && <img src={image} alt={activeLote.title} className="absolute inset-0 h-full w-full object-cover" />}
+          {image && <img src={optimizedImage(image, 1200)} decoding="async" alt={activeLote.title} className="absolute inset-0 h-full w-full object-cover" />}
           <div className="absolute inset-0 bg-gradient-to-t from-ink/80 via-transparent to-transparent lg:bg-gradient-to-r lg:from-transparent lg:via-transparent lg:to-ink" />
           <span className="absolute left-5 top-5 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-ink backdrop-blur">
             Lote {activeLote.lot_number} en remate
