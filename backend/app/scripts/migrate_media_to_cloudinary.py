@@ -17,9 +17,11 @@ Uso (desde backend/, con DATABASE_URL de Neon y CLOUDINARY_* en el entorno):
 import argparse
 import asyncio
 import re
+import ssl
 from pathlib import Path
 
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import get_async_database_url, get_settings
@@ -50,7 +52,14 @@ async def main(apply: bool) -> None:
     if apply and not settings.CLOUDINARY_CLOUD_NAME:
         raise SystemExit("Faltan las variables CLOUDINARY_* en el entorno.")
 
-    engine = create_async_engine(get_async_database_url(settings.DATABASE_URL))
+    # `get_async_database_url` descarta `?sslmode=...`: el SSL se pide acá según el host
+    # (la base local de docker-compose no lo tiene; Neon sí lo exige).
+    database_url = get_async_database_url(settings.DATABASE_URL)
+    is_local = make_url(database_url).host in ("db", "localhost", "127.0.0.1")
+    engine = create_async_engine(
+        database_url,
+        connect_args={"ssl": False if is_local else ssl.create_default_context()},
+    )
     found: dict[str, set[str]] = {}  # url completa -> rutas relativas (una sola, en realidad)
     async with engine.begin() as conn:
         for table, _column, expr in _COLUMNS:

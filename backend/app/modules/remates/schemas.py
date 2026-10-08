@@ -256,6 +256,7 @@ class RemateRead(BaseModel):
     access_type: RemateAccessType
     auction_type: RemateAuctionType
     private_access_code_generated_at: datetime | None
+    operator_code_generated_at: datetime | None = None
     settings: RemateSettings
     cancellation_reason: str | None
     cancelled_at: datetime | None
